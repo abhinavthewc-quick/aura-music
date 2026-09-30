@@ -27,8 +27,8 @@ html.aura-loading,html.aura-loading body{overflow:hidden}
 <div id="auraLoader" role="status" aria-live="polite" aria-label="Loading Aura Music"><canvas id="auraLoaderCanvas"></canvas><div id="auraLoaderText">Getting ready<span class="d">.</span><span class="d">.</span><span class="d">.</span></div></div>
   <div class="net-banner" id="netBanner" role="status" aria-live="polite"></div>
   <div class="welcome-screen" id="welcomeScreen">
-    <button class="welcome-info" id="welcomeInfo" type="button" aria-label="Why AURA Music asks for your name" aria-expanded="false"><i class="fa-solid fa-circle-info"></i></button>
-    <div class="welcome-info-panel" id="welcomeInfoPanel" role="note"><strong>Why we ask your name</strong>This website asks for your name so the AI can talk with you more naturally and AURA Music can call you by the name you choose.</div>
+    <button class="welcome-info" id="welcomeInfo" type="button" aria-label="Why AURA Music asks you to sign in" aria-expanded="false"><i class="fa-solid fa-circle-info"></i></button>
+    <div class="welcome-info-panel" id="welcomeInfoPanel" role="note"><strong>Why sign in with Google?</strong>Sign-in checks your Google account so only you can enter your music. Your name and preferences still stay on this device.</div>
     <div class="lg-shell">
       <div class="lg-stage" aria-hidden="true">
         <span class="lg-aura"></span>
@@ -41,18 +41,17 @@ html.aura-loading,html.aura-loading body{overflow:hidden}
         <h1 class="lg-brand">Aura Music</h1>
         <p class="lg-tag">Your personal space for music, radio and moments that feel like yours.</p>
         <div class="lg-form">
-          <label class="lg-field" for="userNameInput">
-            <span class="wc-avatar" id="wcAvatar"><i class="fa-solid fa-user"></i></span>
-            <input type="text" id="userNameInput" maxlength="40" autocomplete="name" placeholder="What should we call you?">
-          </label>
-          <button class="lg-cta" id="doneBtn" type="button">Enter Aura Music</button>
+          <div class="lg-google" id="googleSignInBox">
+            <div id="googleSignInDiv" class="g-btn-slot"></div>
+            <p class="lg-auth-note" id="googleAuthNote">Sign in with Google to enter — only the owner’s account is allowed.</p>
+          </div>
         </div>
         <div class="lg-points">
           <span><i class="fa-solid fa-music"></i>Your library</span>
           <span><i class="fa-solid fa-radio"></i>Live radio</span>
           <span><i class="fa-solid fa-wand-magic-sparkles"></i>Soundscapes</span>
         </div>
-        <p class="lg-privacy"><i class="fa-solid fa-shield-halved"></i>Your name and preferences stay on this device.</p>
+        <p class="lg-privacy"><i class="fa-solid fa-shield-halved"></i>Sign-in is verified with Google. Your preferences stay on this device.</p>
       </div>
     </div>
   </div>

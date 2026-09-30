@@ -74,6 +74,7 @@ jobs:
             --embed-metadata
             --remux-video opus
             --embed-thumbnail
+            --write-thumbnail
             --output "downloads/%(uploader)s - %(title)s [%(id)s].%(ext)s"
           )
           if [ -f cookies.txt ]; then ARGS+=(--cookies cookies.txt); fi
@@ -98,7 +99,7 @@ jobs:
           : "${HF_TOKEN:?Secret HF_TOKEN is not set - configure it from the admin panel.}"
           : "${HF_BUCKET_ID:?Secret HF_BUCKET_ID is not set - configure it from the admin panel.}"
           hf buckets create "$HF_BUCKET_ID" --private --exist-ok
-          hf buckets sync downloads/ "hf://buckets/$HF_BUCKET_ID" --exclude "*.info.json" --exclude "*.webp" --exclude "*.jpg" --exclude "*.png" --exclude "*.part"
+          hf buckets sync downloads/ "hf://buckets/$HF_BUCKET_ID" --exclude "*.info.json" --exclude "*.part"
 
       - name: Job summary
         if: always()

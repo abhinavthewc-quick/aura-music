@@ -1,3 +1,6 @@
+import { ALLOWED_EMAIL, GOOGLE_CLIENT_ID } from '../core/config';
+import { verifyGoogleCredential } from '../core/google-auth';
+import { clearSession, getSession, setSession } from '../core/session';
 import { toast } from '../core/dom';
 import { updateProfilePopup } from '../features/settings';
 import { $ } from '../core/state';
@@ -12,15 +15,6 @@ import { $ } from '../core/state';
         if(hn&&nm) hn.textContent=(nm.textContent||'User');
       }
       if(lab&&nm){ const mo=new MutationObserver(syncHero); [lab,nm].forEach(e=>mo.observe(e,{childList:true,characterData:true,subtree:true})); syncHero(); }
-                  const inp=$('userNameInput'), av=$('wcAvatar');
-      if(inp&&av){
-        const upd=()=>{
-          const n=inp.value.trim();
-          if(n){ av.textContent=n.charAt(0).toUpperCase(); }
-          else{ av.innerHTML='<i class="fa-solid fa-user"></i>'; }
-        };
-        inp.addEventListener('input',upd); upd();
-      }
     })();
 /* ===== 4813-4871 ===== */
     export function finishLogin(n){
@@ -45,13 +39,67 @@ import { $ } from '../core/state';
       },1500);
     }
 
-    $('doneBtn').onclick=()=>{
-      const n=$('userNameInput').value.trim();
-      if(!n){ $('userNameInput').focus(); toast('Please enter your name', 'circle-exclamation'); return; }
-      playLoginAnimation(n);
-    };
+    /* ---------- Google Sign-In ---------- */
+    let gisLoaded = false;
 
-    $('userNameInput').addEventListener('keydown',(e)=>{ if(e.key==='Enter') $('doneBtn').click(); });
+    async function handleCredential(credential: string){
+      try{
+        const p = await verifyGoogleCredential(credential, GOOGLE_CLIENT_ID);
+        if(p.email !== (ALLOWED_EMAIL||'').toLowerCase()){
+          toast('Access denied — only the owner\'s Google account can enter.', 'triangle-exclamation');
+          try{ (window as any).google?.accounts?.id?.disableAutoSelect?.(); }catch{ /* ignore */ }
+          return;
+        }
+        setSession({ email:p.email, name:p.name || 'Listener', picture:p.picture, exp:p.exp, token:credential });
+        playLoginAnimation(p.name || 'Listener');
+      }catch(err){
+        toast('Sign-in failed — ' + (((err as Error).message)||'please try again'), 'triangle-exclamation');
+      }
+    }
+
+    export function initGoogleAuth(){
+      const box = $('googleSignInBox'), div = $('googleSignInDiv'), note = $('googleAuthNote');
+      if(!box || !div) return;
+      if(!GOOGLE_CLIENT_ID){
+        if(note) note.innerHTML = '<i class="fa-solid fa-triangle-exclamation"></i> Google sign-in is not configured yet — add the Client ID in <code>src/core/config.ts</code>.';
+        return;
+      }
+      if(getSession()) return; // already signed in this session
+
+      const w = window as any;
+      const onload = document.createElement('div');
+      onload.id = 'g_id_onload';
+      onload.dataset.client_id = GOOGLE_CLIENT_ID;
+      onload.dataset.callback = 'auraOnGoogleCredential';
+      onload.dataset.auto_prompt = 'false';
+      document.body.appendChild(onload);
+      w.auraOnGoogleCredential = (resp: any) => { handleCredential(resp?.credential || ''); };
+
+      const s = document.createElement('script');
+      s.src = 'https://accounts.google.com/gsi/client';
+      s.async = true;
+      s.defer = true;
+      s.onload = () => {
+        gisLoaded = true;
+        try{
+          w.google.accounts.id.initialize({
+            client_id: GOOGLE_CLIENT_ID,
+            callback: (resp: any) => handleCredential(resp?.credential || ''),
+          });
+          w.google.accounts.id.renderButton(div, {
+            theme: 'filled_black', size: 'large', shape: 'pill',
+            text: 'signin_with', width: 275,
+          });
+          w.google.accounts.id.prompt();
+        }catch{ /* button container keeps its note text */ }
+      };
+      s.onerror = () => {
+        if(note) note.innerHTML = '<i class="fa-solid fa-triangle-exclamation"></i> Could not load Google sign-in — check your connection.';
+      };
+      document.head.appendChild(s);
+    }
+    initGoogleAuth();
+
     $('welcomeInfo').onclick=(e)=>{
       e.stopPropagation();
       const panel=$('welcomeInfoPanel');
@@ -82,3 +130,4 @@ import { $ } from '../core/state';
       }
     });
 
+export { clearSession };

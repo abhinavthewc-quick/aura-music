@@ -152,3 +152,10 @@ body {
 .adm-toast .msg.err { border-color: rgba(239, 139, 139, 0.5); color: var(--red); }
 .adm-toast .msg.ok { border-color: rgba(125, 211, 160, 0.5); }
 @keyframes toastIn { from { opacity: 0; transform: translateY(8px); } }
+
+/* Google access gate */
+.adm-google { min-height: 44px; display: flex; justify-content: flex-start; align-items: center; }
+.adm-signedin { display: flex; align-items: center; gap: 10px; font-size: 14px; color: var(--dim); flex-wrap: wrap; }
+.adm-signedin i { color: var(--green); }
+.adm-signedin b { color: var(--gold); font-weight: 700; word-break: break-all; }
+.adm-card[hidden] { display: none !important; }

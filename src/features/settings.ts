@@ -1,4 +1,5 @@
 import { getSavedUserName, toast } from '../core/dom';
+import { clearSession } from '../core/session';
 import { searchYouTubePro } from './search';
 import { $, state } from '../core/state';
 /* ===== 4216-4287 ===== */
@@ -16,6 +17,8 @@ import { $, state } from '../core/state';
       overlay.setAttribute('aria-hidden', 'false');
       setTimeout(() => {
         localStorage.removeItem('auraUserName');
+        clearSession();
+        try{ (window as any).google?.accounts?.id?.disableAutoSelect?.(); }catch(e){}
         location.reload();
       }, 1500);
     }

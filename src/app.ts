@@ -1,9 +1,11 @@
-import { getSavedUserName, toast } from './core/dom';
+import { toast } from './core/dom';
+import { fetchHfCatalog } from './core/catalog';
+import { getSession } from './core/session';
 import { setGreeting } from './features/home';
 import { hydrateLocalTracks, renderRecent, renderSongs, updateLibCount } from './features/library';
 import { auraYTPlayer, auraYTVideoId, lastPlayRequestAt, loadSong } from './features/player';
 import { updateProfilePopup } from './features/settings';
-import { $, state } from './core/state';
+import { $, setHfTracks, state } from './core/state';
 /* ===== 4669-4686 ===== */
 
     /* Network + playback error states */
@@ -25,16 +27,27 @@ import { $, state } from './core/state';
 
 /* ===== 6274-6287 ===== */
     (async function init(){
-      const savedName = getSavedUserName();
-      if(savedName){
-        $('displayUserName').textContent=$('profileName').textContent=savedName;
-        $('userNameInput').value=savedName;
+      const session = getSession();
+      if(session){
+        const name = session.name || 'Listener';
+        $('displayUserName').textContent=$('profileName').textContent=name;
         $('welcomeScreen').classList.add('hidden');
         localStorage.setItem('auraLastLogin', new Date().toISOString());
+        if(!localStorage.getItem('auraUserName')) localStorage.setItem('auraUserName', name);
       }
       setGreeting();
       await hydrateLocalTracks();
       renderSongs(state.songs); loadSong(0); updateLibCount(); renderRecent();
       updateProfilePopup();
+
+      /* Catalog lives in the Hugging Face bucket — refresh it in the background
+         (the list is painted instantly from localStorage cache, if any). */
+      fetchHfCatalog().then((tracks)=>{
+        setHfTracks(tracks);
+        renderSongs(state.songs);
+        renderRecent();
+        updateLibCount();
+      }).catch(()=>{
+        if(!state.hfSongs.length) toast('Could not load the Hugging Face catalog — showing local files only.','triangle-exclamation');
+      });
     })();
-  

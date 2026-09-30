@@ -1,11 +1,9 @@
-import sodium from 'libsodium-wrappers';
 import './admin.css';
+import { ALLOWED_EMAIL, GOOGLE_CLIENT_ID } from '../core/config';
+import { verifyGoogleCredential } from '../core/google-auth';
+import { clearSession, getSession, setSession } from '../core/session';
 
-const API = 'https://api.github.com';
-const WORKFLOW_FILE = 'upload-music.yml';
 const SECRET_NAMES = ['HF_TOKEN', 'HF_BUCKET_ID', 'YOUTUBE_COOKIES'] as const;
-const LS_PAT = 'auraAdmin_pat';
-const LS_REPO = 'auraAdmin_repo';
 
 const $ = <T extends HTMLElement = HTMLElement>(id: string): T => {
   const el = document.getElementById(id);
@@ -13,22 +11,18 @@ const $ = <T extends HTMLElement = HTMLElement>(id: string): T => {
   return el as T;
 };
 
-const patInput = $<HTMLInputElement>('patInput');
-const repoInput = $<HTMLInputElement>('repoInput');
+const gateCard = $('gateCard');
+const gateStatus = $('gateStatus');
+const gBtnBox = $('adminGoogleBtn');
 const urlsInput = $<HTMLTextAreaElement>('urlsInput');
 const cookiesInput = $<HTMLTextAreaElement>('cookiesInput');
-const cfgStatus = $('cfgStatus');
 const secretsStatus = $('secretsStatus');
 const downloadStatus = $('downloadStatus');
-const secretChips = $('secretChips');
 const previewList = $('previewList');
 const runsList = $('runsList');
 const urlCount = $('urlCount');
 const toastHost = $('toastHost');
-
-/* ---------- storage ---------- */
-const getPat = () => localStorage.getItem(LS_PAT) || '';
-const getRepo = () => localStorage.getItem(LS_REPO) || '';
+const gatedSections = Array.from(document.querySelectorAll<HTMLElement>('.adm-gated'));
 
 /* ---------- toast ---------- */
 function toast(msg: string, kind: 'ok' | 'err' | '' = '') {
@@ -44,68 +38,136 @@ function setStatus(el: HTMLElement, msg: string, kind: 'ok' | 'err' | '' = '') {
   el.className = 'adm-status ' + kind;
 }
 
-/* ---------- github api ---------- */
-async function api<T = any>(path: string, init?: RequestInit): Promise<T> {
-  const pat = getPat();
-  if (!pat) throw new Error('No GitHub token — save one in step 1 first.');
-  if (!getRepo() && path.includes('{repo}')) throw new Error('No repository set — save owner/name in step 1 first.');
-  const headers: Record<string, string> = {
-    Accept: 'application/vnd.github+json',
-    Authorization: 'Bearer ' + pat,
-  };
-  if (init?.body) headers['Content-Type'] = 'application/json';
-  const res = await fetch(API + path.split('{repo}').join(getRepo()), { ...init, headers });
-  if (!res.ok) {
-    let msg = 'HTTP ' + res.status;
-    try {
-      const j = await res.json();
-      if (j.message) msg += ' — ' + j.message;
-    } catch { /* keep status */ }
-    if (res.status === 401) msg += ' (token invalid or expired)';
-    if (res.status === 404) msg += ' (repo not found or token lacks access)';
-    throw new Error(msg);
+/* ---------- server API (no tokens in this page — the server holds them
+   and re-verifies the Google ID token on every single call) ---------- */
+async function adminApi<T = any>(action: string, payload: Record<string, unknown> = {}): Promise<T> {
+  const session = getSession();
+  if (!session) {
+    lock('Your Google session expired — sign in again.');
+    throw new Error('Sign in with Google first.');
   }
-  return res.status === 204 ? (undefined as T) : ((await res.json()) as T);
+  let res: Response;
+  try {
+    res = await fetch('/api/admin', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ credential: session.token, action, ...payload }),
+    });
+  } catch {
+    throw new Error('network error — is the site reachable?');
+  }
+  let data: any = null;
+  try { data = await res.json(); } catch { /* non-JSON response */ }
+  if (!res.ok) {
+    if (res.status === 401 || res.status === 403) {
+      clearSession();
+      lock(data?.error || 'Sign-in required.');
+    }
+    throw new Error(data?.error || 'HTTP ' + res.status);
+  }
+  return data as T;
 }
 
-/* ---------- secrets ---------- */
-async function saveSecret(name: string, value: string) {
-  if (!value.trim()) throw new Error('Empty value — nothing to save.');
-  const pub = await api<{ key: string; key_id: string }>(
-    '/repos/{repo}/actions/secrets/public-key',
-  );
-  await sodium.ready;
-  const sealed = sodium.crypto_box_seal(
-    sodium.from_string(value),
-    sodium.from_base64(pub.key, sodium.base64_variants.ORIGINAL),
-  );
-  await api('/repos/{repo}/actions/secrets/' + name, {
-    method: 'PUT',
-    body: JSON.stringify({
-      encrypted_value: sodium.to_base64(sealed, sodium.base64_variants.ORIGINAL),
-      key_id: pub.key_id,
-    }),
+/* ---------- Google gate ---------- */
+let gisInitialized = false;
+
+function renderGisButton() {
+  if (!GOOGLE_CLIENT_ID) {
+    setStatus(gateStatus, 'Google sign-in is not configured — set GOOGLE_CLIENT_ID in src/core/config.ts and GOOGLE_CLIENT_ID + GH_TOKEN in the Cloudflare Pages environment.', 'err');
+    return;
+  }
+  const w = window as any;
+  if (!document.getElementById('g_id_onload')) {
+    const onload = document.createElement('div');
+    onload.id = 'g_id_onload';
+    onload.dataset.client_id = GOOGLE_CLIENT_ID;
+    onload.dataset.callback = 'auraAdminOnCredential';
+    onload.dataset.auto_prompt = 'false';
+    document.body.appendChild(onload);
+    w.auraAdminOnCredential = async (resp: any) => {
+      try {
+        const p = await verifyGoogleCredential(resp?.credential || '', GOOGLE_CLIENT_ID);
+        if (p.email !== (ALLOWED_EMAIL || '').toLowerCase()) {
+          setStatus(gateStatus, 'Access denied — ' + p.email + ' is not allowed on this panel.', 'err');
+          try { w.google?.accounts?.id?.disableAutoSelect?.(); } catch { /* ignore */ }
+          return;
+        }
+        setSession({ email: p.email, name: p.name, picture: p.picture, exp: p.exp, token: resp.credential });
+        unlock();
+      } catch (e) {
+        setStatus(gateStatus, 'Sign-in failed — ' + ((e as Error).message || 'try again'), 'err');
+      }
+    };
+    const s = document.createElement('script');
+    s.src = 'https://accounts.google.com/gsi/client';
+    s.async = true;
+    s.defer = true;
+    s.onload = () => {
+      gisInitialized = true;
+      try {
+        w.google.accounts.id.initialize({
+          client_id: GOOGLE_CLIENT_ID,
+          callback: (resp: any) => w.auraAdminOnCredential(resp),
+        });
+        w.google.accounts.id.renderButton(gBtnBox, {
+          theme: 'filled_black', size: 'large', shape: 'pill', text: 'signin_with', width: 275,
+        });
+      } catch {
+        setStatus(gateStatus, 'Could not initialise Google sign-in.', 'err');
+      }
+    };
+    s.onerror = () => setStatus(gateStatus, 'Could not load Google sign-in — check your connection.', 'err');
+    document.head.appendChild(s);
+  } else if (gisInitialized) {
+    try {
+      w.google.accounts.id.renderButton(gBtnBox, {
+        theme: 'filled_black', size: 'large', shape: 'pill', text: 'signin_with', width: 275,
+      });
+    } catch { /* ignore */ }
+  }
+  setStatus(gateStatus, 'Waiting for Google sign-in…');
+}
+
+function unlock() {
+  const session = getSession();
+  if (!session) return lock();
+  gBtnBox.innerHTML =
+    '<div class="adm-signedin"><i class="fa-solid fa-circle-check"></i>' +
+    '<span>Signed in as <b></b></span>' +
+    '<button type="button" class="adm-btn ghost small" id="signOutBtn">Sign out</button></div>';
+  (gBtnBox.querySelector('b') as HTMLElement).textContent = session.email;
+  setStatus(gateStatus, '✓ Access granted — queue and cookies are unlocked.', 'ok');
+  gatedSections.forEach((s) => { s.hidden = false; });
+  document.getElementById('signOutBtn')!.addEventListener('click', () => {
+    clearSession();
+    location.reload();
   });
+  refreshSecretChips();
+  refreshRuns();
 }
 
-async function deleteSecret(name: string) {
-  await api('/repos/{repo}/actions/secrets/' + name, { method: 'DELETE' });
+function lock(msg?: string) {
+  gatedSections.forEach((s) => { s.hidden = true; });
+  gBtnBox.innerHTML = '';
+  if (msg) setStatus(gateStatus, msg, 'err');
+  renderGisButton();
 }
 
+/* ---------- repository config status ---------- */
 async function refreshSecretChips() {
   try {
-    const data = await api<{ secrets: { name: string }[] }>('/repos/{repo}/actions/secrets?per_page=100');
-    const have = new Set(data.secrets.map((s) => s.name));
-    secretChips.innerHTML = '';
+    const data = await adminApi<{ secrets: string[] }>('status');
+    const have = new Set(data.secrets || []);
+    const host = document.getElementById('secretChips');
+    if (!host) return;
+    host.innerHTML = '';
     for (const name of SECRET_NAMES) {
       const chip = document.createElement('span');
       chip.className = 'adm-chip' + (have.has(name) ? '' : ' missing');
       chip.textContent = (have.has(name) ? '✓ ' : '✗ ') + name;
-      secretChips.appendChild(chip);
+      host.appendChild(chip);
     }
-  } catch {
-    secretChips.innerHTML = '<span class="adm-chip dim">could not check secrets</span>';
-  }
+  } catch { /* status line already shown */ }
 }
 
 /* ---------- preview ---------- */
@@ -174,10 +236,7 @@ async function previewLinks() {
 async function dispatchDownload() {
   const urls = parseUrls();
   if (!urls.length) throw new Error('Paste at least one valid YouTube link first.');
-  await api('/repos/{repo}/actions/workflows/' + WORKFLOW_FILE + '/dispatches', {
-    method: 'POST',
-    body: JSON.stringify({ ref: 'main', inputs: { urls: urls.join('\n') } }),
-  });
+  await adminApi('dispatch', { urls });
 }
 
 /* ---------- runs ---------- */
@@ -187,11 +246,10 @@ interface Run {
 }
 
 async function refreshRuns() {
+  if (!getSession()) return;
   try {
-    const data = await api<{ workflow_runs: Run[] }>(
-      `/repos/{repo}/actions/workflows/${WORKFLOW_FILE}/runs?per_page=8`,
-    );
-    const runs = data.workflow_runs || [];
+    const data = await adminApi<{ runs: Run[] }>('runs');
+    const runs = data.runs || [];
     if (!runs.length) {
       runsList.innerHTML = '<span class="adm-chip dim">no runs yet — start a download above</span>';
       return;
@@ -217,81 +275,14 @@ async function refreshRuns() {
 
 /* ---------- wiring ---------- */
 function bind() {
-  patInput.value = getPat();
-  repoInput.value = getRepo();
-
-  $('patRevealBtn').addEventListener('click', () => {
-    const show = patInput.type === 'password';
-    patInput.type = show ? 'text' : 'password';
-    $('patRevealBtn').textContent = show ? 'Hide' : 'Show';
-  });
-
-  $('patSaveBtn').addEventListener('click', () => {
-    localStorage.setItem(LS_PAT, patInput.value.trim());
-    setStatus(cfgStatus, 'Token saved locally.', 'ok');
-    toast('Token saved', 'ok');
-    refreshSecretChips();
-  });
-
-  $('repoSaveBtn').addEventListener('click', () => {
-    const v = repoInput.value.trim().replace(/^https?:\/\/github\.com\//, '').replace(/\/+$/, '');
-    if (!/^[^/\s]+\/[^/\s]+$/.test(v)) { setStatus(cfgStatus, 'Repo must look like owner/name.', 'err'); return; }
-    localStorage.setItem(LS_REPO, v);
-    repoInput.value = v;
-    setStatus(cfgStatus, 'Repository saved: ' + v, 'ok');
-    refreshSecretChips();
-    refreshRuns();
-  });
-
-  $('testBtn').addEventListener('click', async () => {
-    const btn = $('testBtn');
-    btn.disabled = true;
-    setStatus(cfgStatus, 'Testing…');
-    try {
-      const repo = await api<{ full_name: string; private: boolean; default_branch: string }>(
-        '/repos/{repo}',
-      );
-      setStatus(cfgStatus, `✓ Connected to ${repo.full_name} (${repo.private ? 'private' : 'public'}, branch ${repo.default_branch})`, 'ok');
-      refreshSecretChips();
-      refreshRuns();
-    } catch (e) {
-      setStatus(cfgStatus, '✗ ' + (e as Error).message, 'err');
-    } finally {
-      btn.disabled = false;
-    }
-  });
-
-  $('hfTokenSaveBtn').addEventListener('click', async () => {
-    try {
-      await saveSecret('HF_TOKEN', $('hfTokenInput').value);
-      ($('hfTokenInput') as HTMLInputElement).value = '';
-      setStatus(secretsStatus, 'HF_TOKEN saved.', 'ok');
-      toast('HF_TOKEN secret saved', 'ok');
-      refreshSecretChips();
-    } catch (e) { setStatus(secretsStatus, (e as Error).message, 'err'); }
-  });
-
-  $('hfBucketSaveBtn').addEventListener('click', async () => {
-    try {
-      const v = ($('hfBucketInput') as HTMLInputElement).value.trim();
-      if (!/^[A-Za-z0-9._-]+\/[A-Za-z0-9._-]+$/.test(v)) {
-        throw new Error('Bucket id must look like namespace/name, e.g. yourname/aura-music.');
-      }
-      await saveSecret('HF_BUCKET_ID', v);
-      setStatus(secretsStatus, 'HF_BUCKET_ID saved.', 'ok');
-      toast('HF_BUCKET_ID secret saved', 'ok');
-      refreshSecretChips();
-    } catch (e) { setStatus(secretsStatus, (e as Error).message, 'err'); }
-  });
-
   $('cookiesSaveBtn').addEventListener('click', async () => {
     try {
       const val = cookiesInput.value;
       if (!/#( Netscape HTTP Cookie File|http.cookie)/i.test(val) && !/^\S+\s+TRUE\s+\//m.test(val)) {
         throw new Error('This does not look like a Netscape cookies.txt file.');
       }
-      await saveSecret('YOUTUBE_COOKIES', val);
-      setStatus(secretsStatus, 'YOUTUBE_COOKIES saved.', 'ok');
+      await adminApi('setSecret', { name: 'YOUTUBE_COOKIES', value: val });
+      setStatus(secretsStatus, 'YOUTUBE_COOKIES saved to the repository.', 'ok');
       toast('YouTube cookies uploaded', 'ok');
       refreshSecretChips();
     } catch (e) { setStatus(secretsStatus, (e as Error).message, 'err'); }
@@ -299,7 +290,7 @@ function bind() {
 
   $('cookiesClearBtn').addEventListener('click', async () => {
     try {
-      await deleteSecret('YOUTUBE_COOKIES');
+      await adminApi('deleteSecret', { name: 'YOUTUBE_COOKIES' });
       cookiesInput.value = '';
       setStatus(secretsStatus, 'YOUTUBE_COOKIES removed.', 'ok');
       refreshSecretChips();
@@ -348,12 +339,16 @@ function bind() {
   $('runsRefreshBtn').addEventListener('click', () => refreshRuns());
 
   window.setInterval(() => {
-    if (document.visibilityState === 'visible' && getPat() && getRepo()) refreshRuns();
+    if (document.visibilityState === 'visible' && getSession()) refreshRuns();
   }, 10000);
 }
 
+/* ---------- boot ---------- */
+try {
+  localStorage.removeItem('auraAdmin_pat');
+  localStorage.removeItem('auraAdmin_repo');
+} catch { /* ignore */ }
+
 bind();
-if (getPat() && getRepo()) {
-  refreshSecretChips();
-  refreshRuns();
-}
+if (getSession()) unlock();
+else lock();

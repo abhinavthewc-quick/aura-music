@@ -1,4 +1,3 @@
-import { defaultSongs } from '../core/config';
 import { fetchYouTubeMeta, stateHTML, toast } from '../core/dom';
 import { renderArtistSpotlight, renderAuraPicks, renderQuickAccess } from './home';
 import { filterSongs, loadSong, resetFullPlayerArtToImage, stopAuraYouTube, updatePlayState } from './player';
@@ -28,7 +27,8 @@ import { $, persistLikedHistory, savedLikeMap, state } from '../core/state';
       sec.style.display='block';
       c.innerHTML='';
       state.recentlyPlayed.forEach(s=>{
-        const idx = state.songs.findIndex(item=>item.id===s.id);
+        let idx = state.songs.findIndex(item=>item.id===s.id);
+        if(idx===-1 && s.title) idx = state.songs.findIndex(item=>item.title===s.title && item.artist===s.artist);
         if(idx===-1) return;
         c.innerHTML+=`<div class="recent-card" onclick="playSong(${idx})"><img src="${s.img}"><p>${s.title}</p></div>`;
       });
@@ -148,7 +148,7 @@ import { $, persistLikedHistory, savedLikeMap, state } from '../core/state';
         }
 
         state.addedSongs.push(newTrack);
-        state.songs = [...defaultSongs, ...state.addedSongs];
+        state.songs = [...state.hfSongs, ...state.addedSongs];
         addedCount++;
 
         row.className = 'upload-file-row done';
@@ -261,7 +261,7 @@ import { $, persistLikedHistory, savedLikeMap, state } from '../core/state';
       }
 
       state.addedSongs = state.addedSongs.filter(s => s.id !== id);
-      state.songs = [...defaultSongs, ...state.addedSongs];
+      state.songs = [...state.hfSongs, ...state.addedSongs];
       state.recentlyPlayed = state.recentlyPlayed.filter(s => s.id !== id);
       localStorage.setItem('recentlyPlayed', JSON.stringify(state.recentlyPlayed));
       persistAddedSongs();
@@ -304,7 +304,7 @@ import { $, persistLikedHistory, savedLikeMap, state } from '../core/state';
 
         state.addedSongs.push(newTrack);
         persistAddedSongs();
-        state.songs = [...defaultSongs, ...state.addedSongs];
+        state.songs = [...state.hfSongs, ...state.addedSongs];
         
         // Reset inputs
         $('newTitle').value = ''; $('newArtist').value = ''; $('newUrl').value = ''; $('newImg').value = '';
@@ -341,7 +341,7 @@ import { $, persistLikedHistory, savedLikeMap, state } from '../core/state';
 
       state.addedSongs.push(newTrack);
       persistAddedSongs();
-      state.songs = [...defaultSongs, ...state.addedSongs];
+      state.songs = [...state.hfSongs, ...state.addedSongs];
       $('ytAddInput').value = '';
       renderSongs(state.songs);
       updateLibCount();
