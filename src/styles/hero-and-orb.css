@@ -1,0 +1,6 @@
+/* Welcome card: with the sub-line and stats gone, give the greeting and the buttons room to breathe */
+.desktop-home-hero .desktop-hero-copy h2{margin-bottom:24px}
+@media(max-width:899px){.desktop-home-hero .desktop-hero-copy h2{margin-bottom:18px}}
+/* In-app loading state: small spinning orb */
+.aura-state-orb{width:76px;height:76px;margin-bottom:2px}
+.aura-orb-mini{display:block;width:100%;height:100%}

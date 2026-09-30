@@ -1,0 +1,78 @@
+/* ===== Premium vinyl welcome hero ===== */
+.desktop-home-hero{
+  grid-template-columns:minmax(0,1fr) minmax(250px,330px)!important;
+  min-height:300px!important;
+  padding:30px 34px 26px!important;
+  border-radius:30px!important;
+  border:1px solid rgba(239,201,132,.28)!important;
+  background:
+    radial-gradient(70% 120% at 96% 50%,rgba(230,177,91,.16),transparent 52%),
+    radial-gradient(55% 95% at 72% 10%,rgba(0,205,239,.10),transparent 56%),
+    linear-gradient(120deg,#081019 0%,#09131e 52%,#0b1018 100%)!important;
+  box-shadow:0 28px 80px rgba(0,0,0,.34),inset 0 1px 0 rgba(255,255,255,.16),inset 0 -1px 0 rgba(255,255,255,.035)!important;
+  isolation:isolate;
+}
+.desktop-home-hero:after{
+  content:"";position:absolute;inset:0;pointer-events:none;z-index:0;
+  background:
+    radial-gradient(38% 55% at 8% 100%,rgba(222,164,86,.13),transparent 70%),
+    linear-gradient(90deg,rgba(255,255,255,.025),transparent 34%,transparent 68%,rgba(239,201,132,.045));
+}
+.desktop-home-hero .desktop-hero-copy{z-index:4;max-width:760px}
+.desktop-home-hero .desktop-hero-kicker{color:rgba(246,226,192,.78);letter-spacing:2.5px}
+.desktop-home-hero .desktop-live-dot{background:#27e6df;box-shadow:0 0 16px rgba(39,230,223,.72)}
+.desktop-home-hero .desktop-hero-copy h2{font-size:clamp(40px,4.2vw,62px);line-height:.96;letter-spacing:-2.4px;margin-bottom:22px}
+.desktop-home-hero .desktop-hero-copy h2 em{display:block;font-style:normal;font-size:.68em;letter-spacing:-1.2px;color:#19dce5;-webkit-text-fill-color:#19dce5;text-shadow:0 0 24px rgba(25,220,229,.16)}
+.desktop-home-hero .desktop-hero-copy h2 span{display:block;background:linear-gradient(180deg,#fffdf9 0%,#f2eadc 65%,#d8c9b4 100%);-webkit-background-clip:text;background-clip:text;color:transparent;-webkit-text-fill-color:transparent}
+.desktop-home-hero .desktop-hero-actions{gap:12px}
+.desktop-home-hero .desktop-hero-actions button{min-height:48px;padding:0 19px;border-radius:17px;font-size:12px;border:1px solid rgba(239,201,132,.24);box-shadow:inset 0 1px 0 rgba(255,255,255,.16),0 10px 26px rgba(0,0,0,.20);backdrop-filter:blur(16px);-webkit-backdrop-filter:blur(16px)}
+.desktop-home-hero .desktop-hero-primary{background:linear-gradient(135deg,rgba(236,190,111,.22),rgba(255,255,255,.06))!important;color:#fff5e5}
+.desktop-home-hero .desktop-hero-secondary{background:linear-gradient(135deg,rgba(255,255,255,.10),rgba(255,255,255,.035))!important}
+.desktop-home-hero .desktop-hero-actions button i{color:#f1cf92;margin-right:7px}
+.desktop-home-hero .hero-chat-btn{display:none}
+
+
+.hero-vinyl{position:absolute;right:-310px;top:50%;width:620px;height:620px;transform:translateY(-50%);z-index:2;pointer-events:none;overflow:visible}
+.hero-vinyl-record{position:absolute!important;inset:0!important;width:100%!important;height:100%!important;display:block;object-fit:contain;transform-origin:50% 50%;animation:heroRecordSpin 10s linear infinite;filter:drop-shadow(0 18px 28px rgba(0,0,0,.48)) drop-shadow(0 0 20px rgba(239,190,104,.12))}
+.hero-vinyl-aura{position:absolute;left:10%;top:10%;width:80%;height:80%;border-radius:50%;background:radial-gradient(circle,rgba(235,192,116,.11) 0%,rgba(0,213,235,.035) 42%,transparent 68%);filter:blur(30px);animation:heroVinylAura 5s ease-in-out infinite alternate;pointer-events:none}
+@keyframes heroRecordSpin{to{transform:rotate(360deg)}}
+@keyframes heroVinylAura{from{transform:scale(.97);opacity:.5}to{transform:scale(1.03);opacity:.85}}
+
+/* Premium Beeboo interaction badge */
+.desktop-home-hero .beeboo-mascot-btn{top:auto!important;right:24px!important;bottom:22px!important;align-items:flex-end;gap:8px}
+.desktop-home-hero .beeboo-bubble{padding:8px 13px;border-radius:13px;color:#f8ead1;background:linear-gradient(135deg,rgba(40,31,21,.90),rgba(12,18,28,.88));border:1px solid rgba(238,196,122,.38);box-shadow:0 10px 28px rgba(0,0,0,.35),inset 0 1px 0 rgba(255,255,255,.14);font-size:10.5px;letter-spacing:.15px}
+.desktop-home-hero .beeboo-bubble::after{border-color:transparent transparent rgba(40,31,21,.90) transparent}
+.desktop-home-hero .beeboo-face{width:62px;height:62px;border-radius:20px;background:linear-gradient(145deg,#202a3b,#0a111d);border:1px solid rgba(245,207,139,.72);box-shadow:0 14px 30px rgba(0,0,0,.42),0 0 0 5px rgba(239,193,112,.055),0 0 30px rgba(35,215,231,.12),inset 0 1px 0 rgba(255,255,255,.22);animation:beebooPremiumFloat 3.8s ease-in-out infinite}
+.desktop-home-hero .beeboo-face:before{content:"";position:absolute;inset:-7px;border-radius:24px;border:1px solid rgba(25,220,229,.18);box-shadow:0 0 22px rgba(25,220,229,.10);pointer-events:none}
+.desktop-home-hero .beeboo-face img{border-radius:18px;padding:2px;filter:saturate(1.08) contrast(1.03)}
+.desktop-home-hero .beeboo-online-dot{width:11px;height:11px;right:-1px;bottom:-1px;background:#f0c979;border-color:#101722;box-shadow:0 0 0 3px rgba(240,201,121,.10),0 0 12px rgba(240,201,121,.5)}
+@keyframes beebooPremiumFloat{0%,100%{transform:translateY(0) rotate(0)}50%{transform:translateY(-4px) rotate(1deg)}}
+
+@media(max-width:899px){
+  .desktop-home-hero{display:block!important;min-height:230px!important;padding:20px 18px 18px!important;border-radius:24px!important}
+  .desktop-home-hero .desktop-hero-copy{padding-right:84px}
+  .desktop-home-hero .desktop-hero-kicker{font-size:8px;letter-spacing:1.6px;margin-bottom:9px;white-space:nowrap}
+  .desktop-home-hero .desktop-hero-copy h2{font-size:38px;letter-spacing:-1.8px;margin-bottom:17px;line-height:.94}
+  .desktop-home-hero .desktop-hero-copy h2 em{font-size:20px;letter-spacing:-.5px;margin-bottom:4px}
+  .desktop-home-hero .desktop-hero-actions{position:relative;z-index:5;display:flex;flex-wrap:wrap;gap:7px;max-width:74%}
+  .desktop-home-hero .desktop-hero-actions button{min-height:38px;padding:0 12px;border-radius:13px;font-size:10px}
+  .desktop-home-hero .hero-chat-btn{display:none!important}
+  .hero-vinyl{right:-155px;top:52%;width:330px;height:330px;opacity:.92}
+  .desktop-home-hero .beeboo-mascot-btn{right:15px!important;bottom:14px!important}
+  .desktop-home-hero .beeboo-face{width:54px;height:54px;border-radius:17px}
+  .desktop-home-hero .beeboo-face:before{border-radius:21px}
+  .desktop-home-hero .beeboo-bubble{font-size:9px;padding:6px 9px}
+}
+@media(max-width:420px){
+  .desktop-home-hero{min-height:215px!important;padding:18px 15px 15px!important}
+  .desktop-home-hero .desktop-hero-copy{padding-right:62px}
+  .desktop-home-hero .desktop-hero-copy h2{font-size:32px}
+  .desktop-home-hero .desktop-hero-copy h2 em{font-size:18px}
+  .desktop-home-hero .desktop-hero-actions{max-width:100%;gap:6px}
+  .desktop-home-hero .desktop-hero-actions button{min-height:35px;padding:0 10px;font-size:9.5px}
+  .hero-vinyl{right:-176px;width:300px;height:300px;opacity:.78}
+  .desktop-home-hero .beeboo-mascot-btn{right:11px!important;bottom:11px!important}
+  .desktop-home-hero .beeboo-face{width:48px;height:48px;border-radius:15px}
+  .desktop-home-hero .beeboo-bubble{display:none}
+}
+@media(prefers-reduced-motion:reduce){.hero-vinyl-record,.hero-vinyl-aura,.desktop-home-hero .beeboo-face{animation:none!important}}

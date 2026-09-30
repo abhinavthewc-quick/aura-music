@@ -1,0 +1,85 @@
+/* ===== Tweaks: gold radio theme, lighter hero text, round profile ===== */
+.radio-tea-hero{min-height:230px}
+.radio-tea-hero-fade{background:linear-gradient(180deg,rgba(6,8,14,0) 45%,rgba(6,8,14,.55) 100%)!important}
+.radio-tea-hero-content{padding:14px 16px 12px}
+.radio-tea-hero-content h3{font-size:15px;margin:0 0 3px}
+.radio-tea-sub{font-size:10px;line-height:1.4;margin:0;max-width:none;color:rgba(255,255,255,.9);text-shadow:0 1px 6px rgba(0,0,0,.7)}
+:root{--gold:#e9b949;--gold-2:#b8862b}
+.radio-segment-btn i{color:var(--gold)}
+.radio-segment-btn.active{color:#2a1a02!important;background:linear-gradient(135deg,#f6d77a,#e9b949 55%,#b8862b)!important;border-color:rgba(246,215,122,.7)!important;box-shadow:0 6px 18px rgba(233,185,73,.28),inset 0 1px 0 rgba(255,255,255,.5)}
+.radio-segment-btn.active i{color:#2a1a02}
+.radio-chip.active{color:#2a1a02!important;border-color:rgba(246,215,122,.7)!important;background:linear-gradient(135deg,#f6d77a,#e9b949 60%,#b8862b)!important;box-shadow:0 6px 16px rgba(233,185,73,.25),inset 0 1px 0 rgba(255,255,255,.5)!important}
+.radio-presets::before{background:linear-gradient(120deg,rgba(255,255,255,.10),rgba(255,255,255,.03) 48%,rgba(233,185,73,.08))!important}
+.radio-search button{color:var(--gold)!important;border-color:rgba(233,185,73,.4)!important}
+.radio-search input:focus{border-color:rgba(233,185,73,.6)}
+.header-profile-wrap{width:40px;height:40px;flex:0 0 40px;min-width:40px;aspect-ratio:1/1}
+.profile-btn{width:40px!important;height:40px!important;min-width:40px;aspect-ratio:1/1;border-radius:50%!important;flex:0 0 auto}
+.profile-btn img{border-radius:50%;aspect-ratio:1/1}
+@media(max-width:480px){.header-profile-wrap{width:44px;height:44px;flex-basis:44px;min-width:44px}.profile-btn{width:44px!important;height:44px!important;min-width:44px}}
+
+/* ===== Round 2: warm tan radio theme, inline effects, Aura Picks ===== */
+:root{--tan:#dcae7c;--tan-2:#c58f5c;--tan-ink:#2b1a0d}
+.radio-tea-hero-content, .radio-tea-hero-content *{font-family:"DM Sans","Helvetica Neue",Arial,sans-serif}
+.radio-tea-hero{min-height:250px;border-color:rgba(220,174,124,.28)}
+.radio-tea-hero-fade{background:linear-gradient(180deg,rgba(20,12,6,0) 30%,rgba(20,12,6,.62) 78%,rgba(20,12,6,.88) 100%)!important}
+.radio-tea-hero-content{padding:18px 20px 18px}
+.radio-tea-hero-content h3{font-size:34px;font-weight:500;letter-spacing:-1.6px;line-height:1;margin:0 0 8px}
+.radio-tea-sub{font-size:12.5px;font-weight:400;line-height:1.55;max-width:460px;color:rgba(255,240,225,.9);text-shadow:0 1px 8px rgba(0,0,0,.6)}
+.radio-segment-btn i{color:var(--tan)}
+.radio-segment-btn.active,.radio-chip.active{color:var(--tan-ink)!important;background:linear-gradient(135deg,#e6bd92,var(--tan) 55%,var(--tan-2))!important;border-color:rgba(230,189,146,.7)!important;box-shadow:0 6px 18px rgba(197,143,92,.28),inset 0 1px 0 rgba(255,255,255,.4)!important}
+.radio-segment-btn.active i{color:var(--tan-ink)}
+.radio-presets::before{background:linear-gradient(120deg,rgba(255,255,255,.09),rgba(255,255,255,.03) 48%,rgba(197,143,92,.09))!important}
+.radio-search button{color:var(--tan)!important;border-color:rgba(220,174,124,.4)!important}
+.radio-search input:focus{border-color:rgba(220,174,124,.6)}
+/* inline effects panel (same look as stations window) */
+#radioEffectsPane .effects-card{width:100%;max-height:none;overflow:visible;border-radius:22px;box-shadow:0 14px 40px rgba(0,0,0,.25),inset 0 1px 0 rgba(255,255,255,.12)}
+#radioEffectsPane .effects-close{display:none}
+/* Home: soundscape + aura picks */
+.soundscape-card{display:flex;align-items:center;gap:14px;padding:14px;margin:0 0 22px;border-radius:24px;cursor:pointer;background:linear-gradient(135deg,rgba(255,255,255,.09),rgba(255,255,255,.03));border:1px solid rgba(255,255,255,.14)}
+.soundscape-icon{width:56px;height:56px;flex:0 0 56px;border-radius:18px;display:flex;align-items:center;justify-content:center;font-size:22px;color:#f1cf9f;background:linear-gradient(135deg,rgba(255,255,255,.14),rgba(120,90,140,.25));border:1px solid rgba(255,255,255,.14)}
+.soundscape-text{flex:1;min-width:0}.soundscape-text b{display:block;font-size:16px;margin-bottom:3px}.soundscape-text span{display:block;font-size:11.5px;line-height:1.4;color:var(--text-sub)}
+.soundscape-btn{flex:0 0 auto;padding:11px 14px;border-radius:15px;border:1px solid rgba(255,255,255,.16);background:rgba(255,255,255,.07);color:var(--text);font-weight:700;font-size:12.5px;cursor:pointer}
+.aura-picks{margin:0 0 22px}
+.aura-picks-head{display:flex;align-items:flex-end;justify-content:space-between;gap:10px;margin-bottom:12px}
+.aura-picks-kicker{font-size:11px;letter-spacing:2.6px;font-weight:800;color:var(--text-sub);margin-bottom:4px}
+.aura-picks-head h3{font-size:22px;font-weight:800;margin:0}
+.aura-picks-refresh{display:inline-flex;align-items:center;gap:7px;padding:10px 14px;border-radius:15px;border:1px solid rgba(255,255,255,.16);background:rgba(255,255,255,.06);color:var(--text);font-weight:700;font-size:12.5px;cursor:pointer;white-space:nowrap}
+.aura-picks-scroll{display:flex;gap:12px;overflow-x:auto;padding:2px 1px 8px;scrollbar-width:none}
+.aura-picks-scroll::-webkit-scrollbar{display:none}
+.aura-pick{position:relative;flex:0 0 158px;height:166px;border-radius:22px;overflow:hidden;cursor:pointer;border:1px solid rgba(255,255,255,.16);background:#111;box-shadow:0 10px 24px rgba(0,0,0,.28)}
+.aura-pick img{position:absolute;inset:0;width:100%;height:100%;object-fit:cover}
+.aura-pick::after{content:"";position:absolute;inset:0;background:linear-gradient(180deg,rgba(0,0,0,0) 40%,rgba(0,0,0,.78) 100%)}
+.aura-pick-play{position:absolute;z-index:2;top:10px;right:10px;width:34px;height:34px;border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:13px;color:#fff;background:rgba(0,0,0,.5);border:1px solid rgba(255,255,255,.25)}
+.aura-pick-info{position:absolute;z-index:2;left:12px;right:10px;bottom:10px;color:#fff}
+.aura-pick-info b{display:block;font-size:14px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.aura-pick-info span{display:block;font-size:11px;color:rgba(255,255,255,.7);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+@media(min-width:900px){.aura-pick{flex-basis:190px;height:200px}}
+
+/* ===== Round 3: LIVE badge, merged home card, new welcome ===== */
+.radio-live-badge{position:absolute;z-index:3;top:12px;left:14px;display:inline-flex;align-items:center;gap:7px;padding:6px 11px;border-radius:999px;font:700 10px/1 "DM Sans",system-ui,sans-serif;letter-spacing:1.4px;color:#fff;background:rgba(20,12,6,.55);border:1px solid rgba(220,174,124,.4);backdrop-filter:blur(8px);-webkit-backdrop-filter:blur(8px);max-width:calc(100% - 28px)}
+#radioLiveText{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.radio-live-dot{width:7px;height:7px;flex:0 0 7px;border-radius:50%;background:#7dffb0;box-shadow:0 0 8px #7dffb0;animation:radioLivePulse 1.6s ease-in-out infinite}
+@keyframes radioLivePulse{50%{opacity:.35;transform:scale(.8)}}
+.desktop-hero-copy h2 em{font-style:normal;display:block;-webkit-text-fill-color:#fff;color:#fff}
+@media(min-width:900px){#tabHome > .greeting{display:none!important}}
+@media(prefers-reduced-motion:reduce){.radio-live-dot{animation:none}}
+
+/* ===== Round 4: single merged home card on PC + mobile ===== */
+#tabHome > .greeting{display:none!important}
+.desktop-home-hero .beeboo-mascot-btn{top:16px;right:18px;bottom:auto!important}
+.desktop-home-hero .hero-float-one{display:none}
+@media(max-width:899px){
+  .desktop-home-hero{display:block!important;position:relative;margin:0 0 20px;padding:20px 18px 16px;border-radius:22px;overflow:hidden;border:1px solid rgba(255,255,255,.18);background:linear-gradient(135deg,rgba(0,242,254,.18),rgba(0,120,140,.10) 45%,rgba(126,92,255,.10));box-shadow:0 18px 40px rgba(0,0,0,.25),inset 0 1px 0 rgba(255,255,255,.16)}
+  .desktop-hero-orbit{display:none}
+  .desktop-hero-kicker{font-size:9px;letter-spacing:1.8px;color:var(--text-sub);font-weight:800;margin-bottom:10px;padding-right:84px}
+  .desktop-live-dot{display:inline-block;width:7px;height:7px;border-radius:50%;background:#24e0a3;margin-right:4px}
+  .desktop-hero-copy h2{font-size:34px;line-height:1.05;letter-spacing:-1px;margin:0 0 6px}
+  .desktop-hero-copy h2 em{font-style:normal;display:block;font-size:20px;font-weight:600;letter-spacing:0;color:var(--accent);-webkit-text-fill-color:var(--accent)}
+  .desktop-hero-copy h2 span{color:var(--text)}
+  .desktop-hero-copy p{margin:0 0 14px;color:var(--text-sub);font-size:12px}
+  .desktop-hero-actions{display:flex;flex-wrap:wrap;gap:8px}
+  .desktop-hero-actions button{min-height:38px;padding:0 13px;border-radius:13px;border:1px solid rgba(255,255,255,.15);background:rgba(255,255,255,.08);color:var(--text);font-size:11px;font-weight:800;cursor:pointer}
+  .desktop-hero-stats{display:flex;gap:18px;margin-top:14px}
+  .desktop-hero-stats div{display:flex;align-items:baseline;gap:6px}
+  .desktop-hero-stats b{font-size:15px}.desktop-hero-stats span{font-size:9px;letter-spacing:1px;text-transform:uppercase;color:var(--text-sub)}
+}

@@ -1,0 +1,1 @@
+  .nav-bar .nav-label, .nav-bar .nav-text, .nav-bar .nav-title, .nav-bar span:not(.fa-solid):not(.fa-regular):not(.fa-brands) { display:none !important; }

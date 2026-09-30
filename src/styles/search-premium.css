@@ -1,0 +1,51 @@
+/* ===== Round 11: premium search tab ===== */
+.srch-head{margin:2px 2px 16px}
+.srch-kicker{font-size:11px;font-weight:800;letter-spacing:3px;color:#dcae7c;margin-bottom:6px}
+.srch-title{font-size:34px!important;font-weight:800;letter-spacing:-1.2px;line-height:1.05;margin:0 0 6px!important;background:linear-gradient(90deg,var(--text) 40%,#dcae7c);-webkit-background-clip:text;background-clip:text;-webkit-text-fill-color:transparent}
+.srch-sub{font-size:13px;color:var(--text-sub);margin:0}
+.srch-bar-row{display:flex;gap:10px;margin-bottom:14px}
+.srch-bar{flex:1;height:58px;margin:0!important;padding:0 8px 0 10px!important;border-radius:20px!important;gap:10px;background:linear-gradient(135deg,rgba(255,236,210,.09),rgba(255,236,210,.03))!important;border:1px solid rgba(220,174,124,.28)!important;box-shadow:0 12px 30px rgba(0,0,0,.25),inset 0 1px 0 rgba(255,255,255,.1);transition:border-color .2s,box-shadow .2s}
+.srch-bar:focus-within{border-color:rgba(220,174,124,.75)!important;box-shadow:0 0 0 4px rgba(220,174,124,.14),0 14px 36px rgba(0,0,0,.32)}
+.srch-bar > i{width:40px;height:40px;flex:0 0 40px;border-radius:14px;display:grid;place-items:center;font-size:15px;background:rgba(220,174,124,.16);color:#e6bd92!important}
+.srch-bar input{flex:1;min-width:0;font-size:15.5px!important;font-weight:500;background:transparent!important;color:var(--text)}
+.srch-clear{display:none;width:34px;height:34px;flex:0 0 34px;border-radius:50%;border:0;place-items:center;background:rgba(255,236,210,.1);color:var(--text-sub);cursor:pointer}
+.srch-bar.has-text .srch-clear{display:grid}
+.srch-mic{width:58px!important;height:58px!important;border-radius:20px!important;border:0!important;background:linear-gradient(135deg,#e6bd92,#c58f5c)!important;color:#2b1a0d!important;font-size:18px;box-shadow:0 10px 24px rgba(197,143,92,.35)}
+.srch-trending{display:flex;align-items:center;gap:8px;overflow-x:auto;padding:2px 1px 6px;margin-bottom:12px;scrollbar-width:none}
+.srch-trending::-webkit-scrollbar{display:none}
+.srch-trend-label{flex:0 0 auto;font-size:11px;font-weight:800;letter-spacing:1.2px;text-transform:uppercase;color:var(--text-sub);margin-right:2px}
+.srch-trend-label i{color:#f0995a;margin-right:4px}
+.srch-trending button{flex:0 0 auto;padding:8px 14px;border-radius:999px;font-size:12.5px;font-weight:600;color:var(--text);background:rgba(220,174,124,.1);border:1px solid rgba(220,174,124,.28);cursor:pointer;transition:.18s}
+.srch-trending button:hover,.srch-trending button:active{background:rgba(220,174,124,.24);transform:translateY(-1px)}
+#tabSearch.searching .srch-trending{display:none}
+#tabSearch .browse-grid{display:flex!important;gap:8px;overflow-x:auto;margin-bottom:20px;padding:2px 1px 6px;scrollbar-width:none}
+#tabSearch .browse-grid::-webkit-scrollbar{display:none}
+#tabSearch .browse-tile{flex:0 0 auto;min-height:40px;padding:0 16px;border-radius:999px;font-size:12.5px;font-weight:700;color:var(--text);background:var(--card-bg)!important;border:1px solid var(--card-border)!important;box-shadow:none}
+#tabSearch .browse-tile::before,#tabSearch .browse-tile::after{display:none}
+#tabSearch .browse-tile i{font-size:13px;margin-right:7px;color:#dcae7c}
+#tabSearch .browse-tile.active{background:linear-gradient(135deg,#e6bd92,#c58f5c)!important;color:#2b1a0d;border-color:transparent!important;box-shadow:0 8px 20px rgba(197,143,92,.3)}
+#tabSearch .browse-tile.active i{color:#2b1a0d}
+.srch-section{position:relative;font-size:16px;font-weight:800;margin:0 0 12px;padding-left:12px}
+.srch-section::before{content:"";position:absolute;left:0;top:3px;bottom:3px;width:4px;border-radius:4px;background:linear-gradient(180deg,#e6bd92,#c58f5c)}
+.srch-hint{font-size:10.5px;color:var(--text-sub)}
+#tabSearch .song-item,#tabSearch .song-row{border-radius:18px;padding:10px 12px;background:linear-gradient(135deg,rgba(255,236,210,.06),rgba(255,236,210,.02));border:1px solid rgba(255,236,210,.08);transition:transform .18s,border-color .18s,background .18s;gap:12px}
+#tabSearch .song-item:hover,#tabSearch .song-row:hover{transform:translateY(-2px);border-color:rgba(220,174,124,.45);background:linear-gradient(135deg,rgba(220,174,124,.12),rgba(255,236,210,.03))}
+#tabSearch .song-item.active{border-color:rgba(220,174,124,.6);background:linear-gradient(135deg,rgba(220,174,124,.2),rgba(255,236,210,.04))}
+#tabSearch .song-item img,#tabSearch .srch-cover{width:54px;height:54px;border-radius:14px;object-fit:cover;flex-shrink:0;box-shadow:0 6px 16px rgba(0,0,0,.35)}
+#tabSearch .song-title{font-weight:700;font-size:14px}
+.src-pill{display:inline-block;margin-top:4px;padding:2px 8px;border-radius:99px;font-size:10px;font-weight:700;letter-spacing:.2px}
+.src-pill.full{color:#8fe0ab;background:rgba(125,214,160,.12);border:1px solid rgba(125,214,160,.28)}
+.src-pill.preview{color:#e6bd92;background:rgba(220,174,124,.12);border:1px solid rgba(220,174,124,.28)}
+#tabSearch .song-item-icon-btn{width:40px;height:40px;border-radius:50%;border:0;display:grid;place-items:center;background:linear-gradient(135deg,#e6bd92,#c58f5c);color:#2b1a0d;box-shadow:0 6px 16px rgba(197,143,92,.3)}
+.paste-link-row input{border-radius:14px}
+body.light-theme .srch-bar{background:linear-gradient(135deg,rgba(255,255,255,.95),rgba(250,240,225,.75))!important;border-color:rgba(168,100,42,.3)!important;box-shadow:0 10px 26px rgba(120,85,45,.14)}
+body.light-theme .srch-bar > i{background:rgba(220,174,124,.28);color:#8f4f18!important}
+body.light-theme .srch-clear{background:rgba(120,85,45,.1)}
+body.light-theme .srch-trending button{background:rgba(220,174,124,.2);border-color:rgba(168,100,42,.3)}
+body.light-theme #tabSearch .song-item,body.light-theme #tabSearch .song-row{background:rgba(255,255,255,.78);border-color:rgba(120,85,45,.14);box-shadow:0 6px 16px rgba(120,85,45,.08)}
+body.light-theme .src-pill.full{color:#2f7a4c;background:rgba(60,160,100,.12);border-color:rgba(60,160,100,.3)}
+body.light-theme .src-pill.preview{color:#8f4f18}
+body.light-theme #tabSearch .browse-tile:not(.active){background:rgba(255,255,255,.8)!important}
+body.light-theme .srch-bar input{color:var(--text)!important;-webkit-text-fill-color:var(--text)}
+body.light-theme .srch-bar input::placeholder{color:#a3917c;opacity:1;-webkit-text-fill-color:#a3917c}
+.srch-bar input::placeholder{opacity:.7}

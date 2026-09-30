@@ -1,0 +1,59 @@
+    .admin-section { margin-top: 20px; display: flex; flex-direction: column; gap: 10px; background: var(--card-bg); padding: 15px; border-radius: 14px; border: 1px solid var(--card-border); }
+
+    /* Local Audio File Upload Card */
+    /* Premium liquid-glass Add Music area */
+    .upload-card{position:relative;overflow:hidden;background:linear-gradient(135deg,rgba(0,242,254,.14),rgba(255,255,255,.055) 42%,rgba(126,92,255,.10));border:1px solid rgba(255,255,255,.20);border-radius:24px;padding:22px;margin-bottom:16px;max-width:520px;box-shadow:inset 0 1px 0 rgba(255,255,255,.28),inset 0 -20px 45px rgba(0,0,0,.12),0 18px 45px rgba(0,0,0,.20),0 0 35px rgba(0,242,254,.06);backdrop-filter:blur(28px) saturate(175%);-webkit-backdrop-filter:blur(28px) saturate(175%)}
+    .upload-card::before{content:"";position:absolute;inset:0;pointer-events:none;background:linear-gradient(115deg,rgba(255,255,255,.14),transparent 24%,transparent 68%,rgba(0,242,254,.06));}
+    .upload-card::after{content:"";position:absolute;top:-70%;left:-30%;width:45%;height:240%;pointer-events:none;background:linear-gradient(90deg,transparent,rgba(255,255,255,.10),transparent);transform:rotate(18deg);animation:addMusicGlassSweep 7s ease-in-out infinite;opacity:.55}
+    @keyframes addMusicGlassSweep{0%,55%{transform:translateX(-180%) rotate(18deg)}100%{transform:translateX(430%) rotate(18deg)}}
+    .upload-card > *{position:relative;z-index:1}
+    .upload-card-head{display:flex;align-items:center;gap:12px;margin-bottom:10px}
+    .upload-card-head .icon-badge{width:42px;height:42px;border-radius:14px;background:linear-gradient(135deg,rgba(0,242,254,.22),rgba(126,92,255,.16));border:1px solid rgba(255,255,255,.20);display:flex;align-items:center;justify-content:center;color:var(--accent);font-size:17px;flex-shrink:0;box-shadow:inset 0 1px 0 rgba(255,255,255,.28),0 8px 24px rgba(0,0,0,.16)}
+    .upload-card-head h4{font-size:14px;font-weight:800;letter-spacing:.3px}
+    .upload-desc{font-size:12.5px;color:var(--text-sub);line-height:1.5;margin-bottom:14px}
+    .format-tags{display:flex;flex-wrap:wrap;gap:6px;margin-bottom:14px}
+    .format-tag{font-size:10px;font-weight:700;color:var(--accent);background:rgba(0,242,254,.1);border:1px solid rgba(0,242,254,.25);padding:3px 8px;border-radius:20px}
+    .upload-select-btn{width:100%;padding:14px;border-radius:16px;border:1px solid rgba(255,255,255,.22);background:linear-gradient(135deg,rgba(0,242,254,.22),rgba(0,242,254,.10) 48%,rgba(126,92,255,.14));color:var(--text);font-weight:800;font-size:13.5px;cursor:pointer;display:flex;align-items:center;justify-content:center;gap:8px;transition:.2s;box-shadow:inset 0 1px 0 rgba(255,255,255,.28),0 10px 25px rgba(0,0,0,.16);backdrop-filter:blur(18px) saturate(160%);-webkit-backdrop-filter:blur(18px) saturate(160%)}
+    .upload-select-btn:hover{border-color:rgba(0,242,254,.55);background:linear-gradient(135deg,rgba(0,242,254,.30),rgba(0,242,254,.13) 48%,rgba(126,92,255,.18));box-shadow:inset 0 1px 0 rgba(255,255,255,.34),0 12px 30px rgba(0,0,0,.20),0 0 22px rgba(0,242,254,.08)}
+    .upload-select-btn:active{transform:scale(.985)}
+    .upload-file-list{margin-top:12px;display:flex;flex-direction:column;gap:6px}
+    .upload-file-row{display:flex;align-items:center;gap:8px;font-size:11.5px;color:var(--text-sub);background:rgba(255,255,255,.05);padding:6px 10px;border-radius:8px}
+    .upload-file-row.done{color:var(--accent)}
+    .upload-file-row.failed{color:#ff6b6b}
+    .upload-file-row span{white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+
+    /* Toast Notifications */
+    .toast-container{position:fixed;top:16px;left:50%;transform:translateX(-50%);z-index:2000;display:flex;flex-direction:column;gap:8px;align-items:center;pointer-events:none}
+    .toast{background:var(--card-bg);backdrop-filter:blur(20px);border:1px solid var(--card-border);color:var(--text);padding:12px 20px;border-radius:12px;font-size:13px;font-weight:600;box-shadow:0 10px 30px rgba(0,0,0,.3);opacity:0;transform:translateY(-14px);transition:.3s;display:flex;align-items:center;gap:8px;white-space:nowrap}
+    .toast.show{opacity:1;transform:translateY(0)}
+    .toast i{color:var(--accent)}
+
+    /* Recently Played */
+    .recent-scroll{display:flex;gap:12px;overflow-x:auto;padding:4px 2px 8px;scrollbar-width:none}
+    .recent-scroll::-webkit-scrollbar{display:none}
+    .recent-card{position:relative;flex-shrink:0;width:112px;padding:7px 7px 9px;cursor:pointer;text-align:center;border-radius:18px;background:linear-gradient(135deg,rgba(255,255,255,.12),rgba(255,255,255,.045));border:1px solid rgba(255,255,255,.15);box-shadow:0 8px 22px rgba(0,0,0,.18),inset 0 1px 0 rgba(255,255,255,.13);backdrop-filter:blur(20px) saturate(155%);-webkit-backdrop-filter:blur(20px) saturate(155%);transition:transform .2s ease,background .2s ease,border-color .2s ease}
+    .recent-card:hover{transform:translateY(-2px);background:linear-gradient(135deg,rgba(255,255,255,.16),rgba(255,255,255,.06));border-color:rgba(255,255,255,.24)}
+    .recent-card:active{transform:scale(.97)}
+    .recent-card img{width:98px;height:98px;border-radius:13px;object-fit:cover;margin-bottom:7px;display:block;box-shadow:0 4px 14px rgba(0,0,0,.22)}
+    .recent-card p{font-size:11px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;padding:0 3px}
+    .lib-count{font-size:11px;color:var(--text-sub);font-weight:500;margin-top:4px}
+
+    /* Volume Control */
+    .volume-row{display:flex;align-items:center;gap:10px;margin-top:18px;color:var(--text-sub);font-size:13px}
+    .volume-row input[type="range"]{flex:1;height:4px;border-radius:2px;background:rgba(150,150,150,.3);outline:none;-webkit-appearance:none;cursor:pointer}
+    .volume-row input[type="range"]::-webkit-slider-thumb{-webkit-appearance:none;width:12px;height:12px;border-radius:50%;background:var(--accent)}
+
+    /* Shuffle / Repeat active states */
+    .full-ctrl-btn{position:relative}
+    .full-ctrl-btn.mode-active{color:var(--accent)}
+    .repeat-one-badge{position:absolute;top:-2px;right:-6px;font-size:9px;font-weight:800;background:var(--accent);color:#fff;border-radius:50%;width:13px;height:13px;display:flex;align-items:center;justify-content:center}
+
+    /* Song item action buttons (menu) */
+    .song-item-actions{display:flex;align-items:center;gap:0;flex-shrink:0}
+    .song-item-icon-btn{background:none;border:none;color:var(--text-sub);font-size:13px;cursor:pointer;padding:6px}
+    .song-item-icon-btn:hover{color:var(--accent)}
+    .song-item-icon-btn.delete-btn:hover{color:#ff6b6b}
+    .song-item-menu-btn{background:none;border:none;color:var(--text-sub);font-size:16px;cursor:pointer;padding:6px 8px;border-radius:8px;transition:.15s}
+    .song-item-menu-btn:hover,.song-item-menu-btn:active{color:var(--accent);background:rgba(255,255,255,.06)}
+    #fullHeaderMenuBtn,#radioHeaderMenuBtn{cursor:pointer;padding:6px;border-radius:8px;transition:.15s}
+    #fullHeaderMenuBtn:active,#radioHeaderMenuBtn:active{background:rgba(255,255,255,.08)}

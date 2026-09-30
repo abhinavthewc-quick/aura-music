@@ -1,0 +1,49 @@
+    :root {
+      --bg: #06080e;
+      --text: #ffffff;
+      --text-sub: #888888;
+      --accent: #00f2fe;
+      --card-bg: rgba(255,255,255,.03);
+      --card-border: rgba(255,255,255,.05);
+      --glass-btn-bg: linear-gradient(135deg,rgba(255,255,255,.12),rgba(255,255,255,.03));
+      --glass-btn-border: rgba(255,255,255,.18);
+      --player-bg: rgba(15,23,42,.95);
+      --full-player-bg: linear-gradient(180deg,#2b3330,#121517);
+      --dynamic-color: transparent;
+      --nav-bg: rgba(10,14,23,.8);
+      --profile-glass-bg: linear-gradient(135deg, rgba(20,30,52,.48), rgba(8,14,28,.30));
+      --profile-glass-border: rgba(255,255,255,.16);
+      --profile-glass-highlight: rgba(255,255,255,.10);
+      --menu-glass-bg: rgba(8,12,22,.42);
+      --menu-glass-border: rgba(255,255,255,.12);
+      /* New Slider Colors */
+      --slider-fill: #4a628f;
+      --slider-track: #dde4fa;
+      --slider-dot: #8fa0d8;
+    }
+
+    body.light-theme {
+      --bg: #f3f5f9;
+      --text: #0f172a;
+      --text-sub: #64748b;
+      --accent: #0284c7;
+      --card-bg: rgba(255,255,255,.8);
+      --card-border: rgba(0,0,0,.08);
+      --glass-btn-bg: linear-gradient(135deg,rgba(255,255,255,.9),rgba(255,255,255,.5));
+      --glass-btn-border: rgba(0,0,0,.1);
+      --player-bg: rgba(255,255,255,.92);
+      --full-player-bg: linear-gradient(180deg,#e0f2fe,#f8fafc);
+      --nav-bg: rgba(255,255,255,.85);
+      --profile-glass-bg: linear-gradient(135deg, rgba(255,255,255,.58), rgba(255,255,255,.28));
+      --profile-glass-border: rgba(255,255,255,.72);
+      --profile-glass-highlight: rgba(255,255,255,.68);
+      --menu-glass-bg: rgba(255,255,255,.42);
+      --menu-glass-border: rgba(255,255,255,.62);
+    }
+
+    *{box-sizing:border-box;margin:0;padding:0;font-family:system-ui,-apple-system,sans-serif}
+    html,body{width:100%;max-width:100%;min-width:0;overflow-x:hidden}
+    body{background:var(--bg);color:var(--text);min-height:100vh;display:block;transition:background .3s,color .3s}
+
+    .glass-btn{background:var(--glass-btn-bg);backdrop-filter:blur(16px);border:1px solid var(--glass-btn-border);transition:.2s;display:inline-flex;align-items:center;justify-content:center;cursor:pointer;color:var(--text)}
+    .glass-btn:active{transform:scale(.95)}

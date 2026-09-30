@@ -1,0 +1,44 @@
+/* ===== Round 12: borderless profile icon ===== */
+.profile-btn{border:0!important;background:transparent!important;box-shadow:none!important;padding:0!important}
+.profile-btn img{transform:scale(1.36);border-radius:50%}
+.profile-btn:focus-visible{outline:2px solid rgba(220,174,124,.7);outline-offset:2px}
+
+    /* Warm play controls only — preserve AURA liquid-glass surfaces. */
+    .full-player-overlay .full-ctrl-btn.play-btn{
+      background:linear-gradient(145deg,#f0c58d 0%,#e2ad70 52%,#c98b50 100%) !important;
+      color:#24170e !important;
+      box-shadow:0 12px 30px rgba(207,143,80,.24),inset 0 1px 0 rgba(255,255,255,.42) !important;
+    }
+    .full-player-overlay .full-seek-slider{
+      background:var(--slider-track) !important;
+    }
+    .full-player-overlay .full-seek-slider::-webkit-slider-thumb{
+      background:var(--slider-fill) !important;
+      box-shadow:-1000px 0 0 996px var(--slider-fill) !important;
+    }
+    .full-player-overlay .full-seek-slider::-moz-range-progress{background:var(--slider-fill) !important}
+    .full-player-overlay .full-seek-slider::-moz-range-thumb{background:var(--slider-fill) !important}
+
+    /* Mini/task player: keep the existing liquid-glass background, warm only the play button and progress fill. */
+    .player-bar .ctrl-glass-btn.play-primary,
+    .radio-player-bar .radio-mini-btn.primary{
+      background:linear-gradient(145deg,#f0c58d 0%,#e2ad70 52%,#c98b50 100%) !important;
+      color:#24170e !important;
+      border-color:rgba(255,235,204,.34) !important;
+      box-shadow:0 8px 22px rgba(207,143,80,.22),inset 0 1px 0 rgba(255,255,255,.38) !important;
+    }
+    .player-bar .mini-progress-fill{background:var(--accent) !important}
+
+    /* Warm accent for the bottom navigation icons only — keep the liquid-glass surface unchanged. */
+    .nav-bar .nav-btn.active,
+    .nav-bar .nav-btn.active i{
+      color:#e6b77b !important;
+      filter:drop-shadow(0 0 8px rgba(230,183,123,.24));
+    }
+    .nav-bar .nav-btn:not(.active),
+    .nav-bar .nav-btn:not(.active) i{
+      color:rgba(255,255,255,.72) !important;
+      filter:none;
+    }
+    .nav-bar .nav-btn.active:focus-visible{outline:2px solid rgba(230,183,123,.45);outline-offset:2px}
+    /* Bottom navigation/task bar stays exactly in its existing liquid-glass theme. */

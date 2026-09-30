@@ -1,0 +1,70 @@
+/* ===== Round 10: warm white light mode ===== */
+body.light-theme{--bg:#faf6ef;--text:#2a2018;--text-sub:#7d6c5a;--accent:#a8642a;--card-bg:rgba(255,255,255,.74);--card-border:rgba(120,85,45,.14);--glass-btn-bg:linear-gradient(135deg,rgba(255,255,255,.96),rgba(250,240,225,.72));--glass-btn-border:rgba(120,85,45,.18);--player-bg:rgba(255,252,247,.95);--full-player-bg:linear-gradient(180deg,#f6e7d2,#fbf7f0);--nav-bg:rgba(255,250,242,.9);--profile-glass-bg:linear-gradient(135deg,rgba(255,255,255,.75),rgba(250,240,225,.5));--profile-glass-border:rgba(120,85,45,.16);--profile-glass-highlight:rgba(255,255,255,.8);--menu-glass-bg:rgba(255,250,242,.7);--menu-glass-border:rgba(120,85,45,.16);--slider-fill:#c58f5c;--slider-track:#eadfce;--slider-dot:#a8642a;--sidebar-bg:linear-gradient(180deg,#fbf6ee,#f3eadc);--sb-text:#5a4a3a;--sb-line:rgba(120,85,45,.16)}
+body.light-theme{background:radial-gradient(900px 520px at 10% -6%,rgba(220,174,124,.28),transparent 62%),radial-gradient(800px 600px at 100% 100%,rgba(190,205,160,.22),transparent 62%),#faf6ef!important;background-attachment:fixed!important}
+html:has(body.light-theme){background:#faf6ef}
+/* photo cards keep light text in light mode */
+body.light-theme .desktop-home-hero,body.light-theme .radio-tea-hero{--text:#fff;--text-sub:rgba(255,255,255,.82);--accent:#e6bd92;color:#fff}
+body.light-theme .desktop-home-hero .desktop-hero-actions button{background:rgba(255,255,255,.16)!important;border:1px solid rgba(255,255,255,.34)!important;color:#fff!important;-webkit-text-fill-color:#fff}
+body.light-theme .desktop-hero-copy h2 span{color:#fff;-webkit-text-fill-color:#fff}
+body.light-theme .desktop-hero-copy h2 em{-webkit-text-fill-color:#e6bd92;color:#e6bd92}
+body.light-theme .desktop-hero-stats *,body.light-theme .desktop-hero-kicker,body.light-theme .desktop-hero-copy p{color:rgba(255,255,255,.88)!important;-webkit-text-fill-color:currentColor}
+body.light-theme .radio-tea-hero-content h3,body.light-theme .radio-tea-sub{color:#fff!important;-webkit-text-fill-color:#fff}
+/* bottom nav */
+body.light-theme .nav-bar{background:linear-gradient(135deg,rgba(255,252,247,.92),rgba(250,240,225,.86));border-color:rgba(120,85,45,.2);box-shadow:0 12px 32px rgba(120,85,45,.2),inset 0 1px 0 rgba(255,255,255,.9)}
+body.light-theme .nav-bar::before{background:none}
+body.light-theme .nav-indicator{background:linear-gradient(135deg,rgba(220,174,124,.42),rgba(220,174,124,.2));border-color:rgba(168,100,42,.28);box-shadow:0 6px 14px rgba(168,100,42,.16),inset 0 1px 0 rgba(255,255,255,.7)}
+body.light-theme .nav-btn{color:#8a7660}
+body.light-theme .nav-btn.active{color:#8f4f18}
+/* home cards & buttons */
+body.light-theme .soundscape-card{background:linear-gradient(135deg,rgba(255,255,255,.9),rgba(250,240,225,.7));border-color:rgba(120,85,45,.16);box-shadow:0 8px 22px rgba(120,85,45,.08)}
+body.light-theme .soundscape-icon{background:linear-gradient(135deg,#f6e3c8,#e6bd92);border-color:rgba(120,85,45,.2);color:#8f4f18}
+body.light-theme .soundscape-btn,body.light-theme .aura-picks-refresh{background:rgba(255,255,255,.85);border-color:rgba(120,85,45,.22);color:var(--text)}
+body.light-theme .aura-pick{border-color:rgba(120,85,45,.18);box-shadow:0 8px 20px rgba(120,85,45,.16)}
+/* PC menu */
+body.light-theme .sidebar-toggle{background:rgba(120,85,45,.1);color:var(--text)}
+body.light-theme .desktop-brand strong{color:var(--text)}body.light-theme .desktop-brand span{color:var(--text-sub)}
+body.light-theme .desktop-nav-label{color:#9a8770}
+body.light-theme .desktop-nav-btn{color:var(--sb-text)}
+body.light-theme .desktop-nav-btn:hover{color:var(--text);background:rgba(120,85,45,.08)}
+body.light-theme .desktop-nav-btn.active{color:#5a3210;background:linear-gradient(90deg,rgba(220,174,124,.4),rgba(220,174,124,.12));border-color:rgba(168,100,42,.4);box-shadow:inset 3px 0 0 #c58f5c}
+body.light-theme .desktop-nav-btn.active i{color:#a8642a}
+body.light-theme .desktop-sidebar-note p{color:var(--sb-text)}
+body.light-theme .sb-ready{color:#3d8a5a}
+body.light-theme.sb-collapsed .desktop-nav-btn.active{background:rgba(220,174,124,.35)}
+/* panels & modals */
+body.light-theme .about-card,body.light-theme .settings-modal-card,body.light-theme .effects-card,body.light-theme .beeboo-chat-panel,body.light-theme .track-sheet,body.light-theme .help-card,body.light-theme .name-modal-card{--accent:#a8642a;background:linear-gradient(160deg,#fffdf9,#f6ede0)!important;border-color:rgba(120,85,45,.22)!important;box-shadow:0 24px 60px rgba(120,85,45,.22)!important;color:var(--text)}
+body.light-theme .modal-overlay,body.light-theme .effects-modal,body.light-theme .help-overlay,body.light-theme .beeboo-chat-overlay,body.light-theme .track-sheet-overlay{background:rgba(60,40,20,.32)}
+body.light-theme .settings-row,body.light-theme .help-row,body.light-theme .about-row,body.light-theme .effect-row,body.light-theme .effect-choice{background:rgba(255,255,255,.75);border-color:rgba(120,85,45,.14)}
+body.light-theme .effect-row.active,body.light-theme .effect-choice.active{background:linear-gradient(135deg,rgba(220,174,124,.35),rgba(220,174,124,.12))!important;border-color:rgba(168,100,42,.45)!important}
+body.light-theme .help-close{background:rgba(120,85,45,.08);border-color:rgba(120,85,45,.18);color:var(--text)}
+body.light-theme .settings-icon,body.light-theme .effects-icon{background:linear-gradient(135deg,#f6e3c8,#e6bd92);color:#8f4f18;border-color:rgba(120,85,45,.2)}
+body.light-theme .settings-switch:checked{background:linear-gradient(90deg,#e6bd92,#c58f5c)}
+body.light-theme .track-sheet-row i,body.light-theme .about-row i{color:#a8642a}
+body.light-theme .track-sheet-row.danger,body.light-theme .track-sheet-row.danger i{color:#c0392b}
+body.light-theme .beeboo-msg.bot{background:rgba(120,85,45,.07);border-color:rgba(120,85,45,.1)}
+body.light-theme .beeboo-msg.user,body.light-theme .beeboo-chat-send{background:linear-gradient(135deg,#e6bd92,#c58f5c);color:#2b1a0d}
+body.light-theme .beeboo-suggest-chip{background:rgba(220,174,124,.2);border-color:rgba(168,100,42,.3);color:#6b3d12}
+body.light-theme .beeboo-chat-input-row input{background:rgba(255,255,255,.85);border-color:rgba(120,85,45,.25);color:var(--text)}
+body.light-theme .beeboo-song-row,body.light-theme .beeboo-language-row,body.light-theme .beeboo-chat-note{background:rgba(255,255,255,.7);border-color:rgba(120,85,45,.14)}
+/* radio tab controls */
+body.light-theme .radio-segment-btn:not(.active),body.light-theme .radio-chip:not(.active){color:var(--text);background:rgba(255,255,255,.75);border-color:rgba(120,85,45,.18)}
+body.light-theme .radio-segment-btn i{color:#a8642a}
+body.light-theme .radio-segment-btn.active i{color:#2b1a0d}
+body.light-theme .settings-switch{background:rgba(120,85,45,.2);border-color:rgba(120,85,45,.35)}
+body.light-theme .settings-switch::after,body.light-theme .settings-switch::before{background:#fff;box-shadow:0 1px 4px rgba(60,40,20,.35)}
+body.light-theme .settings-switch:checked{background:linear-gradient(90deg,#e6bd92,#c58f5c);border-color:rgba(168,100,42,.5)}
+body.light-theme .effects-switch-track{background:rgba(120,85,45,.28)}
+body.light-theme .effects-switch-track::before{box-shadow:0 1px 4px rgba(60,40,20,.35)}
+body.light-theme .effects-switch input:checked + .effects-switch-track{background:#c58f5c}
+body.light-theme .effects-toggle-item{background:rgba(255,255,255,.75);border-color:rgba(120,85,45,.14)}
+body.light-theme .aura-state-icon{color:#a8642a;background:rgba(220,174,124,.22);border-color:rgba(168,100,42,.28)}
+body.light-theme .aura-state-btn{color:#7a4413;background:rgba(220,174,124,.3);border-color:rgba(168,100,42,.4)}
+
+/* ===== Round 11: effect % labels ===== */
+.effect-row-pct{display:none;font-size:11px;font-weight:800;color:#e6bd92;background:rgba(220,174,124,.14);border:1px solid rgba(220,174,124,.3);padding:2px 8px;border-radius:99px;min-width:44px;text-align:center}
+.effect-row.active .effect-row-pct{display:inline-block}
+.effect-master-pct{color:#e6bd92;font-weight:800;margin-left:6px}
+.effect-row-top i{color:#dcae7c}
+body.light-theme .effect-row-pct,body.light-theme .effect-master-pct{color:#8f4f18;background:rgba(220,174,124,.25);border-color:rgba(168,100,42,.35)}
+body.light-theme .effect-master-pct{background:none;border:0}
+body.light-theme .effect-row-top i{color:#a8642a}

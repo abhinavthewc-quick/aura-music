@@ -1,0 +1,17 @@
+/* AURA premium liquid-glass treatment for Library track rows */
+.library-song, .song-item, .track-item, .library-item, .song-card, .track-card, .library-track {
+  background: linear-gradient(135deg, rgba(255,255,255,.13), rgba(255,255,255,.045)) !important;
+  border: 1px solid rgba(255,255,255,.20) !important;
+  border-radius: 18px !important;
+  box-shadow: inset 0 1px 0 rgba(255,255,255,.24), inset 0 -1px 0 rgba(255,255,255,.05), 0 8px 24px rgba(0,0,0,.16) !important;
+  backdrop-filter: blur(18px) saturate(145%); -webkit-backdrop-filter: blur(18px) saturate(145%);
+  overflow: hidden; position: relative;
+}
+.library-song::before, .song-item::before, .track-item::before, .library-item::before, .song-card::before, .track-card::before, .library-track::before {
+  content:''; position:absolute; inset:0; pointer-events:none;
+  background: linear-gradient(115deg, rgba(255,255,255,.16), transparent 28%, transparent 72%, rgba(255,255,255,.055));
+}
+.library-song:hover, .song-item:hover, .track-item:hover, .library-item:hover, .song-card:hover, .track-card:hover, .library-track:hover {
+  border-color: rgba(255,255,255,.34) !important; transform: translateY(-1px);
+  box-shadow: inset 0 1px 0 rgba(255,255,255,.30), 0 12px 30px rgba(0,0,0,.20) !important;
+}
