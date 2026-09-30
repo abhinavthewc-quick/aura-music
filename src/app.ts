@@ -37,16 +37,18 @@ import { $, setHfTracks, state } from './core/state';
       }
       setGreeting();
       await hydrateLocalTracks();
-      renderSongs(state.songs); loadSong(0); updateLibCount(); renderRecent();
+      renderSongs(state.songs); if(state.songs.length) loadSong(0); updateLibCount(); renderRecent();
       updateProfilePopup();
 
       /* Catalog lives in the Hugging Face bucket — refresh it in the background
          (the list is painted instantly from localStorage cache, if any). */
       fetchHfCatalog().then((tracks)=>{
+        const hadSongs = state.songs.length > 0;
         setHfTracks(tracks);
         renderSongs(state.songs);
         renderRecent();
         updateLibCount();
+        if(!hadSongs && state.songs.length) loadSong(state.currentIndex);
       }).catch(()=>{
         if(!state.hfSongs.length) toast('Could not load the Hugging Face catalog — showing local files only.','triangle-exclamation');
       });

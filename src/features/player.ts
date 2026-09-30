@@ -303,7 +303,7 @@ import { $, persistLikedHistory, savedLikeMap, state } from '../core/state';
     }
 
     export function loadSong(i){
-      const s=state.songs[i]; state.audio.src=s.url;
+      const s=state.songs[i]; if(!s) return; state.audio.src=s.url;
       $('currentImg').src=$('fullImg').src=s.img;
       $('currentTitle').textContent=$('fullTitle').textContent=$('fullHeaderTitle').textContent=s.title;
       $('currentArtist').textContent=$('fullArtist').textContent=s.artist;
