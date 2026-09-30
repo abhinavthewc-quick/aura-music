@@ -29,9 +29,12 @@ jobs:
 
       - name: Install tools
         run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq ffmpeg
           python -m pip install -U pip
           pip install -U "yt-dlp[default]" huggingface_hub mutagen
-          deno --version
+          ffmpeg -version | head -1
+          deno --version | head -1
           yt-dlp --version
 
       - name: Prepare workspace
@@ -95,7 +98,7 @@ jobs:
           : "${HF_TOKEN:?Secret HF_TOKEN is not set - configure it from the admin panel.}"
           : "${HF_BUCKET_ID:?Secret HF_BUCKET_ID is not set - configure it from the admin panel.}"
           hf buckets create "$HF_BUCKET_ID" --private --exist-ok
-          hf buckets sync downloads/ "hf://buckets/$HF_BUCKET_ID" --exclude "*.info.json"
+          hf buckets sync downloads/ "hf://buckets/$HF_BUCKET_ID" --exclude "*.info.json" --exclude "*.webp" --exclude "*.jpg" --exclude "*.png" --exclude "*.part"
 
       - name: Job summary
         if: always()
