@@ -1,0 +1,94 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Aura Admin — Music Uploader</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;700&family=Cormorant+Garamond:wght@600&display=swap" rel="stylesheet">
+</head>
+<body>
+  <header class="adm-header">
+    <a class="adm-back" href="./index.html">&larr; Aura Music</a>
+    <h1>AURA <span>Admin</span></h1>
+    <p class="adm-sub">Download YouTube Music (format 251 — webm/Opus) via GitHub Actions and upload it to your Hugging Face storage bucket.</p>
+  </header>
+
+  <main class="adm-grid">
+
+    <section class="adm-card" id="cfgCard">
+      <h2><span class="adm-num">1</span> GitHub connection</h2>
+      <p class="adm-hint">Uses a Personal Access Token to call the GitHub API and start workflow runs. Stored only in this browser (localStorage).</p>
+      <label class="adm-label" for="patInput">Personal access token</label>
+      <div class="adm-row">
+        <input type="password" id="patInput" class="adm-input" placeholder="ghp_… or github_pat_…" autocomplete="off">
+        <button type="button" class="adm-btn ghost" id="patRevealBtn">Show</button>
+        <button type="button" class="adm-btn" id="patSaveBtn">Save</button>
+      </div>
+      <p class="adm-hint">Token needs <b>repo</b> + <b>workflow</b> scopes (classic) or fine-grained: <b>Actions: read/write</b>, <b>Secrets: read/write</b>, <b>Contents: read</b>.</p>
+      <label class="adm-label" for="repoInput">Repository <small>(owner/name)</small></label>
+      <div class="adm-row">
+        <input type="text" id="repoInput" class="adm-input" placeholder="abhinavthewc-quick/aura-music" autocomplete="off">
+        <button type="button" class="adm-btn" id="repoSaveBtn">Save</button>
+      </div>
+      <button type="button" class="adm-btn wide" id="testBtn">Test connection</button>
+      <div class="adm-status" id="cfgStatus"></div>
+    </section>
+
+    <section class="adm-card" id="secretsCard">
+      <h2><span class="adm-num">2</span> Repository secrets</h2>
+      <p class="adm-hint">Values are encrypted with libsodium in your browser and pushed straight to GitHub's secrets API — they never touch this page's server (there isn't one).</p>
+
+      <div class="adm-secret-chips" id="secretChips"><span class="adm-chip dim">connect GitHub to check</span></div>
+
+      <label class="adm-label" for="hfTokenInput">HF_TOKEN <small>(huggingface write token)</small></label>
+      <div class="adm-row">
+        <input type="password" id="hfTokenInput" class="adm-input" placeholder="hf_…" autocomplete="off">
+        <button type="button" class="adm-btn" id="hfTokenSaveBtn">Save secret</button>
+      </div>
+
+      <label class="adm-label" for="hfBucketInput">HF_BUCKET_ID <small>(storage bucket, e.g. user/aura-music — created automatically if missing)</small></label>
+      <div class="adm-row">
+        <input type="text" id="hfBucketInput" class="adm-input" placeholder="yourname/aura-music" autocomplete="off">
+        <button type="button" class="adm-btn" id="hfBucketSaveBtn">Save secret</button>
+      </div>
+
+      <label class="adm-label" for="cookiesInput">YOUTUBE_COOKIES <small>(Netscape cookies.txt from your browser)</small></label>
+      <textarea id="cookiesInput" class="adm-input adm-textarea" rows="6" spellcheck="false" placeholder="# Netscape HTTP Cookie File&#10;.youtube.com&#10;TRUE&#10;/&#10;TRUE&#10;1756000000&#10;SID&#10;…"></textarea>
+      <div class="adm-row adm-row-wrap">
+        <label class="adm-btn ghost adm-file-label">
+          Load cookies.txt file
+          <input type="file" id="cookiesFile" accept=".txt,text/plain" hidden>
+        </label>
+        <button type="button" class="adm-btn" id="cookiesSaveBtn">Save secret</button>
+        <button type="button" class="adm-btn danger" id="cookiesClearBtn">Clear</button>
+      </div>
+      <p class="adm-hint">Export with a browser extension like “Get cookies.txt LOCALLY”, then save here. Required for age-restricted / logged-in-only videos.</p>
+      <div class="adm-status" id="secretsStatus"></div>
+    </section>
+
+    <section class="adm-card adm-span2" id="downloadCard">
+      <h2><span class="adm-num">3</span> Download queue</h2>
+      <p class="adm-hint">Paste one URL per line (YouTube or YouTube Music). Titles are fetched for preview, then a GitHub Actions run does the rest: <code>yt-dlp -f 251</code> → metadata → Hugging Face bucket sync.</p>
+      <textarea id="urlsInput" class="adm-input adm-textarea" rows="7" spellcheck="false" placeholder="https://music.youtube.com/watch?v=…&#10;https://www.youtube.com/watch?v=…&#10;https://youtu.be/…"></textarea>
+      <div class="adm-row adm-row-wrap">
+        <button type="button" class="adm-btn" id="fetchBtn">Fetch titles</button>
+        <button type="button" class="adm-btn primary" id="downloadBtn">Start download</button>
+        <span class="adm-count" id="urlCount"></span>
+      </div>
+      <div class="adm-preview" id="previewList"></div>
+      <div class="adm-status" id="downloadStatus"></div>
+    </section>
+
+    <section class="adm-card adm-span2" id="runsCard">
+      <h2><span class="adm-num">4</span> Workflow runs <button type="button" class="adm-btn ghost small" id="runsRefreshBtn">Refresh</button></h2>
+      <div class="adm-runs" id="runsList"><span class="adm-chip dim">no data yet</span></div>
+    </section>
+
+  </main>
+
+  <div class="adm-toast" id="toastHost" aria-live="polite"></div>
+
+  <script type="module" src="/src/admin/main.ts"></script>
+</body>
+</html>

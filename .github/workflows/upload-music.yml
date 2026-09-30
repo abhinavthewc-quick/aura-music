@@ -1,0 +1,106 @@
+name: Upload Music to Hugging Face Bucket
+
+on:
+  workflow_dispatch:
+    inputs:
+      urls:
+        description: 'YouTube / YouTube Music URLs (one per line)'
+        required: true
+        type: string
+
+concurrency:
+  group: upload-music
+  cancel-in-progress: false
+
+jobs:
+  download-and-upload:
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Install tools
+        run: |
+          python -m pip install -U pip
+          pip install -U yt-dlp huggingface_hub mutagen
+
+      - name: Prepare workspace
+        env:
+          URLS: ${{ inputs.urls }}
+        run: |
+          rm -rf downloads && mkdir -p downloads
+          printf '%s\n' "$URLS" > urls.txt
+          grep -E 'https?://' urls.txt > urls.clean.txt || true
+          mv urls.clean.txt urls.txt
+          echo "Queued URLs:" && cat urls.txt
+
+      - name: Write YouTube cookies (if configured)
+        env:
+          YT_COOKIES: ${{ secrets.YOUTUBE_COOKIES }}
+        run: |
+          if [ -n "$YT_COOKIES" ]; then
+            printf '%s' "$YT_COOKIES" > cookies.txt
+            echo "cookies.txt restored from repo secret."
+          else
+            echo "No YOUTUBE_COOKIES secret set - downloading without cookies."
+          fi
+
+      - name: Download audio (format 251 - webm/Opus) with metadata
+        env:
+          URLS: ${{ inputs.urls }}
+        run: |
+          ARGS=(
+            --no-progress
+            --newline
+            --retries 5
+            --fragment-retries 5
+            --ignore-errors
+            --no-playlist
+            -f "251/bestaudio[ext=webm]/bestaudio"
+            --write-info-json
+            --embed-metadata
+            --remux-video opus
+            --embed-thumbnail
+            --output "downloads/%(uploader)s - %(title)s [%(id)s].%(ext)s"
+          )
+          if [ -f cookies.txt ]; then ARGS+=(--cookies cookies.txt); fi
+          RC=0
+          yt-dlp "${ARGS[@]}" -a urls.txt || RC=$?
+          echo "yt-dlp exit code: $RC (non-zero is OK as long as some audio landed)"
+          COUNT=$(find downloads -type f \( -name '*.opus' -o -name '*.webm' -o -name '*.m4a' -o -name '*.mp3' \) | wc -l)
+          if [ "$COUNT" -eq 0 ]; then
+            echo "::error::No audio files were downloaded - check URLs, cookies, or yt-dlp errors above."
+            exit 1
+          fi
+          echo "$COUNT audio file(s) ready."
+
+      - name: Add missing metadata
+        run: python scripts/fix_metadata.py downloads
+
+      - name: Upload to Hugging Face storage bucket
+        env:
+          HF_TOKEN: ${{ secrets.HF_TOKEN }}
+          HF_BUCKET_ID: ${{ secrets.HF_BUCKET_ID }}
+        run: |
+          : "${HF_TOKEN:?Secret HF_TOKEN is not set - configure it from the admin panel.}"
+          : "${HF_BUCKET_ID:?Secret HF_BUCKET_ID is not set - configure it from the admin panel.}"
+          hf buckets create "$HF_BUCKET_ID" --private --exist-ok
+          hf buckets sync downloads/ "hf://buckets/$HF_BUCKET_ID" --exclude "*.info.json"
+
+      - name: Job summary
+        if: always()
+        env:
+          HF_BUCKET_ID: ${{ secrets.HF_BUCKET_ID }}
+        run: |
+          {
+            echo "### Uploaded files"
+            ls -lh downloads/ 2>/dev/null | grep -vE 'info\.json|total' || echo "(no files)"
+            if [ -n "$HF_BUCKET_ID" ]; then
+              echo ""
+              echo "Bucket: https://huggingface.co/buckets/$HF_BUCKET_ID"
+            fi
+          } >> "$GITHUB_STEP_SUMMARY"
