@@ -106,7 +106,8 @@ function renderGisButton() {
           callback: handleResp,
         });
         w.google.accounts.id.renderButton(gBtnBox, {
-          theme: 'filled_black', size: 'large', shape: 'pill', text: 'signin_with', width: 275,
+          theme: 'filled_black', size: 'large', shape: 'pill', text: 'signin_with',
+          width: Math.max(240, Math.min(400, gBtnBox.clientWidth || 400)),
         });
       } catch {
         setStatus(gateStatus, 'Could not initialise Google sign-in.', 'err');
@@ -117,7 +118,8 @@ function renderGisButton() {
   } else if (gisInitialized) {
     try {
       w.google.accounts.id.renderButton(gBtnBox, {
-        theme: 'filled_black', size: 'large', shape: 'pill', text: 'signin_with', width: 275,
+        theme: 'filled_black', size: 'large', shape: 'pill', text: 'signin_with',
+        width: Math.max(240, Math.min(400, gBtnBox.clientWidth || 400)),
       });
     } catch { /* ignore */ }
   }
