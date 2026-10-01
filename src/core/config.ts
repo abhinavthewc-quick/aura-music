@@ -38,7 +38,7 @@ import { state } from './state';
          - https://aura-music-01g.pages.dev
          - http://localhost:5173
        Then paste the Client ID below. */
-    export const GOOGLE_CLIENT_ID = '';
+    export const GOOGLE_CLIENT_ID = '563051437889-5qcvn8a4e64i5fh49got6g70iundv0m9.apps.googleusercontent.com';
 
     /* The only Google account allowed to use the site and the admin panel. */
     export const ALLOWED_EMAIL = 'vivekpereiraalbert@gmail.com';
