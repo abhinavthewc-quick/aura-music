@@ -77,28 +77,24 @@ function renderGisButton() {
     return;
   }
   const w = window as any;
-  if (!document.getElementById('g_id_onload')) {
-    const onload = document.createElement('div');
-    onload.id = 'g_id_onload';
-    onload.dataset.client_id = GOOGLE_CLIENT_ID;
-    onload.dataset.callback = 'auraAdminOnCredential';
-    onload.dataset.auto_prompt = 'false';
-    document.body.appendChild(onload);
-    w.auraAdminOnCredential = async (resp: any) => {
-      try {
-        const p = await verifyGoogleCredential(resp?.credential || '', GOOGLE_CLIENT_ID);
-        if (p.email !== (ALLOWED_EMAIL || '').toLowerCase()) {
-          setStatus(gateStatus, 'Access denied — ' + p.email + ' is not allowed on this panel.', 'err');
-          try { w.google?.accounts?.id?.disableAutoSelect?.(); } catch { /* ignore */ }
-          return;
-        }
-        setSession({ email: p.email, name: p.name, picture: p.picture, exp: p.exp, token: resp.credential });
-        unlock();
-      } catch (e) {
-        setStatus(gateStatus, 'Sign-in failed — ' + ((e as Error).message || 'try again'), 'err');
+  const handleResp = async (resp: any) => {
+    try {
+      const p = await verifyGoogleCredential(resp?.credential || '', GOOGLE_CLIENT_ID);
+      if (p.email !== (ALLOWED_EMAIL || '').toLowerCase()) {
+        setStatus(gateStatus, 'Access denied — ' + p.email + ' is not allowed on this panel.', 'err');
+        try { w.google?.accounts?.id?.disableAutoSelect?.(); } catch { /* ignore */ }
+        return;
       }
-    };
+      setSession({ email: p.email, name: p.name, picture: p.picture, exp: p.exp, token: resp.credential });
+      unlock();
+    } catch (e) {
+      setStatus(gateStatus, 'Sign-in failed — ' + ((e as Error).message || 'try again'), 'err');
+    }
+  };
+
+  if (!document.getElementById('auraGsiScript')) {
     const s = document.createElement('script');
+    s.id = 'auraGsiScript';
     s.src = 'https://accounts.google.com/gsi/client';
     s.async = true;
     s.defer = true;
@@ -107,7 +103,7 @@ function renderGisButton() {
       try {
         w.google.accounts.id.initialize({
           client_id: GOOGLE_CLIENT_ID,
-          callback: (resp: any) => w.auraAdminOnCredential(resp),
+          callback: handleResp,
         });
         w.google.accounts.id.renderButton(gBtnBox, {
           theme: 'filled_black', size: 'large', shape: 'pill', text: 'signin_with', width: 275,
@@ -120,6 +116,7 @@ function renderGisButton() {
     document.head.appendChild(s);
   } else if (gisInitialized) {
     try {
+      w.google.accounts.id.initialize({ client_id: GOOGLE_CLIENT_ID, callback: handleResp });
       w.google.accounts.id.renderButton(gBtnBox, {
         theme: 'filled_black', size: 'large', shape: 'pill', text: 'signin_with', width: 275,
       });

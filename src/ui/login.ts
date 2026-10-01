@@ -67,14 +67,6 @@ import { $ } from '../core/state';
       if(getSession()) return; // already signed in this session
 
       const w = window as any;
-      const onload = document.createElement('div');
-      onload.id = 'g_id_onload';
-      onload.dataset.client_id = GOOGLE_CLIENT_ID;
-      onload.dataset.callback = 'auraOnGoogleCredential';
-      onload.dataset.auto_prompt = 'false';
-      document.body.appendChild(onload);
-      w.auraOnGoogleCredential = (resp: any) => { handleCredential(resp?.credential || ''); };
-
       const s = document.createElement('script');
       s.src = 'https://accounts.google.com/gsi/client';
       s.async = true;
