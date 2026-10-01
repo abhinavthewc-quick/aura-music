@@ -165,3 +165,29 @@ body {
 .adm-or::before,.adm-or::after{content:"";flex:1;height:1px;background:rgba(255,255,255,.12)}
 .adm-emailauth{display:flex;flex-direction:column;gap:8px}
 .adm-emailauth .adm-input{width:100%}
+
+/* ---- Clearer layout: gate / session bar / flow hints / collapsed setup ---- */
+.adm-gate{text-align:center}
+.adm-gate h2{justify-content:center}
+.adm-gate .adm-hint{max-width:560px;margin:6px auto 16px}
+.adm-gate .adm-google{justify-content:center}
+.adm-gate .adm-emailauth{max-width:360px;margin:0 auto}
+.adm-gate .adm-or{max-width:360px;margin:16px auto 12px}
+
+.adm-sessionbar{display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap;padding-top:14px;padding-bottom:14px}
+.adm-sessionwho{display:flex;align-items:center;gap:9px;font-size:14.5px;color:var(--dim)}
+.adm-sessionwho i{color:var(--green)}
+.adm-sessionwho b{color:var(--gold);font-weight:700;word-break:break-all}
+
+.adm-flow{display:flex;align-items:flex-start;gap:9px;margin:16px 0 0;font-size:12.5px;line-height:1.55;color:var(--dim)}
+.adm-flow i{color:var(--gold);opacity:.85;margin-top:2px}
+.adm-flow b{color:#ece4d9;font-weight:600}
+
+.adm-config summary{cursor:pointer;list-style:none;display:flex;flex-direction:column;gap:3px;user-select:none}
+.adm-config summary::-webkit-details-marker{display:none}
+.adm-summary-title{display:flex;align-items:center;gap:10px;font-size:15.5px;font-weight:700;color:#f0e9df}
+.adm-summary-title i{color:var(--gold)}
+.adm-summary-sub{font-size:12.5px;color:var(--dim);font-weight:500;padding-left:28px}
+.adm-config[open] .adm-summary-title i{transform:rotate(90deg)}
+.adm-config-body{margin-top:16px;border-top:1px solid var(--card-border);padding-top:4px}
+.adm-where{margin-top:14px;padding-top:12px;border-top:1px dashed rgba(255,255,255,.1)}

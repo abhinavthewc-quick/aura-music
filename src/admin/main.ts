@@ -116,7 +116,6 @@ function renderGisButton() {
     document.head.appendChild(s);
   } else if (gisInitialized) {
     try {
-      w.google.accounts.id.initialize({ client_id: GOOGLE_CLIENT_ID, callback: handleResp });
       w.google.accounts.id.renderButton(gBtnBox, {
         theme: 'filled_black', size: 'large', shape: 'pill', text: 'signin_with', width: 275,
       });
@@ -128,26 +127,23 @@ function renderGisButton() {
 function unlock() {
   const session = getSession();
   if (!session) return lock();
-  gBtnBox.innerHTML =
-    '<div class="adm-signedin"><i class="fa-solid fa-circle-check"></i>' +
-    '<span>Signed in as <b></b></span>' +
-    '<button type="button" class="adm-btn ghost small" id="signOutBtn">Sign out</button></div>';
-  (gBtnBox.querySelector('b') as HTMLElement).textContent = session.email;
-  setStatus(gateStatus, '✓ Access granted — queue and cookies are unlocked.', 'ok');
+  gateCard.hidden = true;
+  const bar = $('sessionBar');
+  bar.hidden = false;
+  $('sessionEmail').textContent = session.email;
   gatedSections.forEach((s) => { s.hidden = false; });
-  document.getElementById('signOutBtn')!.addEventListener('click', () => {
-    clearSession();
-    location.reload();
-  });
+  setStatus(gateStatus, '✓ Access granted.', 'ok');
   refreshSecretChips();
   refreshRuns();
 }
 
 function lock(msg?: string) {
+  $('sessionBar').hidden = true;
   gatedSections.forEach((s) => { s.hidden = true; });
   gBtnBox.innerHTML = '';
-  if (msg) setStatus(gateStatus, msg, 'err');
+  gateCard.hidden = false;
   renderGisButton();
+  if (msg) setStatus(gateStatus, msg, 'err');
 }
 
 /* ---------- password fallback (server-issued token) ---------- */
@@ -303,6 +299,10 @@ async function refreshRuns() {
 
 /* ---------- wiring ---------- */
 function bind() {
+  $('signOutBtn').addEventListener('click', () => {
+    clearSession();
+    location.reload();
+  });
   $('admPasswordBtn').addEventListener('click', passwordLogin);
   $('admPasswordInput').addEventListener('keydown', (e: KeyboardEvent) => {
     if (e.key === 'Enter') passwordLogin();
