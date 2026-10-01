@@ -298,7 +298,9 @@
 
     /* Google sign-in */
     .lg-google{width:100%;display:flex;flex-direction:column;align-items:center;gap:12px}
-    .g-btn-slot{min-height:44px;display:flex;justify-content:center;align-items:center}
+    .g-btn-slot{width:100%;min-height:44px;display:flex;justify-content:center;align-items:center}
+    .g-btn-slot > div{max-width:100%}
+    .g-btn-slot iframe{max-width:100%;border:0}
     .lg-auth-note{margin:0;font:500 13px/1.5 'DM Sans',system-ui,sans-serif;color:rgba(245,236,223,.55);text-align:center}
     .lg-auth-note code{background:rgba(255,240,220,.08);border:1px solid rgba(255,240,220,.14);border-radius:6px;padding:1px 6px;font-size:12px}
     .lg-auth-note i{color:#e6bd92}

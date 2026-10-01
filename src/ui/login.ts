@@ -197,6 +197,32 @@ import { $ } from '../core/state';
       if(getSession()) return; // already signed in this session
 
       const w = window as any;
+
+      /* The button shows avatar + "Sign in as <name>" + email + chevron + logo.
+         A fixed width clips it, so size it to the slot (Google caps it at 400). */
+      const drawButton = () => {
+        const slot = Math.floor(div.getBoundingClientRect().width) || 275;
+        const width = Math.min(400, Math.max(240, slot));
+        try{
+          w.google.accounts.id.renderButton(div, {
+            theme: 'filled_black', size: 'large', shape: 'pill',
+            text: 'signin_with', width,
+          });
+        }catch{ /* button container keeps its note text */ }
+      };
+
+      let resizeTimer: number | undefined;
+      const onResize = () => {
+        if(resizeTimer) clearTimeout(resizeTimer);
+        resizeTimer = window.setTimeout(() => {
+          if(!w.google?.accounts?.id) return;
+          div.innerHTML = '';
+          drawButton();
+        }, 200);
+      };
+      window.addEventListener('resize', onResize);
+      window.addEventListener('orientationchange', onResize);
+
       const s = document.createElement('script');
       s.src = 'https://accounts.google.com/gsi/client';
       s.async = true;
@@ -208,10 +234,7 @@ import { $ } from '../core/state';
             client_id: GOOGLE_CLIENT_ID,
             callback: (resp: any) => handleCredential(resp?.credential || ''),
           });
-          w.google.accounts.id.renderButton(div, {
-            theme: 'filled_black', size: 'large', shape: 'pill',
-            text: 'signin_with', width: 275,
-          });
+          drawButton();
           w.google.accounts.id.prompt();
         }catch{ /* button container keeps its note text */ }
       };
