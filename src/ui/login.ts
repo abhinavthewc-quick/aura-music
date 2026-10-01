@@ -1,6 +1,9 @@
-import { ALLOWED_EMAIL, GOOGLE_CLIENT_ID } from '../core/config';
+import { GOOGLE_CLIENT_ID } from '../core/config';
 import { verifyGoogleCredential } from '../core/google-auth';
-import { clearSession, getSession, setSession } from '../core/session';
+import {
+  clearSession, getSession, getProfileUsername, isValidUsername, normalizeUsername,
+  setProfileUsername, setSession,
+} from '../core/session';
 import { toast } from '../core/dom';
 import { updateProfilePopup } from '../features/settings';
 import { $ } from '../core/state';
@@ -39,23 +42,71 @@ import { $ } from '../core/state';
       },1500);
     }
 
-    /* ---------- Google Sign-In ---------- */
+    /* ---------- Google Sign-In (any Google account; username picked on first entry) ---------- */
     let gisLoaded = false;
+    let pending: { profile: { email: string; name: string; picture: string; exp: number }; credential: string } | null = null;
+
+    function showUsernamePicker(email: string){
+      const box = $('googleSignInBox'), step = $('usernameStep');
+      if(!box || !step) return;
+      $('pickEmail').textContent = 'Signed in as ' + email;
+      const err = $('pickUsernameErr'); if(err){ err.hidden = true; err.textContent = ''; }
+      const input = $('pickUsernameInput') as HTMLInputElement;
+      if(input) input.value = '';
+      box.hidden = true;
+      step.hidden = false;
+      setTimeout(()=>{ try{ input?.focus(); }catch{ /* ignore */ } }, 60);
+    }
+
+    function hideUsernamePicker(){
+      const box = $('googleSignInBox'), step = $('usernameStep');
+      if(step) step.hidden = true;
+      if(box) box.hidden = false;
+    }
+
+    function submitUsername(){
+      const err = $('pickUsernameErr');
+      const n = normalizeUsername(($('pickUsernameInput') as HTMLInputElement)?.value || '');
+      if(!isValidUsername(n)){
+        if(err){
+          err.textContent = '3–20 characters — letters, numbers, spaces, _ or -, starting with a letter or number.';
+          err.hidden = false;
+        }
+        return;
+      }
+      if(!pending){ hideUsernamePicker(); return; }
+      const { profile, credential } = pending;
+      pending = null;
+      setProfileUsername(profile.email, n);
+      setSession({ email: profile.email, name: n, picture: profile.picture, exp: profile.exp, token: credential });
+      hideUsernamePicker();
+      playLoginAnimation(n);
+    }
 
     async function handleCredential(credential: string){
       try{
         const p = await verifyGoogleCredential(credential, GOOGLE_CLIENT_ID);
-        if(p.email !== (ALLOWED_EMAIL||'').toLowerCase()){
-          toast('Access denied — only the owner\'s Google account can enter.', 'triangle-exclamation');
-          try{ (window as any).google?.accounts?.id?.disableAutoSelect?.(); }catch{ /* ignore */ }
+        const saved = getProfileUsername(p.email);
+        if(saved){
+          setSession({ email: p.email, name: saved, picture: p.picture, exp: p.exp, token: credential });
+          playLoginAnimation(saved);
           return;
         }
-        setSession({ email:p.email, name:p.name || 'Listener', picture:p.picture, exp:p.exp, token:credential });
-        playLoginAnimation(p.name || 'Listener');
+        pending = { profile: { email: p.email, name: p.name, picture: p.picture, exp: p.exp }, credential };
+        showUsernamePicker(p.email);
       }catch(err){
         toast('Sign-in failed — ' + (((err as Error).message)||'please try again'), 'triangle-exclamation');
       }
     }
+
+    $('pickUsernameGo')?.addEventListener('click', submitUsername);
+    $('pickUsernameInput')?.addEventListener('keydown', (e: KeyboardEvent) => {
+      if(e.key === 'Enter') submitUsername();
+    });
+    $('pickUsernameBack')?.addEventListener('click', () => {
+      pending = null;
+      hideUsernamePicker();
+    });
 
     export function initGoogleAuth(){
       const box = $('googleSignInBox'), div = $('googleSignInDiv'), note = $('googleAuthNote');
@@ -91,6 +142,12 @@ import { $ } from '../core/state';
       document.head.appendChild(s);
     }
     initGoogleAuth();
+
+    /* Dev-only preview of the username step (localhost): /?__pickuser */
+    if(location.hostname === 'localhost' && new URLSearchParams(location.search).has('__pickuser')){
+      pending = { profile: { email:'preview@example.com', name:'Preview', picture:'', exp: Math.floor(Date.now()/1000)+3600 }, credential:'dev-preview' };
+      showUsernamePicker('preview@example.com');
+    }
 
     $('welcomeInfo').onclick=(e)=>{
       e.stopPropagation();

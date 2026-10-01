@@ -302,3 +302,13 @@
     .lg-auth-note{margin:0;font:500 13px/1.5 'DM Sans',system-ui,sans-serif;color:rgba(245,236,223,.55);text-align:center}
     .lg-auth-note code{background:rgba(255,240,220,.08);border:1px solid rgba(255,240,220,.14);border-radius:6px;padding:1px 6px;font-size:12px}
     .lg-auth-note i{color:#e6bd92}
+
+/* Username picker (first sign-in) */
+.lg-google[hidden], .lg-picker[hidden], .lg-pick-err[hidden]{display:none !important}
+.lg-picker{display:flex;flex-direction:column;gap:13px;width:100%;text-align:center}
+.lg-picker .lg-field{text-align:left}
+.lg-pick-title{margin:2px 0 0;font:700 21px/1.25 'DM Sans',system-ui,sans-serif;color:var(--lg-ivory)}
+.lg-picker .lg-cta{margin-top:2px}
+.lg-pick-err{color:#e79a8b !important}
+.lg-pick-back{background:none;border:0;cursor:pointer;font:500 13px/1 'DM Sans',system-ui,sans-serif;color:rgba(245,236,223,.55);text-decoration:underline;text-underline-offset:3px;padding:4px}
+.lg-pick-back:hover{color:#e6bd92}

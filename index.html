@@ -28,7 +28,7 @@ html.aura-loading,html.aura-loading body{overflow:hidden}
   <div class="net-banner" id="netBanner" role="status" aria-live="polite"></div>
   <div class="welcome-screen" id="welcomeScreen">
     <button class="welcome-info" id="welcomeInfo" type="button" aria-label="Why AURA Music asks you to sign in" aria-expanded="false"><i class="fa-solid fa-circle-info"></i></button>
-    <div class="welcome-info-panel" id="welcomeInfoPanel" role="note"><strong>Why sign in with Google?</strong>Sign-in checks your Google account so only you can enter your music. Your name and preferences still stay on this device.</div>
+    <div class="welcome-info-panel" id="welcomeInfoPanel" role="note"><strong>Why sign in with Google?</strong>Any Google account can enter — Google verifies it’s really you, then you pick a username that becomes yours inside Aura. Your name and preferences stay on this device.</div>
     <div class="lg-shell">
       <div class="lg-stage" aria-hidden="true">
         <span class="lg-aura"></span>
@@ -43,7 +43,16 @@ html.aura-loading,html.aura-loading body{overflow:hidden}
         <div class="lg-form">
           <div class="lg-google" id="googleSignInBox">
             <div id="googleSignInDiv" class="g-btn-slot"></div>
-            <p class="lg-auth-note" id="googleAuthNote">Sign in with Google to enter — only the owner’s account is allowed.</p>
+            <p class="lg-auth-note" id="googleAuthNote">Sign in with Google to enter — any Google account works.</p>
+          </div>
+          <div class="lg-picker" id="usernameStep" hidden>
+            <p class="lg-auth-note" id="pickEmail"></p>
+            <p class="lg-pick-title">Choose your username</p>
+            <p class="lg-auth-note" id="pickHint">This name is tied to your Google account and shows up across Aura. You can change it later in Settings.</p>
+            <label class="lg-field"><input id="pickUsernameInput" type="text" maxlength="20" placeholder="e.g. vinyllover" autocomplete="off" spellcheck="false" aria-label="Username"></label>
+            <p class="lg-auth-note lg-pick-err" id="pickUsernameErr" hidden></p>
+            <button class="lg-cta" id="pickUsernameGo" type="button">Enter Aura</button>
+            <button class="lg-pick-back" id="pickUsernameBack" type="button">Use a different account</button>
           </div>
         </div>
         <div class="lg-points">

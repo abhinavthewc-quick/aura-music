@@ -1,5 +1,8 @@
 import { getSavedUserName, toast } from '../core/dom';
-import { clearSession } from '../core/session';
+import {
+  clearSession, getSession, getProfileUsername, isValidUsername, normalizeUsername,
+  setProfileUsername, setSession,
+} from '../core/session';
 import { searchYouTubePro } from './search';
 import { $, state } from '../core/state';
 /* ===== 4216-4287 ===== */
@@ -138,20 +141,26 @@ import { $, state } from '../core/state';
       if(e.key === 'Escape') closeNameModal();
     });
     $('nameModalSave').onclick = () => {
-      const n = $('nameModalInput').value.trim();
-      if(!n){
+      const n = normalizeUsername($('nameModalInput').value);
+      if(!isValidUsername(n)){
         $('nameModalInput').focus();
-        toast('Please enter a name', 'circle-exclamation');
+        toast('3–20 characters — letters, numbers, spaces, _ or -, starting with a letter or number.', 'circle-exclamation');
         return;
       }
 
-      // Change only the profile name. Keep first/last login dates and stay on the app.
+      // Change the profile name and re-tie it to the signed-in Google account.
       localStorage.setItem('auraUserName', n);
+      const s = getSession();
+      if(s){
+        s.name = n;
+        setSession(s);
+        setProfileUsername(s.email, n);
+      }
       $('displayUserName').textContent = n;
       $('profileName').textContent = n;
       $('popupProfileName').textContent = n;
       updateProfilePopup();
       closeNameModal();
-      toast('Name updated', 'circle-check');
+      toast('Username updated', 'circle-check');
     };
 

@@ -1,6 +1,6 @@
 import { toast } from './core/dom';
 import { fetchHfCatalog } from './core/catalog';
-import { getSession } from './core/session';
+import { getProfileUsername, getSession, setProfileUsername } from './core/session';
 import { setGreeting } from './features/home';
 import { hydrateLocalTracks, renderRecent, renderSongs, updateLibCount } from './features/library';
 import { auraYTPlayer, auraYTVideoId, lastPlayRequestAt, loadSong } from './features/player';
@@ -30,6 +30,7 @@ import { $, setHfTracks, state } from './core/state';
       const session = getSession();
       if(session){
         const name = session.name || 'Listener';
+        if(!getProfileUsername(session.email) && session.name) setProfileUsername(session.email, session.name);
         $('displayUserName').textContent=$('profileName').textContent=name;
         $('welcomeScreen').classList.add('hidden');
         localStorage.setItem('auraLastLogin', new Date().toISOString());

@@ -43,3 +43,35 @@ export function clearSession(): void {
 export function getIdToken(): string {
   return getSession()?.token || '';
 }
+
+/* ---------- per-email username profiles (main site) ----------
+   The username chosen at first sign-in is tied to the Google address and
+   stored locally as {"email": "username"}. Changing it in Settings updates
+   the same map, so the name follows the account on this device. */
+
+const PROFILES_KEY = 'auraProfiles_v1';
+
+export function getProfileUsername(email: string): string {
+  try {
+    const map = JSON.parse(localStorage.getItem(PROFILES_KEY) || '{}');
+    return String(map[email] || '').trim();
+  } catch {
+    return '';
+  }
+}
+
+export function setProfileUsername(email: string, username: string): void {
+  try {
+    const map = JSON.parse(localStorage.getItem(PROFILES_KEY) || '{}');
+    map[email] = username;
+    localStorage.setItem(PROFILES_KEY, JSON.stringify(map));
+  } catch { /* storage unavailable */ }
+}
+
+export function normalizeUsername(raw: string): string {
+  return String(raw || '').trim().replace(/\s+/g, ' ');
+}
+
+export function isValidUsername(name: string): boolean {
+  return /^[\p{L}\p{N}][\p{L}\p{N} _-]{1,19}$/u.test(name);
+}
