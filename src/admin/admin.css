@@ -155,6 +155,7 @@ body {
 
 /* Google access gate */
 .adm-google { min-height: 44px; display: flex; justify-content: flex-start; align-items: center; }
+.adm-google iframe { max-width: none !important; }
 .adm-signedin { display: flex; align-items: center; gap: 10px; font-size: 14px; color: var(--dim); flex-wrap: wrap; }
 .adm-signedin i { color: var(--green); }
 .adm-signedin b { color: var(--gold); font-weight: 700; word-break: break-all; }
