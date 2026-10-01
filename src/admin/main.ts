@@ -1,5 +1,5 @@
 import './admin.css';
-import { ALLOWED_EMAIL, GOOGLE_CLIENT_ID } from '../core/config';
+import { ADMIN_EMAILS, GOOGLE_CLIENT_ID } from '../core/config';
 import { verifyGoogleCredential } from '../core/google-auth';
 import { clearSession, getSession, setSession } from '../core/session';
 
@@ -80,7 +80,7 @@ function renderGisButton() {
   const handleResp = async (resp: any) => {
     try {
       const p = await verifyGoogleCredential(resp?.credential || '', GOOGLE_CLIENT_ID);
-      if (p.email !== (ALLOWED_EMAIL || '').toLowerCase()) {
+      if (!ADMIN_EMAILS.includes(p.email)) {
         setStatus(gateStatus, 'Access denied — ' + p.email + ' is not allowed on this panel.', 'err');
         try { w.google?.accounts?.id?.disableAutoSelect?.(); } catch { /* ignore */ }
         return;

@@ -40,5 +40,8 @@ import { state } from './state';
        Then paste the Client ID below. */
     export const GOOGLE_CLIENT_ID = '563051437889-5qcvn8a4e64i5fh49got6g70iundv0m9.apps.googleusercontent.com';
 
-    /* The only Google account allowed to use the site and the admin panel. */
-    export const ALLOWED_EMAIL = 'vivekpereiraalbert@gmail.com';
+    /* Google accounts allowed into the admin panel (the site itself is open). */
+    export const ADMIN_EMAILS = [
+      'vivekpereiraalbert@gmail.com',
+      'abhinavthewc@gmail.com',
+    ];

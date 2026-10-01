@@ -7,7 +7,10 @@
 
 const REPO = 'abhinavthewc-quick/aura-music';
 const WORKFLOW_FILE = 'upload-music.yml';
-const ALLOWED_EMAIL = 'vivekpereiraalbert@gmail.com';
+const ALLOWED_EMAILS = new Set([
+  'vivekpereiraalbert@gmail.com',
+  'abhinavthewc@gmail.com',
+]);
 const YT_RE = /^https?:\/\/(?:www\.|m\.|music\.)?(?:youtube\.com\/watch\?v=|youtube\.com\/shorts\/|youtu\.be\/)([\w-]{11})/;
 const ALLOWED_SECRETS = new Set(['YOUTUBE_COOKIES']);
 const MAX_URLS = 10;
@@ -119,14 +122,17 @@ async function signFallbackToken(env: Env, email: string) {
   return { token: 'v1.' + exp + '.' + bytesToB64url(sig), exp };
 }
 
-async function verifyFallbackToken(env: Env, token: string): Promise<boolean> {
+async function verifyFallbackToken(env: Env, token: string): Promise<string | null> {
   const parts = token.split('.');
-  if (parts.length !== 3 || parts[0] !== 'v1') return false;
+  if (parts.length !== 3 || parts[0] !== 'v1') return null;
   const exp = Number(parts[1]);
-  if (!Number.isFinite(exp) || exp * 1000 <= Date.now()) return false;
+  if (!Number.isFinite(exp) || exp * 1000 <= Date.now()) return null;
   const key = await hmacKey(env);
-  const sig = await crypto.subtle.sign('HMAC', key, new TextEncoder().encode(ALLOWED_EMAIL.toLowerCase() + ':' + parts[1]));
-  return bytesToB64url(sig) === parts[2];
+  for (const allowed of ALLOWED_EMAILS) {
+    const sig = await crypto.subtle.sign('HMAC', key, new TextEncoder().encode(allowed + ':' + parts[1]));
+    if (bytesToB64url(sig) === parts[2]) return allowed;
+  }
+  return null;
 }
 
 async function sha256Hex(text: string): Promise<string> {
@@ -177,7 +183,7 @@ export const onRequestPost = async ({ request, env }: { request: Request; env: E
     if (!env.ADMIN_PASSWORD) {
       return json({ error: 'Password login is not configured — set ADMIN_PASSWORD in the Pages environment.' }, 500);
     }
-    if (loginEmail !== ALLOWED_EMAIL.toLowerCase()) {
+    if (!ALLOWED_EMAILS.has(loginEmail)) {
       return json({ error: 'This email is not allowed.' }, 401);
     }
     if (!password) return json({ error: 'Enter your password.' }, 400);
@@ -196,8 +202,9 @@ export const onRequestPost = async ({ request, env }: { request: Request; env: E
   const credential = String(body?.credential || '');
   try {
     if (credential.startsWith('v1.')) {
-      if (!await verifyFallbackToken(env, credential)) throw new Error('session expired — sign in again');
-      email = ALLOWED_EMAIL.toLowerCase();
+      const matched = await verifyFallbackToken(env, credential);
+      if (!matched) throw new Error('session expired — sign in again');
+      email = matched;
     } else {
       if (!env.GOOGLE_CLIENT_ID) throw new Error('Google sign-in is not configured on the server');
       ({ email } = await verifyGoogle(credential, env.GOOGLE_CLIENT_ID));
@@ -205,7 +212,7 @@ export const onRequestPost = async ({ request, env }: { request: Request; env: E
   } catch (e) {
     return json({ error: (e as Error).message }, 401);
   }
-  if (email !== ALLOWED_EMAIL.toLowerCase()) {
+  if (!ALLOWED_EMAILS.has(email)) {
     return json({ error: email + ' is not allowed' }, 403);
   }
 
