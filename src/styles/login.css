@@ -56,7 +56,7 @@
     /* Wide screens and phones on their side: record on the left, form on the right */
     @media (min-width:900px),(max-height:520px) and (orientation:landscape){
       .welcome-screen{padding:32px 48px}
-      .lg-shell{width:auto;max-width:1100px;display:grid;grid-template-columns:auto minmax(280px,400px);column-gap:clamp(72px,9vw,140px);align-items:center;text-align:left}
+      .lg-shell{width:auto;max-width:1100px;display:grid;grid-template-columns:auto minmax(280px,420px);column-gap:clamp(72px,9vw,140px);align-items:center;text-align:left}
       .lg-stage{margin:0;transform:none}
       .lg-copy{align-items:flex-start}
       .lg-tag{max-width:340px}

@@ -199,10 +199,10 @@ import { $ } from '../core/state';
       const w = window as any;
 
       /* The button shows avatar + "Sign in as <name>" + email + chevron + logo.
-         A fixed width clips it, so size it to the slot (Google caps it at 400). */
+         A fixed width clips it, so size it to the slot (Google's real cap is 420, docs say 400). */
       const drawButton = () => {
         const slot = Math.floor(div.getBoundingClientRect().width) || 275;
-        const width = Math.min(400, Math.max(240, slot));
+        const width = Math.min(420, Math.max(240, slot));
         try{
           w.google.accounts.id.renderButton(div, {
             theme: 'filled_black', size: 'large', shape: 'pill',
