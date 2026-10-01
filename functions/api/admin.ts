@@ -1,8 +1,9 @@
 /* Cloudflare Pages Function — /api/admin
    The GitHub token lives HERE (as a Pages environment variable), never in
-   the browser. Every request must carry a Google ID token; it is fully
-   re-verified (RS256 against Google's JWKS, exp/iss/aud) and the email must
-   match the allow-list before any GitHub API call is made. */
+   the browser. Every request must authenticate first: either a Google ID
+   token (RS256 against Google's JWKS, exp/iss/aud) or a password-login
+   session token (HMAC keyed on GH_TOKEN, verified against ADMIN_PASSWORD).
+   The email must match the allow-list before any GitHub API call is made. */
 
 const REPO = 'abhinavthewc-quick/aura-music';
 const WORKFLOW_FILE = 'upload-music.yml';
@@ -11,10 +12,12 @@ const YT_RE = /^https?:\/\/(?:www\.|m\.|music\.)?(?:youtube\.com\/watch\?v=|yout
 const ALLOWED_SECRETS = new Set(['YOUTUBE_COOKIES']);
 const MAX_URLS = 10;
 const MAX_SECRET_BYTES = 128 * 1024;
+const FALLBACK_TTL_SEC = 7 * 24 * 3600; // password sessions last 7 days
 
 interface Env {
   GH_TOKEN: string;
   GOOGLE_CLIENT_ID: string;
+  ADMIN_PASSWORD?: string; // optional — enables the email+password login
 }
 
 const json = (obj: unknown, status = 200) =>
@@ -93,6 +96,44 @@ async function verifyGoogle(token: string, clientId: string) {
   return { email: String(payload.email).toLowerCase() };
 }
 
+/* ---------- password fallback: HMAC-signed sessions (keyed on GH_TOKEN) ---------- */
+function bytesToB64url(bytes: ArrayBuffer): string {
+  const b = btoa(String.fromCharCode(...new Uint8Array(bytes)));
+  return b.replace(/\+/g, '-').replace(/\//g, '_').replace(/=+$/, '');
+}
+
+async function hmacKey(env: Env): Promise<CryptoKey> {
+  return crypto.subtle.importKey(
+    'raw',
+    new TextEncoder().encode('aura-fallback:' + env.GH_TOKEN),
+    { name: 'HMAC', hash: 'SHA-256' },
+    false,
+    ['sign'],
+  );
+}
+
+async function signFallbackToken(env: Env, email: string) {
+  const exp = Math.floor(Date.now() / 1000) + FALLBACK_TTL_SEC;
+  const key = await hmacKey(env);
+  const sig = await crypto.subtle.sign('HMAC', key, new TextEncoder().encode(email + ':' + exp));
+  return { token: 'v1.' + exp + '.' + bytesToB64url(sig), exp };
+}
+
+async function verifyFallbackToken(env: Env, token: string): Promise<boolean> {
+  const parts = token.split('.');
+  if (parts.length !== 3 || parts[0] !== 'v1') return false;
+  const exp = Number(parts[1]);
+  if (!Number.isFinite(exp) || exp * 1000 <= Date.now()) return false;
+  const key = await hmacKey(env);
+  const sig = await crypto.subtle.sign('HMAC', key, new TextEncoder().encode(ALLOWED_EMAIL.toLowerCase() + ':' + parts[1]));
+  return bytesToB64url(sig) === parts[2];
+}
+
+async function sha256Hex(text: string): Promise<string> {
+  const digest = await crypto.subtle.digest('SHA-256', new TextEncoder().encode(text));
+  return [...new Uint8Array(digest)].map((b) => b.toString(16).padStart(2, '0')).join('');
+}
+
 /* ---------- GitHub API ---------- */
 async function gh<T = any>(env: Env, path: string, init?: RequestInit): Promise<T> {
   const res = await fetch('https://api.github.com' + path, {
@@ -118,8 +159,8 @@ async function gh<T = any>(env: Env, path: string, init?: RequestInit): Promise<
 }
 
 export const onRequestPost = async ({ request, env }: { request: Request; env: Env }) => {
-  if (!env?.GH_TOKEN || !env?.GOOGLE_CLIENT_ID) {
-    return json({ error: 'server not configured — set GH_TOKEN and GOOGLE_CLIENT_ID in the Pages environment' }, 500);
+  if (!env?.GH_TOKEN) {
+    return json({ error: 'server not configured — set GH_TOKEN (and GOOGLE_CLIENT_ID / ADMIN_PASSWORD) in the Pages environment' }, 500);
   }
 
   let body: any;
@@ -129,9 +170,38 @@ export const onRequestPost = async ({ request, env }: { request: Request; env: E
     return json({ error: 'invalid JSON body' }, 400);
   }
 
+  /* ----- password login: verify against ADMIN_PASSWORD, issue signed token ----- */
+  if (body?.action === 'login') {
+    const loginEmail = String(body.email || '').toLowerCase().trim();
+    const password = String(body.password || '');
+    if (!env.ADMIN_PASSWORD) {
+      return json({ error: 'Password login is not configured — set ADMIN_PASSWORD in the Pages environment.' }, 500);
+    }
+    if (loginEmail !== ALLOWED_EMAIL.toLowerCase()) {
+      return json({ error: 'This email is not allowed.' }, 401);
+    }
+    if (!password) return json({ error: 'Enter your password.' }, 400);
+    try {
+      const [given, stored] = await Promise.all([sha256Hex(password), sha256Hex(env.ADMIN_PASSWORD)]);
+      if (given !== stored) return json({ error: 'Wrong email or password.' }, 401);
+    } catch {
+      return json({ error: 'auth error' }, 500);
+    }
+    const { token, exp } = await signFallbackToken(env, loginEmail);
+    return json({ token, exp, email: loginEmail });
+  }
+
+  /* ----- authenticate every other action: Google ID token or signed fallback token ----- */
   let email: string;
+  const credential = String(body?.credential || '');
   try {
-    ({ email } = await verifyGoogle(String(body?.credential || ''), env.GOOGLE_CLIENT_ID));
+    if (credential.startsWith('v1.')) {
+      if (!await verifyFallbackToken(env, credential)) throw new Error('session expired — sign in again');
+      email = ALLOWED_EMAIL.toLowerCase();
+    } else {
+      if (!env.GOOGLE_CLIENT_ID) throw new Error('Google sign-in is not configured on the server');
+      ({ email } = await verifyGoogle(credential, env.GOOGLE_CLIENT_ID));
+    }
   } catch (e) {
     return json({ error: (e as Error).message }, 401);
   }

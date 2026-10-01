@@ -44,6 +44,17 @@ html.aura-loading,html.aura-loading body{overflow:hidden}
           <div class="lg-google" id="googleSignInBox">
             <div id="googleSignInDiv" class="g-btn-slot"></div>
             <p class="lg-auth-note" id="googleAuthNote">Sign in with Google to enter — any Google account works.</p>
+            <button class="lg-pick-back" id="emailAuthToggle" type="button">Google not working? Continue with email &amp; password</button>
+          </div>
+          <div class="lg-emailauth" id="emailAuthBox" hidden>
+            <p class="lg-auth-note">Fallback sign-in — no Google needed. Your password stays on this device.</p>
+            <label class="lg-field"><input id="authEmailInput" type="email" placeholder="Email address" autocomplete="email" aria-label="Email address"></label>
+            <label class="lg-field"><input id="authPasswordInput" type="password" placeholder="Password" autocomplete="current-password" aria-label="Password"></label>
+            <label class="lg-field" id="authPassword2Wrap" hidden><input id="authPassword2Input" type="password" placeholder="Confirm password" autocomplete="new-password" aria-label="Confirm password"></label>
+            <p class="lg-auth-note lg-pick-err" id="authErr" hidden></p>
+            <button class="lg-cta" id="authGo" type="button">Sign in</button>
+            <button class="lg-pick-back" id="authSwitch" type="button">New here? Create an account</button>
+            <button class="lg-pick-back" id="authGoogleBack" type="button">Back to Google sign-in</button>
           </div>
           <div class="lg-picker" id="usernameStep" hidden>
             <p class="lg-auth-note" id="pickEmail"></p>

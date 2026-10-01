@@ -73,7 +73,7 @@ let gisInitialized = false;
 
 function renderGisButton() {
   if (!GOOGLE_CLIENT_ID) {
-    setStatus(gateStatus, 'Google sign-in is not configured — set GOOGLE_CLIENT_ID in src/core/config.ts and GOOGLE_CLIENT_ID + GH_TOKEN in the Cloudflare Pages environment.', 'err');
+    setStatus(gateStatus, 'Google sign-in unavailable — use email & password below.', 'err');
     return;
   }
   const w = window as any;
@@ -148,6 +148,37 @@ function lock(msg?: string) {
   gBtnBox.innerHTML = '';
   if (msg) setStatus(gateStatus, msg, 'err');
   renderGisButton();
+}
+
+/* ---------- password fallback (server-issued token) ---------- */
+async function passwordLogin() {
+  const email = ($('admEmailInput') as HTMLInputElement).value.trim().toLowerCase();
+  const password = ($('admPasswordInput') as HTMLInputElement).value;
+  if (!email || !password) {
+    setStatus(gateStatus, 'Enter your email and password.', 'err');
+    return;
+  }
+  setStatus(gateStatus, 'Checking…');
+  let data: any = null;
+  let res: Response;
+  try {
+    res = await fetch('/api/admin', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ action: 'login', email, password }),
+    });
+    data = await res.json().catch(() => null);
+  } catch {
+    setStatus(gateStatus, 'Network error — is the site reachable?', 'err');
+    return;
+  }
+  if (!res.ok) {
+    setStatus(gateStatus, data?.error || 'HTTP ' + res.status, 'err');
+    return;
+  }
+  ($('admPasswordInput') as HTMLInputElement).value = '';
+  setSession({ email: data.email, name: data.email, picture: '', exp: data.exp, token: data.token });
+  unlock();
 }
 
 /* ---------- repository config status ---------- */
@@ -272,6 +303,11 @@ async function refreshRuns() {
 
 /* ---------- wiring ---------- */
 function bind() {
+  $('admPasswordBtn').addEventListener('click', passwordLogin);
+  $('admPasswordInput').addEventListener('keydown', (e: KeyboardEvent) => {
+    if (e.key === 'Enter') passwordLogin();
+  });
+
   $('cookiesSaveBtn').addEventListener('click', async () => {
     try {
       const val = cookiesInput.value;

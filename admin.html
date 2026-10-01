@@ -18,8 +18,14 @@
 
     <section class="adm-card" id="gateCard">
       <h2><span class="adm-num">1</span> Access</h2>
-      <p class="adm-hint">Only <b>vivekpereiraalbert@gmail.com</b> can manage downloads. Every action is re-verified server-side against your Google account — this page never holds API tokens.</p>
+      <p class="adm-hint">Only <b>vivekpereiraalbert@gmail.com</b> can manage downloads. Every action is re-verified server-side — this page never holds API tokens.</p>
       <div id="adminGoogleBtn" class="adm-google"></div>
+      <div class="adm-or"><span>or sign in with email &amp; password</span></div>
+      <div class="adm-emailauth">
+        <input class="adm-input" id="admEmailInput" type="email" placeholder="Email address" autocomplete="email" aria-label="Email address">
+        <input class="adm-input" id="admPasswordInput" type="password" placeholder="Password" autocomplete="current-password" aria-label="Password">
+        <button type="button" class="adm-btn primary" id="admPasswordBtn">Sign in</button>
+      </div>
       <div class="adm-status" id="gateStatus"></div>
     </section>
 

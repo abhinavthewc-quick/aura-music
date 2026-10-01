@@ -159,3 +159,9 @@ body {
 .adm-signedin i { color: var(--green); }
 .adm-signedin b { color: var(--gold); font-weight: 700; word-break: break-all; }
 .adm-card[hidden] { display: none !important; }
+
+/* Password fallback in the access gate */
+.adm-or{display:flex;align-items:center;gap:10px;margin:14px 0 4px;font-size:11px;font-weight:700;letter-spacing:.08em;text-transform:uppercase;color:var(--dim)}
+.adm-or::before,.adm-or::after{content:"";flex:1;height:1px;background:rgba(255,255,255,.12)}
+.adm-emailauth{display:flex;flex-direction:column;gap:8px}
+.adm-emailauth .adm-input{width:100%}

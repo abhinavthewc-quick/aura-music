@@ -312,3 +312,10 @@
 .lg-pick-err{color:#e79a8b !important}
 .lg-pick-back{background:none;border:0;cursor:pointer;font:500 13px/1 'DM Sans',system-ui,sans-serif;color:rgba(245,236,223,.55);text-decoration:underline;text-underline-offset:3px;padding:4px}
 .lg-pick-back:hover{color:#e6bd92}
+
+/* Email + password fallback */
+.lg-emailauth{display:flex;flex-direction:column;gap:12px;width:100%}
+.lg-emailauth[hidden],.lg-field[hidden],#authErr[hidden],#emailAuthToggle[hidden]{display:none !important}
+.lg-emailauth .lg-field{text-align:left}
+.lg-emailauth .lg-cta{margin-top:2px}
+#emailAuthToggle{margin-top:2px}
