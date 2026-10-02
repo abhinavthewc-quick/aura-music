@@ -149,6 +149,7 @@ function unlock() {
   setStatus(gateStatus, '✓ Access granted.', 'ok');
   refreshSecretChips();
   refreshRuns();
+  void refreshLibrary(); // populate "already uploaded" marks for search/queue/dispatch
 }
 
 function lock(msg?: string) {
@@ -238,8 +239,50 @@ function saveQueue() {
 
 const queueHas = (id: string) => queue.some((i) => i.id === id);
 
+/* ---------- what is already in the bucket ("library") ----------
+   One video ID drives every dedupe surface: search rows, pasted links,
+   artist expansion and the dispatch filter on the server. */
+let libraryIdSet = new Set<string>();
+let libraryLoaded = false;
+let libraryLoading: Promise<void> | null = null;
+
+async function refreshLibrary(force = false): Promise<void> {
+  if (libraryLoading) return libraryLoading;
+  if (libraryLoaded && !force) return;
+  libraryLoading = (async () => {
+    try {
+      const data = await adminApi<{ videoIds?: string[] }>('library');
+      libraryIdSet = new Set((data.videoIds || []).filter(Boolean));
+      libraryLoaded = true;
+      syncResultRows();
+      renderQueue();
+    } catch { /* status line already surfaced */ }
+    finally { libraryLoading = null; }
+  })();
+  return libraryLoading;
+}
+
+const inLibrary = (id: string) => libraryIdSet.has(id);
+
+/* YT Music sub = "Lead artist, co-artist… • Album • 6:10" (music) or channel
+   (video). The primary artist is what we search & match on — full credit
+   lists would almost never match exactly across songs. */
+function artistOf(sub: string, mode: 'music' | 'video'): string {
+  const first = mode === 'music' ? (sub || '').split('•')[0] : sub;
+  return normalizeArtist(first.split(',')[0]);
+}
+
+function normalizeArtist(name: string): string {
+  return (name || '')
+    .replace(/\s*-\s*Topic$/i, '')
+    .replace(/\.\s*/g, '.') // "A. R." === "AR"
+    .replace(/\s{2,}/g, ' ')
+    .trim()
+    .toLowerCase();
+}
+
 function addToQueue(item: QueueItem, silent = false): boolean {
-  if (queueHas(item.id)) return false;
+  if (queueHas(item.id) || inLibrary(item.id)) return false;
   queue.push(item);
   saveQueue();
   renderQueue();
@@ -280,32 +323,75 @@ function renderQueue() {
     const img = row.querySelector('img') as HTMLImageElement;
     if (item.thumb) img.src = item.thumb;
     row.querySelector('.t')!.textContent = item.title;
-    row.querySelector('.s')!.textContent = item.sub;
+    row.querySelector('.s')!.textContent =
+      item.sub + (inLibrary(item.id) ? (item.sub ? ' · ' : '') + '✓ already in library' : '');
     row.querySelector('.adm-qremove')!.addEventListener('click', () => removeFromQueue(item.id));
     queueList.appendChild(row);
   }
 }
 
-/* ----- paste ingestion: valid lines are pulled into the queue automatically ----- */
+/* ----- paste ingestion: valid lines are pulled into the queue automatically;
+   playlist/album links expand into their individual tracks ----- */
+const PLAYLIST_RE = /[?&]list=[A-Za-z0-9_-]{6,}/;
+const isPlaylistLine = (l: string) =>
+  PLAYLIST_RE.test(l) && !/watch\?v=|youtu\.be\/|shorts\//.test(l);
+
 function ingestPasted() {
   const lines = urlsInput.value.split(/[\r\n]+/).map((l) => l.trim()).filter(Boolean);
   if (!lines.length) return;
   const valid: string[] = [];
+  const playlists: string[] = [];
   const keep: string[] = [];
-  for (const l of lines) (YT_RE.test(l) ? valid : keep).push(l);
-  if (!valid.length) return;
+  for (const l of lines) {
+    if (isPlaylistLine(l)) playlists.push(l);
+    else if (YT_RE.test(l)) valid.push(l);
+    else keep.push(l);
+  }
+  urlsInput.value = keep.join('\n');
+  if (playlists.length) playlists.forEach((u) => void expandPlaylist(u));
+  if (!valid.length && !playlists.length) return;
   let added = 0;
+  let alreadyQueued = 0;
+  let alreadyUploaded = 0;
   for (const u of valid) {
     const id = YT_RE.exec(u)![1];
-    if (queueHas(id)) continue;
+    if (queueHas(id)) { alreadyQueued++; continue; }
+    if (inLibrary(id)) { alreadyUploaded++; continue; }
     if (addToQueue({ id, url: u, title: 'Reading title…', sub: '', thumb: '', source: 'paste' }, true)) {
       added++;
       void enrichPaste(id, u);
     }
   }
-  urlsInput.value = keep.join('\n');
-  if (added) toast(`Added ${added} link${added === 1 ? '' : 's'} to queue`, 'ok');
-  else toast('Already in the queue', 'err');
+  const skipped = alreadyQueued + alreadyUploaded;
+  if (added) toast(`Added ${added} link${added === 1 ? '' : 's'} to queue${skipped ? ` · ${skipped} skipped` : ''}`, 'ok');
+  else if (skipped) toast('Already in the queue or library', 'err');
+}
+
+/* Expand a /playlist?list=… (or album) link server-side and queue each track. */
+async function expandPlaylist(url: string) {
+  setStatus(searchStatus, 'Reading playlist…');
+  try {
+    const data = await adminApi<{ type: string; title: string; tracks: SearchResult[] }>('expand', { url });
+    let added = 0;
+    let skipped = 0;
+    for (const t of data.tracks || []) {
+      if (queueHas(t.videoId) || inLibrary(t.videoId)) { skipped++; continue; }
+      if (addToQueue({
+        id: t.videoId,
+        url: `https://music.youtube.com/watch?v=${t.videoId}`,
+        title: t.title || t.videoId,
+        sub: t.sub,
+        thumb: t.thumbnail || '',
+        source: 'paste',
+      }, true)) added++;
+    }
+    const kind = data.type === 'album' ? 'Album' : 'Playlist';
+    setStatus(searchStatus, `${kind} “${data.title}” — ${added} track${added === 1 ? '' : 's'} queued${skipped ? `, ${skipped} skipped` : ''}`, 'ok');
+    toast(`${kind} expanded — ${added} track${added === 1 ? '' : 's'} queued`, 'ok');
+    syncResultRows();
+  } catch (e) {
+    setStatus(searchStatus, '✗ ' + ((e as Error).message || 'could not read that playlist'), 'err');
+  }
 }
 
 interface Oembed { title: string; author_name: string; thumbnail_url: string; }
@@ -357,8 +443,10 @@ function renderResults(results: SearchResult[]) {
   }));
   searchResults.innerHTML = '';
   for (const { r, url } of lastResults) {
+    const artist = artistOf(r.sub, searchMode);
+    const uploaded = inLibrary(r.videoId);
     const row = document.createElement('div');
-    row.className = 'adm-res' + (queueHas(r.videoId) ? ' added' : '');
+    row.className = 'adm-res' + (queueHas(r.videoId) ? ' added' : '') + (uploaded ? ' in-lib' : '');
     row.setAttribute('data-id', r.videoId);
     row.setAttribute('data-url', url);
     row.setAttribute('role', 'button');
@@ -367,13 +455,21 @@ function renderResults(results: SearchResult[]) {
       '<img alt="" loading="lazy">' +
       '<div class="adm-res-txt"><div class="t"></div><div class="s"></div></div>' +
       '<span class="adm-res-x"></span>' +
+      '<button type="button" class="adm-res-artist" title="Queue every track by this artist"></button>' +
       '<span class="adm-res-add"></span>';
     const img = row.querySelector('img') as HTMLImageElement;
     if (r.thumbnail) img.src = r.thumbnail;
     row.querySelector('.t')!.textContent = r.title;
     row.querySelector('.s')!.textContent = [r.sub, r.extra].filter(Boolean).join(' · ');
     row.querySelector('.adm-res-x')!.textContent = r.isLive ? 'LIVE' : r.duration || '';
-    row.querySelector('.adm-res-add')!.textContent = queueHas(r.videoId) ? '✓' : '＋';
+    row.querySelector('.adm-res-add')!.textContent = uploaded ? 'library' : queueHas(r.videoId) ? '✓' : '＋';
+    const artistBtn = row.querySelector('.adm-res-artist') as HTMLButtonElement;
+    artistBtn.textContent = '+ all';
+    artistBtn.title = 'Queue every track by ' + (artist || 'this artist');
+    artistBtn.addEventListener('click', (e) => {
+      e.stopPropagation();
+      void queueArtist(artist, searchMode);
+    });
     const toggle = () => toggleResult(r, url);
     row.addEventListener('click', toggle);
     row.addEventListener('keydown', (e: KeyboardEvent) => {
@@ -387,6 +483,10 @@ function renderResults(results: SearchResult[]) {
 }
 
 function toggleResult(r: SearchResult, url: string) {
+  if (inLibrary(r.videoId)) {
+    toast('Already in your library', '');
+    return;
+  }
   if (queueHas(r.videoId)) removeFromQueue(r.videoId);
   else addToQueue({ id: r.videoId, url, title: r.title, sub: r.sub, thumb: r.thumbnail || '', source: 'search' });
   syncResultRows();
@@ -396,10 +496,64 @@ function syncResultRows() {
   searchResults.querySelectorAll<HTMLElement>('.adm-res').forEach((el) => {
     const id = el.getAttribute('data-id') || '';
     const added = queueHas(id);
+    const uploaded = inLibrary(id);
     el.classList.toggle('added', added);
+    el.classList.toggle('in-lib', uploaded);
     const add = el.querySelector('.adm-res-add');
-    if (add) add.textContent = added ? '✓' : '＋';
+    if (add) add.textContent = uploaded ? 'library' : added ? '✓' : '＋';
   });
+}
+
+/* "+ all by artist" — re-queries search, keeps only rows whose artist
+   (first segment of the YT Music sub line) matches exactly, queues ≤ 20. */
+const ARTIST_MAX = 20;
+let artistBusy = false;
+
+async function queueArtist(artist: string, mode: 'music' | 'video'): Promise<void> {
+  const q = (artist || '').replace(/\s*-\s*Topic$/i, '').trim();
+  if (!q) return;
+  if (artistBusy) {
+    toast('Artist lookup already running', '');
+    return;
+  }
+  artistBusy = true;
+  setStatus(searchStatus, `Finding tracks by ${q}…`);
+  try {
+    const data = await adminApi<{ results: SearchResult[] }>('search', { q, mode });
+    const norm = normalizeArtist(q);
+    const matches = (data.results || []).filter(
+      (r) => artistOf(r.sub, mode) === norm,
+    );
+    let added = 0;
+    let skipped = 0;
+    for (const r of matches.slice(0, ARTIST_MAX)) {
+      if (queueHas(r.videoId) || inLibrary(r.videoId)) {
+        skipped++;
+        continue;
+      }
+      const url =
+        mode === 'music'
+          ? `https://music.youtube.com/watch?v=${r.videoId}`
+          : `https://www.youtube.com/watch?v=${r.videoId}`;
+      if (addToQueue({ id: r.videoId, url, title: r.title, sub: r.sub, thumb: r.thumbnail || '', source: 'search' }, true)) {
+        added++;
+      }
+    }
+    if (!matches.length) {
+      setStatus(searchStatus, `No tracks found for “${q}”`, 'err');
+      toast('No matching tracks found', 'err');
+    } else {
+      const more = matches.length > ARTIST_MAX ? ` (top ${ARTIST_MAX} of ${matches.length})` : '';
+      const note = skipped ? ` · ${skipped} already queued/library` : '';
+      setStatus(searchStatus, `${added} track${added === 1 ? '' : 's'} by ${q} queued${more}${note}`, 'ok');
+      toast(added ? `Queued ${added} by ${q}` : 'Nothing new to queue', added ? 'ok' : '');
+    }
+    syncResultRows();
+  } catch (e) {
+    setStatus(searchStatus, '✗ ' + ((e as Error).message || 'artist search failed'), 'err');
+  } finally {
+    artistBusy = false;
+  }
 }
 
 function addTopResult() {
@@ -455,10 +609,89 @@ async function runSearch() {
   }
 }
 
-/* ---------- runs ---------- */
+/* ---------- runs: list + expandable live job/step progress ---------- */
 interface Run {
   id: number; status: string; conclusion: string | null;
   created_at: string; html_url: string; display_title: string;
+}
+interface RunStep { number: number; name: string; status: string; conclusion: string | null; }
+interface RunJob {
+  id: number; name: string; status: string; conclusion: string | null;
+  started_at: string | null; completed_at: string | null; steps: RunStep[];
+}
+
+let expandedRunId: number | null = null;
+let jobsCache: Record<number, RunJob[]> = {};
+let runsActive = false;
+let runsTimer: number | undefined;
+
+function stepIcon(s: RunStep): string {
+  if (s.status === 'completed') {
+    if (s.conclusion === 'success') return '✓';
+    if (s.conclusion === 'skipped') return '·';
+    return '✗';
+  }
+  if (s.status === 'in_progress') return '⟳';
+  return '·';
+}
+
+function renderRunJobs(runId: number, jobs: RunJob[]) {
+  const host = document.getElementById('rundetail-' + runId);
+  if (!host) return;
+  if (!jobs.length) {
+    host.innerHTML = '<span class="adm-chip dim">job not started yet…</span>';
+    return;
+  }
+  const wrap = document.createElement('div');
+  for (const job of jobs) {
+    const block = document.createElement('div');
+    block.className = 'adm-job';
+    const done = job.steps.filter((s) => s.status === 'completed').length;
+    const head = document.createElement('div');
+    head.className = 'adm-job-head';
+    head.innerHTML =
+      '<span class="adm-job-name"></span>' +
+      `<span class="adm-job-count">${done}/${job.steps.length} steps · ${job.conclusion || job.status}</span>`;
+    head.querySelector('.adm-job-name')!.textContent = job.name;
+    block.appendChild(head);
+    for (const s of job.steps) {
+      const row = document.createElement('div');
+      row.className = 'adm-step' + (s.status === 'in_progress' ? ' running' : '');
+      row.innerHTML = `<span class="ic">${stepIcon(s)}</span><span class="nm"></span>`;
+      row.querySelector('.nm')!.textContent = s.name;
+      block.appendChild(row);
+    }
+    wrap.appendChild(block);
+  }
+  host.innerHTML = '';
+  host.appendChild(wrap);
+}
+
+async function refreshRunJobs(runId: number): Promise<void> {
+  try {
+    const data = await adminApi<{ jobs: RunJob[] }>('runJobs', { run_id: runId });
+    jobsCache[runId] = data.jobs || [];
+    renderRunJobs(runId, jobsCache[runId]);
+  } catch (e) {
+    const host = document.getElementById('rundetail-' + runId);
+    if (host) host.innerHTML = `<span class="adm-chip dim">could not load steps — ${(e as Error).message}</span>`;
+  }
+}
+
+function toggleRunDetail(runId: number) {
+  const wasOpen = expandedRunId === runId;
+  expandedRunId = wasOpen ? null : runId;
+  runsList.querySelectorAll('.adm-run-detail').forEach((el) => {
+    el.hidden = el.id !== 'rundetail-' + (expandedRunId ?? -1);
+  });
+  runsList.querySelectorAll('.adm-run').forEach((el) => {
+    el.classList.toggle('open', Number(el.getAttribute('data-run')) === expandedRunId);
+  });
+  if (!wasOpen) {
+    renderRunJobs(runId, jobsCache[runId] || []);
+    void refreshRunJobs(runId);
+  }
+  scheduleRunsPoll();
 }
 
 async function refreshRuns() {
@@ -466,27 +699,62 @@ async function refreshRuns() {
   try {
     const data = await adminApi<{ runs: Run[] }>('runs');
     const runs = data.runs || [];
+    runsActive = runs.some((r) => r.status === 'in_progress' || r.status === 'queued');
     if (!runs.length) {
       runsList.innerHTML = '<span class="adm-chip dim">no runs yet — start a download above</span>';
       return;
     }
     runsList.innerHTML = '';
     for (const run of runs) {
+      const item = document.createElement('div');
+      item.className = 'adm-run-item';
       const row = document.createElement('div');
       row.className = 'adm-run';
+      row.setAttribute('data-run', String(run.id));
       const when = new Date(run.created_at).toLocaleString();
       const label = run.conclusion || run.status;
       row.innerHTML =
+        `<span class="chev"></span>` +
         `<span class="dot ${label}"></span>` +
         `<span class="title"></span>` +
         `<span class="meta">${label} · ${when}</span>` +
         `<a href="${run.html_url}" target="_blank" rel="noopener">logs</a>`;
       row.querySelector('.title')!.textContent = run.display_title;
-      runsList.appendChild(row);
+      row.addEventListener('click', (e) => {
+        if ((e.target as HTMLElement).closest('a')) return;
+        toggleRunDetail(run.id);
+      });
+      const detail = document.createElement('div');
+      detail.className = 'adm-run-detail';
+      detail.id = 'rundetail-' + run.id;
+      detail.hidden = expandedRunId !== run.id;
+      if (!detail.hidden) renderRunJobs(run.id, jobsCache[run.id] || []);
+      item.appendChild(row);
+      item.appendChild(detail);
+      runsList.appendChild(item);
     }
   } catch {
+    runsActive = false;
     runsList.innerHTML = '<span class="adm-chip dim">could not load runs</span>';
   }
+}
+
+/* Poll aggressively (3s) while anything is running or a run is expanded,
+   otherwise back off to 10s — always self-scheduling so nothing stacks. */
+function scheduleRunsPoll() {
+  window.clearTimeout(runsTimer);
+  const fast = runsActive || expandedRunId !== null;
+  runsTimer = window.setTimeout(tickRuns, fast ? 3000 : 10000);
+}
+
+async function tickRuns() {
+  try {
+    if (document.visibilityState === 'visible' && getSession()) {
+      await refreshRuns();
+      if (expandedRunId !== null) await refreshRunJobs(expandedRunId);
+    }
+  } catch { /* transient */ }
+  scheduleRunsPoll();
 }
 
 /* ---------- wiring ---------- */
@@ -576,9 +844,14 @@ function bind() {
 
   $('downloadBtn').addEventListener('click', async () => {
     const btn = $<HTMLButtonElement>('downloadBtn');
-    const urls = queue.map((i) => i.url);
+    const pending = queue.filter((i) => !inLibrary(i.id));
+    const urls = pending.map((i) => i.url);
     if (!urls.length) {
-      setStatus(downloadStatus, 'Queue is empty — search for a song or paste a link first.', 'err');
+      setStatus(
+        downloadStatus,
+        queue.length ? 'Every queued track is already in your library.' : 'Queue is empty — search for a song or paste a link first.',
+        'err',
+      );
       return;
     }
     btn.disabled = true;
@@ -586,19 +859,28 @@ function bind() {
     try {
       const batches: string[][] = [];
       for (let i = 0; i < urls.length; i += MAX_PER_RUN) batches.push(urls.slice(i, i + MAX_PER_RUN));
-      for (const batch of batches) await adminApi('dispatch', { urls: batch });
-      queue = [];
+      let totalDispatched = 0;
+      let totalSkipped = 0;
+      for (const batch of batches) {
+        const res = await adminApi<{ dispatched?: number; skipped?: number }>('dispatch', { urls: batch });
+        totalDispatched += res.dispatched || 0;
+        totalSkipped += res.skipped || 0;
+      }
+      queue = queue.filter((i) => !pending.some((p) => p.id === i.id));
       saveQueue();
       renderQueue();
       syncResultRows();
+      void refreshLibrary(true);
+      const runsNote = batches.length > 1 && totalDispatched ? ` across ${batches.length} runs` : '';
+      const skipNote = totalSkipped ? ` · ${totalSkipped} already in library` : '';
       setStatus(
         downloadStatus,
-        batches.length > 1
-          ? `✓ ${urls.length} tracks dispatched across ${batches.length} runs — watch them below.`
-          : `✓ ${urls.length} track${urls.length === 1 ? '' : 's'} dispatched — watch it below.`,
+        totalDispatched
+          ? `✓ ${totalDispatched} track${totalDispatched === 1 ? '' : 's'} dispatched${runsNote}${skipNote} — watch ${totalDispatched === 1 ? 'it' : 'them'} below.`
+          : `Nothing new to dispatch${skipNote}.`,
         'ok',
       );
-      toast('Download started on GitHub Actions', 'ok');
+      if (totalDispatched) toast('Download started on GitHub Actions', 'ok');
       setTimeout(refreshRuns, 2500);
     } catch (e) {
       setStatus(downloadStatus, '✗ ' + (e as Error).message, 'err');
@@ -607,11 +889,12 @@ function bind() {
     }
   });
 
-  $('runsRefreshBtn').addEventListener('click', () => refreshRuns());
+  $('runsRefreshBtn').addEventListener('click', () => {
+    refreshRuns();
+    if (expandedRunId !== null) void refreshRunJobs(expandedRunId);
+  });
 
-  window.setInterval(() => {
-    if (document.visibilityState === 'visible' && getSession()) refreshRuns();
-  }, 10000);
+  scheduleRunsPoll(); // replaces a fixed interval: 3s while active/expanded, else 10s
 }
 
 /* ---------- boot ---------- */

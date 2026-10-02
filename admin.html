@@ -39,7 +39,7 @@
     <!-- 1. Main action -->
     <section class="adm-card adm-span2 adm-gated" id="downloadCard" hidden>
       <h2><span class="adm-num">1</span> Find &amp; queue music</h2>
-      <p class="adm-hint">Search YouTube Music straight from here, or paste links below — everything lands in the same queue. Press <b>Enter</b> in the search box to queue the top match. <b>Start download</b> sends the queue to GitHub Actions.</p>
+      <p class="adm-hint">Search YouTube Music straight from here, or paste links below — everything lands in the same queue. Press <b>Enter</b> to queue the top match, or <b>+ all</b> on a result to grab every track by that artist. Tracks you already uploaded show as <i>library</i> and are never queued twice. <b>Start download</b> sends the queue to GitHub Actions.</p>
 
       <div class="adm-searchbar">
         <input id="searchInput" class="adm-input" type="search" placeholder="Search a song, artist or album…" autocomplete="off" spellcheck="false" aria-label="Search music">
@@ -52,7 +52,7 @@
       <div class="adm-status" id="searchStatus"></div>
 
       <div class="adm-or"><span>or paste links</span></div>
-      <textarea id="urlsInput" class="adm-input adm-textarea" rows="2" spellcheck="false" placeholder="https://music.youtube.com/watch?v=…&#10;one link per line — valid lines move into the queue automatically"></textarea>
+        <textarea id="urlsInput" class="adm-input adm-textarea" rows="2" spellcheck="false" placeholder="https://music.youtube.com/watch?v=…&#10;or a /playlist?list=… / album link — it expands into individual tracks&#10;valid lines move into the queue automatically"></textarea>
 
       <div class="adm-queuehead">
         <span class="adm-queuetitle">Queue <span class="adm-count" id="urlCount"></span></span>
@@ -72,7 +72,7 @@
     <section class="adm-card adm-span2 adm-gated" id="runsCard" hidden>
       <h2><span class="adm-num">2</span> Download status <button type="button" class="adm-btn ghost small" id="runsRefreshBtn">Refresh</button></h2>
       <div class="adm-runs" id="runsList"><span class="adm-chip dim">no data yet</span></div>
-      <p class="adm-flow"><i class="fa-solid fa-rotate"></i> Refreshes every 10 seconds while this tab is open. Click <b>logs</b> on a run to see full details on GitHub.</p>
+      <p class="adm-flow"><i class="fa-solid fa-rotate"></i> Live progress: <b>3s</b> polling while a run is active (10s idle). Click a run to expand its steps in place, or <b>logs</b> for GitHub.</p>
     </section>
 
     <!-- Configuration (collapsed by default) -->

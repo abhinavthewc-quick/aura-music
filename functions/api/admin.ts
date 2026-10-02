@@ -16,11 +16,73 @@ const ALLOWED_SECRETS = new Set(['YOUTUBE_COOKIES']);
 const MAX_URLS = 10;
 const MAX_SECRET_BYTES = 128 * 1024;
 const FALLBACK_TTL_SEC = 7 * 24 * 3600; // password sessions last 7 days
+const HF_BUCKET = 'Angelrider/sonora'; // public tree — no HF token needed for reads
+const TREE_TTL_MS = 60 * 1000;
+const VIDEO_ID_SUFFIX_RE = /\s\[([A-Za-z0-9_-]{11})\]$/;
 
 interface Env {
   GH_TOKEN: string;
   GOOGLE_CLIENT_ID: string;
   ADMIN_PASSWORD?: string; // optional — enables the email+password login
+}
+
+interface BucketFile {
+  path: string;
+  size: number;
+  mtime: string;
+}
+
+function ytIdOf(u: string): string {
+  const m = YT_RE.exec(u);
+  return m ? m[1] : '';
+}
+
+/* Bucket tree: the single source of truth for "what is already uploaded".
+   Cached in-module (same isolate) and in the worker Cache API for 60s. */
+let treeMem: { files: BucketFile[]; at: number } | null = null;
+
+async function bucketTree(force = false): Promise<BucketFile[]> {
+  if (!force && treeMem && Date.now() - treeMem.at < TREE_TTL_MS) return treeMem.files;
+  const cacheKey = new Request('https://aura-bucket.internal/tree?' + HF_BUCKET);
+  if (!force) {
+    try {
+      const hit = await (caches as any).default.match(cacheKey);
+      if (hit) {
+        const data = await hit.json();
+        if (Array.isArray(data?.files)) {
+          treeMem = { files: data.files, at: Date.now() };
+          return data.files;
+        }
+      }
+    } catch { /* cache unavailable — fetch fresh */ }
+  }
+  const res = await fetch(`https://huggingface.co/api/buckets/${HF_BUCKET}/tree?recursive=true`);
+  if (!res.ok) throw new Error('bucket listing failed (HTTP ' + res.status + ')');
+  const items = await res.json();
+  if (!Array.isArray(items)) throw new Error('unexpected bucket listing format');
+  const files: BucketFile[] = [];
+  for (const it of items) {
+    if (it && it.type === 'file' && typeof it.path === 'string') {
+      files.push({ path: it.path, size: Number(it.size) || 0, mtime: String(it.mtime || '') });
+    }
+  }
+  treeMem = { files, at: Date.now() };
+  try {
+    const cacheRes = new Response(JSON.stringify({ files }), {
+      headers: { 'content-type': 'application/json', 'cache-control': 'public, max-age=60' },
+    });
+    await (caches as any).default.put(cacheKey, cacheRes);
+  } catch { /* caching is best-effort */ }
+  return files;
+}
+
+function uploadedVideoIds(files: BucketFile[]): Set<string> {
+  const ids = new Set<string>();
+  for (const f of files) {
+    const m = VIDEO_ID_SUFFIX_RE.exec(f.path.replace(/\.[^.]+$/, ''));
+    if (m) ids.add(m[1]);
+  }
+  return ids;
 }
 
 const json = (obj: unknown, status = 200) =>
@@ -146,6 +208,117 @@ async function ytSearchVideos(q: string, hl: string, gl: string): Promise<YtResu
     if (out.length >= 20) return out;
   }
   return out;
+}
+
+/* ---------- InnerTube playlist/album expansion ----------
+   Pasted /playlist?list=… links are expanded server-side into individual
+   tracks, so the workflow still downloads real per-track files. YT Music's
+   browse endpoint serves both playlists (browseId "VL"+id) and albums
+   (browseId "MPRE…") in one code path. */
+const EXPAND_MAX_TRACKS = 50;
+const LIST_ID_RE = /^[A-Za-z0-9_-]{6,64}$/;
+
+function collectPlaylistItems(node: any, out: YtResult[]): void {
+  if (!node || typeof node !== 'object' || out.length >= EXPAND_MAX_TRACKS) return;
+  if (Array.isArray(node)) {
+    for (const x of node) collectPlaylistItems(x, out);
+    return;
+  }
+  const r = node.musicResponsiveListItemRenderer;
+  if (r) {
+    const videoId =
+      r?.playlistItemData?.videoId ||
+      r?.overlay?.musicCardPlayerOverlayRenderer?.playNavigationEndpoint?.watchEndpoint?.videoId;
+    if (videoId && !out.some((x) => x.videoId === videoId)) {
+      const cols = (r.flexColumns || []).map((f: any) =>
+        runsText(f?.musicResponsiveListItemFlexColumnRenderer?.text),
+      );
+      out.push({
+        videoId,
+        title: cols[0] || '',
+        sub: cols[1] || '',
+        extra: cols[2] || '',
+        duration: null,
+        thumbnail: r?.thumbnail?.musicThumbnailRenderer?.thumbnail?.thumbnails?.at(-1)?.url ?? null,
+        isLive: false,
+      });
+    }
+  }
+  for (const k of Object.keys(node)) {
+    if (k !== 'musicResponsiveListItemRenderer') collectPlaylistItems(node[k], out);
+  }
+}
+
+function findContinuation(node: any): string | null {
+  if (!node || typeof node !== 'object') return null;
+  if (Array.isArray(node)) {
+    for (const x of node) {
+      const found = findContinuation(x);
+      if (found) return found;
+    }
+    return null;
+  }
+  const next = node.nextContinuationData?.continuation;
+  if (typeof next === 'string') return next;
+  const reload = node.reloadContinuationData?.continuation;
+  if (typeof reload === 'string') return reload;
+  for (const k of Object.keys(node)) {
+    const found = findContinuation(node[k]);
+    if (found) return found;
+  }
+  return null;
+}
+
+function findHeaderTitle(node: any): string {
+  if (!node || typeof node !== 'object') return '';
+  const hdr =
+    node.musicDetailHeaderRenderer ||
+    node.musicDetailedMetadataHeaderRenderer ||
+    node.musicTwoRowItemRenderer;
+  const t = hdr && (hdr.title || hdr.displayName);
+  if (t && (t.runs || t.simpleText)) {
+    const text = runsText(t).trim();
+    if (text) return text;
+  }
+  for (const k of Object.keys(node)) {
+    const found = findHeaderTitle(node[k]);
+    if (found) return found;
+  }
+  return '';
+}
+
+async function ytBrowse(origin: string, hl: string, gl: string, payload: Record<string, unknown>): Promise<any> {
+  return ytPost(origin + '/youtubei/v1/browse?prettyPrint=false', origin, {
+    context: { client: { clientName: 'WEB_REMIX', clientVersion: '1.20250915.01.00', hl, gl } },
+    ...payload,
+  });
+}
+
+async function ytExpandList(listId: string, hl: string, gl: string) {
+  const isAlbum = /^MPRE/i.test(listId);
+  const browseId = isAlbum ? listId : 'VL' + listId;
+  const data = await ytBrowse('https://music.youtube.com', hl, gl, { browseId });
+  const tracks: YtResult[] = [];
+  collectPlaylistItems(data, tracks);
+  if (tracks.length < EXPAND_MAX_TRACKS) {
+    const cont = findContinuation(data);
+    if (cont) {
+      try {
+        const more = await ytBrowse('https://music.youtube.com', hl, gl, { continuation: cont });
+        collectPlaylistItems(more, tracks);
+      } catch { /* first page is enough */ }
+    }
+  }
+  const mf = data?.microformat?.microformatDataRenderer;
+  const title =
+    (typeof mf?.title === 'string' && mf.title.trim()) ||
+    findHeaderTitle(data?.header || {}) ||
+    (isAlbum ? 'Album' : 'Playlist');
+  return {
+    type: isAlbum ? 'album' : 'playlist',
+    title,
+    tracks: tracks.slice(0, EXPAND_MAX_TRACKS),
+  };
 }
 
 /* ---------- Google ID-token verification (mirror of src/core/google-auth.ts) ---------- */
@@ -405,6 +578,26 @@ export const onRequestPost = async ({ request, env, ctx }: {
         return json({ results });
       }
 
+      case 'library': {
+        const files = await bucketTree();
+        return json({ files, videoIds: [...uploadedVideoIds(files)] });
+      }
+
+      case 'expand': {
+        const raw = String(body.url || body.listId || '').trim();
+        const listMatch = /[?&]list=([A-Za-z0-9_-]{6,64})/.exec(raw);
+        const listId = listMatch ? listMatch[1] : LIST_ID_RE.test(raw) ? raw : '';
+        if (!listId) return json({ error: 'no playlist/album ID in that link' }, 400);
+        if (/^RD/.test(listId)) {
+          return json({ error: 'auto-generated mixes can’t be expanded — queue the tracks individually' }, 400);
+        }
+        const hl = /^[a-z]{2}(-[A-Za-z]{2,4})?$/.test(String(body.hl || '')) ? String(body.hl) : 'en';
+        const gl = /^[A-Z]{2}$/.test(String(body.gl || '')) ? String(body.gl) : 'US';
+        const expanded = await ytExpandList(listId, hl, gl);
+        if (!expanded.tracks.length) return json({ error: 'no tracks found in that playlist/album' }, 404);
+        return json(expanded);
+      }
+
       case 'dispatch': {
         const urls: unknown = body.urls;
         if (!Array.isArray(urls) || !urls.length) return json({ error: 'no URLs given' }, 400);
@@ -412,11 +605,40 @@ export const onRequestPost = async ({ request, env, ctx }: {
         for (const u of urls) {
           if (typeof u !== 'string' || !YT_RE.test(u)) return json({ error: 'invalid YouTube URL in list' }, 400);
         }
+
+        /* Dedupe hard: same video twice in one batch, or already in the
+           bucket, never reaches a runner. A failed listing must not block
+           downloads — the filter is best-effort. */
+        let uploaded = new Set<string>();
+        try {
+          uploaded = uploadedVideoIds(await bucketTree());
+        } catch { /* tree unavailable — dispatch anyway */ }
+        const seen = new Set<string>();
+        const keep: string[] = [];
+        let skippedDup = 0;
+        let skippedUploaded = 0;
+        for (const u of urls as string[]) {
+          const id = ytIdOf(u);
+          if (!id || seen.has(id)) {
+            skippedDup++;
+            continue;
+          }
+          seen.add(id);
+          if (uploaded.has(id)) {
+            skippedUploaded++;
+            continue;
+          }
+          keep.push(u);
+        }
+        const skipped = skippedDup + skippedUploaded;
+        if (!keep.length) {
+          return json({ ok: true, dispatched: 0, skipped, skippedUploaded });
+        }
         await gh(env, `/repos/${REPO}/actions/workflows/${WORKFLOW_FILE}/dispatches`, {
           method: 'POST',
-          body: JSON.stringify({ ref: 'main', inputs: { urls: urls.join('\n') } }),
+          body: JSON.stringify({ ref: 'main', inputs: { urls: keep.join('\n') } }),
         });
-        return json({ ok: true });
+        return json({ ok: true, dispatched: keep.length, skipped, skippedUploaded });
       }
 
       case 'setSecret': {
@@ -469,6 +691,27 @@ export const onRequestPost = async ({ request, env, ctx }: {
           display_title: r.display_title,
         }));
         return json({ runs });
+      }
+
+      case 'runJobs': {
+        const id = Number(body.run_id);
+        if (!Number.isFinite(id) || id <= 0) return json({ error: 'bad run id' }, 400);
+        const data = await gh<{ jobs: any[] }>(env, `/repos/${REPO}/actions/runs/${id}/jobs?per_page=20`);
+        const jobs = (data.jobs || []).map((j) => ({
+          id: j.id,
+          name: j.name,
+          status: j.status,
+          conclusion: j.conclusion,
+          started_at: j.started_at,
+          completed_at: j.completed_at,
+          steps: (j.steps || []).map((s: any) => ({
+            number: s.number,
+            name: s.name,
+            status: s.status,
+            conclusion: s.conclusion,
+          })),
+        }));
+        return json({ jobs });
       }
 
       default:
