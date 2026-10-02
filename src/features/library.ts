@@ -2,7 +2,7 @@ import { fetchYouTubeMeta, stateHTML, toast } from '../core/dom';
 import { renderArtistSpotlight, renderAuraPicks, renderQuickAccess } from './home';
 import { filterSongs, loadSong, resetFullPlayerArtToImage, stopAuraYouTube, updatePlayState } from './player';
 import { filterSearchTab, getYouTubeIdFromUrl } from './search';
-import { $, persistLikedHistory, savedLikeMap, state } from '../core/state';
+import { $, persistLikedHistory, rebuildSongs, savedLikeMap, state } from '../core/state';
 /* ===== 3006-3012 ===== */
     /* Library Count */
     export function updateLibCount(){
@@ -148,7 +148,7 @@ import { $, persistLikedHistory, savedLikeMap, state } from '../core/state';
         }
 
         state.addedSongs.push(newTrack);
-        state.songs = [...state.hfSongs, ...state.addedSongs];
+        rebuildSongs();
         addedCount++;
 
         row.className = 'upload-file-row done';
@@ -261,7 +261,7 @@ import { $, persistLikedHistory, savedLikeMap, state } from '../core/state';
       }
 
       state.addedSongs = state.addedSongs.filter(s => s.id !== id);
-      state.songs = [...state.hfSongs, ...state.addedSongs];
+      rebuildSongs();
       state.recentlyPlayed = state.recentlyPlayed.filter(s => s.id !== id);
       localStorage.setItem('recentlyPlayed', JSON.stringify(state.recentlyPlayed));
       persistAddedSongs();
@@ -304,7 +304,7 @@ import { $, persistLikedHistory, savedLikeMap, state } from '../core/state';
 
         state.addedSongs.push(newTrack);
         persistAddedSongs();
-        state.songs = [...state.hfSongs, ...state.addedSongs];
+        rebuildSongs();
         
         // Reset inputs
         $('newTitle').value = ''; $('newArtist').value = ''; $('newUrl').value = ''; $('newImg').value = '';
@@ -341,7 +341,7 @@ import { $, persistLikedHistory, savedLikeMap, state } from '../core/state';
 
       state.addedSongs.push(newTrack);
       persistAddedSongs();
-      state.songs = [...state.hfSongs, ...state.addedSongs];
+      rebuildSongs();
       $('ytAddInput').value = '';
       renderSongs(state.songs);
       updateLibCount();

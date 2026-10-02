@@ -33,8 +33,45 @@ function applyFavorites(list: any[]) {
     s.favorite = !!savedLikeMap[String(s.id)] || likedKeySet.has(likeKey(s.title, s.artist));
   });
 }
+
+/* One song = one entry, no matter how it arrived (bucket catalog, manual add,
+   YouTube link, local file). Video ID is the strongest identity; otherwise
+   title+artist decides. Cross-source duplicates collapse onto the HF entry
+   and carry their favorite flag over. */
+export function trackKey(s: any): string {
+  if (s?.videoId) return 'vid:' + s.videoId;
+  return 'lk:' + String(s?.title || '').toLowerCase().trim() + '|' + String(s?.artist || '').toLowerCase().trim();
+}
+
 export function rebuildSongs() {
-  state.songs = [...state.hfSongs, ...state.addedSongs];
+  const current = state.songs[state.currentIndex];
+  const seen = new Set<string>();
+  const hf: any[] = [];
+  for (const s of state.hfSongs) {
+    const k = trackKey(s);
+    if (seen.has(k)) continue;
+    seen.add(k);
+    hf.push(s);
+  }
+  const added: any[] = [];
+  for (const s of state.addedSongs) {
+    const k = trackKey(s);
+    if (seen.has(k)) {
+      if (s.favorite) {
+        const kept = hf.find((x) => trackKey(x) === k);
+        if (kept) kept.favorite = true;
+      }
+      continue;
+    }
+    seen.add(k);
+    added.push(s);
+  }
+  state.songs = [...hf, ...added];
+  if (current) {
+    let idx = state.songs.findIndex((s: any) => String(s.id) === String(current.id));
+    if (idx === -1) idx = state.songs.findIndex((s: any) => trackKey(s) === trackKey(current));
+    if (idx !== -1) state.currentIndex = idx;
+  }
 }
 export function setHfTracks(tracks: any[]) {
   const current = state.songs[state.currentIndex];
@@ -46,7 +83,9 @@ export function setHfTracks(tracks: any[]) {
     if (idx !== -1) state.currentIndex = idx;
   }
 }
-applyFavorites(state.songs = [...state.hfSongs, ...state.addedSongs]);
+applyFavorites(state.hfSongs);
+applyFavorites(state.addedSongs);
+rebuildSongs();
 
 export const $ = (id: string) => document.getElementById(id);
 
