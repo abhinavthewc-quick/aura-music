@@ -88,6 +88,7 @@ jobs:
           sudo install -m 755 /tmp/yt-dlp "$FF" "$FP" /usr/local/bin/
 
           yt-dlp --version
+          node --version
           ffmpeg -version | head -1
           ffprobe -version | head -1
           hf --help >/dev/null && echo "hf CLI ok"
@@ -104,6 +105,7 @@ jobs:
             --fragment-retries 5
             --ignore-errors
             --no-playlist
+            --js-runtimes node
             -f "251/bestaudio[ext=webm]/bestaudio"
             --write-info-json
             --embed-metadata
