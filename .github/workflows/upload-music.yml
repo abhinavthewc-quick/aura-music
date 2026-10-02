@@ -14,53 +14,87 @@ concurrency:
 
 jobs:
   download-and-upload:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 90
     steps:
-      - uses: actions/checkout@v4
-
       - uses: actions/setup-python@v5
         with:
           python-version: '3.12'
 
-      - uses: denoland/setup-deno@v2
-        with:
-          deno-version: v2.x
-
-      - name: Install tools
-        run: |
-          sudo apt-get update -qq
-          sudo apt-get install -y -qq ffmpeg
-          python -m pip install -U pip
-          pip install -U "yt-dlp[default]" huggingface_hub mutagen
-          ffmpeg -version | head -1
-          deno --version | head -1
-          yt-dlp --version
-
-      - name: Prepare workspace
+      - name: Bootstrap tools & workspace
         env:
           URLS: ${{ inputs.urls }}
+          YT_COOKIES: ${{ secrets.YOUTUBE_COOKIES }}
+          GH_API_TOKEN: ${{ github.token }}
         run: |
-          rm -rf downloads && mkdir -p downloads
+          set -euo pipefail
+          T_ALL=$(date +%s%N)
+
+          # Everything network-bound runs in parallel: yt-dlp binary,
+          # static ffmpeg (download + extract chained), hf/mutagen pip install.
+          curl -fsSL --retry 3 -o /tmp/yt-dlp \
+            "https://github.com/yt-dlp/yt-dlp/releases/latest/download/yt-dlp_linux" &
+          PID_YT=$!
+          (
+            set +e
+            if curl -fsSL --retry 3 \
+                "https://johnvansickle.com/ffmpeg/releases/ffmpeg-release-amd64-static.tar.xz" \
+                | tar -xJf - -C /tmp; then exit 0; fi
+            echo "primary ffmpeg source failed - falling back to GitHub build" >&2
+            curl -fsSL --retry 3 \
+              "https://github.com/yt-dlp/FFmpeg-Builds/releases/latest/download/ffmpeg-master-latest-linux64-gpl.tar.xz" \
+              | tar -xJf - -C /tmp
+          ) &
+          PID_FF=$!
+          python -m pip install -q huggingface_hub mutagen &
+          PID_PIP=$!
+
+          # Workspace + cookies (local I/O while network runs).
+          mkdir -p downloads scripts
           printf '%s\n' "$URLS" > urls.txt
           grep -E 'https?://' urls.txt > urls.clean.txt || true
           mv urls.clean.txt urls.txt
           echo "Queued URLs:" && cat urls.txt
-
-      - name: Write YouTube cookies (if configured)
-        env:
-          YT_COOKIES: ${{ secrets.YOUTUBE_COOKIES }}
-        run: |
-          if [ -n "$YT_COOKIES" ]; then
+          if [ -n "${YT_COOKIES:-}" ]; then
             printf '%s' "$YT_COOKIES" > cookies.txt
             echo "cookies.txt restored from repo secret."
           else
             echo "No YOUTUBE_COOKIES secret set - downloading without cookies."
           fi
 
+          # The job only needs one file from the repo - fetch it at the exact
+          # run SHA instead of a full checkout (fast + still race-free).
+          curl -fsSL \
+              "https://raw.githubusercontent.com/$GITHUB_REPOSITORY/$GITHUB_SHA/scripts/fix_metadata.py" \
+              -o scripts/fix_metadata.py \
+            || {
+              curl -fsSL -H "Authorization: Bearer $GH_API_TOKEN" \
+                "https://api.github.com/repos/$GITHUB_REPOSITORY/contents/scripts/fix_metadata.py?ref=$GITHUB_SHA" \
+                | python -c 'import sys,json,base64; sys.stdout.write(base64.b64decode(json.load(sys.stdin)["content"]).decode())' \
+                > scripts/fix_metadata.py
+            }
+
+          wait "$PID_YT"  || { echo "::error::yt-dlp download failed";  exit 1; }
+          wait "$PID_FF"  || { echo "::error::ffmpeg install failed";    exit 1; }
+          wait "$PID_PIP" || { echo "::error::pip install failed";       exit 1; }
+
+          FF=$(find /tmp -maxdepth 3 -type f -name ffmpeg  | head -1)
+          FP=$(find /tmp -maxdepth 3 -type f -name ffprobe | head -1)
+          if [ -z "$FF" ] || [ -z "$FP" ]; then
+            echo "::error::ffmpeg/ffprobe not found after extraction"
+            exit 1
+          fi
+          sudo install -m 755 /tmp/yt-dlp "$FF" "$FP" /usr/local/bin/
+
+          yt-dlp --version
+          ffmpeg -version | head -1
+          ffprobe -version | head -1
+          hf --help >/dev/null && echo "hf CLI ok"
+          python -c "import mutagen; print('mutagen', mutagen.version_string)"
+          test -s scripts/fix_metadata.py && echo "fix_metadata.py ok"
+          echo "bootstrap wall: $(( ($(date +%s%N) - T_ALL) / 1000000 ))ms"
+
       - name: Download audio (format 251 - webm/Opus) with metadata
-        env:
-          URLS: ${{ inputs.urls }}
         run: |
           ARGS=(
             --no-progress
@@ -123,8 +157,7 @@ jobs:
           fi
           echo "$COUNT audio file(s) ready."
 
-      - name: Add missing metadata
-        run: python scripts/fix_metadata.py downloads
+          python scripts/fix_metadata.py downloads
 
       - name: Upload to Hugging Face storage bucket
         env:
