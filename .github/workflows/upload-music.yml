@@ -32,6 +32,7 @@ jobs:
 
           # Everything network-bound runs in parallel: yt-dlp binary,
           # static ffmpeg (download + extract chained), hf/mutagen pip install.
+          mkdir -p /tmp/ffkit
           curl -fsSL --retry 3 -o /tmp/yt-dlp \
             "https://github.com/yt-dlp/yt-dlp/releases/latest/download/yt-dlp_linux" &
           PID_YT=$!
@@ -39,11 +40,11 @@ jobs:
             set +e
             if curl -fsSL --retry 3 \
                 "https://johnvansickle.com/ffmpeg/releases/ffmpeg-release-amd64-static.tar.xz" \
-                | tar -xJf - -C /tmp; then exit 0; fi
+                | tar -xJf - -C /tmp/ffkit; then exit 0; fi
             echo "primary ffmpeg source failed - falling back to GitHub build" >&2
             curl -fsSL --retry 3 \
               "https://github.com/yt-dlp/FFmpeg-Builds/releases/latest/download/ffmpeg-master-latest-linux64-gpl.tar.xz" \
-              | tar -xJf - -C /tmp
+              | tar -xJf - -C /tmp/ffkit
           ) &
           PID_FF=$!
           python -m pip install -q huggingface_hub mutagen &
@@ -78,8 +79,8 @@ jobs:
           wait "$PID_FF"  || { echo "::error::ffmpeg install failed";    exit 1; }
           wait "$PID_PIP" || { echo "::error::pip install failed";       exit 1; }
 
-          FF=$(find /tmp -maxdepth 3 -type f -name ffmpeg  | head -1)
-          FP=$(find /tmp -maxdepth 3 -type f -name ffprobe | head -1)
+          FF=$(find /tmp/ffkit -type f -name ffmpeg  | head -1 || :)
+          FP=$(find /tmp/ffkit -type f -name ffprobe | head -1 || :)
           if [ -z "$FF" ] || [ -z "$FP" ]; then
             echo "::error::ffmpeg/ffprobe not found after extraction"
             exit 1
