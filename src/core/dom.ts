@@ -31,6 +31,11 @@ import { $ } from './state';
     /* ===== Shared helpers (consolidated) ===== */
     export function timeGreeting(){ const h=new Date().getHours(); return h<12?'Good morning':h<18?'Good afternoon':'Good evening'; }
     export function getSavedUserName(){ try{ return (localStorage.getItem('auraUserName')||'').trim(); }catch(e){ return ''; } }
+    /* Normalized grouping key so "A. R. Rahman", "A.R. Rahman" and
+       "a. r. rahman - Topic" all land in one artist bucket. */
+    export function artistKey(name){
+      return (name||'').replace(/\s*-\s*Topic$/i,'').replace(/＜[^＞]*＞/g,'').replace(/\.\s*/g,'.').toLowerCase().replace(/\s{2,}/g,' ').trim();
+    }
     export async function fetchYouTubeMeta(videoId){
       let title='YouTube Track', artist='YouTube Music';
       try{

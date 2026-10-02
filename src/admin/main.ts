@@ -1,5 +1,6 @@
 import './admin.css';
 import { ADMIN_EMAILS, GOOGLE_CLIENT_ID } from '../core/config';
+import { cleanArtist, cleanTitle } from '../core/catalog';
 import { verifyGoogleCredential } from '../core/google-auth';
 import { clearSession, exchangeGoogleToken, getSession, setSession } from '../core/session';
 
@@ -1006,10 +1007,27 @@ function bind() {
     try {
       const batches: string[][] = [];
       for (let i = 0; i < urls.length; i += MAX_PER_RUN) batches.push(urls.slice(i, i + MAX_PER_RUN));
+      /* Clean names/albums for manifest.json — YT Music sub lines carry
+         "Artist • Album • 6:10"; paste rows only carry the title. */
+      const metaOf = (item: QueueItem) => {
+        const segs = item.sub.split('•').map((s) => s.trim()).filter(Boolean);
+        const artist = segs[0] ? cleanArtist(segs[0].split(',')[0]) : '';
+        return {
+          id: item.id,
+          title: cleanTitle(item.title || ''),
+          artist: artist === 'Unknown Artist' ? '' : artist,
+          album: segs[1] || '',
+        };
+      };
       let totalDispatched = 0;
       let totalSkipped = 0;
-      for (const batch of batches) {
-        const res = await adminApi<{ dispatched?: number; skipped?: number }>('dispatch', { urls: batch });
+      for (let b = 0; b < batches.length; b++) {
+        const batch = batches[b];
+        const batchItems = pending.filter((i) => batch.some((u) => u === i.url));
+        const res = await adminApi<{ dispatched?: number; skipped?: number }>('dispatch', {
+          urls: batch,
+          meta: batchItems.map(metaOf),
+        });
         totalDispatched += res.dispatched || 0;
         totalSkipped += res.skipped || 0;
       }

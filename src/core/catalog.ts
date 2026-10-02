@@ -31,14 +31,14 @@ export function hfFileUrl(path: string): string {
 
 /* YouTube's auto-generated channels publish as "<Artist> - Topic" — strip the
    suffix so one artist groups as one artist everywhere in the UI. */
-function cleanArtist(name: string): string {
+export function cleanArtist(name: string): string {
   return name.replace(/\s*-\s*Topic$/i, '').trim() || 'Unknown Artist';
 }
 
 /* Drop upload-noise from titles — "(Official Video)", "[Lyrics]", "【MV】",
    fullwidth quotes — while keeping meaningful parts like years, "(From …)"
    credits and "(Remix)". Order matters: specific phrases first. */
-function cleanTitle(raw: string): string {
+export function cleanTitle(raw: string): string {
   let t = raw.replace(/＂/g, '"').replace(/（/g, '(').replace(/）/g, ')');
   const patterns: RegExp[] = [
     /[[(【]\s*official\s+(?:music\s+)?video\s*[\])】]/gi,

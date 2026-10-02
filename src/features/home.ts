@@ -1,4 +1,4 @@
-import { timeGreeting, toast } from '../core/dom';
+import { artistKey, timeGreeting, toast } from '../core/dom';
 import { playSong } from './player';
 import { escapeHtml } from './radio';
 import { $, state } from '../core/state';
@@ -58,25 +58,32 @@ import { $, state } from '../core/state';
     }
 
     /* Home: spotlight EVERY artist who has 2+ tracks in the library,
-       most-tracks-first — not just a single top artist. */
+       most-tracks-first — variants ("A. R. Rahman" / "A.R. Rahman" /
+       "… - Topic") merge into one bucket via artistKey. */
     export function renderArtistSpotlight(){
-      const counts={};
-      state.songs.forEach(s=>{ if(s.artist && s.artist!=='Unknown Artist') counts[s.artist]=(counts[s.artist]||0)+1; });
-      const artists = Object.keys(counts).filter(a=>counts[a]>=2).sort((a,b)=>counts[b]-counts[a]);
+      const groups = {};
+      state.songs.forEach(s=>{
+        if(!s.artist || s.artist==='Unknown Artist') return;
+        const k = artistKey(s.artist);
+        if(!groups[k]) groups[k] = {count:0, name:s.artist, songs:[]};
+        groups[k].count++;
+        if(s.artist.length > groups[k].name.length) groups[k].name = s.artist;
+        groups[k].songs.push(s);
+      });
+      const artists = Object.values(groups).filter((g:any)=>g.count>=2).sort((a:any,b:any)=>b.count-a.count);
       const container = $('artistSpotlightContainer');
 
       if(!artists.length){ container.innerHTML=''; return; }
 
-      container.innerHTML = artists.map(artist=>{
-        const tracks = state.songs.filter(s=>s.artist===artist);
-        const cards = tracks.map(s=>{
+      container.innerHTML = artists.map((g:any)=>{
+        const cards = g.songs.map(s=>{
           const idx = state.songs.findIndex(item=>item.id===s.id);
           return `<div class="spotlight-card" onclick="playSong(${idx})"><img src="${s.img}"><p class="sc-title">${s.title}</p><p class="sc-sub">${s.artist}</p></div>`;
         }).join('');
         return `<div class="artist-spotlight-block" style="margin-bottom:24px">
           <div class="spotlight-header">
-            <img class="spotlight-avatar" src="${tracks[0].img}" alt="">
-            <div><p style="font-size:11px;color:var(--text-sub)">More from</p><p style="font-size:16px;font-weight:800">${artist}</p></div>
+            <img class="spotlight-avatar" src="${g.songs[0].img}" alt="">
+            <div><p style="font-size:11px;color:var(--text-sub)">More from</p><p style="font-size:16px;font-weight:800">${g.name}</p></div>
           </div>
           <div class="recent-scroll">${cards}</div>
         </div>`;

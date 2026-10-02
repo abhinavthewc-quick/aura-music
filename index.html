@@ -539,6 +539,12 @@ html.aura-loading,html.aura-loading body{overflow:hidden}
         <div class="stats-grid" id="statsPanel" style="display:none"></div>
       </div>
 
+      <div class="lib-seg" id="libViewSeg" role="group" aria-label="Library view">
+        <button class="lib-seg-btn active" data-view="tracks" onclick="setLibView('tracks')">Tracks</button>
+        <button class="lib-seg-btn" data-view="artists" onclick="setLibView('artists')">Artists</button>
+        <button class="lib-seg-btn" data-view="albums" onclick="setLibView('albums')">Albums</button>
+        <button class="lib-seg-btn" data-view="films" onclick="setLibView('films')">Films</button>
+      </div>
       <p style="font-size:15px;font-weight:700;margin-bottom:12px" id="allTracksSection">All Tracks</p>
       <div class="song-list" id="librarySongList"></div>
     </div>

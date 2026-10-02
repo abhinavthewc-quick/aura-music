@@ -1,6 +1,6 @@
-import { fetchYouTubeMeta, stateHTML, toast } from '../core/dom';
+import { fetchYouTubeMeta, artistKey, stateHTML, toast } from '../core/dom';
 import { renderArtistSpotlight, renderAuraPicks, renderQuickAccess } from './home';
-import { filterSongs, loadSong, resetFullPlayerArtToImage, stopAuraYouTube, updatePlayState } from './player';
+import { filterSongs, loadSong, playSong, resetFullPlayerArtToImage, stopAuraYouTube, updatePlayState } from './player';
 import { filterSearchTab, getYouTubeIdFromUrl } from './search';
 import { $, persistLikedHistory, rebuildSongs, savedLikeMap, state } from '../core/state';
 /* ===== 3006-3012 ===== */
@@ -384,9 +384,98 @@ import { $, persistLikedHistory, rebuildSongs, savedLikeMap, state } from '../co
       c.innerHTML=list.length?list.map(songItemHTML).join('') : stateHTML('noresults','No tracks found','Try a different spelling or another filter.');
     }
 
+/* ===== Library tab view switcher: Tracks / Artists / Albums / Films ===== */
+    let libView = 'tracks';
+    const libGroupIndex = new Map<string, number[]>();
+
+    export function setLibView(v){
+      libView = v === 'artists' || v === 'albums' || v === 'films' ? v : 'tracks';
+      document.querySelectorAll('#libViewSeg .lib-seg-btn').forEach(b => {
+        b.classList.toggle('active', (b as HTMLElement).dataset.view === libView);
+      });
+      renderLibrary();
+    }
+
+    export function playLibGroup(key){
+      const idxs = libGroupIndex.get(key);
+      if(idxs && idxs.length) playSong(idxs[0]);
+    }
+
+    /* Soundtrack credit lives in the album/title as (From "Film Name" …) */
+    const FILM_RE = /\(\s*From\s+[“"「＂]([^”"」＂]+)[”"」＂]/i;
+    function filmOf(s){
+      const m = ((s.album||'') + ' ' + (s.title||'')).match(FILM_RE);
+      return m ? m[1].trim() : '';
+    }
+
+    function groupsFor(view){
+      const groups = new Map<string, {name: string, songs: any[]}>();
+      const push = (key, name, s) => {
+        let g = groups.get(key);
+        if(!g){ g = {name, songs: []}; groups.set(key, g); }
+        g.songs.push(s);
+      };
+      if(view === 'artists'){
+        state.songs.forEach(s => {
+          const a = (s.artist||'').trim();
+          if(!a || a === 'Unknown Artist') return;
+          push(artistKey(a), a, s);
+        });
+      }else if(view === 'albums'){
+        state.songs.forEach(s => {
+          const al = (s.album||'').trim();
+          push(al ? 'album:'+al : 'album:', al || 'Singles & extras', s);
+        });
+      }else{
+        state.songs.forEach(s => {
+          const f = filmOf(s);
+          if(f) push('film:'+f, f, s);
+        });
+      }
+      /* busiest group first; ties alphabetical */
+      return [...groups.entries()].sort((a,b) => b[1].songs.length - a[1].songs.length || a[1].name.localeCompare(b[1].name));
+    }
+
+    function renderGroups(view){
+      const c = $('librarySongList');
+      const groups = groupsFor(view);
+      libGroupIndex.clear();
+      if(!groups.length){
+        c.innerHTML = view === 'films'
+          ? stateHTML('noresults','No film songs yet','Soundtrack tracks group here once album metadata (manifest.json) reaches the site.')
+          : stateHTML('empty','No album metadata yet','Album data arrives with manifest.json after the next managed workflow run.');
+        return;
+      }
+      let gi = 0;
+      c.innerHTML = groups.map(([ , g]) => {
+        const gkey = 'g' + (gi++);
+        libGroupIndex.set(gkey, g.songs.map(s => state.songs.findIndex(x => x.id === s.id)).filter(i => i >= 0));
+        const n = g.songs.length;
+        return `<div class="lib-group">
+          <div class="lib-group-head">
+            <img class="lib-group-art" src="${g.songs[0]?.img || ''}" alt="">
+            <div class="lib-group-meta"><div class="lib-group-name">${g.name}</div><div class="lib-group-sub">${n} track${n!==1?'s':''}</div></div>
+            <button class="lib-group-play" data-gplay="${gkey}" title="Play"><i class="fa-solid fa-play"></i></button>
+          </div>
+          <div class="song-list lib-group-list">${g.songs.map(songItemHTML).join('')}</div>
+        </div>`;
+      }).join('');
+      c.querySelectorAll('[data-gplay]').forEach(btn => {
+        btn.addEventListener('click', e => { e.stopPropagation(); playLibGroup((btn as HTMLElement).dataset.gplay); });
+      });
+    }
+
     export function renderLibrary(){
       const c=$('librarySongList');
-      c.innerHTML=state.songs.length?state.songs.map(songItemHTML).join('') : stateHTML('empty','Your library is empty','Add your own songs or search online to get started.','Search music',"goTab('tabSearch')");
+      const heading=$('allTracksSection');
+      if(heading) heading.textContent = libView==='artists'?'Artists':libView==='albums'?'Albums':libView==='films'?'Films':'All Tracks';
+      if(!state.songs.length){
+        c.innerHTML=stateHTML('empty','Your library is empty','Add your own songs or search online to get started.','Search music',"goTab('tabSearch')");
+      }else if(libView==='tracks'){
+        c.innerHTML=state.songs.map(songItemHTML).join('');
+      }else{
+        renderGroups(libView);
+      }
       updateLibNowPlaying();
       if($('statsPanel').style.display!=='none') renderStatsPanel();
     }

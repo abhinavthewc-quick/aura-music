@@ -419,7 +419,7 @@ import { $, state } from '../core/state';
          selected previously. Clearing the bar restores the selected category. */
       const base=q ? state.songs : songsForCategory();
       $('searchResultsLabel').textContent = q ? 'Results' : categoryLabels[searchCategory];
-      renderSearchResults(q ? base.filter(s=>s.title.toLowerCase().includes(q)||s.artist.toLowerCase().includes(q)) : base);
+      renderSearchResults(q ? base.filter(s=>s.title.toLowerCase().includes(q)||s.artist.toLowerCase().includes(q)||(s.album||'').toLowerCase().includes(q)) : base);
       clearTimeout(window.__auraYoutubeSearchTimer);
       window.__auraYoutubeSearchTimer=setTimeout(()=>searchYouTubePro(q), q ? 350 : 0);
     }

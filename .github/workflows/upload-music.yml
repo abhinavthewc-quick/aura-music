@@ -7,6 +7,11 @@ on:
         description: 'YouTube / YouTube Music URLs (one per line)'
         required: true
         type: string
+      meta:
+        description: 'Optional JSON metadata for manifest.json ([{id,title,artist,album}])'
+        required: false
+        default: ''
+        type: string
 
 concurrency:
   group: upload-music
@@ -63,17 +68,19 @@ jobs:
             echo "No YOUTUBE_COOKIES secret set - downloading without cookies."
           fi
 
-          # The job only needs one file from the repo - fetch it at the exact
-          # run SHA instead of a full checkout (fast + still race-free).
-          curl -fsSL \
-              "https://raw.githubusercontent.com/$GITHUB_REPOSITORY/$GITHUB_SHA/scripts/fix_metadata.py" \
-              -o scripts/fix_metadata.py \
-            || {
-              curl -fsSL -H "Authorization: Bearer $GH_API_TOKEN" \
-                "https://api.github.com/repos/$GITHUB_REPOSITORY/contents/scripts/fix_metadata.py?ref=$GITHUB_SHA" \
-                | python -c 'import sys,json,base64; sys.stdout.write(base64.b64decode(json.load(sys.stdin)["content"]).decode())' \
-                > scripts/fix_metadata.py
-            }
+          # The job only needs two files from the repo - fetch them at the
+          # exact run SHA instead of a full checkout (fast + race-free).
+          for SCRIPT in fix_metadata.py build_manifest.py; do
+            curl -fsSL \
+                "https://raw.githubusercontent.com/$GITHUB_REPOSITORY/$GITHUB_SHA/scripts/$SCRIPT" \
+                -o "scripts/$SCRIPT" \
+              || {
+                curl -fsSL -H "Authorization: Bearer $GH_API_TOKEN" \
+                  "https://api.github.com/repos/$GITHUB_REPOSITORY/contents/scripts/$SCRIPT?ref=$GITHUB_SHA" \
+                  | python -c 'import sys,json,base64; sys.stdout.write(base64.b64decode(json.load(sys.stdin)["content"]).decode())' \
+                  > "scripts/$SCRIPT"
+              }
+          done
 
           wait "$PID_YT"  || { echo "::error::yt-dlp download failed";  exit 1; }
           wait "$PID_FF"  || { echo "::error::ffmpeg install failed";    exit 1; }
@@ -94,6 +101,7 @@ jobs:
           hf --help >/dev/null && echo "hf CLI ok"
           python -c "import mutagen; print('mutagen', mutagen.version_string)"
           test -s scripts/fix_metadata.py && echo "fix_metadata.py ok"
+          test -s scripts/build_manifest.py && echo "build_manifest.py ok"
           echo "bootstrap wall: $(( ($(date +%s%N) - T_ALL) / 1000000 ))ms"
 
       - name: Download audio (format 251 - webm/Opus) with metadata
@@ -171,6 +179,16 @@ jobs:
           : "${HF_BUCKET_ID:?Secret HF_BUCKET_ID is not set - configure it from the admin panel.}"
           hf buckets create "$HF_BUCKET_ID" --private --exist-ok
           hf buckets sync downloads/ "hf://buckets/$HF_BUCKET_ID" --exclude "*.info.json" --exclude "*.part" --exclude "*.temp.*"
+
+      - name: Build & upload manifest
+        env:
+          HF_TOKEN: ${{ secrets.HF_TOKEN }}
+          HF_BUCKET_ID: ${{ secrets.HF_BUCKET_ID }}
+          META: ${{ inputs.meta }}
+        run: |
+          : "${HF_BUCKET_ID:?Secret HF_BUCKET_ID is not set}"
+          test -s scripts/build_manifest.py || { echo "::error::build_manifest.py missing"; exit 1; }
+          python scripts/build_manifest.py downloads
 
       - name: Job summary
         if: always()

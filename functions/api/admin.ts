@@ -796,9 +796,31 @@ export const onRequestPost = async ({ request, env, ctx }: {
         if (!keep.length) {
           return json({ ok: true, dispatched: 0, skipped, skippedUploaded });
         }
+        /* Optional clean metadata (title/artist/album from search results)
+           rides along for manifest.json — capped like the URL list. */
+        let metaInput = '';
+        const metaRaw = body.meta;
+        if (Array.isArray(metaRaw)) {
+          const keepIds = new Set(keep.map(u => ytIdOf(u)));
+          const clean = metaRaw
+            .filter((m: any) => m && typeof m.id === 'string' && keepIds.has(m.id))
+            .slice(0, MAX_URLS)
+            .map((m: any) => ({
+              id: String(m.id),
+              title: String(m.title || '').slice(0, 200),
+              artist: String(m.artist || '').slice(0, 200),
+              album: String(m.album || '').slice(0, 200),
+            }));
+          if (clean.length) metaInput = JSON.stringify(clean);
+        }
         await gh(env, `/repos/${REPO}/actions/workflows/${WORKFLOW_FILE}/dispatches`, {
           method: 'POST',
-          body: JSON.stringify({ ref: 'main', inputs: { urls: keep.join('\n') } }),
+          body: JSON.stringify({
+            ref: 'main',
+            inputs: metaInput
+              ? { urls: keep.join('\n'), meta: metaInput }
+              : { urls: keep.join('\n') },
+          }),
         });
         return json({ ok: true, dispatched: keep.length, skipped, skippedUploaded });
       }

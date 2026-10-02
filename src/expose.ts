@@ -6,7 +6,7 @@ import { playSong } from './features/player';
 import { queueTrackAction, openTrackMenu } from './features/queue';
 import {
   addNewTrack, addYouTubeTrack, closeEditModal, saveEditedTrack,
-  toggleFavorite, toggleStatsPanel,
+  setLibView, toggleFavorite, toggleStatsPanel,
 } from './features/library';
 import {
   goToSearchCategory, playOutsideResult, retryOnlineSearch, runSearchChip,
@@ -32,7 +32,7 @@ Object.assign(globalThis, {
   playSong,
   queueTrackAction, openTrackMenu,
   addNewTrack, addYouTubeTrack, closeEditModal, saveEditedTrack,
-  toggleFavorite, toggleStatsPanel,
+  setLibView, toggleFavorite, toggleStatsPanel,
   goToSearchCategory, playOutsideResult, retryOnlineSearch, runSearchChip,
   renderAuraPicks, resumeLastPlayed, shuffleAll,
   changeProfileName, closeHelp, logoutUser, openHelp, openSettings,
