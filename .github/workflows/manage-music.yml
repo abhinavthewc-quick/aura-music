@@ -1,0 +1,65 @@
+name: Manage Music
+
+# Bucket mutations that need NEW bytes (cover art) cannot run in the Pages
+# Function — the HF batch endpoint only copies/deletes existing objects.
+# The admin panel stages the image into .staging/ via the Contents API and
+# dispatches this workflow to push it with the GitHub-held HF_TOKEN.
+
+on:
+  workflow_dispatch:
+    inputs:
+      op:
+        description: 'Operation'
+        required: true
+        default: 'cover'
+        type: choice
+        options:
+          - cover
+      staged_path:
+        description: 'Staged file inside the repo (e.g. .staging/cover-x.webp)'
+        required: true
+        type: string
+      target_path:
+        description: 'Destination path inside the Hugging Face bucket'
+        required: true
+        type: string
+
+permissions:
+  contents: write
+
+jobs:
+  cover:
+    if: inputs.op == 'cover'
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Install huggingface CLI
+        run: pip install -q --upgrade huggingface_hub
+
+      - name: Upload cover to bucket
+        env:
+          HF_TOKEN: ${{ secrets.HF_TOKEN }}
+          HF_BUCKET_ID: ${{ secrets.HF_BUCKET_ID }}
+          STAGED: ${{ inputs.staged_path }}
+          TARGET: ${{ inputs.target_path }}
+        run: |
+          if [ ! -f "$STAGED" ]; then echo "staged file missing: $STAGED" >&2; exit 1; fi
+          hf buckets cp "$STAGED" "hf://buckets/$HF_BUCKET_ID/$TARGET"
+
+      - name: Clean staging
+        if: always()
+        env:
+          STAGED: ${{ inputs.staged_path }}
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git rm -q --ignore-unmatch -- "$STAGED" || true
+          if ! git diff --cached --quiet; then
+            git commit -qm "chore: remove staged cover file"
+            git push || echo "::warning::staging cleanup push failed — file stays for a later run"
+          fi

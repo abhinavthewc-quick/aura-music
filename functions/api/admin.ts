@@ -19,17 +19,25 @@ const FALLBACK_TTL_SEC = 7 * 24 * 3600; // password sessions last 7 days
 const HF_BUCKET = 'Angelrider/sonora'; // public tree — no HF token needed for reads
 const TREE_TTL_MS = 60 * 1000;
 const VIDEO_ID_SUFFIX_RE = /\s\[([A-Za-z0-9_-]{11})\]$/;
+const MANAGE_WORKFLOW_FILE = 'manage-music.yml';
+const STAGING_DIR = '.staging';
+const AUDIO_EXT_RE = /\.(opus|mp3|ogg|m4a|webm)$/i;
+const IMAGE_EXT_RE = /\.(webp|jpe?g|png)$/i;
+const MAX_COVER_B64 = Math.ceil(1.5 * 1024 * 1024) * 4 / 3 + 64; // ~1.5 MB image
 
 interface Env {
   GH_TOKEN: string;
   GOOGLE_CLIENT_ID: string;
   ADMIN_PASSWORD?: string; // optional — enables the email+password login
+  HF_TOKEN?: string; // bucket mutations (rename/delete) — set in Pages env
+  HF_BUCKET_ID?: string;
 }
 
 interface BucketFile {
   path: string;
   size: number;
   mtime: string;
+  xetHash?: string; // required to copyFile (rename) server-side
 }
 
 function ytIdOf(u: string): string {
@@ -63,7 +71,12 @@ async function bucketTree(force = false): Promise<BucketFile[]> {
   const files: BucketFile[] = [];
   for (const it of items) {
     if (it && it.type === 'file' && typeof it.path === 'string') {
-      files.push({ path: it.path, size: Number(it.size) || 0, mtime: String(it.mtime || '') });
+      files.push({
+        path: it.path,
+        size: Number(it.size) || 0,
+        mtime: String(it.mtime || ''),
+        xetHash: typeof it.xetHash === 'string' ? it.xetHash : undefined,
+      });
     }
   }
   treeMem = { files, at: Date.now() };
@@ -83,6 +96,59 @@ function uploadedVideoIds(files: BucketFile[]): Set<string> {
     if (m) ids.add(m[1]);
   }
   return ids;
+}
+
+/* Drop both tree caches — called after every bucket mutation so the very
+   next library/dispatch request sees the new state. */
+async function invalidateTree(): Promise<void> {
+  treeMem = null;
+  try {
+    await (caches as any).default.delete(new Request('https://aura-bucket.internal/tree?' + HF_BUCKET));
+  } catch { /* cache unavailable */ }
+}
+
+function hfBucketId(env: Env): string {
+  return env.HF_BUCKET_ID || HF_BUCKET;
+}
+
+/* HF buckets mutate through a single NDJSON batch endpoint: copyFile (=
+   server-side rename, needs xetHash + mtime in ms) and deleteFile. Uploading
+   NEW bytes is not expressible here — that path goes through the
+   manage-music.yml workflow with the GitHub-held HF_TOKEN. */
+async function hfBatch(env: Env, ops: Record<string, unknown>[]): Promise<any> {
+  if (!env.HF_TOKEN) {
+    throw new Error('HF_TOKEN is not set in the Pages environment — add HF_TOKEN + HF_BUCKET_ID to the deployment');
+  }
+  if (!ops.length) return { success: true, processed: 0, succeeded: 0, failed: [] };
+  const body = ops.map((o) => JSON.stringify(o)).join('\n') + '\n';
+  const res = await fetch(`https://huggingface.co/api/buckets/${hfBucketId(env)}/batch`, {
+    method: 'POST',
+    headers: { Authorization: 'Bearer ' + env.HF_TOKEN, 'Content-Type': 'application/x-ndjson' },
+    body,
+  });
+  const data: any = await res.json().catch(() => null);
+  if (!res.ok) throw new Error(data?.error || data?.message || 'bucket update failed (HTTP ' + res.status + ')');
+  if (data && Array.isArray(data.failed) && data.failed.length) {
+    throw new Error('bucket update failed: ' + JSON.stringify(data.failed).slice(0, 300));
+  }
+  return data;
+}
+
+function assertSafePath(p: string): void {
+  if (!p || p.length > 512 || p.startsWith('/') || p.includes('..') || p.includes('\0')) {
+    throw new Error('invalid file path');
+  }
+}
+
+/* Remove a staged .staging file after a failed dispatch (best-effort). */
+async function cleanupStaged(env: Env, path: string): Promise<void> {
+  try {
+    const meta = await gh<{ sha: string }>(env, `/repos/${REPO}/contents/${path}`);
+    await gh(env, `/repos/${REPO}/contents/${path}`, {
+      method: 'DELETE',
+      body: JSON.stringify({ message: `chore: drop stale staging file ${path}`, sha: meta.sha, branch: 'main' }),
+    });
+  } catch { /* already gone / never landed */ }
 }
 
 const json = (obj: unknown, status = 200) =>
@@ -583,6 +649,102 @@ export const onRequestPost = async ({ request, env, ctx }: {
         return json({ files, videoIds: [...uploadedVideoIds(files)] });
       }
 
+      /* ----- bucket management (F6): rename & delete are direct batch
+         mutations; cover art uploads new bytes → manage-music.yml ----- */
+
+      case 'bucketDelete': {
+        const path = String(body.path || '');
+        assertSafePath(path);
+        if (!AUDIO_EXT_RE.test(path)) return json({ error: 'only audio files can be deleted' }, 400);
+        const files = await bucketTree(true);
+        const stem = path.replace(/\.[^.]+$/, '');
+        const group = files.filter((f) => f.path.replace(/\.[^.]+$/, '') === stem);
+        if (!group.some((f) => f.path === path)) return json({ error: 'not found in the bucket' }, 404);
+        await hfBatch(env, group.map((f) => ({ type: 'deleteFile', path: f.path })));
+        await invalidateTree();
+        return json({ ok: true, deleted: group.map((f) => f.path) });
+      }
+
+      case 'bucketRename': {
+        const from = String(body.from || '');
+        const to = String(body.to || '');
+        assertSafePath(from);
+        assertSafePath(to);
+        if (!AUDIO_EXT_RE.test(from)) return json({ error: 'source must be an audio file' }, 400);
+        if (!AUDIO_EXT_RE.test(to)) return json({ error: 'new name must keep an audio extension (.opus/.mp3/…)' }, 400);
+        if (from === to) return json({ ok: true, renamed: [] });
+        const files = await bucketTree(true);
+        const srcGroup = files.filter((f) => f.path.replace(/\.[^.]+$/, '') === from.replace(/\.[^.]+$/, ''));
+        if (!srcGroup.some((f) => f.path === from)) return json({ error: 'not found in the bucket' }, 404);
+        const toStem = to.replace(/\.[^.]+$/, '');
+        const planned = srcGroup.map((f) => toStem + f.path.slice(from.replace(/\.[^.]+$/, '').length));
+        if (files.some((f) => planned.includes(f.path))) {
+          return json({ error: 'a file with the new name already exists' }, 409);
+        }
+        const ops: Record<string, unknown>[] = [];
+        for (let i = 0; i < srcGroup.length; i++) {
+          const f = srcGroup[i];
+          if (!f.xetHash || !Date.parse(f.mtime)) {
+            throw new Error('bucket listing is missing copy metadata for ' + f.path);
+          }
+          ops.push({
+            type: 'copyFile',
+            path: planned[i],
+            xetHash: f.xetHash,
+            mtime: Date.parse(f.mtime),
+            sourceRepoType: 'bucket',
+            sourceRepoId: hfBucketId(env),
+          });
+        }
+        for (const f of srcGroup) ops.push({ type: 'deleteFile', path: f.path });
+        await hfBatch(env, ops);
+        await invalidateTree();
+        return json({ ok: true, renamed: planned });
+      }
+
+      case 'bucketCover': {
+        const path = String(body.path || '');
+        assertSafePath(path);
+        if (!AUDIO_EXT_RE.test(path)) return json({ error: 'cover applies to audio files' }, 400);
+        const m = /^data:image\/(png|jpe?g|webp);base64,([A-Za-z0-9+/=]+)$/.exec(String(body.data || ''));
+        if (!m) return json({ error: 'expected a data:image/…;base64 payload' }, 400);
+        if (m[2].length > MAX_COVER_B64) return json({ error: 'cover image too large (max 1.5 MB)' }, 400);
+        const stem = path.replace(/\.[^.]+$/, '');
+        const files = await bucketTree();
+        if (!files.some((f) => f.path === path)) return json({ error: 'not found in the bucket' }, 404);
+        /* keep the existing cover extension so the site keeps resolving it */
+        const existing = files.find((f) => f.path.replace(/\.[^.]+$/, '') === stem && IMAGE_EXT_RE.test(f.path));
+        const target = existing ? existing.path : stem + '.webp';
+        const ext = target.slice(target.lastIndexOf('.') + 1).toLowerCase();
+        const stagedName = `cover-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}.${ext}`;
+        const stagedPath = `${STAGING_DIR}/${stagedName}`;
+        try {
+          await gh(env, `/repos/${REPO}/contents/${stagedPath}`, {
+            method: 'PUT',
+            body: JSON.stringify({
+              message: `chore: stage cover for ${path}`,
+              content: m[2],
+              branch: 'main',
+            }),
+          });
+        } catch (e) {
+          throw new Error('could not stage the cover image in the repo — ' + (e as Error).message);
+        }
+        try {
+          await gh(env, `/repos/${REPO}/actions/workflows/${MANAGE_WORKFLOW_FILE}/dispatches`, {
+            method: 'POST',
+            body: JSON.stringify({
+              ref: 'main',
+              inputs: { op: 'cover', staged_path: stagedPath, target_path: target },
+            }),
+          });
+        } catch (e) {
+          await cleanupStaged(env, stagedPath); // best-effort — don't leave junk in the repo
+          throw e;
+        }
+        return json({ ok: true, dispatched: true, target, staged: stagedPath });
+      }
+
       case 'expand': {
         const raw = String(body.url || body.listId || '').trim();
         const listMatch = /[?&]list=([A-Za-z0-9_-]{6,64})/.exec(raw);
@@ -674,7 +836,11 @@ export const onRequestPost = async ({ request, env, ctx }: {
 
       case 'status': {
         const data = await gh<{ secrets: { name: string }[] }>(env, `/repos/${REPO}/actions/secrets?per_page=100`);
-        return json({ secrets: (data.secrets || []).map((s) => s.name), repo: REPO });
+        return json({
+          secrets: (data.secrets || []).map((s) => s.name),
+          repo: REPO,
+          hf: Boolean(env.HF_TOKEN && env.HF_BUCKET_ID),
+        });
       }
 
       case 'runs': {

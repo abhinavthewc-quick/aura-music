@@ -75,6 +75,14 @@
       <p class="adm-flow"><i class="fa-solid fa-rotate"></i> Live progress: <b>3s</b> polling while a run is active (10s idle). Click a run to expand its steps in place, or <b>logs</b> for GitHub.</p>
     </section>
 
+    <!-- Library management (bucket files) -->
+    <section class="adm-card adm-span2 adm-gated" id="libraryCard" hidden>
+      <h2><span class="adm-num">3</span> Library management <button type="button" class="adm-btn ghost small" id="libRefreshBtn">Refresh</button></h2>
+      <p class="adm-hint">Everything currently in the Hugging Face bucket. <b>Rename</b> fixes wrong titles/artists (file + cover move together), <b>cover</b> replaces the artwork, <b>delete</b> removes the track and its cover.</p>
+      <div class="adm-status" id="libStatus"></div>
+      <div class="adm-liblist" id="libList"><span class="adm-chip dim">loading…</span></div>
+    </section>
+
     <!-- Configuration (collapsed by default) -->
     <details class="adm-card adm-span2 adm-gated adm-config" id="configCard" hidden>
       <summary>

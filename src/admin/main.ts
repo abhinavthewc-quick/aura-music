@@ -150,6 +150,7 @@ function unlock() {
   refreshSecretChips();
   refreshRuns();
   void refreshLibrary(); // populate "already uploaded" marks for search/queue/dispatch
+  void loadLibraryManager(); // bucket file list for the management card
 }
 
 function lock(msg?: string) {
@@ -609,6 +610,152 @@ async function runSearch() {
   }
 }
 
+/* ---------- bucket library manager (F6) ----------
+   Rename/delete are direct HF batch mutations (instant); cover art stages
+   the image in the repo and rides manage-music.yml (~1 min). */
+const AUDIO_FILE_RE = /\.(opus|mp3|ogg|m4a|webm)$/i;
+const MAX_COVER_BYTES = 1.5 * 1024 * 1024;
+let libFiles: { path: string; size: number }[] = [];
+let coverPicker: HTMLInputElement | null = null;
+
+function fmtSize(n: number): string {
+  if (n >= 1024 * 1024) return (n / (1024 * 1024)).toFixed(1) + ' MB';
+  if (n >= 1024) return Math.round(n / 1024) + ' KB';
+  return n + ' B';
+}
+
+function renderLibList() {
+  const list = $('libList');
+  list.innerHTML = '';
+  if (!libFiles.length) {
+    list.innerHTML = '<span class="adm-chip dim">the bucket is empty</span>';
+    return;
+  }
+  for (const f of libFiles) {
+    const stem = f.path.replace(/\.[^.]+$/, '');
+    const row = document.createElement('div');
+    row.className = 'adm-lib';
+    row.innerHTML =
+      '<span class="nm"></span><span class="sz"></span>' +
+      '<span class="acts">' +
+      '<button type="button" class="adm-libbtn" data-a="ren" title="Rename track">✎ rename</button>' +
+      '<button type="button" class="adm-libbtn" data-a="cov" title="Replace cover art">🖼 cover</button>' +
+      '<button type="button" class="adm-libbtn danger" data-a="del" title="Delete track and cover">🗑 delete</button>' +
+      '</span>';
+    row.querySelector('.nm')!.textContent = stem;
+    row.querySelector('.sz')!.textContent = fmtSize(f.size);
+    row.querySelector('[data-a="ren"]')!.addEventListener('click', () => startLibRename(row, f.path));
+    row.querySelector('[data-a="cov"]')!.addEventListener('click', () => pickLibCover(f.path));
+    row.querySelector('[data-a="del"]')!.addEventListener('click', () => deleteLibTrack(f.path));
+    list.appendChild(row);
+  }
+}
+
+async function loadLibraryManager(notify = false): Promise<void> {
+  if (notify) setStatus($('libStatus'), 'Loading bucket…');
+  try {
+    const data = await adminApi<{ files: { path: string; size: number }[] }>('library');
+    libFiles = (data.files || []).filter((f) => AUDIO_FILE_RE.test(f.path));
+    renderLibList();
+    if (notify) setStatus($('libStatus'), `${libFiles.length} tracks in the bucket`, 'ok');
+  } catch (e) {
+    $('libList').innerHTML = '<span class="adm-chip dim">could not load the bucket</span>';
+    if (notify) setStatus($('libStatus'), '✗ ' + ((e as Error).message || 'load failed'), 'err');
+  }
+}
+
+function startLibRename(row: HTMLElement, path: string) {
+  if (row.classList.contains('editing')) return;
+  row.classList.add('editing');
+  const stem = path.replace(/\.[^.]+$/, '');
+  const ext = path.slice(stem.length);
+  const input = document.createElement('input');
+  input.className = 'adm-input adm-libedit';
+  input.value = stem;
+  input.spellcheck = false;
+  row.querySelector('.nm')!.replaceWith(input);
+  input.focus();
+  input.select();
+
+  const commit = async () => {
+    const to = (input.value || '').trim() + ext;
+    if (!to || to === path) {
+      row.classList.remove('editing');
+      renderLibList();
+      return;
+    }
+    setStatus($('libStatus'), 'Renaming…');
+    try {
+      const res = await adminApi<{ renamed?: string[] }>('bucketRename', { from: path, to });
+      setStatus($('libStatus'), '✓ renamed → ' + (res.renamed || []).join(', '), 'ok');
+      toast('Track renamed', 'ok');
+      await Promise.all([loadLibraryManager(false), refreshLibrary(true)]);
+    } catch (e) {
+      setStatus($('libStatus'), '✗ ' + ((e as Error).message || 'rename failed'), 'err');
+      row.classList.remove('editing');
+      renderLibList();
+    }
+  };
+  input.addEventListener('keydown', (e: KeyboardEvent) => {
+    if (e.key === 'Enter') { e.preventDefault(); void commit(); }
+    else if (e.key === 'Escape') { row.classList.remove('editing'); renderLibList(); }
+  });
+  input.addEventListener('blur', () => {
+    window.setTimeout(() => {
+      if (row.classList.contains('editing') && document.activeElement !== input) {
+        row.classList.remove('editing');
+        renderLibList();
+      }
+    }, 150);
+  });
+}
+
+function pickLibCover(path: string) {
+  if (!coverPicker) {
+    coverPicker = document.createElement('input');
+    coverPicker.type = 'file';
+    coverPicker.accept = 'image/webp,image/jpeg,image/png';
+    coverPicker.style.display = 'none';
+    document.body.appendChild(coverPicker);
+  }
+  coverPicker.onchange = () => {
+    const file = coverPicker!.files?.[0];
+    coverPicker!.value = '';
+    if (!file) return;
+    if (file.size > MAX_COVER_BYTES) {
+      setStatus($('libStatus'), '✗ cover image too large (max 1.5 MB)', 'err');
+      return;
+    }
+    const reader = new FileReader();
+    reader.onload = async () => {
+      setStatus($('libStatus'), 'Uploading cover — queueing workflow…');
+      try {
+        const res = await adminApi<{ target?: string }>('bucketCover', { path, data: reader.result });
+        setStatus($('libStatus'), `✓ cover upload started → ${res.target} — new art appears in about a minute`, 'ok');
+        toast('Cover upload started', 'ok');
+      } catch (e) {
+        setStatus($('libStatus'), '✗ ' + ((e as Error).message || 'cover upload failed'), 'err');
+      }
+    };
+    reader.readAsDataURL(file);
+  };
+  coverPicker.click();
+}
+
+async function deleteLibTrack(path: string): Promise<void> {
+  const stem = path.replace(/\.[^.]+$/, '');
+  if (!window.confirm(`Delete “${stem}” from the bucket?\n\nThe track AND its cover art will be removed.`)) return;
+  setStatus($('libStatus'), 'Deleting…');
+  try {
+    const res = await adminApi<{ deleted?: string[] }>('bucketDelete', { path });
+    setStatus($('libStatus'), `✓ deleted ${res.deleted?.length || 1} file(s)`, 'ok');
+    toast('Deleted from the bucket', 'ok');
+    await Promise.all([loadLibraryManager(false), refreshLibrary(true)]);
+  } catch (e) {
+    setStatus($('libStatus'), '✗ ' + ((e as Error).message || 'delete failed'), 'err');
+  }
+}
+
 /* ---------- runs: list + expandable live job/step progress ---------- */
 interface Run {
   id: number; status: string; conclusion: string | null;
@@ -893,6 +1040,8 @@ function bind() {
     refreshRuns();
     if (expandedRunId !== null) void refreshRunJobs(expandedRunId);
   });
+
+  $('libRefreshBtn').addEventListener('click', () => loadLibraryManager(true));
 
   scheduleRunsPoll(); // replaces a fixed interval: 3s while active/expanded, else 10s
 }
