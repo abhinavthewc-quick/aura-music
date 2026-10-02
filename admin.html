@@ -11,7 +11,7 @@
   <header class="adm-header">
     <a class="adm-back" href="./index.html">&larr; Aura Music</a>
     <h1>AURA <span>Admin</span></h1>
-    <p class="adm-sub">Sign in &rarr; paste YouTube links &rarr; they land in your library automatically.</p>
+    <p class="adm-sub">Sign in &rarr; search or paste YouTube links &rarr; they land in your library automatically.</p>
   </header>
 
   <main class="adm-grid">
@@ -38,15 +38,32 @@
 
     <!-- 1. Main action -->
     <section class="adm-card adm-span2 adm-gated" id="downloadCard" hidden>
-      <h2><span class="adm-num">1</span> Paste YouTube links</h2>
-      <p class="adm-hint">One link per line — YouTube or YouTube Music. Use <b>Fetch titles</b> to preview, then <b>Start download</b>.</p>
-      <textarea id="urlsInput" class="adm-input adm-textarea" rows="7" spellcheck="false" placeholder="https://music.youtube.com/watch?v=…&#10;https://www.youtube.com/watch?v=…&#10;https://youtu.be/…"></textarea>
-      <div class="adm-row adm-row-wrap">
-        <button type="button" class="adm-btn ghost" id="fetchBtn">Fetch titles</button>
-        <button type="button" class="adm-btn primary" id="downloadBtn">Start download</button>
-        <span class="adm-count" id="urlCount"></span>
+      <h2><span class="adm-num">1</span> Find &amp; queue music</h2>
+      <p class="adm-hint">Search YouTube Music straight from here, or paste links below — everything lands in the same queue. Press <b>Enter</b> in the search box to queue the top match. <b>Start download</b> sends the queue to GitHub Actions.</p>
+
+      <div class="adm-searchbar">
+        <input id="searchInput" class="adm-input" type="search" placeholder="Search a song, artist or album…" autocomplete="off" spellcheck="false" aria-label="Search music">
+        <div class="adm-seg" id="searchModes">
+          <button type="button" class="adm-seg-btn active" data-mode="music">Songs</button>
+          <button type="button" class="adm-seg-btn" data-mode="video">Videos</button>
+        </div>
       </div>
-      <div class="adm-preview" id="previewList"></div>
+      <div class="adm-results" id="searchResults"></div>
+      <div class="adm-status" id="searchStatus"></div>
+
+      <div class="adm-or"><span>or paste links</span></div>
+      <textarea id="urlsInput" class="adm-input adm-textarea" rows="2" spellcheck="false" placeholder="https://music.youtube.com/watch?v=…&#10;one link per line — valid lines move into the queue automatically"></textarea>
+
+      <div class="adm-queuehead">
+        <span class="adm-queuetitle">Queue <span class="adm-count" id="urlCount"></span></span>
+        <button type="button" class="adm-btn ghost small" id="clearQueueBtn">Clear</button>
+      </div>
+      <div class="adm-preview" id="queueList"></div>
+
+      <div class="adm-row adm-row-wrap">
+        <button type="button" class="adm-btn primary" id="downloadBtn">Start download</button>
+        <span class="adm-count" id="batchHint"></span>
+      </div>
       <div class="adm-status" id="downloadStatus"></div>
       <p class="adm-flow"><i class="fa-solid fa-arrow-right-long"></i> Each run downloads the audio + cover art into the Hugging Face bucket — new tracks show up on the site automatically.</p>
     </section>

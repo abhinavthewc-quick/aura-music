@@ -29,6 +29,125 @@ const json = (obj: unknown, status = 200) =>
     headers: { 'content-type': 'application/json', 'cache-control': 'no-store' },
   });
 
+/* ---------- YouTube InnerTube search (see YOUTUBE_SEARCH_IMPL_GUIDE.md) ----------
+   One POST to YouTube's private JSON RPC — no API key, no quota, no cookies.
+   Results are cached twice: a module-level Map (same isolate, ~0 ms) and the
+   worker Cache API (cross-isolate), because YouTube's search payload is ~200-430 KB
+   and there is no official quota. */
+const SEARCH_TTL_MS = 60 * 60 * 1000; // 1 hour
+const SEARCH_CACHE_MAX = 200;
+const SEARCH_MAX_Q = 200;
+const MUSIC_PARAMS = 'EgWKAQIIAWoKEAoQAxAEEAkQBQ=='; // YT Music "Songs" tab only
+const VIDEO_PARAMS = 'EgIQAQ=='; // WEB "video only"
+const searchMem = new Map<string, { results: YtResult[]; at: number }>();
+
+interface YtResult {
+  videoId: string;
+  title: string;
+  sub: string; // "artist • album • 6:10" (music) or channel (video)
+  extra: string; // "1.9B plays" (music) or "views · published" (video)
+  duration: string | null;
+  thumbnail: string | null;
+  isLive: boolean;
+}
+
+const YT_POST_HEADERS = (origin: string) => ({
+  'Content-Type': 'application/json',
+  'User-Agent':
+    'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36',
+  Origin: origin,
+  Cookie: 'SOCS=CAI', // kills the EU consent interstitial
+});
+
+async function ytPost(url: string, origin: string, body: unknown): Promise<any> {
+  let lastErr: unknown = new Error('YouTube request failed');
+  for (let attempt = 0; attempt < 3; attempt++) {
+    try {
+      const res = await fetch(url, {
+        method: 'POST',
+        headers: YT_POST_HEADERS(origin),
+        body: JSON.stringify(body),
+        signal: AbortSignal.timeout(8000),
+      });
+      if (res.status === 429 || res.status >= 500) {
+        lastErr = new Error('YouTube HTTP ' + res.status);
+        await new Promise((r) => setTimeout(r, 300 * 2 ** attempt));
+        continue;
+      }
+      const ct = res.headers.get('content-type') || '';
+      if (!ct.includes('application/json')) throw new Error('non-JSON response from YouTube (' + ct + ')');
+      return await res.json();
+    } catch (e) {
+      lastErr = e;
+      await new Promise((r) => setTimeout(r, 300 * 2 ** attempt));
+    }
+  }
+  throw lastErr;
+}
+
+const runsText = (r: any): string =>
+  Array.isArray(r?.runs) ? r.runs.map((x: any) => x.text).join('') : (r?.simpleText ?? '');
+
+async function ytSearchMusic(q: string, hl: string, gl: string): Promise<YtResult[]> {
+  const data = await ytPost('https://music.youtube.com/youtubei/v1/search?prettyPrint=false', 'https://music.youtube.com', {
+    context: { client: { clientName: 'WEB_REMIX', clientVersion: '1.20250915.01.00', hl, gl } },
+    query: q,
+    params: MUSIC_PARAMS,
+  });
+  const sections =
+    data?.contents?.tabbedSearchResultsRenderer?.tabs?.[0]?.tabRenderer?.content?.sectionListRenderer
+      ?.contents || [];
+  const out: YtResult[] = [];
+  for (const sec of sections) {
+    for (const item of sec?.musicShelfRenderer?.contents || []) {
+      const r = item?.musicResponsiveListItemRenderer;
+      const videoId = r?.playlistItemData?.videoId;
+      if (!videoId) continue; // albums/playlists/sections carry no videoId
+      const cols = (r?.flexColumns || []).map((f: any) =>
+        runsText(f?.musicResponsiveListItemFlexColumnRenderer?.text),
+      );
+      out.push({
+        videoId,
+        title: cols[0] || '',
+        sub: cols[1] || '',
+        extra: cols[2] || '',
+        duration: null,
+        thumbnail: r?.thumbnail?.musicThumbnailRenderer?.thumbnail?.thumbnails?.at(-1)?.url ?? null,
+        isLive: false,
+      });
+      if (out.length >= 20) return out;
+    }
+  }
+  return out;
+}
+
+async function ytSearchVideos(q: string, hl: string, gl: string): Promise<YtResult[]> {
+  const data = await ytPost('https://www.youtube.com/youtubei/v1/search?prettyPrint=false', 'https://www.youtube.com', {
+    context: { client: { clientName: 'WEB', clientVersion: '2.20250915.01.00', hl, gl } },
+    query: q,
+    params: VIDEO_PARAMS,
+  });
+  const items =
+    data?.contents?.twoColumnSearchResultsRenderer?.primaryContents?.sectionListRenderer?.contents?.[0]
+      ?.itemSectionRenderer?.contents || [];
+  const out: YtResult[] = [];
+  for (const it of items) {
+    const v = it?.videoRenderer;
+    if (!v?.videoId) continue;
+    out.push({
+      videoId: v.videoId,
+      title: runsText(v.title),
+      sub: runsText(v.ownerText) || runsText(v.shortBylineText),
+      extra: [v?.viewCountText?.simpleText, v?.publishedTimeText?.simpleText].filter(Boolean).join(' · '),
+      duration: v?.lengthText?.simpleText ?? null,
+      thumbnail: v?.thumbnail?.thumbnails?.at(-1)?.url ?? null,
+      isLive: !!v.isLive,
+    });
+    if (out.length >= 20) return out;
+  }
+  return out;
+}
+
 /* ---------- Google ID-token verification (mirror of src/core/google-auth.ts) ---------- */
 const CERTS_URL = 'https://www.googleapis.com/oauth2/v3/certs';
 let certsCache: { keys: any[]; fetchedAt: number } | null = null;
@@ -164,7 +283,11 @@ async function gh<T = any>(env: Env, path: string, init?: RequestInit): Promise<
   return res.status === 204 ? (undefined as T) : ((await res.json()) as T);
 }
 
-export const onRequestPost = async ({ request, env }: { request: Request; env: Env }) => {
+export const onRequestPost = async ({ request, env, ctx }: {
+  request: Request;
+  env: Env;
+  ctx?: { waitUntil: (p: Promise<unknown>) => void };
+}) => {
   if (!env?.GH_TOKEN) {
     return json({ error: 'server not configured — set GH_TOKEN (and GOOGLE_CLIENT_ID / ADMIN_PASSWORD) in the Pages environment' }, 500);
   }
@@ -218,6 +341,50 @@ export const onRequestPost = async ({ request, env }: { request: Request; env: E
 
   try {
     switch (body?.action) {
+      case 'search': {
+        const q = String(body.q || '').trim().slice(0, SEARCH_MAX_Q);
+        if (!q) return json({ error: 'empty query' }, 400);
+        const mode = body.mode === 'video' ? 'video' : 'music';
+        const hl = /^[a-z]{2}(-[A-Za-z]{2,4})?$/.test(String(body.hl || '')) ? String(body.hl) : 'en';
+        const gl = /^[A-Z]{2}$/.test(String(body.gl || '')) ? String(body.gl) : 'US';
+        const memKey = mode + '|' + hl + '|' + gl + '|' + q.toLowerCase();
+
+        const memHit = searchMem.get(memKey);
+        if (memHit && Date.now() - memHit.at < SEARCH_TTL_MS) {
+          return json({ results: memHit.results, cached: 'mem' });
+        }
+
+        const cacheKey = new Request(
+          'https://aura-search.internal/ytsearch?' +
+            new URLSearchParams({ mode, hl, gl, q: q.toLowerCase() }),
+        );
+        try {
+          const hit = await (caches as any).default.match(cacheKey);
+          if (hit) {
+            const data = await hit.json();
+            if (Array.isArray(data?.results)) {
+              searchMem.set(memKey, { results: data.results, at: Date.now() });
+              return json({ results: data.results, cached: 'edge' });
+            }
+          }
+        } catch { /* cache unavailable — fetch fresh */ }
+
+        const results = mode === 'music' ? await ytSearchMusic(q, hl, gl) : await ytSearchVideos(q, hl, gl);
+
+        searchMem.set(memKey, { results, at: Date.now() });
+        if (searchMem.size > SEARCH_CACHE_MAX) {
+          const oldest = searchMem.keys().next().value;
+          if (oldest !== undefined) searchMem.delete(oldest);
+        }
+        try {
+          const cacheRes = new Response(JSON.stringify({ results }), {
+            headers: { 'content-type': 'application/json', 'cache-control': 'public, max-age=1800' },
+          });
+          ctx?.waitUntil((caches as any).default.put(cacheKey, cacheRes));
+        } catch { /* caching is best-effort */ }
+        return json({ results });
+      }
+
       case 'dispatch': {
         const urls: unknown = body.urls;
         if (!Array.isArray(urls) || !urls.length) return json({ error: 'no URLs given' }, 400);

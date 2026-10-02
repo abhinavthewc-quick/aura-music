@@ -18,9 +18,14 @@ const urlsInput = $<HTMLTextAreaElement>('urlsInput');
 const cookiesInput = $<HTMLTextAreaElement>('cookiesInput');
 const secretsStatus = $('secretsStatus');
 const downloadStatus = $('downloadStatus');
-const previewList = $('previewList');
+const queueList = $('queueList');
 const runsList = $('runsList');
 const urlCount = $('urlCount');
+const batchHint = $('batchHint');
+const searchInput = $<HTMLInputElement>('searchInput');
+const searchResults = $('searchResults');
+const searchStatus = $('searchStatus');
+const searchModes = $('searchModes');
 const toastHost = $('toastHost');
 const gatedSections = Array.from(document.querySelectorAll<HTMLElement>('.adm-gated'));
 
@@ -196,73 +201,251 @@ async function refreshSecretChips() {
   } catch { /* status line already shown */ }
 }
 
-/* ---------- preview ---------- */
+/* ---------- unified queue: search adds + pasted links (one source of truth,
+   persisted so a reload never loses what you queued) ---------- */
 const YT_RE = /^https?:\/\/(?:www\.|m\.|music\.)?(?:youtube\.com\/watch\?v=|youtube\.com\/shorts\/|youtu\.be\/)([\w-]{11})/;
+const QUEUE_KEY = 'auraAdmin_queue_v1';
+const MAX_PER_RUN = 10; // server-side dispatch cap
 
-function parseUrls(): string[] {
-  const lines = urlsInput.value.split(/[\r\n]+/).map((l) => l.trim()).filter(Boolean);
-  const out: string[] = [];
-  const seen = new Set<string>();
-  for (const l of lines) {
-    if (!YT_RE.test(l)) continue;
-    if (seen.has(l)) continue;
-    seen.add(l);
-    out.push(l);
-  }
-  return out;
+interface QueueItem {
+  id: string;
+  url: string;
+  title: string;
+  sub: string;
+  thumb: string;
+  source: 'search' | 'paste';
 }
 
-function updateUrlCount() {
-  const all = urlsInput.value.split(/[\r\n]+/).map((l) => l.trim()).filter(Boolean);
-  const valid = parseUrls().length;
-  if (!all.length) { urlCount.textContent = ''; return; }
-  urlCount.textContent = valid === all.length ? `${valid} link${valid === 1 ? '' : 's'} ready` : `${valid}/${all.length} valid YouTube links`;
+let queue: QueueItem[] = (() => {
+  try {
+    const arr = JSON.parse(localStorage.getItem(QUEUE_KEY) || '[]');
+    return Array.isArray(arr) ? arr.filter((i: any) => i && i.id && i.url) : [];
+  } catch {
+    return [];
+  }
+})();
+
+function saveQueue() {
+  try { localStorage.setItem(QUEUE_KEY, JSON.stringify(queue)); } catch { /* private mode */ }
+}
+
+const queueHas = (id: string) => queue.some((i) => i.id === id);
+
+function addToQueue(item: QueueItem, silent = false): boolean {
+  if (queueHas(item.id)) return false;
+  queue.push(item);
+  saveQueue();
+  renderQueue();
+  if (!silent) toast('Added to queue', 'ok');
+  return true;
+}
+
+function removeFromQueue(id: string) {
+  queue = queue.filter((i) => i.id !== id);
+  saveQueue();
+  renderQueue();
+  syncResultRows();
+}
+
+function updateCounts() {
+  const n = queue.length;
+  urlCount.textContent = n ? `${n} track${n === 1 ? '' : 's'}` : '';
+  const batches = Math.ceil(n / MAX_PER_RUN);
+  batchHint.textContent = n > MAX_PER_RUN ? `splits into ${batches} runs · max ${MAX_PER_RUN} per run` : '';
+}
+
+function renderQueue() {
+  updateCounts();
+  queueList.innerHTML = '';
+  if (!queue.length) {
+    const empty = document.createElement('span');
+    empty.className = 'adm-chip dim';
+    empty.textContent = 'queue is empty — search above or paste links';
+    queueList.appendChild(empty);
+    return;
+  }
+  for (const item of queue) {
+    const row = document.createElement('div');
+    row.className = 'adm-prev-item';
+    row.innerHTML =
+      '<img alt="" loading="lazy"><div><div class="t"></div><div class="s"></div></div>' +
+      '<button type="button" class="adm-qremove" title="Remove" aria-label="Remove from queue">×</button>';
+    const img = row.querySelector('img') as HTMLImageElement;
+    if (item.thumb) img.src = item.thumb;
+    row.querySelector('.t')!.textContent = item.title;
+    row.querySelector('.s')!.textContent = item.sub;
+    row.querySelector('.adm-qremove')!.addEventListener('click', () => removeFromQueue(item.id));
+    queueList.appendChild(row);
+  }
+}
+
+/* ----- paste ingestion: valid lines are pulled into the queue automatically ----- */
+function ingestPasted() {
+  const lines = urlsInput.value.split(/[\r\n]+/).map((l) => l.trim()).filter(Boolean);
+  if (!lines.length) return;
+  const valid: string[] = [];
+  const keep: string[] = [];
+  for (const l of lines) (YT_RE.test(l) ? valid : keep).push(l);
+  if (!valid.length) return;
+  let added = 0;
+  for (const u of valid) {
+    const id = YT_RE.exec(u)![1];
+    if (queueHas(id)) continue;
+    if (addToQueue({ id, url: u, title: 'Reading title…', sub: '', thumb: '', source: 'paste' }, true)) {
+      added++;
+      void enrichPaste(id, u);
+    }
+  }
+  urlsInput.value = keep.join('\n');
+  if (added) toast(`Added ${added} link${added === 1 ? '' : 's'} to queue`, 'ok');
+  else toast('Already in the queue', 'err');
 }
 
 interface Oembed { title: string; author_name: string; thumbnail_url: string; }
 
-async function fetchInfo(url: string): Promise<Oembed | null> {
-  const res = await fetch(
-    'https://www.youtube.com/oembed?url=' + encodeURIComponent(url) + '&format=json',
-  );
-  if (!res.ok) return null;
-  return (await res.json()) as Oembed;
-}
-
-async function previewLinks() {
-  const urls = parseUrls();
-  previewList.innerHTML = '';
-  updateUrlCount();
-  if (!urls.length) return;
-  previewList.innerHTML = '<span class="adm-chip dim">fetching titles…</span>';
-  const results = await Promise.allSettled(
-    urls.map(async (u) => ({ u, info: await fetchInfo(u) })),
-  );
-  previewList.innerHTML = '';
-  for (const r of results) {
-    const item = document.createElement('div');
-    item.className = 'adm-prev-item';
-    if (r.status === 'fulfilled' && r.value.info) {
-      const { u, info } = r.value;
-      item.innerHTML =
-        `<img src="" alt="">` +
-        `<div><div class="t"></div><div class="s"></div></div>`;
-      (item.querySelector('img') as HTMLImageElement).src = info.thumbnail_url;
-      item.querySelector('.t')!.textContent = info.title;
-      item.querySelector('.s')!.textContent = info.author_name + ' · ' + YT_RE.exec(u)?.[1];
-    } else {
-      item.classList.add('bad');
-      item.innerHTML = '<div><div class="t">Could not read this link</div><div class="s">not a valid YouTube URL?</div></div>';
-    }
-    previewList.appendChild(item);
+async function enrichPaste(id: string, url: string) {
+  const settle = (title: string, sub: string, thumb: string) => {
+    const item = queue.find((i) => i.id === id);
+    if (!item) return; // removed while fetching
+    item.title = title;
+    item.sub = sub;
+    item.thumb = thumb;
+    saveQueue();
+    renderQueue();
+  };
+  try {
+    const res = await fetch('https://www.youtube.com/oembed?url=' + encodeURIComponent(url) + '&format=json');
+    if (!res.ok) throw new Error('HTTP ' + res.status);
+    const info = (await res.json()) as Oembed;
+    settle(info.title || id, info.author_name || '', info.thumbnail_url || '');
+  } catch {
+    settle(id, 'title unavailable — still downloadable', '');
   }
 }
 
-/* ---------- dispatch ---------- */
-async function dispatchDownload() {
-  const urls = parseUrls();
-  if (!urls.length) throw new Error('Paste at least one valid YouTube link first.');
-  await adminApi('dispatch', { urls });
+/* ---------- search: type → debounced InnerTube query → click/Enter to queue ---------- */
+interface SearchResult {
+  videoId: string;
+  title: string;
+  sub: string;
+  extra: string;
+  duration: string | null;
+  thumbnail: string | null;
+  isLive: boolean;
+}
+
+let searchMode: 'music' | 'video' = 'music';
+let searchSeq = 0;
+let searchTimer: number | undefined;
+let lastResults: Array<{ r: SearchResult; url: string }> = [];
+const searchMemo = new Map<string, SearchResult[]>();
+
+function renderResults(results: SearchResult[]) {
+  lastResults = results.map((r) => ({
+    r,
+    url:
+      searchMode === 'music'
+        ? `https://music.youtube.com/watch?v=${r.videoId}`
+        : `https://www.youtube.com/watch?v=${r.videoId}`,
+  }));
+  searchResults.innerHTML = '';
+  for (const { r, url } of lastResults) {
+    const row = document.createElement('div');
+    row.className = 'adm-res' + (queueHas(r.videoId) ? ' added' : '');
+    row.setAttribute('data-id', r.videoId);
+    row.setAttribute('data-url', url);
+    row.setAttribute('role', 'button');
+    row.tabIndex = 0;
+    row.innerHTML =
+      '<img alt="" loading="lazy">' +
+      '<div class="adm-res-txt"><div class="t"></div><div class="s"></div></div>' +
+      '<span class="adm-res-x"></span>' +
+      '<span class="adm-res-add"></span>';
+    const img = row.querySelector('img') as HTMLImageElement;
+    if (r.thumbnail) img.src = r.thumbnail;
+    row.querySelector('.t')!.textContent = r.title;
+    row.querySelector('.s')!.textContent = [r.sub, r.extra].filter(Boolean).join(' · ');
+    row.querySelector('.adm-res-x')!.textContent = r.isLive ? 'LIVE' : r.duration || '';
+    row.querySelector('.adm-res-add')!.textContent = queueHas(r.videoId) ? '✓' : '＋';
+    const toggle = () => toggleResult(r, url);
+    row.addEventListener('click', toggle);
+    row.addEventListener('keydown', (e: KeyboardEvent) => {
+      if (e.key === 'Enter' || e.key === ' ') {
+        e.preventDefault();
+        toggle();
+      }
+    });
+    searchResults.appendChild(row);
+  }
+}
+
+function toggleResult(r: SearchResult, url: string) {
+  if (queueHas(r.videoId)) removeFromQueue(r.videoId);
+  else addToQueue({ id: r.videoId, url, title: r.title, sub: r.sub, thumb: r.thumbnail || '', source: 'search' });
+  syncResultRows();
+}
+
+function syncResultRows() {
+  searchResults.querySelectorAll<HTMLElement>('.adm-res').forEach((el) => {
+    const id = el.getAttribute('data-id') || '';
+    const added = queueHas(id);
+    el.classList.toggle('added', added);
+    const add = el.querySelector('.adm-res-add');
+    if (add) add.textContent = added ? '✓' : '＋';
+  });
+}
+
+function addTopResult() {
+  const next = lastResults.find((e) => !queueHas(e.r.videoId));
+  if (!next) {
+    if (lastResults.length) setStatus(searchStatus, 'Everything shown is already queued — keep typing for more.', '');
+    return;
+  }
+  addToQueue({
+    id: next.r.videoId,
+    url: next.url,
+    title: next.r.title,
+    sub: next.r.sub,
+    thumb: next.r.thumbnail || '',
+    source: 'search',
+  });
+  syncResultRows();
+}
+
+async function runSearch() {
+  window.clearTimeout(searchTimer);
+  const q = searchInput.value.trim();
+  if (q.length < 2) {
+    searchResults.innerHTML = '';
+    lastResults = [];
+    setStatus(searchStatus, '');
+    return;
+  }
+  const seq = ++searchSeq;
+  const memoKey = searchMode + '|' + q.toLowerCase();
+  const memo = searchMemo.get(memoKey);
+  if (memo) {
+    renderResults(memo);
+    setStatus(searchStatus, `${memo.length} result${memo.length === 1 ? '' : 's'} · instant — click to queue, Enter adds the top match`);
+    return;
+  }
+  setStatus(searchStatus, 'Searching…');
+  try {
+    const data = await adminApi<{ results: SearchResult[] }>('search', { q, mode: searchMode });
+    if (seq !== searchSeq) return; // a newer keystroke superseded this request
+    const results = Array.isArray(data.results) ? data.results : [];
+    searchMemo.set(memoKey, results);
+    renderResults(results);
+    setStatus(
+      searchStatus,
+      results.length
+        ? `${results.length} result${results.length === 1 ? '' : 's'} — click to queue, Enter adds the top match`
+        : `No results for “${q}”`,
+    );
+  } catch (e) {
+    if (seq !== searchSeq) return;
+    setStatus(searchStatus, '✗ ' + ((e as Error).message || 'search failed'), 'err');
+  }
 }
 
 /* ---------- runs ---------- */
@@ -341,28 +524,74 @@ function bind() {
     input.value = '';
   });
 
-  let previewTimer: number | undefined;
+  /* paste → valid lines flow into the queue after a short pause */
+  let ingestTimer: number | undefined;
   urlsInput.addEventListener('input', () => {
-    updateUrlCount();
-    window.clearTimeout(previewTimer);
-    previewTimer = window.setTimeout(() => { previewLinks().catch(() => {}); }, 700);
+    window.clearTimeout(ingestTimer);
+    ingestTimer = window.setTimeout(ingestPasted, 350);
   });
 
-  $('fetchBtn').addEventListener('click', () => {
-    previewLinks().catch(() => toast('Title fetch failed (network?)', 'err'));
+  /* search: 250 ms debounce; Enter queues the top not-yet-queued match */
+  searchInput.addEventListener('input', () => {
+    window.clearTimeout(searchTimer);
+    searchTimer = window.setTimeout(() => { runSearch().catch(() => {}); }, 250);
+  });
+  searchInput.addEventListener('keydown', (e: KeyboardEvent) => {
+    if (e.key === 'Enter') {
+      e.preventDefault();
+      addTopResult();
+    } else if (e.key === 'Escape') {
+      searchInput.value = '';
+      searchResults.innerHTML = '';
+      lastResults = [];
+      setStatus(searchStatus, '');
+    }
+  });
+
+  searchModes.querySelectorAll<HTMLElement>('.adm-seg-btn').forEach((btn) => {
+    btn.addEventListener('click', () => {
+      const mode = btn.dataset.mode === 'video' ? 'video' : 'music';
+      if (mode === searchMode) return;
+      searchMode = mode;
+      searchModes.querySelectorAll('.adm-seg-btn').forEach((b) => b.classList.toggle('active', b === btn));
+      runSearch().catch(() => {}); // memo is mode-keyed → instant when cached
+    });
+  });
+
+  $('clearQueueBtn').addEventListener('click', () => {
+    if (!queue.length) return;
+    queue = [];
+    saveQueue();
+    renderQueue();
+    syncResultRows();
+    toast('Queue cleared');
   });
 
   $('downloadBtn').addEventListener('click', async () => {
     const btn = $<HTMLButtonElement>('downloadBtn');
+    const urls = queue.map((i) => i.url);
+    if (!urls.length) {
+      setStatus(downloadStatus, 'Queue is empty — search for a song or paste a link first.', 'err');
+      return;
+    }
     btn.disabled = true;
     setStatus(downloadStatus, 'Starting GitHub Actions run…');
     try {
-      await dispatchDownload();
-      setStatus(downloadStatus, '✓ Workflow dispatched — watch it below.', 'ok');
+      const batches: string[][] = [];
+      for (let i = 0; i < urls.length; i += MAX_PER_RUN) batches.push(urls.slice(i, i + MAX_PER_RUN));
+      for (const batch of batches) await adminApi('dispatch', { urls: batch });
+      queue = [];
+      saveQueue();
+      renderQueue();
+      syncResultRows();
+      setStatus(
+        downloadStatus,
+        batches.length > 1
+          ? `✓ ${urls.length} tracks dispatched across ${batches.length} runs — watch them below.`
+          : `✓ ${urls.length} track${urls.length === 1 ? '' : 's'} dispatched — watch it below.`,
+        'ok',
+      );
       toast('Download started on GitHub Actions', 'ok');
-      urlsInput.value = '';
-      previewList.innerHTML = '';
-      updateUrlCount();
       setTimeout(refreshRuns, 2500);
     } catch (e) {
       setStatus(downloadStatus, '✗ ' + (e as Error).message, 'err');
@@ -385,5 +614,6 @@ try {
 } catch { /* ignore */ }
 
 bind();
+renderQueue();
 if (getSession()) unlock();
 else lock();
