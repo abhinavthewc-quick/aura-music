@@ -1,8 +1,8 @@
-import { GOOGLE_CLIENT_ID } from '../core/config';
+import { GOOGLE_CLIENT_ID, ADMIN_EMAILS } from '../core/config';
 import { verifyGoogleCredential } from '../core/google-auth';
 import {
-  clearSession, getSession, getProfileUsername, isValidUsername, normalizeUsername,
-  setProfileUsername, setSession,
+  clearSession, exchangeGoogleToken, getSession, getProfileUsername, isValidUsername, normalizeUsername,
+  SESSION_TTL_SEC, setProfileUsername, setSession,
 } from '../core/session';
 import { loginLocalAccount, normEmail, registerLocalAccount } from '../core/local-auth';
 import { toast } from '../core/dom';
@@ -100,7 +100,16 @@ import { $ } from '../core/state';
     async function handleCredential(credential: string){
       try{
         const p = await verifyGoogleCredential(credential, GOOGLE_CLIENT_ID);
-        enterWithProfile(p, credential);
+        /* The Google ID token expires in ~1h. Give the site session a full
+           7 days instead; allow-listed admins additionally exchange it at the
+           server for a signed token the admin panel can keep using. */
+        let token = credential;
+        let exp = Math.floor(Date.now() / 1000) + SESSION_TTL_SEC;
+        if (ADMIN_EMAILS.includes(p.email)) {
+          const swapped = await exchangeGoogleToken(credential);
+          if (swapped) { token = swapped.token; exp = swapped.exp; }
+        }
+        enterWithProfile({ ...p, exp }, token);
       }catch(err){
         toast('Sign-in failed — ' + (((err as Error).message)||'please try again'), 'triangle-exclamation');
       }

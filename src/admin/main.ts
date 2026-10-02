@@ -1,7 +1,7 @@
 import './admin.css';
 import { ADMIN_EMAILS, GOOGLE_CLIENT_ID } from '../core/config';
 import { verifyGoogleCredential } from '../core/google-auth';
-import { clearSession, getSession, setSession } from '../core/session';
+import { clearSession, exchangeGoogleToken, getSession, setSession } from '../core/session';
 
 const SECRET_NAMES = ['HF_TOKEN', 'HF_BUCKET_ID', 'YOUTUBE_COOKIES'] as const;
 
@@ -65,7 +65,9 @@ async function adminApi<T = any>(action: string, payload: Record<string, unknown
   try { data = await res.json(); } catch { /* non-JSON response */ }
   if (!res.ok) {
     if (res.status === 401 || res.status === 403) {
-      clearSession();
+      /* Server-issued sessions are dead for good; a raw Google token may
+         only be stale here — keep it so the main-site login survives. */
+      if (session.token.startsWith('v1.') || session.token.startsWith('local:')) clearSession();
       lock(data?.error || 'Sign-in required.');
     }
     throw new Error(data?.error || 'HTTP ' + res.status);
@@ -90,7 +92,12 @@ function renderGisButton() {
         try { w.google?.accounts?.id?.disableAutoSelect?.(); } catch { /* ignore */ }
         return;
       }
-      setSession({ email: p.email, name: p.name, picture: p.picture, exp: p.exp, token: resp.credential });
+      /* The Google ID token dies in ~1h — exchange it for a 7-day
+         server-signed session so the panel stays open. */
+      const swapped = await exchangeGoogleToken(resp?.credential || '');
+      setSession(swapped
+        ? { email: p.email, name: p.name, picture: p.picture, exp: swapped.exp, token: swapped.token }
+        : { email: p.email, name: p.name, picture: p.picture, exp: p.exp, token: resp.credential });
       unlock();
     } catch (e) {
       setStatus(gateStatus, 'Sign-in failed — ' + ((e as Error).message || 'try again'), 'err');

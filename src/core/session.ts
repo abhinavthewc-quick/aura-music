@@ -44,6 +44,30 @@ export function getIdToken(): string {
   return getSession()?.token || '';
 }
 
+/* Spend a Google ID token (valid ~1h) at /api/admin for a server-signed
+   session token that lasts SESSION_TTL_SEC (7 days). Falls back to null when
+   the server is unreachable or refuses — callers keep the raw token then. */
+export const SESSION_TTL_SEC = 7 * 24 * 3600;
+
+export async function exchangeGoogleToken(
+  credential: string,
+): Promise<{ token: string; exp: number; email: string } | null> {
+  if (!credential || credential.startsWith('v1.') || credential.startsWith('local:')) return null;
+  try {
+    const res = await fetch('/api/admin', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ action: 'exchange', credential }),
+    });
+    if (!res.ok) return null;
+    const data = await res.json();
+    if (!data?.token || typeof data.exp !== 'number' || !data?.email) return null;
+    return { token: String(data.token), exp: Number(data.exp), email: String(data.email) };
+  } catch {
+    return null;
+  }
+}
+
 /* ---------- per-email username profiles (main site) ----------
    The username chosen at first sign-in is tied to the Google address and
    stored locally as {"email": "username"}. Changing it in Settings updates

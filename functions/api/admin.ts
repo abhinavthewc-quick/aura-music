@@ -320,6 +320,26 @@ export const onRequestPost = async ({ request, env, ctx }: {
     return json({ token, exp, email: loginEmail });
   }
 
+  /* ----- session exchange: spend a short-lived Google ID token ONCE for a
+     7-day signed session token, so sign-in survives the ~1h ID-token expiry ----- */
+  if (body?.action === 'exchange') {
+    const raw = String(body.credential || '');
+    if (raw.startsWith('v1.')) {
+      const already = await verifyFallbackToken(env, raw);
+      if (!already) return json({ error: 'session expired — sign in again' }, 401);
+      return json({ token: raw, exp: Number(raw.split('.')[1]), email: already });
+    }
+    try {
+      if (!env.GOOGLE_CLIENT_ID) throw new Error('Google sign-in is not configured on the server');
+      const { email } = await verifyGoogle(raw, env.GOOGLE_CLIENT_ID);
+      if (!ALLOWED_EMAILS.has(email)) return json({ error: email + ' is not allowed' }, 403);
+      const { token, exp } = await signFallbackToken(env, email);
+      return json({ token, exp, email });
+    } catch (e) {
+      return json({ error: (e as Error).message }, 401);
+    }
+  }
+
   /* ----- authenticate every other action: Google ID token or signed fallback token ----- */
   let email: string;
   const credential = String(body?.credential || '');
