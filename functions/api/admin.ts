@@ -134,6 +134,40 @@ async function hfBatch(env: Env, ops: Record<string, unknown>[]): Promise<any> {
   return data;
 }
 
+/* manifest.json — clean track metadata (title/artist/album/year/duration)
+   keyed by video ID. Fetched anonymously (the resolve URL is public) with a
+   hard timeout so a slow CDN never stalls an admin action; never fatal. */
+type ManifestTracks = Record<string, Record<string, unknown>>;
+let manifestMem: { tracks: ManifestTracks; at: number } | null = null;
+const MANIFEST_TTL_MS = 30_000;
+async function hfManifest(env: Env): Promise<ManifestTracks> {
+  if (manifestMem && Date.now() - manifestMem.at < MANIFEST_TTL_MS) return manifestMem.tracks;
+  try {
+    const res = await fetch(`https://huggingface.co/buckets/${hfBucketId(env)}/resolve/manifest.json`, {
+      signal: AbortSignal.timeout(8000),
+    });
+    if (!res.ok) return {};
+    const data: any = await res.json();
+    const tracks = data && data.tracks;
+    const out = tracks && typeof tracks === 'object' ? (tracks as ManifestTracks) : {};
+    manifestMem = { tracks: out, at: Date.now() };
+    return out;
+  } catch {
+    return manifestMem ? manifestMem.tracks : {};
+  }
+}
+function invalidateManifest(): void { manifestMem = null; }
+
+/* UTF-8-safe base64 for GitHub Contents API staging (btoa wants binary). */
+function toB64Utf8(s: string): string {
+  const bytes = new TextEncoder().encode(s);
+  let bin = '';
+  for (let i = 0; i < bytes.length; i += 0x8000) {
+    bin += String.fromCharCode(...bytes.subarray(i, i + 0x8000));
+  }
+  return btoa(bin);
+}
+
 function assertSafePath(p: string): void {
   if (!p || p.length > 512 || p.startsWith('/') || p.includes('..') || p.includes('\0')) {
     throw new Error('invalid file path');
@@ -646,7 +680,13 @@ export const onRequestPost = async ({ request, env, ctx }: {
 
       case 'library': {
         const files = await bucketTree();
-        return json({ files, videoIds: [...uploadedVideoIds(files)] });
+        const manifest = await hfManifest(env);
+        return json({
+          files,
+          videoIds: [...uploadedVideoIds(files)],
+          bucketId: hfBucketId(env),
+          manifest,
+        });
       }
 
       /* ----- bucket management (F6): rename & delete are direct batch
@@ -743,6 +783,53 @@ export const onRequestPost = async ({ request, env, ctx }: {
           throw e;
         }
         return json({ ok: true, dispatched: true, target, staged: stagedPath });
+      }
+
+      /* ----- edit manifest.json metadata (title/artist/album for the site).
+         The batch endpoint can't write new bytes, so the mutated manifest is
+         staged in the repo and pushed by manage-music.yml — same pattern as
+         cover art, ~1 min to appear. ----- */
+      case 'bucketManifestSet': {
+        const vid = String(body.id || '');
+        if (!/^[A-Za-z0-9_-]{11}$/.test(vid)) return json({ error: 'bad video ID' }, 400);
+        const fields: Record<string, unknown> = {};
+        for (const [src, dst] of [['title', 't'], ['artist', 'a'], ['album', 'al']] as const) {
+          const v = String((body as any)[src] ?? '').trim().slice(0, 200);
+          if (v) fields[dst] = v;
+        }
+        if (!Object.keys(fields).length) return json({ error: 'nothing to update' }, 400);
+        const tracks = await hfManifest(env);
+        const existing = tracks[vid];
+        if (!existing) {
+          return json({ error: 'not in manifest yet — its metadata arrives with the next download run for this track' }, 404);
+        }
+        const manifest = { v: 1, tracks: { ...tracks, [vid]: { ...existing, ...fields } } };
+        const stagedPath = `${STAGING_DIR}/manifest-${Date.now().toString(36)}.json`;
+        try {
+          await gh(env, `/repos/${REPO}/contents/${stagedPath}`, {
+            method: 'PUT',
+            body: JSON.stringify({
+              message: `chore: stage manifest metadata for ${vid}`,
+              content: toB64Utf8(JSON.stringify(manifest, null, 1)),
+              branch: 'main',
+            }),
+          });
+        } catch (e) {
+          throw new Error('could not stage the manifest in the repo — ' + (e as Error).message);
+        }
+        try {
+          await gh(env, `/repos/${REPO}/actions/workflows/${MANAGE_WORKFLOW_FILE}/dispatches`, {
+            method: 'POST',
+            body: JSON.stringify({
+              ref: 'main',
+              inputs: { op: 'manifest', staged_path: stagedPath, target_path: 'manifest.json' },
+            }),
+          });
+        } catch (e) {
+          await cleanupStaged(env, stagedPath);
+          throw e;
+        }
+        return json({ ok: true, dispatched: true, target: 'manifest.json' });
       }
 
       case 'expand': {

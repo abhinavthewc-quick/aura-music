@@ -151,16 +151,28 @@ function unlock() {
   refreshSecretChips();
   refreshRuns();
   void refreshLibrary(); // populate "already uploaded" marks for search/queue/dispatch
-  void loadLibraryManager(); // bucket file list for the management card
+  void loadLibraryManager(); // bucket file list + Library tab badge
+  switchTab('panelAdd');
 }
 
 function lock(msg?: string) {
   $('sessionBar').hidden = true;
   gatedSections.forEach((s) => { s.hidden = true; });
+  ['panelAdd', 'panelLibrary', 'panelSettings'].forEach((id) => { $(id).hidden = true; });
   gBtnBox.innerHTML = '';
   gateCard.hidden = false;
   renderGisButton();
   if (msg) setStatus(gateStatus, msg, 'err');
+}
+
+/* ---------- top-level tabs ---------- */
+function switchTab(panelId: string): void {
+  document.querySelectorAll<HTMLElement>('.adm-tab').forEach((b) => {
+    b.classList.toggle('active', b.dataset.panel === panelId);
+  });
+  for (const id of ['panelAdd', 'panelLibrary', 'panelSettings']) $(id).hidden = id !== panelId;
+  if (panelId === 'panelLibrary') void loadLibraryManager();
+  if (panelId === 'panelSettings') ($('configCard') as HTMLDetailsElement).open = true;
 }
 
 /* ---------- password fallback (server-issued token) ---------- */
@@ -253,11 +265,14 @@ async function refreshLibrary(force = false): Promise<void> {
   if (libraryLoaded && !force) return;
   libraryLoading = (async () => {
     try {
-      const data = await adminApi<{ videoIds?: string[] }>('library');
+      const data = await adminApi<LibraryResponse>('library');
       libraryIdSet = new Set((data.videoIds || []).filter(Boolean));
       libraryLoaded = true;
+      libLoadError = '';
+      ingestLibraryData(data);
       syncResultRows();
       renderQueue();
+      if (!$('panelLibrary').hidden) renderLibGrid();
     } catch { /* status line already surfaced */ }
     finally { libraryLoading = null; }
   })();
@@ -611,12 +626,41 @@ async function runSearch() {
   }
 }
 
-/* ---------- bucket library manager (F6) ----------
-   Rename/delete are direct HF batch mutations (instant); cover art stages
-   the image in the repo and rides manage-music.yml (~1 min). */
+/* ---------- library tab: searchable grid browser over the bucket ----------
+   Rename/delete are direct HF batch mutations (instant); cover art and
+   manifest metadata edits stage a file in the repo and ride
+   manage-music.yml (~1 min). */
 const AUDIO_FILE_RE = /\.(opus|mp3|ogg|m4a|webm)$/i;
+const IMG_FILE_RE = /\.(jpe?g|png|webp|gif)$/i;
 const MAX_COVER_BYTES = 1.5 * 1024 * 1024;
-let libFiles: { path: string; size: number }[] = [];
+const VID_SUFFIX_RE = / \[([A-Za-z0-9_-]{11})\]$/;
+const VID_RE = /^[A-Za-z0-9_-]{11}$/;
+
+interface LibFile { path: string; size: number; mtime?: string }
+interface LibMeta { t?: string; a?: string; al?: string; y?: string; d?: number }
+interface LibraryResponse {
+  files?: LibFile[];
+  videoIds?: string[];
+  bucketId?: string;
+  manifest?: Record<string, LibMeta>;
+}
+interface LibEntry {
+  path: string; stem: string; ext: string; vid: string;
+  size: number; mtime: string;
+  title: string; artist: string; album: string; year: string; duration: number;
+  coverUrl: string;
+}
+
+let libFiles: LibFile[] = [];
+let libCovers = new Map<string, string>(); // audio stem -> cover path
+let libManifest: Record<string, LibMeta> = {};
+let libBucketId = '';
+let libLoadError = '';
+let libFilter = 'all';
+let libSortMode = 'title';
+let libQuery = '';
+let libSelectMode = false;
+let libSelected = new Set<string>();
 let coverPicker: HTMLInputElement | null = null;
 
 function fmtSize(n: number): string {
@@ -625,92 +669,338 @@ function fmtSize(n: number): string {
   return n + ' B';
 }
 
-function renderLibList() {
-  const list = $('libList');
-  list.innerHTML = '';
-  if (!libFiles.length) {
-    list.innerHTML = '<span class="adm-chip dim">the bucket is empty</span>';
+function fmtDur(sec: number): string {
+  const m = Math.floor(sec / 60), s = Math.floor(sec % 60);
+  return m + ':' + String(s).padStart(2, '0');
+}
+
+const escHtml = (s: string): string =>
+  s.replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c] as string));
+
+function hfLibUrl(path: string): string {
+  return 'https://huggingface.co/buckets/' + libBucketId + '/resolve/' + path.split('/').map(encodeURIComponent).join('/');
+}
+
+function ingestLibraryData(data: LibraryResponse): void {
+  if (data.bucketId) libBucketId = data.bucketId;
+  if (data.manifest) libManifest = data.manifest;
+  const files = Array.isArray(data.files) ? data.files : [];
+  libFiles = files.filter((f) => f && AUDIO_FILE_RE.test(f.path));
+  libCovers = new Map();
+  for (const f of files) {
+    if (f && IMG_FILE_RE.test(f.path)) libCovers.set(f.path.replace(/\.[^.]+$/, ''), f.path);
+  }
+}
+
+function buildLibEntries(): LibEntry[] {
+  return libFiles.map((f) => {
+    const stem = f.path.replace(/\.[^.]+$/, '');
+    const ext = f.path.slice(stem.length);
+    const vidM = VID_SUFFIX_RE.exec(stem);
+    const vid = vidM ? vidM[1] : '';
+    const base = stem.replace(VID_SUFFIX_RE, '');
+    const fm = /^(.+?)\s+-\s+(.+)$/.exec(base);
+    let artist = fm ? fm[1].trim() : '';
+    let title = fm ? fm[2].trim() : base;
+    let album = '', year = '', duration = 0;
+    const m = vid ? libManifest[vid] : undefined;
+    if (m) {
+      if (m.t) title = m.t;
+      if (m.a) artist = m.a;
+      if (m.al) album = m.al;
+      if (m.y) year = String(m.y);
+      if (typeof m.d === 'number') duration = m.d;
+    }
+    const coverPath = libCovers.get(stem);
+    return {
+      path: f.path, stem, ext, vid,
+      size: Number(f.size) || 0, mtime: f.mtime || '',
+      title, artist, album, year, duration,
+      coverUrl: coverPath ? hfLibUrl(coverPath) : '',
+    };
+  });
+}
+
+function libVisibleEntries(): LibEntry[] {
+  let list = buildLibEntries();
+  if (libFilter === 'nocover') list = list.filter((e) => !e.coverUrl);
+  else if (libFilter === 'noid') list = list.filter((e) => !e.vid);
+  const q = libQuery.toLowerCase();
+  if (q) {
+    list = list.filter((e) =>
+      e.title.toLowerCase().includes(q) ||
+      e.artist.toLowerCase().includes(q) ||
+      e.album.toLowerCase().includes(q) ||
+      e.stem.toLowerCase().includes(q) ||
+      (e.vid && e.vid.toLowerCase().includes(q)),
+    );
+  }
+  const cmp: Record<string, (a: LibEntry, b: LibEntry) => number> = {
+    title: (a, b) => a.title.localeCompare(b.title),
+    titleDesc: (a, b) => b.title.localeCompare(a.title),
+    artist: (a, b) => (a.artist || '').localeCompare(b.artist || '') || a.title.localeCompare(b.title),
+    newest: (a, b) => (b.mtime || '').localeCompare(a.mtime || ''),
+    oldest: (a, b) => (a.mtime || '').localeCompare(b.mtime || ''),
+    largest: (a, b) => b.size - a.size,
+  };
+  return list.sort(cmp[libSortMode] || cmp.title);
+}
+
+function libCardHTML(e: LibEntry): string {
+  const selected = libSelected.has(e.path);
+  const thumb = e.coverUrl
+    ? `<img src="${escHtml(e.coverUrl)}" alt="" loading="lazy" decoding="async">`
+    : '<span class="adm-lcard-note" aria-hidden="true">♪</span>';
+  const dur = e.duration ? `<span class="adm-lcard-dur">${fmtDur(e.duration)}</span>` : '';
+  const check = libSelectMode
+    ? `<span class="adm-lcard-check${selected ? ' on' : ''}" aria-hidden="true">${selected ? '✓' : ''}</span>`
+    : '';
+  const vid = e.vid ? `<span class="adm-lcard-vid" title="Video ID ${escHtml(e.vid)}">${escHtml(e.vid)}</span>` : '';
+  return `<div class="adm-lcard${selected ? ' selected' : ''}" data-path="${escHtml(e.path)}" tabindex="0">
+    <div class="adm-lcard-thumb">
+      ${thumb}
+      ${dur}
+      ${check}
+      <div class="adm-lcard-acts">
+        <button type="button" data-a="ren" title="Rename &amp; edit metadata" aria-label="Rename">✎</button>
+        <button type="button" data-a="cov" title="Replace cover art" aria-label="Cover">🖼</button>
+        <button type="button" data-a="del" title="Delete track and cover" aria-label="Delete">🗑</button>
+      </div>
+    </div>
+    <div class="adm-lcard-title" title="${escHtml(e.title)}">${escHtml(e.title)}</div>
+    <div class="adm-lcard-sub">${escHtml(e.artist || 'Unknown artist')} · ${fmtSize(e.size)}</div>
+    ${vid}
+  </div>`;
+}
+
+function renderLibGrid(): void {
+  const grid = $('libGrid');
+  const all = buildLibEntries();
+  const shown = libVisibleEntries();
+
+  const counts = {
+    all: all.length,
+    nocover: all.filter((e) => !e.coverUrl).length,
+    noid: all.filter((e) => !e.vid).length,
+  };
+  $('libFilters').querySelectorAll<HTMLElement>('button').forEach((b) => {
+    const el = b.querySelector('b');
+    if (el) el.textContent = String(counts[(b.dataset.f || 'all') as keyof typeof counts] ?? 0);
+  });
+
+  const bytes = shown.reduce((n, e) => n + e.size, 0);
+  const covers = all.filter((e) => e.coverUrl).length;
+  $('libStats').textContent = all.length
+    ? `${shown.length === all.length ? all.length : shown.length + ' of ' + all.length} tracks · ${fmtSize(bytes)}${shown.length === all.length ? ` · ${covers} with cover art` : ''}`
+    : '';
+  $('libHeadSub').textContent = all.length ? `${all.length} tracks` : '';
+  const badge = $('libTabCount');
+  badge.hidden = !all.length;
+  badge.textContent = String(all.length);
+
+  if (libLoadError) {
+    grid.innerHTML = '<span class="adm-chip dim">could not load the bucket</span>';
     return;
   }
-  for (const f of libFiles) {
-    const stem = f.path.replace(/\.[^.]+$/, '');
-    const row = document.createElement('div');
-    row.className = 'adm-lib';
-    row.innerHTML =
-      '<span class="nm"></span><span class="sz"></span>' +
-      '<span class="acts">' +
-      '<button type="button" class="adm-libbtn" data-a="ren" title="Rename track">✎ rename</button>' +
-      '<button type="button" class="adm-libbtn" data-a="cov" title="Replace cover art">🖼 cover</button>' +
-      '<button type="button" class="adm-libbtn danger" data-a="del" title="Delete track and cover">🗑 delete</button>' +
-      '</span>';
-    row.querySelector('.nm')!.textContent = stem;
-    row.querySelector('.sz')!.textContent = fmtSize(f.size);
-    row.querySelector('[data-a="ren"]')!.addEventListener('click', () => startLibRename(row, f.path));
-    row.querySelector('[data-a="cov"]')!.addEventListener('click', () => pickLibCover(f.path));
-    row.querySelector('[data-a="del"]')!.addEventListener('click', () => deleteLibTrack(f.path));
-    list.appendChild(row);
+  if (!all.length) {
+    grid.innerHTML = '<span class="adm-chip dim">the bucket is empty — queue something above</span>';
+    return;
   }
+  if (!shown.length) {
+    grid.innerHTML = '<span class="adm-chip dim">no tracks match this filter</span>';
+    return;
+  }
+  grid.innerHTML = shown.map(libCardHTML).join('');
 }
 
-async function loadLibraryManager(notify = false): Promise<void> {
-  if (notify) setStatus($('libStatus'), 'Loading bucket…');
+async function loadLibraryManager(force = false): Promise<void> {
+  const statusEl = $('libStatus');
+  if (force) setStatus(statusEl, 'Loading bucket…');
   try {
-    const data = await adminApi<{ files: { path: string; size: number }[] }>('library');
-    libFiles = (data.files || []).filter((f) => AUDIO_FILE_RE.test(f.path));
-    renderLibList();
-    if (notify) setStatus($('libStatus'), `${libFiles.length} tracks in the bucket`, 'ok');
+    const data = await adminApi<LibraryResponse>('library');
+    libLoadError = '';
+    ingestLibraryData(data);
+    renderLibGrid();
+    if (force) setStatus(statusEl, `${libFiles.length} tracks in the bucket`, 'ok');
   } catch (e) {
-    $('libList').innerHTML = '<span class="adm-chip dim">could not load the bucket</span>';
-    if (notify) setStatus($('libStatus'), '✗ ' + ((e as Error).message || 'load failed'), 'err');
+    libLoadError = (e as Error).message || 'load failed';
+    renderLibGrid();
+    setStatus(statusEl, '✗ ' + libLoadError, 'err');
   }
 }
 
-function startLibRename(row: HTMLElement, path: string) {
-  if (row.classList.contains('editing')) return;
-  row.classList.add('editing');
-  const stem = path.replace(/\.[^.]+$/, '');
-  const ext = path.slice(stem.length);
-  const input = document.createElement('input');
-  input.className = 'adm-input adm-libedit';
-  input.value = stem;
-  input.spellcheck = false;
-  row.querySelector('.nm')!.replaceWith(input);
-  input.focus();
-  input.select();
+/* ---------- selection mode + bulk delete ---------- */
+function updateSelectUI(): void {
+  $('libSelectBtn').textContent = libSelectMode ? 'Done' : 'Select';
+  $('libGrid').classList.toggle('selectmode', libSelectMode);
+  const bar = $<HTMLElement>('libBulkBar');
+  bar.hidden = !libSelectMode || libSelected.size === 0;
+  $('libBulkCount').textContent = `${libSelected.size} selected`;
+}
 
-  const commit = async () => {
-    const to = (input.value || '').trim() + ext;
-    if (!to || to === path) {
-      row.classList.remove('editing');
-      renderLibList();
-      return;
-    }
-    setStatus($('libStatus'), 'Renaming…');
-    try {
-      const res = await adminApi<{ renamed?: string[] }>('bucketRename', { from: path, to });
-      setStatus($('libStatus'), '✓ renamed → ' + (res.renamed || []).join(', '), 'ok');
-      toast('Track renamed', 'ok');
-      await Promise.all([loadLibraryManager(false), refreshLibrary(true)]);
-    } catch (e) {
-      setStatus($('libStatus'), '✗ ' + ((e as Error).message || 'rename failed'), 'err');
-      row.classList.remove('editing');
-      renderLibList();
-    }
+function toggleLibSelect(path: string): void {
+  if (libSelected.has(path)) libSelected.delete(path);
+  else libSelected.add(path);
+  updateSelectUI();
+  renderLibGrid();
+}
+
+/* ---------- modal host ---------- */
+const modalHost = $('modalHost');
+const modalCard = $('modalCard');
+
+function openModal(html: string): void {
+  modalCard.innerHTML = html;
+  modalHost.hidden = false;
+}
+function closeModal(): void {
+  modalHost.hidden = true;
+  modalCard.innerHTML = '';
+}
+modalHost.addEventListener('click', (e) => { if (e.target === modalHost) closeModal(); });
+document.addEventListener('keydown', (e) => { if (e.key === 'Escape' && !modalHost.hidden) closeModal(); });
+
+const safeName = (s: string): string =>
+  s.replace(/[\\/:*?"<>|\[\]]/g, ' ').replace(/\s{2,}/g, ' ').trim();
+
+/* ---------- rename / metadata edit ---------- */
+function openRenameModal(path: string): void {
+  const entry = buildLibEntries().find((e) => e.path === path);
+  if (!entry) return;
+  const thumb = entry.coverUrl
+    ? `<img src="${escHtml(entry.coverUrl)}" alt="">`
+    : '<span class="adm-lcard-note">♪</span>';
+  const albumHint = entry.vid
+    ? 'shows on the site'
+    : 'needs a video ID — not available for this file';
+  openModal(`
+    <div class="adm-modal-head">
+      <div class="adm-modal-thumb">${thumb}</div>
+      <div>
+        <h3 class="adm-modal-title">Edit track</h3>
+        <p class="adm-modal-sub">Rename moves the audio + cover together; title/artist/album also sync to the site via manifest.json.</p>
+      </div>
+    </div>
+    <label class="adm-label" for="mfnTitle">Title</label>
+    <input class="adm-input" id="mfnTitle" type="text" spellcheck="false" maxlength="180">
+    <label class="adm-label" for="mfnArtist">Artist</label>
+    <input class="adm-input" id="mfnArtist" type="text" spellcheck="false" maxlength="180" placeholder="Unknown artist">
+    <label class="adm-label" for="mfnAlbum">Album <span class="adm-modal-hint">${albumHint}</span></label>
+    <input class="adm-input" id="mfnAlbum" type="text" spellcheck="false" maxlength="180" ${entry.vid ? '' : 'disabled'} placeholder="—">
+    <div class="adm-modal-file">file: <code id="mfnPreview"></code></div>
+    <div class="adm-status" id="mfnStatus"></div>
+    <div class="adm-modal-actions">
+      <button type="button" class="adm-btn ghost" id="mfnCancel">Cancel</button>
+      <button type="button" class="adm-btn primary" id="mfnSave">Save</button>
+    </div>`);
+
+  const titleInput = $<HTMLInputElement>('mfnTitle');
+  const artistInput = $<HTMLInputElement>('mfnArtist');
+  const albumInput = $<HTMLInputElement>('mfnAlbum');
+  const preview = $('mfnPreview');
+  titleInput.value = entry.title;
+  artistInput.value = entry.artist;
+  albumInput.value = entry.album;
+
+  const newStem = (): string => {
+    const t = safeName(titleInput.value) || 'Untitled';
+    const a = safeName(artistInput.value);
+    return (a ? a + ' - ' : '') + t + (entry.vid ? ' [' + entry.vid + ']' : '');
   };
-  input.addEventListener('keydown', (e: KeyboardEvent) => {
-    if (e.key === 'Enter') { e.preventDefault(); void commit(); }
-    else if (e.key === 'Escape') { row.classList.remove('editing'); renderLibList(); }
-  });
-  input.addEventListener('blur', () => {
-    window.setTimeout(() => {
-      if (row.classList.contains('editing') && document.activeElement !== input) {
-        row.classList.remove('editing');
-        renderLibList();
+  const showPreview = () => { preview.textContent = newStem() + entry.ext; };
+  titleInput.addEventListener('input', showPreview);
+  artistInput.addEventListener('input', showPreview);
+  showPreview();
+  titleInput.focus();
+  titleInput.select();
+
+  $('mfnCancel').addEventListener('click', closeModal);
+  $('mfnSave').addEventListener('click', async () => {
+    const statusEl = $('mfnStatus');
+    const title = safeName(titleInput.value) || 'Untitled';
+    const artist = safeName(artistInput.value);
+    const album = albumInput.disabled ? entry.album : safeName(albumInput.value);
+    const to = newStem() + entry.ext;
+    const btn = $('mfnSave') as HTMLButtonElement;
+    btn.disabled = true;
+    try {
+      let renamed = false;
+      if (to !== entry.path) {
+        setStatus(statusEl, 'Renaming in the bucket…');
+        await adminApi('bucketRename', { from: entry.path, to });
+        renamed = true;
       }
-    }, 150);
+      const metaChanged = title !== entry.title || artist !== entry.artist || album !== entry.album;
+      let synced = false;
+      if (entry.vid && metaChanged) {
+        setStatus(statusEl, 'Syncing metadata to the site…');
+        try {
+          await adminApi('bucketManifestSet', { id: entry.vid, title, artist, album });
+          synced = true;
+        } catch (e) {
+          if (!/not in manifest/i.test((e as Error).message)) throw e;
+        }
+      }
+      closeModal();
+      if (renamed) toast(synced ? 'Renamed — metadata sync queued' : 'Track renamed', 'ok');
+      else if (synced) toast('Metadata sync queued — live in about a minute', 'ok');
+      else { closeModal(); return; }
+      await loadLibraryManager(true);
+      await refreshLibrary(true);
+    } catch (e) {
+      setStatus(statusEl, '✗ ' + ((e as Error).message || 'save failed'), 'err');
+      btn.disabled = false;
+    }
   });
 }
 
+/* ---------- delete (single or bulk) ---------- */
+function openDeleteModal(paths: string[]): void {
+  if (!paths.length) return;
+  const names = paths.map((p) => p.replace(/\.[^.]+$/, '').replace(VID_SUFFIX_RE, ''));
+  const body = paths.length === 1
+    ? `Delete <b>${escHtml(names[0])}</b> from the bucket?`
+    : `Delete <b>${paths.length} tracks</b> from the bucket?`;
+  const sub = paths.length === 1
+    ? 'The audio file AND its cover art will be removed.'
+    : 'Each track’s audio file and cover art will be removed.';
+  openModal(`
+    <h3 class="adm-modal-title danger">Delete from library</h3>
+    <p class="adm-modal-sub">${body}</p>
+    <p class="adm-modal-sub dim">${sub}</p>
+    ${paths.length > 1 ? `<ul class="adm-modal-list">${names.slice(0, 8).map((n) => `<li>${escHtml(n)}</li>`).join('')}${names.length > 8 ? `<li>…and ${names.length - 8} more</li>` : ''}</ul>` : ''}
+    <div class="adm-status" id="mfdStatus"></div>
+    <div class="adm-modal-actions">
+      <button type="button" class="adm-btn ghost" id="mfdCancel">Cancel</button>
+      <button type="button" class="adm-btn danger" id="mfdConfirm">${paths.length === 1 ? 'Delete' : `Delete ${paths.length} tracks`}</button>
+    </div>`);
+  $('mfdCancel').addEventListener('click', closeModal);
+  $('mfdConfirm').addEventListener('click', async () => {
+    const statusEl = $('mfdStatus');
+    const btn = $('mfdConfirm') as HTMLButtonElement;
+    btn.disabled = true;
+    let done = 0;
+    try {
+      for (const p of paths) {
+        setStatus(statusEl, `Deleting ${done + 1}/${paths.length}…`);
+        await adminApi('bucketDelete', { path: p });
+        done++;
+      }
+      closeModal();
+      toast(paths.length === 1 ? 'Deleted from the bucket' : `Deleted ${done} tracks`, 'ok');
+      libSelected.clear();
+      updateSelectUI();
+      await loadLibraryManager(true);
+      await refreshLibrary(true);
+    } catch (e) {
+      setStatus(statusEl, `✗ ${done}/${paths.length} deleted — ` + ((e as Error).message || 'failed'), 'err');
+      btn.disabled = false;
+      if (done) { await loadLibraryManager(true); await refreshLibrary(true); }
+    }
+  });
+}
+
+/* ---------- cover art ---------- */
 function pickLibCover(path: string) {
   if (!coverPicker) {
     coverPicker = document.createElement('input');
@@ -743,19 +1033,6 @@ function pickLibCover(path: string) {
   coverPicker.click();
 }
 
-async function deleteLibTrack(path: string): Promise<void> {
-  const stem = path.replace(/\.[^.]+$/, '');
-  if (!window.confirm(`Delete “${stem}” from the bucket?\n\nThe track AND its cover art will be removed.`)) return;
-  setStatus($('libStatus'), 'Deleting…');
-  try {
-    const res = await adminApi<{ deleted?: string[] }>('bucketDelete', { path });
-    setStatus($('libStatus'), `✓ deleted ${res.deleted?.length || 1} file(s)`, 'ok');
-    toast('Deleted from the bucket', 'ok');
-    await Promise.all([loadLibraryManager(false), refreshLibrary(true)]);
-  } catch (e) {
-    setStatus($('libStatus'), '✗ ' + ((e as Error).message || 'delete failed'), 'err');
-  }
-}
 
 /* ---------- runs: list + expandable live job/step progress ---------- */
 interface Run {
@@ -1060,6 +1337,53 @@ function bind() {
   });
 
   $('libRefreshBtn').addEventListener('click', () => loadLibraryManager(true));
+
+  /* tabs */
+  $('admTabs').addEventListener('click', (e) => {
+    const btn = (e.target as HTMLElement).closest<HTMLElement>('.adm-tab');
+    if (btn?.dataset.panel) switchTab(btn.dataset.panel);
+  });
+
+  /* library browser controls */
+  $('libSearchInput').addEventListener('input', () => {
+    libQuery = ($('libSearchInput') as HTMLInputElement).value.trim();
+    renderLibGrid();
+  });
+  $('libSort').addEventListener('change', () => {
+    libSortMode = ($('libSort') as HTMLSelectElement).value;
+    renderLibGrid();
+  });
+  $('libFilters').addEventListener('click', (e) => {
+    const chip = (e.target as HTMLElement).closest<HTMLElement>('.libf');
+    if (!chip) return;
+    libFilter = chip.dataset.f || 'all';
+    $('libFilters').querySelectorAll<HTMLElement>('.libf').forEach((c) => c.classList.toggle('active', c === chip));
+    renderLibGrid();
+  });
+  $('libSelectBtn').addEventListener('click', () => {
+    libSelectMode = !libSelectMode;
+    libSelected.clear();
+    updateSelectUI();
+    renderLibGrid();
+  });
+  $('libBulkCancel').addEventListener('click', () => {
+    libSelectMode = false;
+    libSelected.clear();
+    updateSelectUI();
+    renderLibGrid();
+  });
+  $('libBulkDelete').addEventListener('click', () => openDeleteModal([...libSelected]));
+  $('libGrid').addEventListener('click', (e) => {
+    const t = e.target as HTMLElement;
+    const card = t.closest<HTMLElement>('.adm-lcard');
+    if (!card?.dataset.path) return;
+    const path = card.dataset.path;
+    if (libSelectMode) { toggleLibSelect(path); return; }
+    const act = (t.closest<HTMLElement>('[data-a]'))?.dataset.a;
+    if (act === 'ren') openRenameModal(path);
+    else if (act === 'cov') pickLibCover(path);
+    else if (act === 'del') openDeleteModal([path]);
+  });
 
   scheduleRunsPoll(); // replaces a fixed interval: 3s while active/expanded, else 10s
 }

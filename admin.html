@@ -36,7 +36,15 @@
       <button type="button" class="adm-btn ghost small" id="signOutBtn">Sign out</button>
     </section>
 
-    <!-- 1. Main action -->
+    <!-- Top-level tabs (signed in only) -->
+    <nav class="adm-tabs adm-gated" id="admTabs" hidden aria-label="Admin sections">
+      <button type="button" class="adm-tab active" data-panel="panelAdd">Find &amp; queue</button>
+      <button type="button" class="adm-tab" data-panel="panelLibrary">Library <span class="adm-tabcount" id="libTabCount" hidden></span></button>
+      <button type="button" class="adm-tab" data-panel="panelSettings">Settings</button>
+    </nav>
+
+    <!-- 1. Find & queue + 2. runs -->
+    <div class="adm-panel" id="panelAdd" hidden>
     <section class="adm-card adm-span2 adm-gated" id="downloadCard" hidden>
       <h2><span class="adm-num">1</span> Find &amp; queue music</h2>
       <p class="adm-hint">Search YouTube Music straight from here, or paste links below — everything lands in the same queue. Press <b>Enter</b> to queue the top match, or <b>+ all</b> on a result to grab every track by that artist. Tracks you already uploaded show as <i>library</i> and are never queued twice. <b>Start download</b> sends the queue to GitHub Actions.</p>
@@ -74,16 +82,51 @@
       <div class="adm-runs" id="runsList"><span class="adm-chip dim">no data yet</span></div>
       <p class="adm-flow"><i class="fa-solid fa-rotate"></i> Live progress: <b>3s</b> polling while a run is active (10s idle). Click a run to expand its steps in place, or <b>logs</b> for GitHub.</p>
     </section>
+    </div><!-- /panelAdd -->
 
-    <!-- Library management (bucket files) -->
+    <!-- Library tab: bucket browser -->
+    <div class="adm-panel" id="panelLibrary" hidden>
     <section class="adm-card adm-span2 adm-gated" id="libraryCard" hidden>
-      <h2><span class="adm-num">3</span> Library management <button type="button" class="adm-btn ghost small" id="libRefreshBtn">Refresh</button></h2>
-      <p class="adm-hint">Everything currently in the Hugging Face bucket. <b>Rename</b> fixes wrong titles/artists (file + cover move together), <b>cover</b> replaces the artwork, <b>delete</b> removes the track and its cover.</p>
-      <div class="adm-status" id="libStatus"></div>
-      <div class="adm-liblist" id="libList"><span class="adm-chip dim">loading…</span></div>
-    </section>
+      <h2><span class="adm-num">3</span> Library <span class="adm-libhead-sub" id="libHeadSub"></span></h2>
+      <p class="adm-hint">Everything in the Hugging Face bucket, with cover art. <b>Search &amp; sort</b> to find a track, <b>rename</b> to fix title/artist/album (file, cover and site metadata stay in sync), <b>cover</b> to replace artwork, <b>delete</b> to remove the track and its cover.</p>
 
-    <!-- Configuration (collapsed by default) -->
+      <div class="adm-libbar">
+        <div class="adm-libsearch">
+          <svg viewBox="0 0 20 20" aria-hidden="true"><path d="M9 3a6 6 0 1 0 3.6 10.8l3.3 3.3 1.4-1.4-3.3-3.3A6 6 0 0 0 9 3zm0 2a4 4 0 1 1 0 8 4 4 0 0 1 0-8z"/></svg>
+          <input id="libSearchInput" class="adm-input" type="search" placeholder="Search title, artist, album, file or ID…" autocomplete="off" spellcheck="false" aria-label="Search library">
+        </div>
+        <select id="libSort" class="adm-input adm-libsort" aria-label="Sort library">
+          <option value="title">Title A–Z</option>
+          <option value="titleDesc">Title Z–A</option>
+          <option value="artist">Artist A–Z</option>
+          <option value="newest">Newest first</option>
+          <option value="oldest">Oldest first</option>
+          <option value="largest">Largest first</option>
+        </select>
+        <button type="button" class="adm-btn ghost small" id="libSelectBtn">Select</button>
+        <button type="button" class="adm-btn ghost small" id="libRefreshBtn">Refresh</button>
+      </div>
+
+      <div class="adm-libchips" id="libFilters">
+        <button type="button" class="adm-chip libf active" data-f="all">All <b>–</b></button>
+        <button type="button" class="adm-chip libf" data-f="nocover">No cover <b>–</b></button>
+        <button type="button" class="adm-chip libf" data-f="noid">No video ID <b>–</b></button>
+      </div>
+
+      <div class="adm-status" id="libStatus"></div>
+      <div class="adm-libstats" id="libStats"></div>
+      <div class="adm-libgrid" id="libGrid"><span class="adm-chip dim">loading…</span></div>
+
+      <div class="adm-libbulk" id="libBulkBar" hidden>
+        <span class="adm-libbulk-n" id="libBulkCount">0 selected</span>
+        <button type="button" class="adm-btn danger small" id="libBulkDelete">Delete selected</button>
+        <button type="button" class="adm-btn ghost small" id="libBulkCancel">Cancel</button>
+      </div>
+    </section>
+    </div><!-- /panelLibrary -->
+
+    <!-- Settings tab -->
+    <div class="adm-panel" id="panelSettings" hidden>
     <details class="adm-card adm-span2 adm-gated adm-config" id="configCard" hidden>
       <summary>
         <span class="adm-summary-title"><i class="fa-solid fa-gear"></i> Setup &amp; configuration</span>
@@ -107,8 +150,14 @@
         <div class="adm-status" id="secretsStatus"></div>
       </div>
     </details>
+    </div><!-- /panelSettings -->
 
   </main>
+
+  <!-- Modal host (rename / confirm dialogs) -->
+  <div class="adm-modal" id="modalHost" hidden>
+    <div class="adm-modal-card" id="modalCard" role="dialog" aria-modal="true"></div>
+  </div>
 
   <div class="adm-toast" id="toastHost" aria-live="polite"></div>
 

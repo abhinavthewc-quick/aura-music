@@ -15,6 +15,7 @@ on:
         type: choice
         options:
           - cover
+          - manifest
       staged_path:
         description: 'Staged file inside the repo (e.g. .staging/cover-x.webp)'
         required: true
@@ -28,8 +29,8 @@ permissions:
   contents: write
 
 jobs:
-  cover:
-    if: inputs.op == 'cover'
+  apply:
+    if: inputs.op == 'cover' || inputs.op == 'manifest'
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -41,7 +42,7 @@ jobs:
       - name: Install huggingface CLI
         run: pip install -q --upgrade huggingface_hub
 
-      - name: Upload cover to bucket
+      - name: Push staged file to bucket
         env:
           HF_TOKEN: ${{ secrets.HF_TOKEN }}
           HF_BUCKET_ID: ${{ secrets.HF_BUCKET_ID }}
@@ -60,6 +61,6 @@ jobs:
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
           git rm -q --ignore-unmatch -- "$STAGED" || true
           if ! git diff --cached --quiet; then
-            git commit -qm "chore: remove staged cover file"
+            git commit -qm "chore: remove staged file"
             git push || echo "::warning::staging cleanup push failed — file stays for a later run"
           fi
