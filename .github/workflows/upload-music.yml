@@ -81,9 +81,44 @@ jobs:
           RC=0
           yt-dlp "${ARGS[@]}" -a urls.txt || RC=$?
           echo "yt-dlp exit code: $RC (non-zero is OK as long as some audio landed)"
-          COUNT=$(find downloads -type f \( -name '*.opus' -o -name '*.webm' -o -name '*.m4a' -o -name '*.mp3' \) | wc -l)
+
+          audio_files() {
+            find downloads -type f \( -name '*.opus' -o -name '*.webm' -o -name '*.m4a' -o -name '*.mp3' \) \
+              ! -name '*.temp.*' ! -name '*.part' ! -name '*.ytdl'
+          }
+          failed_urls() {
+            local id url
+            while IFS= read -r url; do
+              id=$(printf '%s' "$url" | grep -oE '[?&]v=[A-Za-z0-9_-]{11}' | head -n1 | cut -d= -f2)
+              if [ -z "$id" ]; then continue; fi
+              if ! audio_files | grep -qF "[$id]"; then
+                printf '%s\n' "$url"
+              fi
+            done < urls.txt
+            return 0
+          }
+
+          failed_urls > failed.txt
+          if [ -s failed.txt ]; then
+            N=$(wc -l < failed.txt)
+            echo "$N URL(s) missed in pass 1 - retrying with forced fallback clients..."
+            for CLIENT in visionos tv_embedded; do
+              if [ ! -s failed.txt ]; then break; fi
+              echo "Trying player_client=$CLIENT ..."
+              yt-dlp "${ARGS[@]}" --extractor-args "youtube:player_client=$CLIENT" -a failed.txt || true
+              failed_urls > failed.txt
+            done
+          fi
+
+          if [ -s failed.txt ]; then
+            echo "::warning::Some queued URLs could not be downloaded - see the Job summary."
+            sed 's/^/not downloaded: /' failed.txt
+          fi
+
+          COUNT=$(audio_files | wc -l)
           if [ "$COUNT" -eq 0 ]; then
             echo "::error::No audio files were downloaded - check URLs, cookies, or yt-dlp errors above."
+            sed 's/^/  - /' failed.txt || true
             exit 1
           fi
           echo "$COUNT audio file(s) ready."
@@ -99,7 +134,7 @@ jobs:
           : "${HF_TOKEN:?Secret HF_TOKEN is not set - configure it from the admin panel.}"
           : "${HF_BUCKET_ID:?Secret HF_BUCKET_ID is not set - configure it from the admin panel.}"
           hf buckets create "$HF_BUCKET_ID" --private --exist-ok
-          hf buckets sync downloads/ "hf://buckets/$HF_BUCKET_ID" --exclude "*.info.json" --exclude "*.part"
+          hf buckets sync downloads/ "hf://buckets/$HF_BUCKET_ID" --exclude "*.info.json" --exclude "*.part" --exclude "*.temp.*"
 
       - name: Job summary
         if: always()
@@ -109,6 +144,11 @@ jobs:
           {
             echo "### Uploaded files"
             ls -lh downloads/ 2>/dev/null | grep -vE 'info\.json|total' || echo "(no files)"
+            if [ -s failed.txt ]; then
+              echo ""
+              echo "### Not downloaded (queued but failed - retried with fallback clients)"
+              sed 's/^/- /' failed.txt
+            fi
             if [ -n "$HF_BUCKET_ID" ]; then
               echo ""
               echo "Bucket: https://huggingface.co/buckets/$HF_BUCKET_ID"
