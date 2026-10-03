@@ -860,7 +860,7 @@ export const onRequestPost = async ({ request, env, ctx }: {
           const cacheRes = new Response(JSON.stringify({ results }), {
             headers: { 'content-type': 'application/json', 'cache-control': 'public, max-age=1800' },
           });
-          ctx?.waitUntil((caches as any).default.put(cacheKey, cacheRes));
+          await (caches as any).default.put(cacheKey, cacheRes);
         } catch { /* caching is best-effort */ }
         return json({ results });
       }
@@ -1074,7 +1074,9 @@ export const onRequestPost = async ({ request, env, ctx }: {
             const cacheRes = new Response(JSON.stringify(data), {
               headers: { 'content-type': 'application/json', 'cache-control': 'public, max-age=3600' },
             });
-            ctx?.waitUntil((caches as any).default.put(cacheKey, cacheRes));
+            /* awaited, not waitUntil: Pages Functions doesn't always run
+               waitUntil work, and a lost put means no cross-isolate cache */
+            await (caches as any).default.put(cacheKey, cacheRes);
           } catch { /* caching is best-effort */ }
         }
         return json(data);
