@@ -13,7 +13,7 @@ const ALLOWED_EMAILS = new Set([
 ]);
 const YT_RE = /^https?:\/\/(?:www\.|m\.|music\.)?(?:youtube\.com\/watch\?v=|youtube\.com\/shorts\/|youtu\.be\/)([\w-]{11})/;
 const ALLOWED_SECRETS = new Set(['YOUTUBE_COOKIES']);
-const MAX_URLS = 20;
+const MAX_URLS = 25;
 const MAX_SECRET_BYTES = 128 * 1024;
 const FALLBACK_TTL_SEC = 7 * 24 * 3600; // password sessions last 7 days
 const HF_BUCKET = 'Angelrider/sonora'; // public tree — no HF token needed for reads
@@ -1317,6 +1317,29 @@ export const onRequestPost = async ({ request, env, ctx }: {
             }));
           if (clean.length) metaInput = JSON.stringify(clean);
         }
+        /* The workflow shares one concurrency group and GitHub keeps only a
+           single *pending* run in a group — dispatching a second batch while
+           one waits silently cancels it. Refuse instead, so the client can
+           queue batches one at a time. */
+        try {
+          const recent = await gh<{ workflow_runs: any[] }>(
+            env,
+            `/repos/${REPO}/actions/workflows/${WORKFLOW_FILE}/runs?per_page=5`,
+          );
+          const active = (recent.workflow_runs || []).find(
+            (r) => r.status === 'in_progress' || r.status === 'queued',
+          );
+          if (active) {
+            return json(
+              {
+                error: `run #${active.id} is still ${active.status.replace('_', ' ')} — GitHub cancels queued runs, so wait for it to finish`,
+                runId: active.id,
+              },
+              409,
+            );
+          }
+        } catch { /* status check is best-effort — dispatch anyway */ }
+
         await gh(env, `/repos/${REPO}/actions/workflows/${WORKFLOW_FILE}/dispatches`, {
           method: 'POST',
           body: JSON.stringify({
@@ -1326,7 +1349,17 @@ export const onRequestPost = async ({ request, env, ctx }: {
               : { urls: keep.join('\n') },
           }),
         });
-        return json({ ok: true, dispatched: keep.length, skipped, skippedUploaded });
+
+        /* best-effort: hand the caller the new run id so it can wait on it */
+        let runId = 0;
+        try {
+          const fresh = await gh<{ workflow_runs: any[] }>(
+            env,
+            `/repos/${REPO}/actions/workflows/${WORKFLOW_FILE}/runs?per_page=1`,
+          );
+          runId = Number(fresh.workflow_runs?.[0]?.id) || 0;
+        } catch { /* polling fallback handles it */ }
+        return json({ ok: true, dispatched: keep.length, skipped, skippedUploaded, runId });
       }
 
       case 'setSecret': {
