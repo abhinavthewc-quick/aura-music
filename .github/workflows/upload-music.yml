@@ -12,6 +12,20 @@ on:
         required: false
         default: ''
         type: string
+      more_urls:
+        description: 'Remaining URLs for the chain (queued by the previous run)'
+        required: false
+        default: ''
+        type: string
+      more_meta:
+        description: 'Metadata for more_urls'
+        required: false
+        default: ''
+        type: string
+
+permissions:
+  contents: read
+  actions: write
 
 concurrency:
   group: upload-music
@@ -170,6 +184,11 @@ jobs:
 
           python scripts/fix_metadata.py downloads
 
+          # marker for the chain step: if this is missing, the run died before
+          # downloading anything (bad secret, network, yt-dlp gone) and the
+          # rest of the chain should stop instead of burning every batch.
+          touch .chain-ok
+
       - name: Upload to Hugging Face storage bucket
         env:
           HF_TOKEN: ${{ secrets.HF_TOKEN }}
@@ -189,6 +208,66 @@ jobs:
           : "${HF_BUCKET_ID:?Secret HF_BUCKET_ID is not set}"
           test -s scripts/build_manifest.py || { echo "::error::build_manifest.py missing"; exit 1; }
           python scripts/build_manifest.py downloads
+
+      # GitHub keeps only ONE pending run per concurrency group, so the
+      # batches cannot all be dispatched up front (each new one cancels the
+      # waiting one). Instead every run hands the leftovers to the next run as
+      # it finishes — one click, whole queue, no browser tab required.
+      - name: Queue the next batch (chain)
+        if: always()
+        env:
+          GH_TOKEN: ${{ secrets.GH_TOKEN != '' && secrets.GH_TOKEN || github.token }}
+          MORE_URLS: ${{ inputs.more_urls }}
+          MORE_META: ${{ inputs.more_meta }}
+          MAX_PER_RUN: '25'
+        run: |
+          set -euo pipefail
+          if [ -z "${MORE_URLS//[[:space:]]/}" ]; then
+            echo "chain complete - nothing left to queue"
+            exit 0
+          fi
+          if [ ! -f .chain-ok ]; then
+            echo "::warning::this run never reached the download step - stopping the chain so the rest stays queued"
+            exit 0
+          fi
+
+          python3 - <<'PY'
+          import json, os
+          urls = [l.strip() for l in os.environ['MORE_URLS'].splitlines() if l.strip()]
+          try:
+              meta = json.loads(os.environ.get('MORE_META') or '[]')
+          except Exception:
+              meta = []
+          n = int(os.environ['MAX_PER_RUN'])
+          batch, rest = urls[:n], urls[n:]
+          def ids(seq):
+              out = set()
+              for u in seq:
+                  q = u.split('v=')[-1].split('&')[0].strip()
+                  if len(q) == 11:
+                      out.add(q)
+              return out
+          keep = [m for m in meta if isinstance(m, dict) and m.get('id') in ids(batch)]
+          left = [m for m in meta if isinstance(m, dict) and m.get('id') in ids(rest)]
+          json.dump(
+              {
+                  'ref': 'main',
+                  'inputs': {
+                      'urls': '\n'.join(batch),
+                      'meta': json.dumps(keep, separators=(',', ':')),
+                      'more_urls': '\n'.join(rest),
+                      'more_meta': json.dumps(left, separators=(',', ':')),
+                  },
+              },
+              open('.next-batch.json', 'w'),
+          )
+          print(f"queued {len(batch)} track(s); {len(rest)} left in the chain")
+          PY
+
+          gh api --method POST \
+            "repos/${GITHUB_REPOSITORY}/actions/workflows/upload-music.yml/dispatches" \
+            --input .next-batch.json
+          echo "next batch dispatched"
 
       - name: Job summary
         if: always()

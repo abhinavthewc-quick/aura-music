@@ -901,44 +901,8 @@ document.addEventListener('keydown', (e) => { if (e.key === 'Escape' && !modalHo
    the dispatch API returns 204 with no body, so look for the newest run. */
 let lastKnownRunId = 0;
 
-async function newestRun(): Promise<Run | null> {
-  const data = await adminApi<{ runs: Run[] }>('runs');
-  const runs = data.runs || [];
-  if (runs.length) lastKnownRunId = Math.max(lastKnownRunId, runs[0].id);
-  return runs[0] || null;
-}
 
-async function waitForNewRun(afterId: number, timeoutMs = 90_000): Promise<number> {
-  const until = Date.now() + timeoutMs;
-  while (Date.now() < until) {
-    const run = await newestRun().catch(() => null);
-    if (run && run.id > afterId) return run.id;
-    await new Promise((r) => setTimeout(r, 4000));
-  }
-  return 0;
-}
 
-/* Blocks until the run finishes; 'cancelled' when GitHub killed it (which it
-   does to a queued run the moment a newer one is dispatched). */
-async function waitForRunDone(runId: number, index: number, total: number, timeoutMs = 60 * 60 * 1000): Promise<string> {
-  const until = Date.now() + timeoutMs;
-  while (Date.now() < until) {
-    await new Promise((r) => setTimeout(r, 6000));
-    const data = await adminApi<{ runs: Run[] }>('runs').catch(() => null);
-    const run = data?.runs?.find((r) => r.id === runId);
-    if (run && run.status === 'completed') {
-      if (run.conclusion === 'cancelled') return 'cancelled';
-      setStatus(downloadStatus, `Run ${index} of ${total} ${run.conclusion || 'finished'} — starting the next…`);
-      return run.conclusion || 'completed';
-    }
-    const mins = Math.round((Date.now() - (until - timeoutMs)) / 60000);
-    setStatus(
-      downloadStatus,
-      `Run ${index} of ${total} ${run?.status === 'queued' ? 'queued' : 'running'} (${mins} min) — waiting before the next batch…`,
-    );
-  }
-  return 'timeout';
-}
 
 function confirmRuns(tracks: number, runs: number): Promise<boolean> {
   return new Promise((resolve) => {
@@ -1393,8 +1357,6 @@ function bind() {
     btn.disabled = true;
     setStatus(downloadStatus, 'Starting GitHub Actions run…');
     try {
-      const batches: string[][] = [];
-      for (let i = 0; i < urls.length; i += MAX_PER_RUN) batches.push(urls.slice(i, i + MAX_PER_RUN));
       /* Clean names/albums for manifest.json — YT Music sub lines carry
          "Artist • Album • 6:10"; paste rows only carry the title. */
       const metaOf = (item: QueueItem) => {
@@ -1407,61 +1369,28 @@ function bind() {
           album: segs[1] || '',
         };
       };
-      let totalDispatched = 0;
-      let totalSkipped = 0;
-      let lastRunId = 0;
-      let failed = 0;
-      for (let b = 0; b < batches.length; b++) {
-        const batch = batches[b];
-        const batchItems = pending.filter((i) => batch.some((u) => u === i.url));
-        /* GitHub keeps a single pending run per concurrency group, so batches
-           must go one at a time — fire, wait for it to finish, then the next. */
-        const label = batches.length > 1 ? ` (run ${b + 1} of ${batches.length})` : '';
-        setStatus(downloadStatus, `Dispatching ${batch.length} tracks${label}…`);
-        const res = await adminApi<{ dispatched?: number; skipped?: number; runId?: number }>('dispatch', {
-          urls: batch,
-          meta: batchItems.map(metaOf),
-        });
-        totalDispatched += res.dispatched || 0;
-        totalSkipped += res.skipped || 0;
-        /* drop just this batch from the queue — an interrupted pass keeps the rest */
-        const sentUrls = new Set(batch);
-        queue = queue.filter((i) => !sentUrls.has(i.url));
-        saveQueue();
-        renderQueue();
-        if (!res.dispatched) continue;
-        const runId = res.runId || (await waitForNewRun(lastRunId));
-        lastRunId = runId || lastRunId;
-        void refreshRuns();
-        if (b < batches.length - 1) {
-          setStatus(downloadStatus, `Run ${b + 1} of ${batches.length} started — waiting for it to finish…`);
-          const outcome = runId ? await waitForRunDone(runId, b + 1, batches.length) : 'unknown';
-          if (outcome === 'cancelled') {
-            failed = batches.length - b;
-            setStatus(
-              downloadStatus,
-              `✗ run ${b + 1} was cancelled by GitHub — stopped before cancelling the rest. ${batches.length - b - 1} batch(es) stay queued.`,
-              'err',
-            );
-            break;
-          }
-          void refreshLibrary(true);
-          void refreshRuns();
-        }
-      }
+      /* One dispatch, whole queue: the run hands its leftovers to the next
+         run when it finishes, so nothing depends on this tab staying open. */
+      const res = await adminApi<{
+        dispatched?: number; chained?: number; runs?: number; skipped?: number; skippedUploaded?: number;
+      }>('dispatch', { urls, meta: pending.map(metaOf) });
+      const totalDispatched = res.dispatched || 0;
+      const totalSkipped = (res.skipped || 0) + (res.skippedUploaded || 0);
+      queue = queue.filter((i) => !pending.some((p) => p.id === i.id));
+      saveQueue();
+      renderQueue();
       syncResultRows();
       void refreshLibrary(true);
-      if (failed) {
-        saveQueue();
-        renderQueue();
-        return;
-      }
-      const runsNote = batches.length > 1 && totalDispatched ? ` across ${batches.length} runs` : '';
+      const runCount = res.runs || 1;
       const skipNote = totalSkipped ? ` · ${totalSkipped} already in library` : '';
+      const chainNote =
+        runCount > 1
+          ? ` — chained across ${runCount} runs that queue themselves, so you can close this tab`
+          : '';
       setStatus(
         downloadStatus,
         totalDispatched
-          ? `✓ ${totalDispatched} track${totalDispatched === 1 ? '' : 's'} dispatched${runsNote}${skipNote} — watch ${totalDispatched === 1 ? 'it' : 'them'} below.`
+          ? `✓ ${totalDispatched} track${totalDispatched === 1 ? '' : 's'} downloading${chainNote}${skipNote} — watch progress below.`
           : `Nothing new to dispatch${skipNote}.`,
         'ok',
       );

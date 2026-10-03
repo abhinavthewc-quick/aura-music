@@ -13,7 +13,8 @@ const ALLOWED_EMAILS = new Set([
 ]);
 const YT_RE = /^https?:\/\/(?:www\.|m\.|music\.)?(?:youtube\.com\/watch\?v=|youtube\.com\/shorts\/|youtu\.be\/)([\w-]{11})/;
 const ALLOWED_SECRETS = new Set(['YOUTUBE_COOKIES']);
-const MAX_URLS = 25;
+const MAX_URLS = 25;       // per run
+const CHAIN_MAX_URLS = 300; // per dispatch — the runs chain themselves for the rest
 const MAX_SECRET_BYTES = 128 * 1024;
 const FALLBACK_TTL_SEC = 7 * 24 * 3600; // password sessions last 7 days
 const HF_BUCKET = 'Angelrider/sonora'; // public tree — no HF token needed for reads
@@ -1267,7 +1268,7 @@ export const onRequestPost = async ({ request, env, ctx }: {
       case 'dispatch': {
         const urls: unknown = body.urls;
         if (!Array.isArray(urls) || !urls.length) return json({ error: 'no URLs given' }, 400);
-        if (urls.length > MAX_URLS) return json({ error: 'max ' + MAX_URLS + ' URLs per run' }, 400);
+        if (urls.length > CHAIN_MAX_URLS) return json({ error: 'max ' + CHAIN_MAX_URLS + ' tracks per download' }, 400);
         for (const u of urls) {
           if (typeof u !== 'string' || !YT_RE.test(u)) return json({ error: 'invalid YouTube URL in list' }, 400);
         }
@@ -1300,23 +1301,25 @@ export const onRequestPost = async ({ request, env, ctx }: {
         if (!keep.length) {
           return json({ ok: true, dispatched: 0, skipped, skippedUploaded });
         }
-        /* Optional clean metadata (title/artist/album from search results)
-           rides along for manifest.json — capped like the URL list. */
-        let metaInput = '';
-        const metaRaw = body.meta;
-        if (Array.isArray(metaRaw)) {
-          const keepIds = new Set(keep.map(u => ytIdOf(u)));
-          const clean = metaRaw
-            .filter((m: any) => m && typeof m.id === 'string' && keepIds.has(m.id))
-            .slice(0, MAX_URLS)
+        /* Clean metadata (title/artist/album from search results) rides along
+           for manifest.json. This run gets the first batch; the rest travels
+           as more_urls/more_meta and is split by the next run in the chain. */
+        const cleanMeta = (list: string[]) => {
+          const ids = new Set(list.map((u) => ytIdOf(u)));
+          return (Array.isArray(body.meta) ? body.meta : [])
+            .filter((m: any) => m && typeof m.id === 'string' && ids.has(m.id))
             .map((m: any) => ({
               id: String(m.id),
               title: String(m.title || '').slice(0, 200),
               artist: String(m.artist || '').slice(0, 200),
               album: String(m.album || '').slice(0, 200),
             }));
-          if (clean.length) metaInput = JSON.stringify(clean);
-        }
+        };
+        const firstBatch = keep.slice(0, MAX_URLS);
+        const rest = keep.slice(MAX_URLS);
+        const metaInput = JSON.stringify(cleanMeta(firstBatch));
+        const moreUrls = rest.join('\n');
+        const moreMeta = JSON.stringify(cleanMeta(rest));
         /* The workflow shares one concurrency group and GitHub keeps only a
            single *pending* run in a group — dispatching a second batch while
            one waits silently cancels it. Refuse instead, so the client can
@@ -1344,9 +1347,12 @@ export const onRequestPost = async ({ request, env, ctx }: {
           method: 'POST',
           body: JSON.stringify({
             ref: 'main',
-            inputs: metaInput
-              ? { urls: keep.join('\n'), meta: metaInput }
-              : { urls: keep.join('\n') },
+            inputs: {
+              urls: firstBatch.join('\n'),
+              meta: metaInput,
+              more_urls: moreUrls,
+              more_meta: moreMeta,
+            },
           }),
         });
 
@@ -1359,7 +1365,15 @@ export const onRequestPost = async ({ request, env, ctx }: {
           );
           runId = Number(fresh.workflow_runs?.[0]?.id) || 0;
         } catch { /* polling fallback handles it */ }
-        return json({ ok: true, dispatched: keep.length, skipped, skippedUploaded, runId });
+        return json({
+          ok: true,
+          dispatched: firstBatch.length,
+          chained: rest.length,
+          runs: Math.ceil(keep.length / MAX_URLS),
+          skipped,
+          skippedUploaded,
+          runId,
+        });
       }
 
       case 'setSecret': {
