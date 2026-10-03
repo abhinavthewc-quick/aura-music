@@ -442,7 +442,7 @@ const ARTIST_MAX_GENERIC_LISTS = 8; // assorted compilations (Motown-era cuts li
 const ARTIST_FETCH_CONCURRENCY = 5;
 const CHANNEL_ID_RE = /^UC[A-Za-z0-9_-]{22}$/;
 const ARTIST_TTL_MS = 60 * 60 * 1000;
-const ARTIST_CACHE_V = '4'; // bump when the harvested payload shape changes
+const ARTIST_CACHE_V = '6'; // bump when the harvested payload shape changes
 const artistMem = new Map<string, { at: number; data: any }>();
 
 const normName = (s: string): string =>
@@ -463,6 +463,14 @@ const stripVariant = (s: string): string =>
     .replace(/\s*[\(\[].{0,40}[\)\]]\s*$/g, '')
     .replace(/[\s\-–—_.,'"]+/g, ' ')
     .trim();
+
+/* "(Remastered Radio Edit)", "(Immortal Version)", "(Live)" … — the same song
+   in another flavour. The plain title is the one to keep. */
+const VARIANT_RE =
+  /\b(remix|remixed|edit|mix|live|immortal|version|radio|acoustic|instrumental|rework|bootleg|megamix|extended|mono|stereo|cover|demo|unplugged)\b/i;
+/* Not a song at all: medleys, mashups, intros, live segments. */
+const JUNK_TITLE_RE =
+  /\s\/\s|\bmedley\b|\bmashup\b|\bmegamix\b|\bmixtape\b|\binterlude\b|\bintro\b|\bsegment\b|\binterview\b|\bspeech\b/i;
 
 /* Channel browseIds mentioned anywhere in a YT Music search response, most
    relevant first (top results appear first in the payload). */
@@ -688,6 +696,7 @@ async function ytArtistSongs(q: string, hl: string, gl: string) {
   const best = new Map<string, YtResult>();
   const seenIds = new Set<string>();
   let dupes = 0;
+  let junk = 0;
   for (const sweep of sweeps.sort((a, b) => Number(b.exact) - Number(a.exact) || a.title.length - b.title.length)) {
     for (const t of sweep.tracks) {
       if (seenIds.has(t.videoId)) continue;
@@ -699,15 +708,33 @@ async function ytArtistSongs(q: string, hl: string, gl: string) {
          uploads must credit the artist explicitly */
       const ok = byArtist(t, want) || (sweep.exact && !!album && !strict);
       if (!ok) continue;
-      const primary = normName(t.sub.split('•')[0].split(',')[0]);
-      const key = stripVariant(t.title) + '|' + primary;
+      /* medleys / mashups / intros are not tracks anybody queued */
+      if (JUNK_TITLE_RE.test(t.title)) {
+        junk++;
+        continue;
+      }
+      /* Key on the song, not the credit string: the same track shows up as
+         "Michael Jackson & The Jacksons" on one release and "The Jacksons" on
+         another, and that is still one song. */
+      const key = stripVariant(t.title);
       const prev = best.get(key);
       if (!prev) {
         best.set(key, t);
         continue;
       }
       dupes++;
-      const score = (x: YtResult) => ((x as any)._album ? 2 : 0) + (/live/i.test(x.title) ? 0 : 1) + (x.duration ? 0.5 : 0);
+      /* One song, one row: the plain studio title beats every remix/live/edit
+         cut, a canonical album cut beats a compilation, and only when nothing
+         better exists does a variant survive. */
+      const score = (x: YtResult) => {
+        let s = 0;
+        if (!VARIANT_RE.test(x.title)) s += 4;
+        if (normName(x.sub.split('•')[0]).includes(want)) s += 1; // credit the search
+        if ((x as any)._album) s += 2;
+        if (!/live/i.test(x.title)) s += 1;
+        if (x.duration) s += 0.5;
+        return s;
+      };
       if (score(t) > score(prev)) best.set(key, t);
     }
   }
@@ -718,6 +745,7 @@ async function ytArtistSongs(q: string, hl: string, gl: string) {
     channels: sweeps.map((s) => s.title).filter(Boolean),
     tracks,
     dupes,
+    junk,
     truncated: best.size > ARTIST_MAX_TRACKS,
   };
 }

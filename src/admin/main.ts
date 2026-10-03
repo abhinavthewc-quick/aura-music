@@ -547,17 +547,20 @@ async function queueArtist(artist: string, mode: 'music' | 'video'): Promise<voi
     let tracks: ArtistTrack[] = [];
     let truncated = false;
     let dupes = 0;
+    let medleys = 0;
     let channelNames: string[] = [];
     try {
       const data = await adminApi<{
         tracks?: ArtistTrack[];
         truncated?: boolean;
         dupes?: number;
+        junk?: number;
         channels?: string[];
       }>('artist', { q });
       tracks = data.tracks || [];
       truncated = !!data.truncated;
       dupes = data.dupes || 0;
+      medleys = data.junk || 0;
       channelNames = (data.channels || []).slice(0, 2);
     } catch {
       /* channel crawl unavailable — fall through to search-based matching */
@@ -589,11 +592,12 @@ async function queueArtist(artist: string, mode: 'music' | 'video'): Promise<voi
       const capNote =
         truncated || tracks.length > ARTIST_MAX ? ` (first ${ARTIST_MAX} of many)` : '';
       const dupNote = dupes ? ` · ${dupes} duplicate versions merged` : '';
+      const junkNote = medleys ? ` · ${medleys} medleys/mashups skipped` : '';
       const srcNote = channelNames.length ? ` from ${channelNames.join(' + ')}` : '';
       const note = skipped ? ` · ${skipped} already queued/library` : '';
       setStatus(
         searchStatus,
-        `${tracks.length} track${tracks.length === 1 ? '' : 's'} found${srcNote} — ${added} queued${capNote}${dupNote}${note}`,
+        `${tracks.length} track${tracks.length === 1 ? '' : 's'} found${srcNote} — ${added} queued${capNote}${dupNote}${junkNote}${note}`,
         'ok',
       );
       toast(added ? `Queued ${added} by ${q}` : 'Nothing new to queue', added ? 'ok' : '');
