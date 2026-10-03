@@ -444,7 +444,7 @@ const ARTIST_MAX_FEATURED = 6;    // "Featured on" auto-playlists around the art
 const ARTIST_FETCH_CONCURRENCY = 5;
 const CHANNEL_ID_RE = /^UC[A-Za-z0-9_-]{22}$/;
 const ARTIST_TTL_MS = 60 * 60 * 1000;
-const ARTIST_CACHE_V = '11'; // bump when the harvested payload shape changes
+const ARTIST_CACHE_V = '12'; // bump when the harvested payload shape changes
 const artistMem = new Map<string, { at: number; data: any }>();
 
 const normName = (s: string): string =>
@@ -498,7 +498,7 @@ function stripArtistPrefix(title: string, q: string): string {
 /* Not a song at all: medleys, mashups, intros, plus the promo clutter every
    artist channel carries — trailers, BTS, ASMR, interviews, event streams. */
 const JUNK_TITLE_RE =
-  /\s\/\s|\bmedley\b|\bmashup\b|\bmegamix\b|\bmixtape\b|\binterlude\b|\bintro\b|\bsegment\b|\binterview\b|\bspeech\b|\bbts\b|behind[\s-]the[\s-]scenes|\btrailer\b|\bteaser\b|\basmr\b|\bpodcast\b|\bvlog\b|\bdocumentary\b|\bmaking\s+of\b|\breaction\b|\bsneak\s+peek\b|\bfirst\s+look\b|\bpress\s+conference\b|\bshort\s+film\b|\baudio\s+description\b|\bpreview\b|\bsnippet\b|\bexcerpt\b|\bsample\b|\bgameplay\b|\blive\s+set\b|\bfull\s+(set|show|experience|concert)\b|\bawards?\b|\bgrammy\b|\btakeover\b|\blive\s+at\b|\blivestream\b|\bmulticam\b|\bgame\s+play\b|\b(bgmi|pubg\w*|fortnite|minecraft)\b/i;
+  /\s\/\s|\bmedley\b|\bmashup\b|\bmegamix\b|\bmixtape\b|\binterlude\b|\bintro\b|\bsegment\b|\binterview\b|\bspeech\b|\bbts\b|behind[\s-]the[\s-]scenes|\btrailer\b|\bteaser\b|\basmr\b|\bpodcast\b|\bvlog\b|\bdocumentary\b|\bmaking\s+of\b|\breaction\b|\bsneak\s+peek\b|\bfirst\s+look\b|\bpress\s+conference\b|\bshort\s+film\b|\baudio\s+description\b|\bpreview\b|\bsnippet\b|\bexcerpt\b|\bsample\b|\(poem\)|\bpoem\b|\bspoken\s+word\b|\bpoetry\b|\b audiobook\b|\bvisuali[sz]ation\b|\bgameplay\b|\blive\s+set\b|\bfull\s+(set|show|experience|concert)\b|\bawards?\b|\bgrammy\b|\btakeover\b|\blive\s+at\b|\blivestream\b|\bmulticam\b|\bgame\s+play\b|\b(bgmi|pubg\w*|fortnite|minecraft)\b/i;
 /* two songs welded into one upload: "X & Y", "X / Y", '"X" and "Y"' */
 
 /* Channel browseIds mentioned anywhere in a YT Music search response, most
