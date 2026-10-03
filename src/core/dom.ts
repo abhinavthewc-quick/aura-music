@@ -36,6 +36,41 @@ import { $ } from './state';
     export function artistKey(name){
       return (name||'').replace(/\s*-\s*Topic$/i,'').replace(/＜[^＞]*＞/g,'').replace(/\.\s*/g,'.').toLowerCase().replace(/\s{2,}/g,' ').trim();
     }
+    /* Same artist, different spelling — "Ravichander"/"Ravichandran",
+       "Jackson 5"/"The Jacksons". Metadata comes from two places (manifest vs
+       filename) and either can carry a typo or a missing article, which used to
+       split one artist into two rows. Merges on: article-insensitive equality,
+       or a small edit distance between long names sharing a prefix. */
+    function editWithin(a,b,max){
+      if(a===b) return 0;
+      if(Math.abs(a.length-b.length)>max) return max+1;
+      let prev=Array.from({length:b.length+1},(_,i)=>i);
+      for(let i=1;i<=a.length;i++){
+        const cur=[i];
+        let best=i;
+        for(let j=1;j<=b.length;j++){
+          const v=Math.min(prev[j]+1, cur[j-1]+1, prev[j-1]+(a[i-1]===b[j-1]?0:1));
+          cur.push(v); if(v<best) best=v;
+        }
+        if(best>max) return max+1;
+        prev=cur;
+      }
+      return prev[b.length];
+    }
+    export function artistMergeKey(existing,name){
+      const key=artistKey(name);
+      const bare=key.replace(/^the\s+/,'');
+      for(const k of existing){
+        if(k===key) return k;
+        const other=k.replace(/^the\s+/,'');
+        if(!other || !bare) continue;
+        if(other===bare) return k;                                   // article only
+        if(other.length<6 || bare.length<6) continue;
+        if(other.slice(0,3)!==bare.slice(0,3)) continue;             // different artist
+        if(editWithin(other,bare,3)<=3) return k;                    // typo-level difference
+      }
+      return key;
+    }
     export async function fetchYouTubeMeta(videoId){
       let title='YouTube Track', artist='YouTube Music';
       try{

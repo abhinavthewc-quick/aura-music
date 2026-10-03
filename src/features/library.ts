@@ -1,4 +1,4 @@
-import { fetchYouTubeMeta, artistKey, stateHTML, toast } from '../core/dom';
+import { fetchYouTubeMeta, artistMergeKey, stateHTML, toast } from '../core/dom';
 import { renderArtistSpotlight, renderAuraPicks, renderQuickAccess } from './home';
 import { filterSongs, loadSong, playSong, resetFullPlayerArtToImage, stopAuraYouTube, updatePlayState } from './player';
 import { filterSearchTab, getYouTubeIdFromUrl } from './search';
@@ -416,11 +416,22 @@ import { $, persistLikedHistory, rebuildSongs, savedLikeMap, state } from '../co
         g.songs.push(s);
       };
       if(view === 'artists'){
+        const keys: string[] = [];
+        const names = new Map<string, Map<string, number>>();
         state.songs.forEach(s => {
           const a = (s.artist||'').trim();
           if(!a || a === 'Unknown Artist') return;
-          push(artistKey(a), a, s);
+          const k = artistMergeKey(keys, a);
+          if(!groups.has(k)){ keys.push(k); names.set(k, new Map()); }
+          const tally = names.get(k)!;
+          tally.set(a, (tally.get(a) || 0) + 1);
+          push(k, a, s);
         });
+        /* label each merged group with the spelling most tracks use */
+        for(const [k, tally] of names){
+          const g = groups.get(k);
+          if(g) g.name = [...tally.entries()].sort((x, y) => y[1] - x[1] || y[0].length - x[0].length)[0][0];
+        }
       }else if(view === 'albums'){
         state.songs.forEach(s => {
           const al = (s.album||'').trim();

@@ -1,4 +1,4 @@
-import { artistKey, timeGreeting, toast } from '../core/dom';
+import { artistMergeKey, timeGreeting, toast } from '../core/dom';
 import { playSong } from './player';
 import { escapeHtml } from './radio';
 import { $, state } from '../core/state';
@@ -61,14 +61,19 @@ import { $, state } from '../core/state';
        most-tracks-first — variants ("A. R. Rahman" / "A.R. Rahman" /
        "… - Topic") merge into one bucket via artistKey. */
     export function renderArtistSpotlight(){
-      const groups = {};
+      const groups:any = {};
+      const keys:string[] = [];
       state.songs.forEach(s=>{
         if(!s.artist || s.artist==='Unknown Artist') return;
-        const k = artistKey(s.artist);
-        if(!groups[k]) groups[k] = {count:0, name:s.artist, songs:[]};
+        const k = artistMergeKey(keys, s.artist);
+        if(!groups[k]){ groups[k] = {count:0, names:{}, songs:[]}; keys.push(k); }
         groups[k].count++;
-        if(s.artist.length > groups[k].name.length) groups[k].name = s.artist;
+        groups[k].names[s.artist]=(groups[k].names[s.artist]||0)+1;
         groups[k].songs.push(s);
+      });
+      /* show the spelling most of the library actually uses */
+      Object.values(groups).forEach((g:any)=>{
+        g.name = Object.entries(g.names).sort((a:any,b:any)=>b[1]-a[1] || b[0].length-a[0].length)[0][0];
       });
       const artists = Object.values(groups).filter((g:any)=>g.count>=2).sort((a:any,b:any)=>b.count-a.count);
       const container = $('artistSpotlightContainer');
