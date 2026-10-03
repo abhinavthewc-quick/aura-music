@@ -14,6 +14,17 @@ const COVER_RE = /\.(jpe?g|png|webp|gif)$/i;
 const VIDEO_ID_SUFFIX_RE = /\s\[[A-Za-z0-9_-]{11}\]$/;
 const VIDEO_ID_RE = /\[([A-Za-z0-9_-]{11})\]$/;
 
+/* Tracks hidden from the library — accidental duplicates uploaded to the
+   bucket. Matched as bracketed YouTube video IDs (the stable identity of
+   each upload) and applied to BOTH fresh fetches and cached catalogs, so
+   hiding one takes effect immediately.
+   (Starboy dup: kept "The Weeknd - Starboy [3_g2un5M350]".) */
+const HIDDEN_TRACK_PATTERNS: string[] = [
+  '[34Na4j8AVgA]', // Starboy (feat. Daft Punk) — duplicate of [3_g2un5M350]
+];
+const isHiddenTrack = (path: string) =>
+  HIDDEN_TRACK_PATTERNS.some((pat) => path.includes(pat));
+
 export const DEFAULT_COVER =
   'data:image/svg+xml;utf8,' +
   encodeURIComponent(
@@ -90,7 +101,12 @@ export function readCatalogCache(): any[] {
     const raw = localStorage.getItem(CACHE_KEY);
     if (!raw) return [];
     const parsed = JSON.parse(raw);
-    return Array.isArray(parsed?.tracks) ? parsed.tracks : [];
+    if (!Array.isArray(parsed?.tracks)) return [];
+    // Drop hidden tracks even from the cache so removal is instant.
+    return parsed.tracks.filter((t: any) => {
+      const path = typeof t?.id === 'string' && t.id.startsWith('hf:') ? t.id.slice(3) : '';
+      return !path || !isHiddenTrack(path);
+    });
   } catch {
     return [];
   }
@@ -127,7 +143,7 @@ export async function fetchHfCatalog(): Promise<any[]> {
     if (p === 'manifest.json') continue;
     const ct: string = it.contentType || '';
     if (AUDIO_RE.test(p)) {
-      audios.push({ path: p, size: Number(it.size) || 0 });
+      if (!isHiddenTrack(p)) audios.push({ path: p, size: Number(it.size) || 0 });
     } else if (COVER_RE.test(p) || ct.startsWith('image/')) {
       covers.set(p.replace(/\.[^.]+$/, '').toLowerCase(), p);
     }
