@@ -227,7 +227,7 @@ async function refreshSecretChips() {
    persisted so a reload never loses what you queued) ---------- */
 const YT_RE = /^https?:\/\/(?:www\.|m\.|music\.)?(?:youtube\.com\/watch\?v=|youtube\.com\/shorts\/|youtu\.be\/)([\w-]{11})/;
 const QUEUE_KEY = 'auraAdmin_queue_v1';
-const MAX_PER_RUN = 10; // server-side dispatch cap
+const MAX_PER_RUN = 20; // server-side dispatch cap
 
 interface QueueItem {
   id: string;
@@ -521,10 +521,18 @@ function syncResultRows() {
   });
 }
 
-/* "+ all by artist" — re-queries search, keeps only rows whose artist
-   (first segment of the YT Music sub line) matches exactly, queues ≤ 20. */
-const ARTIST_MAX = 20;
+/* "+ all by artist" — crawls the artist's own channel uploads, so a 150-track
+   artist no longer stops at the ~20 rows a search page returns. Falls back to
+   filtering search results if the channel lookup finds nothing. */
+const ARTIST_MAX = 200;
 let artistBusy = false;
+
+interface ArtistTrack {
+  videoId: string;
+  title: string;
+  sub: string;
+  thumbnail: string | null;
+}
 
 async function queueArtist(artist: string, mode: 'music' | 'video'): Promise<void> {
   const q = (artist || '').replace(/\s*-\s*Topic$/i, '').trim();
@@ -534,35 +542,45 @@ async function queueArtist(artist: string, mode: 'music' | 'video'): Promise<voi
     return;
   }
   artistBusy = true;
-  setStatus(searchStatus, `Finding tracks by ${q}…`);
+  setStatus(searchStatus, `Finding every track by ${q}…`);
   try {
-    const data = await adminApi<{ results: SearchResult[] }>('search', { q, mode });
-    const norm = normalizeArtist(q);
-    const matches = (data.results || []).filter(
-      (r) => artistOf(r.sub, mode) === norm,
-    );
+    let tracks: ArtistTrack[] = [];
+    let truncated = false;
+    try {
+      const data = await adminApi<{ tracks?: ArtistTrack[]; truncated?: boolean }>('artist', { q });
+      tracks = data.tracks || [];
+      truncated = !!data.truncated;
+    } catch {
+      /* channel crawl unavailable — fall through to search-based matching */
+    }
+
+    if (!tracks.length) {
+      const data = await adminApi<{ results: SearchResult[] }>('search', { q, mode });
+      const norm = normalizeArtist(q);
+      tracks = (data.results || []).filter((r) => artistOf(r.sub, mode) === norm);
+    }
+
     let added = 0;
     let skipped = 0;
-    for (const r of matches.slice(0, ARTIST_MAX)) {
-      if (queueHas(r.videoId) || inLibrary(r.videoId)) {
+    for (const t of tracks.slice(0, ARTIST_MAX)) {
+      if (queueHas(t.videoId) || inLibrary(t.videoId)) {
         skipped++;
         continue;
       }
-      const url =
-        mode === 'music'
-          ? `https://music.youtube.com/watch?v=${r.videoId}`
-          : `https://www.youtube.com/watch?v=${r.videoId}`;
-      if (addToQueue({ id: r.videoId, url, title: r.title, sub: r.sub, thumb: r.thumbnail || '', source: 'search' }, true)) {
+      const url = `https://music.youtube.com/watch?v=${t.videoId}`;
+      if (addToQueue({ id: t.videoId, url, title: t.title, sub: t.sub, thumb: t.thumbnail || '', source: 'search' }, true)) {
         added++;
       }
     }
-    if (!matches.length) {
+    renderQueue();
+    if (!tracks.length) {
       setStatus(searchStatus, `No tracks found for “${q}”`, 'err');
       toast('No matching tracks found', 'err');
     } else {
-      const more = matches.length > ARTIST_MAX ? ` (top ${ARTIST_MAX} of ${matches.length})` : '';
+      const capNote =
+        truncated || tracks.length > ARTIST_MAX ? ` (first ${ARTIST_MAX} of many)` : '';
       const note = skipped ? ` · ${skipped} already queued/library` : '';
-      setStatus(searchStatus, `${added} track${added === 1 ? '' : 's'} by ${q} queued${more}${note}`, 'ok');
+      setStatus(searchStatus, `${added} track${added === 1 ? '' : 's'} by ${q} queued${capNote}${note}`, 'ok');
       toast(added ? `Queued ${added} by ${q}` : 'Nothing new to queue', added ? 'ok' : '');
     }
     syncResultRows();
@@ -859,6 +877,27 @@ function closeModal(): void {
 }
 modalHost.addEventListener('click', (e) => { if (e.target === modalHost) closeModal(); });
 document.addEventListener('keydown', (e) => { if (e.key === 'Escape' && !modalHost.hidden) closeModal(); });
+
+function confirmRuns(tracks: number, runs: number): Promise<boolean> {
+  return new Promise((resolve) => {
+    openModal(`
+      <h3 class="adm-modal-title">Start ${tracks} downloads?</h3>
+      <p class="adm-modal-sub dim">That's ${runs} GitHub Actions runs (max ${MAX_PER_RUN} tracks each) — roughly
+      ${Math.max(1, Math.round(runs * 1.5))}–${runs * 3} minutes. Tracks already in your library are skipped.</p>
+      <div class="adm-modal-actions">
+        <button type="button" class="adm-btn ghost" id="mrfCancel">Cancel</button>
+        <button type="button" class="adm-btn primary" id="mrfGo">Start ${runs} runs</button>
+      </div>`);
+    const done = (v: boolean) => {
+      closeModal();
+      resolve(v);
+    };
+    $('mrfCancel').addEventListener('click', () => done(false));
+    $('mrfGo').addEventListener('click', () => done(true));
+    modalHost.addEventListener('click', (e) => { if (e.target === modalHost) done(false); }, { once: true });
+    $('mrfGo').focus();
+  });
+}
 
 const safeName = (s: string): string =>
   s.replace(/[\\/:*?"<>|\[\]]/g, ' ').replace(/\s{2,}/g, ' ').trim();
@@ -1278,6 +1317,16 @@ function bind() {
         'err',
       );
       return;
+    }
+    /* A whole-artist queue fans out into many GitHub runs — make that an
+       explicit choice instead of one stray click firing dozens of them. */
+    const runCount = Math.ceil(urls.length / MAX_PER_RUN);
+    if (runCount > 3) {
+      const ok = await confirmRuns(urls.length, runCount);
+      if (!ok) {
+        setStatus(downloadStatus, 'Dispatch cancelled — queue kept as-is.', '');
+        return;
+      }
     }
     btn.disabled = true;
     setStatus(downloadStatus, 'Starting GitHub Actions run…');

@@ -13,7 +13,7 @@ const ALLOWED_EMAILS = new Set([
 ]);
 const YT_RE = /^https?:\/\/(?:www\.|m\.|music\.)?(?:youtube\.com\/watch\?v=|youtube\.com\/shorts\/|youtu\.be\/)([\w-]{11})/;
 const ALLOWED_SECRETS = new Set(['YOUTUBE_COOKIES']);
-const MAX_URLS = 10;
+const MAX_URLS = 20;
 const MAX_SECRET_BYTES = 128 * 1024;
 const FALLBACK_TTL_SEC = 7 * 24 * 3600; // password sessions last 7 days
 const HF_BUCKET = 'Angelrider/sonora'; // public tree — no HF token needed for reads
@@ -418,6 +418,193 @@ async function ytExpandList(listId: string, hl: string, gl: string) {
     type: isAlbum ? 'album' : 'playlist',
     title,
     tracks: tracks.slice(0, EXPAND_MAX_TRACKS),
+  };
+}
+
+/* ---------- full artist catalogue ----------
+   "+ all by artist" used to page through YT Music *search* results, which
+   caps at ~20 rows and whose continuation tokens return nothing new — so a
+   150-track artist looked like a 20-track one. The channel's auto-uploads
+   playlist ("VL" + OLAK…, surfaced in the channel header browse) is a real
+   paginated playlist of every upload, so it returns the whole catalogue. */
+const ARTIST_MAX_TRACKS = 200;   // returned to the client
+const ARTIST_CRAWL_CAP = 400;     // stops the pagination runaway
+const ARTIST_MAX_PAGES = 6;       // continuation rounds per channel
+const ARTIST_MAX_CHANNELS = 3;    // candidate channels tried (subrequest budget)
+const CHANNEL_ID_RE = /^UC[A-Za-z0-9_-]{22}$/;
+const ARTIST_TTL_MS = 60 * 60 * 1000;
+const artistMem = new Map<string, { at: number; data: any }>();
+
+const normName = (s: string): string =>
+  (s || '')
+    .replace(/\s*-\s*Topic$/i, '')
+    .replace(/\.\s*/g, '.') // "A. R." === "AR"
+    .replace(/\s{2,}/g, ' ')
+    .trim()
+    .toLowerCase();
+
+/* Channel browseIds mentioned anywhere in a YT Music search response, most
+   relevant first (top results appear first in the payload). */
+function channelIdsFromSearch(data: any): string[] {
+  const out: string[] = [];
+  const seen = new Set<string>();
+  (function walk(node: any) {
+    if (!node || typeof node !== 'object' || seen.size > 40) return;
+    if (Array.isArray(node)) {
+      for (const x of node) walk(x);
+      return;
+    }
+    for (const k of Object.keys(node)) {
+      const v = (node as any)[k];
+      if (typeof v === 'string' && CHANNEL_ID_RE.test(v)) {
+        if (!seen.has(v)) {
+          seen.add(v);
+          out.push(v);
+        }
+      } else if (v && typeof v === 'object') {
+        walk(v);
+      }
+    }
+  })(data);
+  return out;
+}
+
+/* A channel header browse carries its uploads playlist id (OLAK…) — the key to
+   listing every upload. Returns null when the channel has no such playlist. */
+function uploadsPlaylistId(data: any): string | null {
+  let found: string | null = null;
+  (function walk(node: any) {
+    if (!node || typeof node !== 'object' || found) return;
+    if (Array.isArray(node)) {
+      for (const x of node) walk(x);
+      return;
+    }
+    for (const k of Object.keys(node)) {
+      const v = (node as any)[k];
+      if (typeof v === 'string' && /^OLAK[A-Za-z0-9_-]+$/.test(v)) {
+        found = v;
+        return;
+      }
+      if (v && typeof v === 'object') walk(v);
+    }
+  })(data);
+  return found;
+}
+
+function channelTitle(data: any): string {
+  const mf = data?.microformat?.microformatDataRenderer;
+  if (typeof mf?.title === 'string' && mf.title.trim()) return mf.title.trim();
+  return findHeaderTitle(data?.header || {});
+}
+
+function collectSongItems(node: any, out: YtResult[]): void {
+  if (!node || typeof node !== 'object' || out.length >= ARTIST_CRAWL_CAP) return;
+  if (Array.isArray(node)) {
+    for (const x of node) collectSongItems(x, out);
+    return;
+  }
+  const r = node.musicResponsiveListItemRenderer;
+  if (r) {
+    const videoId = r?.playlistItemData?.videoId;
+    if (videoId && !out.some((x) => x.videoId === videoId)) {
+      const cols = (r.flexColumns || []).map((f: any) =>
+        runsText(f?.musicResponsiveListItemFlexColumnRenderer?.text),
+      );
+      const dur =
+        r?.fixedColumns?.[0]?.musicResponsiveListItemFixedColumnRenderer?.text?.runs?.[0]?.text ??
+        r?.lengthText?.runs?.[0]?.text ??
+        null;
+      out.push({
+        videoId,
+        title: (cols[0] || '').trim(),
+        sub: (cols[1] || '').trim(),
+        extra: '',
+        duration: typeof dur === 'string' ? dur.trim() : null,
+        thumbnail: r?.thumbnail?.musicThumbnailRenderer?.thumbnail?.thumbnails?.at(-1)?.url ?? null,
+        isLive: false,
+      });
+    }
+    return;
+  }
+  for (const k of Object.keys(node)) collectSongItems(node[k], out);
+}
+
+/* Does this upload actually belong to the artist we asked for? Channel
+   uploads include compilations and collabs, so match on the primary artist
+   credit, with a looser title/credit pass as a fallback. */
+function byArtist(track: YtResult, want: string): boolean {
+  const credits = track.sub.split('•')[0];
+  const primary = normName(credits.split(',')[0]);
+  if (primary === want) return true;
+  const all = normName(track.sub);
+  if (all.includes(want)) return true;
+  return normName(track.title).includes(want);
+}
+
+async function ytArtistSongs(q: string, hl: string, gl: string) {
+  const want = normName(q);
+  const searchData = await ytPost(
+    'https://music.youtube.com/youtubei/v1/search?prettyPrint=false',
+    'https://music.youtube.com',
+    { context: { client: { clientName: 'WEB_REMIX', clientVersion: '1.20250915.01.00', hl, gl } }, query: q },
+  );
+  const channels = channelIdsFromSearch(searchData);
+  if (!channels.length) return { artist: q, channels: [], tracks: [], truncated: false };
+
+  const picked: { title: string; tracks: YtResult[] }[] = [];
+  const seen = new Set<string>();
+  for (const ch of channels) {
+    if (picked.length >= ARTIST_MAX_CHANNELS) break;
+    let head: any;
+    try {
+      head = await ytBrowse('https://music.youtube.com', hl, gl, { browseId: ch });
+    } catch {
+      continue;
+    }
+    const uploads = uploadsPlaylistId(head);
+    if (!uploads) continue;
+    /* Prefer the channel whose own name matches what we searched for; keep
+       non-matching ones as fallbacks (a "Topic" channel is named after the
+       artist, a featured channel may not be). */
+    const title = channelTitle(head);
+    const items: YtResult[] = [];
+    try {
+      const first = await ytBrowse('https://music.youtube.com', hl, gl, { browseId: 'VL' + uploads });
+      collectSongItems(first, items);
+      let cont = findContinuation(first);
+      for (let page = 0; cont && page < ARTIST_MAX_PAGES && items.length < ARTIST_CRAWL_CAP; page++) {
+        const more = await ytBrowse('https://music.youtube.com', hl, gl, { continuation: cont });
+        const before = items.length;
+        collectSongItems(more, items);
+        cont = items.length > before ? findContinuation(more) : null; // no new rows → stop
+      }
+    } catch {
+      /* keep whatever this page produced */
+    }
+    if (!items.length) continue;
+    const matching = items.filter((t) => byArtist(t, want));
+    if (!matching.length) continue;
+    picked.push({ title, tracks: matching });
+    seen.add(ch);
+    if (normName(title) === want && matching.length >= 25) break; // clearly the right channel
+  }
+
+  const tracks: YtResult[] = [];
+  const ids = new Set<string>();
+  /* shortest channel name first = closest match to what we searched for;
+     within a channel, YouTube's own upload order (newest first) is kept */
+  for (const p of picked.sort((a, b) => normName(a.title).length - normName(b.title).length)) {
+    for (const t of p.tracks) {
+      if (ids.has(t.videoId)) continue;
+      ids.add(t.videoId);
+      tracks.push(t);
+    }
+  }
+  return {
+    artist: q,
+    channels: picked.map((p) => p.title).filter(Boolean),
+    tracks: tracks.slice(0, ARTIST_MAX_TRACKS),
+    truncated: tracks.length > ARTIST_MAX_TRACKS,
   };
 }
 
@@ -845,6 +1032,52 @@ export const onRequestPost = async ({ request, env, ctx }: {
         const expanded = await ytExpandList(listId, hl, gl);
         if (!expanded.tracks.length) return json({ error: 'no tracks found in that playlist/album' }, 404);
         return json(expanded);
+      }
+
+      case 'artist': {
+        const raw = String(body.q || body.artist || '').trim().slice(0, 120);
+        if (!raw) return json({ error: 'empty artist name' }, 400);
+        const hl = /^[a-z]{2}(-[A-Za-z]{2,4})?$/.test(String(body.hl || '')) ? String(body.hl) : 'en';
+        const gl = /^[A-Z]{2}$/.test(String(body.gl || '')) ? String(body.gl) : 'US';
+        const memKey = hl + '|' + gl + '|' + normName(raw);
+
+        const memHit = artistMem.get(memKey);
+        if (memHit && Date.now() - memHit.at < ARTIST_TTL_MS) return json({ ...memHit.data, cached: 'mem' });
+
+        const cacheKey = new Request(
+          'https://aura-search.internal/ytartist?' + new URLSearchParams({ hl, gl, q: normName(raw) }),
+        );
+        try {
+          const hit = await (caches as any).default.match(cacheKey);
+          if (hit) {
+            const data = await hit.json();
+            if (Array.isArray(data?.tracks)) {
+              artistMem.set(memKey, { at: Date.now(), data });
+              return json({ ...data, cached: 'edge' });
+            }
+          }
+        } catch { /* cache unavailable — fetch fresh */ }
+
+        let data: any;
+        try {
+          data = await ytArtistSongs(raw, hl, gl);
+        } catch (e) {
+          return json({ error: 'artist lookup failed — ' + (e as Error).message }, 502);
+        }
+        artistMem.set(memKey, { at: Date.now(), data });
+        if (artistMem.size > 40) {
+          const oldest = artistMem.keys().next().value;
+          if (oldest !== undefined) artistMem.delete(oldest);
+        }
+        if (data.tracks.length) {
+          try {
+            const cacheRes = new Response(JSON.stringify(data), {
+              headers: { 'content-type': 'application/json', 'cache-control': 'public, max-age=3600' },
+            });
+            ctx?.waitUntil((caches as any).default.put(cacheKey, cacheRes));
+          } catch { /* caching is best-effort */ }
+        }
+        return json(data);
       }
 
       case 'dispatch': {
