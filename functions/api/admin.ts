@@ -422,17 +422,27 @@ async function ytExpandList(listId: string, hl: string, gl: string) {
 }
 
 /* ---------- full artist catalogue ----------
-   "+ all by artist" used to page through YT Music *search* results, which
-   caps at ~20 rows and whose continuation tokens return nothing new — so a
-   150-track artist looked like a 20-track one. The channel's auto-uploads
-   playlist ("VL" + OLAK…, surfaced in the channel header browse) is a real
-   paginated playlist of every upload, so it returns the whole catalogue. */
-const ARTIST_MAX_TRACKS = 200;   // returned to the client
-const ARTIST_CRAWL_CAP = 400;     // stops the pagination runaway
-const ARTIST_MAX_PAGES = 6;       // continuation rounds per channel
-const ARTIST_MAX_CHANNELS = 3;    // candidate channels tried (subrequest budget)
+   "+ all by artist" used to page through YT Music *search* results, which caps
+   at ~20 rows and whose continuation tokens return nothing new — so a 250-track
+   artist looked like a 20-track one.
+
+   Three sources per channel, because no single one is complete:
+     1. uploads      "VL" + OLAK…  (the channel's auto-uploads playlist)
+     2. albums       MPRE… tiles on the channel home (canonical album tracks)
+     3. playlists    VLPL… tiles titled "<Artist> - <Album>" (per-album lists)
+   Tracks are credit-filtered to the artist, then collapsed by title so the
+   album cut wins over the remix/live/radio-edit uploads of the same song. */
+const ARTIST_MAX_TRACKS = 500;   // returned to the client
+const ARTIST_CRAWL_CAP = 900;    // hard stop while paging
+const ARTIST_MAX_PAGES = 4;      // upload continuation rounds per channel
+const ARTIST_MAX_CHANNELS = 2;   // channels swept (uploads + catalogue)
+const ARTIST_MAX_ALBUMS = 16;    // album tiles expanded per channel
+const ARTIST_MAX_LISTS = 8;      // "<Artist> - …" playlist tiles expanded
+const ARTIST_MAX_GENERIC_LISTS = 8; // assorted compilations (Motown-era cuts live here)
+const ARTIST_FETCH_CONCURRENCY = 5;
 const CHANNEL_ID_RE = /^UC[A-Za-z0-9_-]{22}$/;
 const ARTIST_TTL_MS = 60 * 60 * 1000;
+const ARTIST_CACHE_V = '4'; // bump when the harvested payload shape changes
 const artistMem = new Map<string, { at: number; data: any }>();
 
 const normName = (s: string): string =>
@@ -442,6 +452,17 @@ const normName = (s: string): string =>
     .replace(/\s{2,}/g, ' ')
     .trim()
     .toLowerCase();
+
+/* Collapse the "(Live)", "- Radio Edit", "(Remastered 2011)" style variants so
+   one song queued once — the same title in different flavours is one song. */
+const stripVariant = (s: string): string =>
+  (s || '')
+    .toLowerCase()
+    .replace(/\s*[-–—]\s*(radio edit|edit|mix|remix|live|remastered|version|mono|stereo)\b.*$/g, '')
+    .replace(/\s*[\(\[][^\)\]]*\b(live|remix|edit|version|remastered|immortal|mono|stereo|acoustic|instrumental|radio)\b[^\)\]]*[\)\]]\s*$/g, '')
+    .replace(/\s*[\(\[].{0,40}[\)\]]\s*$/g, '')
+    .replace(/[\s\-–—_.,'"]+/g, ' ')
+    .trim();
 
 /* Channel browseIds mentioned anywhere in a YT Music search response, most
    relevant first (top results appear first in the payload). */
@@ -469,12 +490,14 @@ function channelIdsFromSearch(data: any): string[] {
   return out;
 }
 
-/* A channel header browse carries its uploads playlist id (OLAK…) — the key to
-   listing every upload. Returns null when the channel has no such playlist. */
-function uploadsPlaylistId(data: any): string | null {
-  let found: string | null = null;
+/* Everything the channel home browse tells us: uploads playlist, album tiles,
+   playlist tiles. */
+function channelCatalogue(data: any) {
+  let uploads: string | null = null;
+  const albums: { id: string; title: string }[] = [];
+  const lists: { id: string; title: string }[] = [];
   (function walk(node: any) {
-    if (!node || typeof node !== 'object' || found) return;
+    if (!node || typeof node !== 'object') return;
     if (Array.isArray(node)) {
       for (const x of node) walk(x);
       return;
@@ -482,13 +505,18 @@ function uploadsPlaylistId(data: any): string | null {
     for (const k of Object.keys(node)) {
       const v = (node as any)[k];
       if (typeof v === 'string' && /^OLAK[A-Za-z0-9_-]+$/.test(v)) {
-        found = v;
-        return;
+        uploads = uploads || v;
+      } else if (k === 'musicTwoRowItemRenderer' && v?.navigationEndpoint?.browseEndpoint?.browseId) {
+        const id = v.navigationEndpoint.browseEndpoint.browseId;
+        const title = runsText(v.title);
+        if (/^MPRE/.test(id)) albums.push({ id, title });
+        else if (/^VLPL/.test(id)) lists.push({ id, title });
+      } else if (v && typeof v === 'object') {
+        walk(v);
       }
-      if (v && typeof v === 'object') walk(v);
     }
   })(data);
-  return found;
+  return { uploads, albums, lists };
 }
 
 function channelTitle(data: any): string {
@@ -497,10 +525,10 @@ function channelTitle(data: any): string {
   return findHeaderTitle(data?.header || {});
 }
 
-function collectSongItems(node: any, out: YtResult[]): void {
-  if (!node || typeof node !== 'object' || out.length >= ARTIST_CRAWL_CAP) return;
+function collectSongItems(node: any, out: YtResult[], cap: number): void {
+  if (!node || typeof node !== 'object' || out.length >= cap) return;
   if (Array.isArray(node)) {
-    for (const x of node) collectSongItems(x, out);
+    for (const x of node) collectSongItems(x, out, cap);
     return;
   }
   const r = node.musicResponsiveListItemRenderer;
@@ -526,19 +554,38 @@ function collectSongItems(node: any, out: YtResult[]): void {
     }
     return;
   }
-  for (const k of Object.keys(node)) collectSongItems(node[k], out);
+  for (const k of Object.keys(node)) collectSongItems(node[k], out, cap);
 }
 
 /* Does this upload actually belong to the artist we asked for? Channel
-   uploads include compilations and collabs, so match on the primary artist
+   catalogues include compilations and collabs, so match on the primary artist
    credit, with a looser title/credit pass as a fallback. */
 function byArtist(track: YtResult, want: string): boolean {
-  const credits = track.sub.split('•')[0];
-  const primary = normName(credits.split(',')[0]);
+  const primary = normName(track.sub.split('•')[0].split(',')[0]);
   if (primary === want) return true;
   const all = normName(track.sub);
   if (all.includes(want)) return true;
   return normName(track.title).includes(want);
+}
+
+async function ytBrowseItems(
+  listId: string,
+  hl: string,
+  gl: string,
+  pages: number,
+  cap: number,
+): Promise<YtResult[]> {
+  const out: YtResult[] = [];
+  const first = await ytBrowse('https://music.youtube.com', hl, gl, { browseId: listId });
+  collectSongItems(first, out, cap);
+  let cont = findContinuation(first);
+  for (let p = 0; cont && p < pages && out.length < cap; p++) {
+    const more = await ytBrowse('https://music.youtube.com', hl, gl, { continuation: cont });
+    const before = out.length;
+    collectSongItems(more, out, cap);
+    cont = out.length > before ? findContinuation(more) : null; // no new rows → stop
+  }
+  return out;
 }
 
 async function ytArtistSongs(q: string, hl: string, gl: string) {
@@ -549,62 +596,129 @@ async function ytArtistSongs(q: string, hl: string, gl: string) {
     { context: { client: { clientName: 'WEB_REMIX', clientVersion: '1.20250915.01.00', hl, gl } }, query: q },
   );
   const channels = channelIdsFromSearch(searchData);
-  if (!channels.length) return { artist: q, channels: [], tracks: [], truncated: false };
+  if (!channels.length) return { artist: q, channels: [], tracks: [], dupes: 0, truncated: false };
 
-  const picked: { title: string; tracks: YtResult[] }[] = [];
-  const seen = new Set<string>();
+  interface Sweep {
+    title: string;
+    exact: boolean;
+    tracks: YtResult[];
+  }
+  const sweeps: Sweep[] = [];
+
   for (const ch of channels) {
-    if (picked.length >= ARTIST_MAX_CHANNELS) break;
+    if (sweeps.length >= ARTIST_MAX_CHANNELS) break;
     let head: any;
     try {
       head = await ytBrowse('https://music.youtube.com', hl, gl, { browseId: ch });
     } catch {
       continue;
     }
-    const uploads = uploadsPlaylistId(head);
-    if (!uploads) continue;
-    /* Prefer the channel whose own name matches what we searched for; keep
-       non-matching ones as fallbacks (a "Topic" channel is named after the
-       artist, a featured channel may not be). */
+    const cat = channelCatalogue(head);
+    if (!cat.uploads && !cat.albums.length) continue;
     const title = channelTitle(head);
-    const items: YtResult[] = [];
-    try {
-      const first = await ytBrowse('https://music.youtube.com', hl, gl, { browseId: 'VL' + uploads });
-      collectSongItems(first, items);
-      let cont = findContinuation(first);
-      for (let page = 0; cont && page < ARTIST_MAX_PAGES && items.length < ARTIST_CRAWL_CAP; page++) {
-        const more = await ytBrowse('https://music.youtube.com', hl, gl, { continuation: cont });
-        const before = items.length;
-        collectSongItems(more, items);
-        cont = items.length > before ? findContinuation(more) : null; // no new rows → stop
-      }
-    } catch {
-      /* keep whatever this page produced */
+    const exact = normName(title) === want;
+    /* Albums/playlists cost ~1 subrequest each, so only the best channel gets
+       the full catalogue sweep; any further channel is uploads-only. */
+    const deep = sweeps.length === 0;
+    const tracks: YtResult[] = [];
+
+    /* 1. every upload on the channel */
+    if (cat.uploads) {
+      try {
+        tracks.push(...(await ytBrowseItems('VL' + cat.uploads, hl, gl, ARTIST_MAX_PAGES, ARTIST_CRAWL_CAP)));
+      } catch { /* keep what we have */ }
     }
-    if (!items.length) continue;
-    const matching = items.filter((t) => byArtist(t, want));
-    if (!matching.length) continue;
-    picked.push({ title, tracks: matching });
-    seen.add(ch);
-    if (normName(title) === want && matching.length >= 25) break; // clearly the right channel
+
+    const jobs: { id: string; album: string; strict: boolean }[] = [];
+    if (deep) {
+      /* 2. album tiles — album credit plus the deep cuts that were never
+         uploaded as videos */
+      for (const a of cat.albums.slice(0, ARTIST_MAX_ALBUMS)) jobs.push({ id: a.id, album: a.title, strict: false });
+      /* 3. playlists the artist published as "<Artist> - <Album>" */
+      for (const l of cat.lists) {
+        if (jobs.length >= ARTIST_MAX_ALBUMS + ARTIST_MAX_LISTS) break;
+        if (!normName(l.title).startsWith(want + ' ')) continue;
+        jobs.push({
+          id: l.id,
+          album: l.title.replace(new RegExp('^' + q.replace(/[.*+?^${}()|[\]\\]/g, '\\$&') + '\\s*[-–—]\\s*', 'i'), ''),
+          strict: true,
+        });
+      }
+      /* 4. assorted compilations the channel appears on — the only place some
+         early-career tracks exist at all (credit filter keeps other artists out) */
+      /* lists that name the artist ("The Best of Michael Jackson") hold early
+         catalogue; decade-mix compilations are the weakest source, so they go last */
+      const generic = cat.lists
+        .filter((l) => !normName(l.title).startsWith(want + ' '))
+        .sort((a, b) => Number(normName(b.title).includes(want)) - Number(normName(a.title).includes(want)))
+        .slice(0, ARTIST_MAX_GENERIC_LISTS);
+      for (const l of generic) jobs.push({ id: l.id, album: '', strict: true });
+    }
+
+    for (let i = 0; i < jobs.length; i += ARTIST_FETCH_CONCURRENCY) {
+      const slice = jobs.slice(i, i + ARTIST_FETCH_CONCURRENCY);
+      const got = await Promise.all(
+        slice.map(async (job) => {
+          try {
+            return (await ytBrowseItems(job.id, hl, gl, 1, ARTIST_CRAWL_CAP)).map((t) => {
+              /* Album rows sometimes omit the credits column; the channel we
+                 harvested from is the artist, so fill it in rather than
+                 letting "Unknown Artist" reach manifest.json. Keep the album
+                 name in the sub line — the admin splits on "•" for metadata. */
+              const credits = t.sub.split('•')[0].trim();
+              let sub = credits || q;
+              if (job.album && !sub.includes('•')) sub += ' • ' + job.album;
+              return { ...t, sub, _album: job.album, _strict: job.strict };
+            });
+          } catch {
+            return [] as YtResult[];
+          }
+        }),
+      );
+      for (const list of got) tracks.push(...list);
+      if (tracks.length >= ARTIST_CRAWL_CAP) break;
+    }
+
+    sweeps.push({ title, exact, tracks });
+    if (exact && tracks.filter((t) => byArtist(t, want)).length >= 200) break; // clearly enough
   }
 
-  const tracks: YtResult[] = [];
-  const ids = new Set<string>();
-  /* shortest channel name first = closest match to what we searched for;
-     within a channel, YouTube's own upload order (newest first) is kept */
-  for (const p of picked.sort((a, b) => normName(a.title).length - normName(b.title).length)) {
-    for (const t of p.tracks) {
-      if (ids.has(t.videoId)) continue;
-      ids.add(t.videoId);
-      tracks.push(t);
+  /* Credit filter, then collapse same-song variants (album cut beats the
+     remix/live upload of the identical title). */
+  const best = new Map<string, YtResult>();
+  const seenIds = new Set<string>();
+  let dupes = 0;
+  for (const sweep of sweeps.sort((a, b) => Number(b.exact) - Number(a.exact) || a.title.length - b.title.length)) {
+    for (const t of sweep.tracks) {
+      if (seenIds.has(t.videoId)) continue;
+      seenIds.add(t.videoId);
+      const album = (t as any)._album as string | undefined;
+      const strict = (t as any)._strict === true;
+      /* canonical album on the artist's own channel → its whole tracklist is
+         theirs (guest features keep their own credits); compilations and
+         uploads must credit the artist explicitly */
+      const ok = byArtist(t, want) || (sweep.exact && !!album && !strict);
+      if (!ok) continue;
+      const primary = normName(t.sub.split('•')[0].split(',')[0]);
+      const key = stripVariant(t.title) + '|' + primary;
+      const prev = best.get(key);
+      if (!prev) {
+        best.set(key, t);
+        continue;
+      }
+      dupes++;
+      const score = (x: YtResult) => ((x as any)._album ? 2 : 0) + (/live/i.test(x.title) ? 0 : 1) + (x.duration ? 0.5 : 0);
+      if (score(t) > score(prev)) best.set(key, t);
     }
   }
+
+  const tracks = [...best.values()].slice(0, ARTIST_MAX_TRACKS);
   return {
     artist: q,
-    channels: picked.map((p) => p.title).filter(Boolean),
-    tracks: tracks.slice(0, ARTIST_MAX_TRACKS),
-    truncated: tracks.length > ARTIST_MAX_TRACKS,
+    channels: sweeps.map((s) => s.title).filter(Boolean),
+    tracks,
+    dupes,
+    truncated: best.size > ARTIST_MAX_TRACKS,
   };
 }
 
@@ -1045,7 +1159,7 @@ export const onRequestPost = async ({ request, env, ctx }: {
         if (memHit && Date.now() - memHit.at < ARTIST_TTL_MS) return json({ ...memHit.data, cached: 'mem' });
 
         const cacheKey = new Request(
-          'https://aura-search.internal/ytartist?' + new URLSearchParams({ hl, gl, q: normName(raw) }),
+          'https://aura-search.internal/ytartist?' + new URLSearchParams({ v: ARTIST_CACHE_V, hl, gl, q: normName(raw) }),
         );
         try {
           const hit = await (caches as any).default.match(cacheKey);

@@ -524,7 +524,7 @@ function syncResultRows() {
 /* "+ all by artist" — crawls the artist's own channel uploads, so a 150-track
    artist no longer stops at the ~20 rows a search page returns. Falls back to
    filtering search results if the channel lookup finds nothing. */
-const ARTIST_MAX = 200;
+const ARTIST_MAX = 500;
 let artistBusy = false;
 
 interface ArtistTrack {
@@ -546,10 +546,19 @@ async function queueArtist(artist: string, mode: 'music' | 'video'): Promise<voi
   try {
     let tracks: ArtistTrack[] = [];
     let truncated = false;
+    let dupes = 0;
+    let channelNames: string[] = [];
     try {
-      const data = await adminApi<{ tracks?: ArtistTrack[]; truncated?: boolean }>('artist', { q });
+      const data = await adminApi<{
+        tracks?: ArtistTrack[];
+        truncated?: boolean;
+        dupes?: number;
+        channels?: string[];
+      }>('artist', { q });
       tracks = data.tracks || [];
       truncated = !!data.truncated;
+      dupes = data.dupes || 0;
+      channelNames = (data.channels || []).slice(0, 2);
     } catch {
       /* channel crawl unavailable — fall through to search-based matching */
     }
@@ -579,8 +588,14 @@ async function queueArtist(artist: string, mode: 'music' | 'video'): Promise<voi
     } else {
       const capNote =
         truncated || tracks.length > ARTIST_MAX ? ` (first ${ARTIST_MAX} of many)` : '';
+      const dupNote = dupes ? ` · ${dupes} duplicate versions merged` : '';
+      const srcNote = channelNames.length ? ` from ${channelNames.join(' + ')}` : '';
       const note = skipped ? ` · ${skipped} already queued/library` : '';
-      setStatus(searchStatus, `${added} track${added === 1 ? '' : 's'} by ${q} queued${capNote}${note}`, 'ok');
+      setStatus(
+        searchStatus,
+        `${tracks.length} track${tracks.length === 1 ? '' : 's'} found${srcNote} — ${added} queued${capNote}${dupNote}${note}`,
+        'ok',
+      );
       toast(added ? `Queued ${added} by ${q}` : 'Nothing new to queue', added ? 'ok' : '');
     }
     syncResultRows();
