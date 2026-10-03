@@ -547,7 +547,7 @@ async function queueArtist(artist: string, mode: 'music' | 'video'): Promise<voi
     let tracks: ArtistTrack[] = [];
     let truncated = false;
     let dupes = 0;
-    let medleys = 0;
+    let junkCount = 0;
     let channelNames: string[] = [];
     try {
       const data = await adminApi<{
@@ -560,7 +560,7 @@ async function queueArtist(artist: string, mode: 'music' | 'video'): Promise<voi
       tracks = data.tracks || [];
       truncated = !!data.truncated;
       dupes = data.dupes || 0;
-      medleys = data.junk || 0;
+      junkCount = data.junk || 0;
       channelNames = (data.channels || []).slice(0, 2);
     } catch {
       /* channel crawl unavailable — fall through to search-based matching */
@@ -592,7 +592,7 @@ async function queueArtist(artist: string, mode: 'music' | 'video'): Promise<voi
       const capNote =
         truncated || tracks.length > ARTIST_MAX ? ` (first ${ARTIST_MAX} of many)` : '';
       const dupNote = dupes ? ` · ${dupes} duplicate versions merged` : '';
-      const junkNote = medleys ? ` · ${medleys} medleys/mashups skipped` : '';
+      const junkNote = junkCount ? ` · ${junkCount} non-song clips skipped` : '';
       const srcNote = channelNames.length ? ` from ${channelNames.join(' + ')}` : '';
       const note = skipped ? ` · ${skipped} already queued/library` : '';
       setStatus(

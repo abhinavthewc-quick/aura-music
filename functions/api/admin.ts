@@ -436,13 +436,14 @@ const ARTIST_MAX_TRACKS = 500;   // returned to the client
 const ARTIST_CRAWL_CAP = 900;    // hard stop while paging
 const ARTIST_MAX_PAGES = 4;      // upload continuation rounds per channel
 const ARTIST_MAX_CHANNELS = 2;   // channels swept (uploads + catalogue)
-const ARTIST_MAX_ALBUMS = 16;    // album tiles expanded per channel
+const ARTIST_MAX_ALBUMS = 14;    // album tiles expanded per channel
 const ARTIST_MAX_LISTS = 8;      // "<Artist> - …" playlist tiles expanded
 const ARTIST_MAX_GENERIC_LISTS = 8; // assorted compilations (Motown-era cuts live here)
+const ARTIST_MAX_FEATURED = 6;    // "Featured on" auto-playlists around the artist
 const ARTIST_FETCH_CONCURRENCY = 5;
 const CHANNEL_ID_RE = /^UC[A-Za-z0-9_-]{22}$/;
 const ARTIST_TTL_MS = 60 * 60 * 1000;
-const ARTIST_CACHE_V = '6'; // bump when the harvested payload shape changes
+const ARTIST_CACHE_V = '11'; // bump when the harvested payload shape changes
 const artistMem = new Map<string, { at: number; data: any }>();
 
 const normName = (s: string): string =>
@@ -455,22 +456,49 @@ const normName = (s: string): string =>
 
 /* Collapse the "(Live)", "- Radio Edit", "(Remastered 2011)" style variants so
    one song queued once — the same title in different flavours is one song. */
-const stripVariant = (s: string): string =>
-  (s || '')
-    .toLowerCase()
-    .replace(/\s*[-–—]\s*(radio edit|edit|mix|remix|live|remastered|version|mono|stereo)\b.*$/g, '')
-    .replace(/\s*[\(\[][^\)\]]*\b(live|remix|edit|version|remastered|immortal|mono|stereo|acoustic|instrumental|radio)\b[^\)\]]*[\)\]]\s*$/g, '')
-    .replace(/\s*[\(\[].{0,40}[\)\]]\s*$/g, '')
-    .replace(/[\s\-–—_.,'"]+/g, ' ')
+const stripVariant = (s: string): string => {
+  let out = (s || '').toLowerCase();
+  /* repeat: "(From Delta Force Game) (feat. Sofia Reyes)" needs two passes */
+  for (let i = 0; i < 3; i++) {
+    const next = out
+      .replace(/\s*[-\u2013\u2014]\s*(radio edit|edit|mix|remix|live|remastered|version|mono|stereo)\b.*$/g, '')
+      .replace(/\s*[(\[][^)\]]*\b(live|remix|edit|version|remastered|immortal|mono|stereo|acoustic|instrumental|radio)\b[^)\]]*[)\]]\s*$/g, '')
+      .replace(/\s*[(\[][^)\]]{0,40}[)\]]\s*$/g, '');
+    if (next === out) break;
+    out = next;
+  }
+  return out
+    .replace(/[\s\-\u2013\u2014_.,'"]+/g, ' ')
     .trim();
+};
 
-/* "(Remastered Radio Edit)", "(Immortal Version)", "(Live)" … — the same song
-   in another flavour. The plain title is the one to keep. */
+/* "(Remastered Radio Edit)", "(Immortal Version)", "(Lyric Video)" … — the same
+   song in another flavour. The plain title is the one to keep. */
 const VARIANT_RE =
-  /\b(remix|remixed|edit|mix|live|immortal|version|radio|acoustic|instrumental|rework|bootleg|megamix|extended|mono|stereo|cover|demo|unplugged)\b/i;
-/* Not a song at all: medleys, mashups, intros, live segments. */
+  /\b(remix|remixed|edit|mix|live|immortal|version|radio|acoustic|instrumental|rework|bootleg|megamix|extended|mono|stereo|cover|demo|unplugged|visualizer)\b|\blyric\s*video\b|\bofficial\s+(music\s+)?video\b|\baudio\s+only\b|\b(4k|hd|hq)\b/i;
+/* Channel uploads are often titled "<Artist> - <Song>"; the album tiles use the
+   bare title, so both must reduce to one key or the song ships twice. */
+function stripArtistPrefix(title: string, q: string): string {
+  const t = (title || '').trim();
+  const m = /^[^–—:]{2,44}?\s*[-–—:]\s*(\S.*)$/.exec(t);
+  if (!m) return t;
+  const head = normName(m[0].slice(0, m[0].length - m[1].length - 1));
+  const want = normName(q);
+  if (!head || !want || !m[1].trim()) return t;
+  if (!(head.includes(want) || want.includes(head))) return t;
+  const rest = m[1].trim();
+  /* a cut that leaves unbalanced brackets means the split landed mid-title */
+  const opens = (rest.match(/[(\[]/g) || []).length;
+  const closes = (rest.match(/[)\]]/g) || []).length;
+  if (opens !== closes || rest.length < 3) return t;
+  return rest;
+}
+
+/* Not a song at all: medleys, mashups, intros, plus the promo clutter every
+   artist channel carries — trailers, BTS, ASMR, interviews, event streams. */
 const JUNK_TITLE_RE =
-  /\s\/\s|\bmedley\b|\bmashup\b|\bmegamix\b|\bmixtape\b|\binterlude\b|\bintro\b|\bsegment\b|\binterview\b|\bspeech\b/i;
+  /\s\/\s|\bmedley\b|\bmashup\b|\bmegamix\b|\bmixtape\b|\binterlude\b|\bintro\b|\bsegment\b|\binterview\b|\bspeech\b|\bbts\b|behind[\s-]the[\s-]scenes|\btrailer\b|\bteaser\b|\basmr\b|\bpodcast\b|\bvlog\b|\bdocumentary\b|\bmaking\s+of\b|\breaction\b|\bsneak\s+peek\b|\bfirst\s+look\b|\bpress\s+conference\b|\bshort\s+film\b|\baudio\s+description\b|\bpreview\b|\bsnippet\b|\bexcerpt\b|\bsample\b|\bgameplay\b|\blive\s+set\b|\bfull\s+(set|show|experience|concert)\b|\bawards?\b|\bgrammy\b|\btakeover\b|\blive\s+at\b|\blivestream\b|\bmulticam\b|\bgame\s+play\b|\b(bgmi|pubg\w*|fortnite|minecraft)\b/i;
+/* two songs welded into one upload: "X & Y", "X / Y", '"X" and "Y"' */
 
 /* Channel browseIds mentioned anywhere in a YT Music search response, most
    relevant first (top results appear first in the payload). */
@@ -504,6 +532,7 @@ function channelCatalogue(data: any) {
   let uploads: string | null = null;
   const albums: { id: string; title: string }[] = [];
   const lists: { id: string; title: string }[] = [];
+  const featured: { id: string; title: string }[] = [];
   (function walk(node: any) {
     if (!node || typeof node !== 'object') return;
     if (Array.isArray(node)) {
@@ -519,12 +548,13 @@ function channelCatalogue(data: any) {
         const title = runsText(v.title);
         if (/^MPRE/.test(id)) albums.push({ id, title });
         else if (/^VLPL/.test(id)) lists.push({ id, title });
+        else if (/RDCLAK/.test(id)) featured.push({ id, title }); // "Featured on" auto-playlists
       } else if (v && typeof v === 'object') {
         walk(v);
       }
     }
   })(data);
-  return { uploads, albums, lists };
+  return { uploads, albums, lists, featured };
 }
 
 function channelTitle(data: any): string {
@@ -661,6 +691,13 @@ async function ytArtistSongs(q: string, hl: string, gl: string) {
         .sort((a, b) => Number(normName(b.title).includes(want)) - Number(normName(a.title).includes(want)))
         .slice(0, ARTIST_MAX_GENERIC_LISTS);
       for (const l of generic) jobs.push({ id: l.id, album: '', strict: true });
+      /* 5. "Featured on" — YT's own playlists that include the artist; these
+         reach singles that never made it onto the channel page */
+      for (const f of cat.featured
+        .sort((a, b) => Number(normName(b.title).includes(want)) - Number(normName(a.title).includes(want)))
+        .slice(0, ARTIST_MAX_FEATURED)) {
+        jobs.push({ id: f.id, album: '', strict: true });
+      }
     }
 
     for (let i = 0; i < jobs.length; i += ARTIST_FETCH_CONCURRENCY) {
@@ -708,18 +745,21 @@ async function ytArtistSongs(q: string, hl: string, gl: string) {
          uploads must credit the artist explicitly */
       const ok = byArtist(t, want) || (sweep.exact && !!album && !strict);
       if (!ok) continue;
-      /* medleys / mashups / intros are not tracks anybody queued */
-      if (JUNK_TITLE_RE.test(t.title)) {
+      /* medleys / mashups / intros and channel promo clutter are not tracks
+         anybody queued */
+      const title = stripArtistPrefix(t.title, q);
+      if (JUNK_TITLE_RE.test(title) || (/\s&\s|\s\/\s|["'][^"']+["']\s*(and|&|\/|,)\s*["'][^"']+["']/i.test(title) && title.length > 22)) {
         junk++;
         continue;
       }
       /* Key on the song, not the credit string: the same track shows up as
          "Michael Jackson & The Jacksons" on one release and "The Jacksons" on
          another, and that is still one song. */
-      const key = stripVariant(t.title);
+      const track = title === t.title ? t : { ...t, title };
+      const key = stripVariant(title);
       const prev = best.get(key);
       if (!prev) {
-        best.set(key, t);
+        best.set(key, track);
         continue;
       }
       dupes++;
@@ -735,7 +775,7 @@ async function ytArtistSongs(q: string, hl: string, gl: string) {
         if (x.duration) s += 0.5;
         return s;
       };
-      if (score(t) > score(prev)) best.set(key, t);
+      if (score(track) > score(prev)) best.set(key, track);
     }
   }
 
