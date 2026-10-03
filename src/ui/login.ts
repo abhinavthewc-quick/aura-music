@@ -201,15 +201,31 @@ import { $ } from '../core/state';
       if(!box || !div) return;
       if(!GOOGLE_CLIENT_ID){
         if(note) note.innerHTML = '<i class="fa-solid fa-triangle-exclamation"></i> Google sign-in is not configured yet — you can still continue with email &amp; password below.';
+        const ours = $('googleSignInBtn') as HTMLElement | null;
+        if(ours) ours.hidden = true;
         return;
       }
       if(getSession()) return; // already signed in this session
 
       const w = window as any;
 
-      /* The button shows avatar + "Sign in as <name>" + email + chevron + logo.
-         A fixed width clips it, so size it to the slot (Google's real cap is 420, docs say 400). */
-      const drawButton = () => {
+      /* Google's personalized "Sign in as …" button draws its content wider than
+         the iframe Google places it in (the width option is only a minimum), so
+         the right end (the G logo) is clipped inside Google's own cross-origin
+         iframe — page CSS can't reach in. The primary CTA is therefore our own
+         button, which opens Google's One Tap floating prompt on click; that UI
+         is never clipped. The native button is rendered only as a fallback for
+         when the prompt cannot be displayed. */
+      const showNativeFallback = () => {
+        const ours = $('googleSignInBtn') as HTMLElement | null;
+        if(ours) ours.hidden = true;
+        if(div){
+          div.hidden = false;
+          if(!div.childElementCount) drawNativeButton();
+        }
+      };
+
+      const drawNativeButton = () => {
         const slot = Math.floor(div.getBoundingClientRect().width) || 275;
         const width = Math.min(420, Math.max(240, slot));
         try{
@@ -217,16 +233,16 @@ import { $ } from '../core/state';
             theme: 'filled_black', size: 'large', shape: 'pill',
             text: 'signin_with', width,
           });
-        }catch{ /* button container keeps its note text */ }
+        }catch{ /* fallback unavailable; note text remains */ }
       };
 
       let resizeTimer: number | undefined;
       const onResize = () => {
         if(resizeTimer) clearTimeout(resizeTimer);
         resizeTimer = window.setTimeout(() => {
-          if(!w.google?.accounts?.id) return;
+          if(!w.google?.accounts?.id || !div || div.hidden) return;
           div.innerHTML = '';
-          drawButton();
+          drawNativeButton();
         }, 200);
       };
       window.addEventListener('resize', onResize);
@@ -243,12 +259,23 @@ import { $ } from '../core/state';
             client_id: GOOGLE_CLIENT_ID,
             callback: (resp: any) => handleCredential(resp?.credential || ''),
           });
-          drawButton();
+          const ours = $('googleSignInBtn') as HTMLElement | null;
+          if(ours){
+            ours.addEventListener('click', () => {
+              try{
+                w.google.accounts.id.prompt((n: any) => {
+                  if(n?.isNotDisplayed?.() || n?.isSkippedMoment?.()) showNativeFallback();
+                });
+              }catch{ showNativeFallback(); }
+            });
+          }
           w.google.accounts.id.prompt();
-        }catch{ /* button container keeps its note text */ }
+        }catch{ showNativeFallback(); }
       };
       s.onerror = () => {
-        if(note) note.innerHTML = '<i class="fa-solid fa-triangle-exclamation"></i> Could not load Google sign-in — check your connection.';
+        const ours = $('googleSignInBtn') as HTMLElement | null;
+        if(ours) ours.hidden = true;
+        if(note) note.innerHTML = '<i class="fa-solid fa-triangle-exclamation"></i> Could not load Google sign-in — check your connection, or continue with email &amp; password below.';
       };
       document.head.appendChild(s);
     }

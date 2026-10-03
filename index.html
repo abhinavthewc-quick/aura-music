@@ -42,7 +42,8 @@ html.aura-loading,html.aura-loading body{overflow:hidden}
         <p class="lg-tag">Your personal space for music, radio and moments that feel like yours.</p>
         <div class="lg-form">
           <div class="lg-google" id="googleSignInBox">
-            <div id="googleSignInDiv" class="g-btn-slot"></div>
+            <button class="lg-cta g-google-cta" id="googleSignInBtn" type="button"><i class="fa-brands fa-google" aria-hidden="true"></i>Continue with Google</button>
+            <div id="googleSignInDiv" class="g-btn-slot g-btn-fallback" hidden></div>
             <p class="lg-auth-note" id="googleAuthNote">Sign in with Google to enter — any Google account works.</p>
             <button class="lg-pick-back" id="emailAuthToggle" type="button">Google not working? Continue with email &amp; password</button>
           </div>

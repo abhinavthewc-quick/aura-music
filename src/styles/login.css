@@ -300,6 +300,12 @@
     .lg-google{width:100%;display:flex;flex-direction:column;align-items:center;gap:12px}
     .g-btn-slot{width:100%;min-height:44px;display:flex;justify-content:center;align-items:center}
     .g-btn-slot iframe{border:0;max-width:none!important}
+    /* Our own primary CTA opens Google's One Tap prompt (no clipping risk) */
+    .g-google-cta{display:flex;align-items:center;justify-content:center;gap:10px}
+    .g-google-cta[hidden]{display:none}
+    .g-google-cta i{font-size:15px}
+    /* Native GSI button only ever shown as fallback */
+    .g-btn-fallback[hidden]{display:none!important}
     .lg-auth-note{margin:0;font:500 13px/1.5 'DM Sans',system-ui,sans-serif;color:rgba(245,236,223,.55);text-align:center}
     .lg-auth-note code{background:rgba(255,240,220,.08);border:1px solid rgba(255,240,220,.14);border-radius:6px;padding:1px 6px;font-size:12px}
     .lg-auth-note i{color:#e6bd92}
