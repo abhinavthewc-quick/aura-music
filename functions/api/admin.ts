@@ -396,6 +396,37 @@ async function ytBrowse(origin: string, hl: string, gl: string, payload: Record<
   });
 }
 
+/* An auto-uploads list has no usable title ("Playlist" / "Top songs"). Name it
+   after whatever its tracks share: the film or album in their titles, else the
+   dominant artist credit — e.g. the ten Bethlehem Kudumba Unit songs show as
+   "Bethlehem Kudumba Unit". */
+const FILM_TAG_RE = /\(\s*From\s+["\u201c\u300c\uff02]([^"\u201d\u300d\uff03]+)["\u201d\u300d\uff03]/i;
+async function uploadsListName(listId: string, hl: string, gl: string): Promise<string> {
+  try {
+    const data = await ytBrowse('https://music.youtube.com', hl, gl, { browseId: 'VL' + listId });
+    const tracks: YtResult[] = [];
+    collectPlaylistItems(data, tracks, 60);
+    if (!tracks.length) return '';
+    const films = new Map<string, number>();
+    const albums = new Map<string, number>();
+    const artists = new Map<string, number>();
+    for (const t of tracks) {
+      const f = FILM_TAG_RE.exec(t.title || '');
+      if (f) films.set(f[1].trim(), (films.get(f[1].trim()) || 0) + 1);
+      const album = (t.sub || '').split('\u2022')[1]?.trim();
+      if (album) albums.set(album, (albums.get(album) || 0) + 1);
+      const who = (t.sub || '').split('\u2022')[0].split(',')[0].trim();
+      if (who) artists.set(who, (artists.get(who) || 0) + 1);
+    }
+    const best = (m: Map<string, number>) =>
+      [...m.entries()].sort((a, b) => b[1] - a[1])[0]?.[0] || '';
+    /* shared film/album wins over the artist (a soundtrack list is one film) */
+    return best(films) || best(albums) || best(artists);
+  } catch {
+    return '';
+  }
+}
+
 async function ytExpandList(listId: string, hl: string, gl: string, maxPages = EXPAND_MAX_PAGES): Promise<Record<string, any>> {
   const isAlbum = /^MPRE/i.test(listId);
   const browseId = isAlbum ? listId : 'VL' + listId;
@@ -1224,51 +1255,22 @@ export const onRequestPost = async ({ request, env, ctx }: {
         }
         const hl = /^[a-z]{2}(-[A-Za-z]{2,4})?$/.test(String(body.hl || '')) ? String(body.hl) : 'en';
         const gl = /^[A-Z]{2}$/.test(String(body.gl || '')) ? String(body.gl) : 'US';
-        /* "OLAK…" is a channel's auto-uploads list — YouTube Music caps those
-           at ~10 rows with no continuation, so it is never what the user means
-           by "all the songs in this playlist". Read one page just to learn who
-           owns it, then harvest that channel (uploads + albums + singles),
-           which is the same sweep "+ all by artist" uses. Paging the list AND
-           sweeping in one request makes ~35 rapid InnerTube calls and YouTube
-           starts refusing the tail, so the list is only read once. */
-        if (/^OLAK/.test(listId)) {
-          const peek = await ytExpandList(listId, hl, gl, 0);
-          /* The newest upload can be a collab ("… feat. Someone"), so take the
-             credit that dominates the list — that's the channel owner. */
-          const creditTally = new Map<string, number>();
-          for (const t of peek.tracks || []) {
-            const who = normName((t.sub || '').split('•')[0].split(',')[0]);
-            if (who) creditTally.set(who, (creditTally.get(who) || 0) + 1);
-          }
-          const ranked = [...creditTally.entries()].sort((a, b) => b[1] - a[1]);
-          const owner =
-            ranked.length && ranked[0][1] >= 2 ? ranked[0][0] : '';
-          if (owner) {
-            try {
-              const full = await ytArtistSongs(owner, hl, gl);
-              if (full.tracks.length) {
-                return json({
-                  type: 'artist',
-                  title: full.channels[0] || owner,
-                  tracks: full.tracks,
-                  dupes: full.dupes,
-                  junk: full.junk,
-                  truncated: !!full.truncated,
-                  viaArtist: owner,
-                });
-              }
-            } catch (e) {
-              /* YouTube refused the sweep — fall back to the plain list */
-              peek.fallbackError = (e as Error).message;
-              const more = await ytExpandList(listId, hl, gl);
-              if (more.tracks.length > peek.tracks.length) return json(more);
-            }
-          }
-          if (peek.tracks.length) return json(peek);
-        }
+        let expanded_listName = '';
+        /* Queue exactly what the link contains. An "OLAK…" uploads list can be a
+           soundtrack, a single's worth of tracks or a whole catalogue — guessing
+           "the artist" from it and sweeping their channel dumped 200 unrelated
+           songs on someone who wanted a film's10 tracks. Only the naming is
+           improved, so the queue shows something meaningful. */
+        if (/^OLAK/.test(listId)) expanded_listName = await uploadsListName(listId, hl, gl);
         const expanded = await ytExpandList(listId, hl, gl);
         if (!expanded.tracks.length) {
           return json({ error: expanded.error || 'no tracks found in that playlist/album' }, 404);
+        }
+        /* uploads lists carry useless titles ("Playlist", "Top songs") —
+           prefer the name derived from the tracks themselves */
+        if (expanded_listName) {
+          expanded.title = expanded_listName;
+          expanded.type = 'playlist';
         }
         return json(expanded);
       }

@@ -100,6 +100,24 @@ import { $, state } from '../core/state';
       return d.toLocaleString([], {dateStyle:'medium', timeStyle:'short'});
     }
 
+    /* Show the signed-in Google account picture instead of the letter avatar.
+       The URL comes from the ID token; if it is missing or fails to load we
+       quietly fall back to the initial so the button is never blank. */
+    export function applyProfilePhoto(){
+      const pic = (getSession()?.picture || '').trim();
+      [['profilePhoto','profileInitial'],['popupPhoto','popupInitial']].forEach(([imgId, initialId]) => {
+        const img = $(imgId);
+        const letter = $(initialId);
+        if (!img) return;
+        if (!pic) { img.hidden = true; img.removeAttribute('src'); if (letter) letter.hidden = false; return; }
+        img.hidden = false;
+        img.referrerPolicy = 'no-referrer';
+        img.onerror = () => { img.hidden = true; if (letter) letter.hidden = false; };
+        if (img.getAttribute('src') !== pic) img.setAttribute('src', pic);
+        if (letter) letter.hidden = true;
+      });
+    }
+
     export function updateProfilePopup(){
       const name = getSavedUserName() || $('profileName').textContent || 'User';
       const firstLogin = localStorage.getItem('auraFirstLogin');
@@ -107,6 +125,7 @@ import { $, state } from '../core/state';
       $('popupProfileName').textContent = name;
       const initial = (Array.from(name.trim())[0] || 'U').toLocaleUpperCase();
       ['profileInitial','popupInitial'].forEach(id => { const el = $(id); if(el) el.textContent = initial; });
+      applyProfilePhoto();
       $('profileFirstLogin').textContent = formatLoginDate(firstLogin);
       $('profileLastLogin').textContent = formatLoginDate(lastLogin);
       $('profileTrackCount').textContent = `${state.songs.length} ${state.songs.length===1?'track':'tracks'}`;
