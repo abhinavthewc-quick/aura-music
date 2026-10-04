@@ -103,8 +103,29 @@ import { $, state } from '../core/state';
     /* Show the signed-in Google account picture instead of the letter avatar.
        The URL comes from the ID token; if it is missing or fails to load we
        quietly fall back to the initial so the button is never blank. */
+    function pictureFromToken(token: string): string {
+      /* The Google ID token carries the `picture` claim, so sessions created
+         before avatars were stored still show the right picture — no re-login. */
+      try {
+        const part = (token || '').split('.')[1];
+        if (!part) return '';
+        const b64 = part.replace(/-/g, '+').replace(/_/g, '/');
+        const json = decodeURIComponent(
+          atob(b64 + '='.repeat((4 - (b64.length % 4)) % 4))
+            .split('')
+            .map((c) => '%' + c.charCodeAt(0).toString(16).padStart(2, '0'))
+            .join(''),
+        );
+        const pic = JSON.parse(json)?.picture;
+        return typeof pic === 'string' ? pic : '';
+      } catch {
+        return '';
+      }
+    }
+
     export function applyProfilePhoto(){
-      const pic = (getSession()?.picture || '').trim();
+      const sess = getSession();
+      const pic = (sess?.picture || pictureFromToken(sess?.token || '')).trim();
       [['profilePhoto','profileInitial'],['popupPhoto','popupInitial']].forEach(([imgId, initialId]) => {
         const img = $(imgId);
         const letter = $(initialId);

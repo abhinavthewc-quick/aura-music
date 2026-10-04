@@ -350,6 +350,11 @@ function renderQueue() {
 /* ----- paste ingestion: valid lines are pulled into the queue automatically;
    playlist/album links expand into their individual tracks ----- */
 const PLAYLIST_RE = /[?&]list=[A-Za-z0-9_-]{6,}/;
+/* People paste playlist links straight into the search box, which used to run
+   them as a *text search* — YouTube then returned whatever vaguely matched the
+   URL string. Detect link-shaped input and expand it instead. */
+const LINK_LIKE_RE = /^(https?:\/\/|www\.)?(music\.|www\.)?(youtube\.com|youtu\.be)\//i;
+const videoIdOf = (raw: string): string => /[?&]v=([A-Za-z0-9_-]{11})/.exec(raw)?.[1] || '';
 const isPlaylistLine = (l: string) =>
   PLAYLIST_RE.test(l) && !/watch\?v=|youtu\.be\/|shorts\//.test(l);
 
@@ -649,6 +654,26 @@ async function runSearch() {
     searchResults.innerHTML = '';
     lastResults = [];
     setStatus(searchStatus, '');
+    return;
+  }
+  /* a pasted playlist/album link is not a search query */
+  if (LINK_LIKE_RE.test(q)) {
+    searchResults.innerHTML = '';
+    lastResults = [];
+    if (videoIdOf(q)) {
+      /* a single watch link: queue it like the paste box does */
+      urlsInput.value = urlsInput.value.trim() ? `${urlsInput.value.trim()}\n${q}` : q;
+      setStatus(searchStatus, 'Link added to the paste box — it joins the queue.');
+      searchInput.value = '';
+      ingestPasted();
+      return;
+    }
+    if (PLAYLIST_RE.test(q)) {
+      searchInput.value = '';
+      void expandPlaylist(q);
+      return;
+    }
+    setStatus(searchStatus, '✗ that link has no video or playlist ID in it', 'err');
     return;
   }
   const seq = ++searchSeq;
@@ -1319,6 +1344,7 @@ function bind() {
   searchInput.addEventListener('keydown', (e: KeyboardEvent) => {
     if (e.key === 'Enter') {
       e.preventDefault();
+      if (LINK_LIKE_RE.test(searchInput.value.trim())) { void runSearch(); return; }
       addTopResult();
     } else if (e.key === 'Escape') {
       searchInput.value = '';
