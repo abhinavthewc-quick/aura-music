@@ -444,6 +444,17 @@ async function ytExpandList(listId: string, hl: string, gl: string, maxPages = E
   } catch (e) {
     return { type: isAlbum ? 'album' : 'playlist', title: '', tracks: [], error: (e as Error).message };
   }
+  /* YouTube intermittently serves a partial first page (10 → 5) with no
+     continuation token, which silently under-reports the playlist. One retry
+     costs a single browse and merges whatever the second pass returns. */
+  if (tracks.length < 10 && !cont) {
+    try {
+      const again = await ytBrowse('https://music.youtube.com', hl, gl, { browseId });
+      const before = tracks.length;
+      collectPlaylistItems(again, tracks, EXPAND_MAX_TRACKS);
+      if (tracks.length > before) cont = findContinuation(again) || '';
+    } catch { /* keep what we have */ }
+  }
   /* follow the playlist's own pages — one extra page used to cap every
      playlist at ~70 tracks */
   for (let page = 0; cont && page < maxPages && tracks.length < EXPAND_MAX_TRACKS; page++) {
