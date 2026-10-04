@@ -1,3 +1,6 @@
 /* Profile icon = first letter of the user's name (same treatment as the login screen) */
 .profile-initial{width:100%;height:100%;display:grid;place-items:center;border-radius:50%;font-family:'Cormorant Garamond','Iowan Old Style','Palatino Linotype',Georgia,serif;font-weight:600;font-size:23px;line-height:1;color:#2a1808;background:linear-gradient(145deg,#f8e4c0,#c58f5c);box-shadow:inset 0 1px 0 rgba(255,255,255,.45),0 4px 12px rgba(0,0,0,.28);user-select:none;-webkit-user-select:none}
 .profile-popover-avatar.profile-initial{width:48px;height:48px;flex:0 0 48px;font-size:27px;border:0;box-shadow:inset 0 1px 0 rgba(255,255,255,.45)}
+/* When the Google picture is shown the letter must actually disappear —
+   .profile-initial sets display:grid, which beats the UA [hidden] rule. */
+.profile-initial[hidden],.profile-photo[hidden],.profile-popover-avatar[hidden]{display:none!important}
