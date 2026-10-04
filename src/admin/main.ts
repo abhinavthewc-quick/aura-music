@@ -388,7 +388,9 @@ function ingestPasted() {
 async function expandPlaylist(url: string) {
   setStatus(searchStatus, 'Reading playlist…');
   try {
-    const data = await adminApi<{ type: string; title: string; tracks: SearchResult[] }>('expand', { url });
+    const data = await adminApi<{
+      type: string; title: string; tracks: SearchResult[]; truncated?: boolean; viaArtist?: string; dupes?: number; junk?: number;
+    }>('expand', { url });
     let added = 0;
     let skipped = 0;
     for (const t of data.tracks || []) {
@@ -402,8 +404,21 @@ async function expandPlaylist(url: string) {
         source: 'paste',
       }, true)) added++;
     }
-    const kind = data.type === 'album' ? 'Album' : 'Playlist';
-    setStatus(searchStatus, `${kind} “${data.title}” — ${added} track${added === 1 ? '' : 's'} queued${skipped ? `, ${skipped} skipped` : ''}`, 'ok');
+    const total = (data.tracks || []).length;
+    /* a channel uploads link expands to the artist's whole catalogue */
+    const kind = data.type === 'album' ? 'Album' : data.type === 'artist' ? 'Artist' : 'Playlist';
+    const extras = [
+      data.viaArtist && data.type === 'artist' ? '' : '',
+      data.dupes ? ` · ${data.dupes} duplicate versions merged` : '',
+      data.junk ? ` · ${data.junk} non-song clips skipped` : '',
+      data.truncated ? ` · showing first ${total}` : '',
+      skipped ? ` · ${skipped} already queued/library` : '',
+    ].filter(Boolean).join('');
+    setStatus(
+      searchStatus,
+      `${kind} “${data.title}” — ${total} track${total === 1 ? '' : 's'} found, ${added} queued${extras}`,
+      'ok',
+    );
     toast(`${kind} expanded — ${added} track${added === 1 ? '' : 's'} queued`, 'ok');
     syncResultRows();
   } catch (e) {

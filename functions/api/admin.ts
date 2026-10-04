@@ -316,13 +316,14 @@ async function ytSearchVideos(q: string, hl: string, gl: string): Promise<YtResu
    tracks, so the workflow still downloads real per-track files. YT Music's
    browse endpoint serves both playlists (browseId "VL"+id) and albums
    (browseId "MPRE…") in one code path. */
-const EXPAND_MAX_TRACKS = 50;
+const EXPAND_MAX_TRACKS = 300;
+const EXPAND_MAX_PAGES = 6;
 const LIST_ID_RE = /^[A-Za-z0-9_-]{6,64}$/;
 
-function collectPlaylistItems(node: any, out: YtResult[]): void {
-  if (!node || typeof node !== 'object' || out.length >= EXPAND_MAX_TRACKS) return;
+function collectPlaylistItems(node: any, out: YtResult[], cap = EXPAND_MAX_TRACKS): void {
+  if (!node || typeof node !== 'object' || out.length >= cap) return;
   if (Array.isArray(node)) {
-    for (const x of node) collectPlaylistItems(x, out);
+    for (const x of node) collectPlaylistItems(x, out, cap);
     return;
   }
   const r = node.musicResponsiveListItemRenderer;
@@ -346,7 +347,7 @@ function collectPlaylistItems(node: any, out: YtResult[]): void {
     }
   }
   for (const k of Object.keys(node)) {
-    if (k !== 'musicResponsiveListItemRenderer') collectPlaylistItems(node[k], out);
+    if (k !== 'musicResponsiveListItemRenderer') collectPlaylistItems(node[k], out, cap);
   }
 }
 
@@ -395,30 +396,41 @@ async function ytBrowse(origin: string, hl: string, gl: string, payload: Record<
   });
 }
 
-async function ytExpandList(listId: string, hl: string, gl: string) {
+async function ytExpandList(listId: string, hl: string, gl: string, maxPages = EXPAND_MAX_PAGES): Promise<Record<string, any>> {
   const isAlbum = /^MPRE/i.test(listId);
   const browseId = isAlbum ? listId : 'VL' + listId;
-  const data = await ytBrowse('https://music.youtube.com', hl, gl, { browseId });
   const tracks: YtResult[] = [];
-  collectPlaylistItems(data, tracks);
-  if (tracks.length < EXPAND_MAX_TRACKS) {
-    const cont = findContinuation(data);
-    if (cont) {
-      try {
-        const more = await ytBrowse('https://music.youtube.com', hl, gl, { continuation: cont });
-        collectPlaylistItems(more, tracks);
-      } catch { /* first page is enough */ }
+  let title = '';
+  let cont = '';
+  try {
+    const data = await ytBrowse('https://music.youtube.com', hl, gl, { browseId });
+    collectPlaylistItems(data, tracks, EXPAND_MAX_TRACKS);
+    const mf = data?.microformat?.microformatDataRenderer;
+    title =
+      (typeof mf?.title === 'string' && mf.title.trim()) ||
+      findHeaderTitle(data?.header || {});
+    cont = findContinuation(data) || '';
+  } catch (e) {
+    return { type: isAlbum ? 'album' : 'playlist', title: '', tracks: [], error: (e as Error).message };
+  }
+  /* follow the playlist's own pages — one extra page used to cap every
+     playlist at ~70 tracks */
+  for (let page = 0; cont && page < maxPages && tracks.length < EXPAND_MAX_TRACKS; page++) {
+    try {
+      const more = await ytBrowse('https://music.youtube.com', hl, gl, { continuation: cont });
+      const before = tracks.length;
+      collectPlaylistItems(more, tracks, EXPAND_MAX_TRACKS);
+      if (tracks.length === before) break;
+      cont = findContinuation(more) || '';
+    } catch {
+      break;
     }
   }
-  const mf = data?.microformat?.microformatDataRenderer;
-  const title =
-    (typeof mf?.title === 'string' && mf.title.trim()) ||
-    findHeaderTitle(data?.header || {}) ||
-    (isAlbum ? 'Album' : 'Playlist');
   return {
     type: isAlbum ? 'album' : 'playlist',
-    title,
+    title: title || (isAlbum ? 'Album' : 'Playlist'),
     tracks: tracks.slice(0, EXPAND_MAX_TRACKS),
+    truncated: !!cont,
   };
 }
 
@@ -1212,8 +1224,52 @@ export const onRequestPost = async ({ request, env, ctx }: {
         }
         const hl = /^[a-z]{2}(-[A-Za-z]{2,4})?$/.test(String(body.hl || '')) ? String(body.hl) : 'en';
         const gl = /^[A-Z]{2}$/.test(String(body.gl || '')) ? String(body.gl) : 'US';
+        /* "OLAK…" is a channel's auto-uploads list — YouTube Music caps those
+           at ~10 rows with no continuation, so it is never what the user means
+           by "all the songs in this playlist". Read one page just to learn who
+           owns it, then harvest that channel (uploads + albums + singles),
+           which is the same sweep "+ all by artist" uses. Paging the list AND
+           sweeping in one request makes ~35 rapid InnerTube calls and YouTube
+           starts refusing the tail, so the list is only read once. */
+        if (/^OLAK/.test(listId)) {
+          const peek = await ytExpandList(listId, hl, gl, 0);
+          /* The newest upload can be a collab ("… feat. Someone"), so take the
+             credit that dominates the list — that's the channel owner. */
+          const creditTally = new Map<string, number>();
+          for (const t of peek.tracks || []) {
+            const who = normName((t.sub || '').split('•')[0].split(',')[0]);
+            if (who) creditTally.set(who, (creditTally.get(who) || 0) + 1);
+          }
+          const ranked = [...creditTally.entries()].sort((a, b) => b[1] - a[1]);
+          const owner =
+            ranked.length && ranked[0][1] >= 2 ? ranked[0][0] : '';
+          if (owner) {
+            try {
+              const full = await ytArtistSongs(owner, hl, gl);
+              if (full.tracks.length) {
+                return json({
+                  type: 'artist',
+                  title: full.channels[0] || owner,
+                  tracks: full.tracks,
+                  dupes: full.dupes,
+                  junk: full.junk,
+                  truncated: !!full.truncated,
+                  viaArtist: owner,
+                });
+              }
+            } catch (e) {
+              /* YouTube refused the sweep — fall back to the plain list */
+              peek.fallbackError = (e as Error).message;
+              const more = await ytExpandList(listId, hl, gl);
+              if (more.tracks.length > peek.tracks.length) return json(more);
+            }
+          }
+          if (peek.tracks.length) return json(peek);
+        }
         const expanded = await ytExpandList(listId, hl, gl);
-        if (!expanded.tracks.length) return json({ error: 'no tracks found in that playlist/album' }, 404);
+        if (!expanded.tracks.length) {
+          return json({ error: expanded.error || 'no tracks found in that playlist/album' }, 404);
+        }
         return json(expanded);
       }
 
