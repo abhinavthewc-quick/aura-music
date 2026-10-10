@@ -81,7 +81,7 @@
 (function(){
   var el=document.getElementById('auraLoader'); if(!el) return;
   var root=document.documentElement;
-  var MIN_MS=1600, CAP_MS=10000;               /* shortest time the orb is shown / longest we ever wait */
+  var MIN_MS=600, CAP_MS=6000;                 /* shortest time the orb is shown / longest we ever wait */
   function cleanup(){ if(el.parentNode) el.parentNode.removeChild(el); root.classList.remove('aura-loading'); }
   try{
     var small=Math.min(window.screen.width||1000,window.screen.height||1000)<700;
@@ -101,8 +101,8 @@
       var tx=document.getElementById('auraLoaderText'); if(tx) tx.classList.add('leaving');
       el.style.pointerEvents='none';
       el.setAttribute('aria-hidden','true');
-      var dur=window.AuraOrb.reduce?350:1000, s=performance.now();
-      setTimeout(function(){ el.style.transition='opacity .5s ease'; el.style.opacity='0'; }, window.AuraOrb.reduce?0:450);
+      var dur=window.AuraOrb.reduce?350:550, s=performance.now();
+      setTimeout(function(){ el.style.transition='opacity .35s ease'; el.style.opacity='0'; }, window.AuraOrb.reduce?0:150);
       (function tick(now){
         var p=Math.min(1,(now-s)/dur);
         orb.setZoom(window.AuraOrb.reduce?0:p);
