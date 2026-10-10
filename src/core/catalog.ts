@@ -119,10 +119,34 @@ export async function fetchHfCatalog(): Promise<any[]> {
   const [treeRes, manifestRes] = await Promise.allSettled([fetch(HF_TREE_URL), fetch(hfFileUrl('manifest.json'))]);
 
   if (treeRes.status !== 'fulfilled') throw treeRes.reason;
-  const res = treeRes.value;
-  if (!res.ok) throw new Error('bucket listing failed (HTTP ' + res.status + ')');
-  const items = await res.json();
-  if (!Array.isArray(items)) throw new Error('unexpected bucket listing format');
+
+  /* The bucket tree API returns 1000 entries per page with a
+     `Link: rel="next"` cursor. One request capped the whole library at 1000
+     files, so anything uploaded past that was invisible on the site. */
+  let items: any[] = [];
+  let res: Response = treeRes.value;
+  const seenPaths = new Set<string>();
+  for (let page = 0; page < 20; page++) {
+    if (!res.ok) {
+      if (!items.length) throw new Error('bucket listing failed (HTTP ' + res.status + ')');
+      break;
+    }
+    const batch = await res.json();
+    if (!Array.isArray(batch)) {
+      if (!items.length) throw new Error('unexpected bucket listing format');
+      break;
+    }
+    for (const it of batch) {
+      const p = it?.path;
+      if (typeof p === 'string' && !seenPaths.has(p)) {
+        seenPaths.add(p);
+        items.push(it);
+      }
+    }
+    const next = /<([^>]+)>;\s*rel="next"/.exec(res.headers.get('link') || '');
+    if (!next) break;
+    res = await fetch(next[1]);
+  }
 
   let manifest: Manifest = {};
   if (manifestRes.status === 'fulfilled' && manifestRes.value.ok) {
@@ -170,10 +194,26 @@ export async function fetchHfCatalog(): Promise<any[]> {
     };
   });
 
+  /* A hand-uploaded "Artist - Song.mp3" has no video ID, so it keys differently
+     from the "… [id].opus" the download pipeline fetched for the same song and
+     both showed up. When the only difference is the missing ID, keep the
+     version with the ID — it carries manifest metadata, duration and year. */
+  const bySong = new Map<string, any>();
+  for (const t of tracks) {
+    const k = String(t.title || '').toLowerCase().trim() + '|' + String(t.artist || '').toLowerCase().trim();
+    const prev = bySong.get(k);
+    if (!prev) {
+      bySong.set(k, t);
+      continue;
+    }
+    if (!prev.videoId && t.videoId) bySong.set(k, t);
+  }
+  const finalTracks = [...bySong.values()];
+
   try {
-    localStorage.setItem(CACHE_KEY, JSON.stringify({ tracks, at: Date.now() }));
+    localStorage.setItem(CACHE_KEY, JSON.stringify({ tracks: finalTracks, at: Date.now() }));
   } catch {
     /* quota — cache is best-effort */
   }
-  return tracks;
+  return finalTracks;
 }

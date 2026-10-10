@@ -19,6 +19,7 @@ const MAX_SECRET_BYTES = 128 * 1024;
 const FALLBACK_TTL_SEC = 7 * 24 * 3600; // password sessions last 7 days
 const HF_BUCKET = 'Angelrider/sonora'; // public tree — no HF token needed for reads
 const TREE_TTL_MS = 60 * 1000;
+const TREE_MAX_PAGES = 20; // 1000 entries per page
 const VIDEO_ID_SUFFIX_RE = /\s\[([A-Za-z0-9_-]{11})\]$/;
 const MANAGE_WORKFLOW_FILE = 'manage-music.yml';
 const STAGING_DIR = '.staging';
@@ -65,20 +66,39 @@ async function bucketTree(force = false): Promise<BucketFile[]> {
       }
     } catch { /* cache unavailable — fetch fresh */ }
   }
-  const res = await fetch(`https://huggingface.co/api/buckets/${HF_BUCKET}/tree?recursive=true`);
-  if (!res.ok) throw new Error('bucket listing failed (HTTP ' + res.status + ')');
-  const items = await res.json();
-  if (!Array.isArray(items)) throw new Error('unexpected bucket listing format');
+  /* The tree endpoint returns 1000 entries per page and hands back a
+     `Link: rel="next"` cursor. Reading only the first page made everything
+     past it — including freshly uploaded tracks — invisible to the site and
+     the library manager, so follow the cursor until it runs out. */
   const files: BucketFile[] = [];
-  for (const it of items) {
-    if (it && it.type === 'file' && typeof it.path === 'string') {
-      files.push({
-        path: it.path,
-        size: Number(it.size) || 0,
-        mtime: String(it.mtime || ''),
-        xetHash: typeof it.xetHash === 'string' ? it.xetHash : undefined,
-      });
+  const seen = new Set<string>();
+  let url: string | null = `https://huggingface.co/api/buckets/${HF_BUCKET}/tree?recursive=true`;
+  for (let page = 0; url && page < TREE_MAX_PAGES; page++) {
+    const res: Response = await fetch(url);
+    if (!res.ok) {
+      /* keep whatever earlier pages gave us rather than failing outright */
+      if (!files.length) throw new Error('bucket listing failed (HTTP ' + res.status + ')');
+      break;
     }
+    const items: any = await res.json();
+    if (!Array.isArray(items)) {
+      if (!files.length) throw new Error('unexpected bucket listing format');
+      break;
+    }
+    for (const it of items) {
+      if (it && it.type === 'file' && typeof it.path === 'string' && !seen.has(it.path)) {
+        seen.add(it.path);
+        files.push({
+          path: it.path,
+          size: Number(it.size) || 0,
+          mtime: String(it.mtime || ''),
+          xetHash: typeof it.xetHash === 'string' ? it.xetHash : undefined,
+        });
+      }
+    }
+    const link = res.headers.get('link') || '';
+    const next = /<([^>]+)>;\s*rel="next"/.exec(link);
+    url = next ? next[1] : null;
   }
   treeMem = { files, at: Date.now() };
   try {
