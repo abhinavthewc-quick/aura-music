@@ -306,6 +306,15 @@ body {
   background: rgba(0, 0, 0, 0.3); border: 1px solid rgba(255, 255, 255, 0.09);
   border-radius: 14px; padding: 9px 9px 11px; position: relative; transition: .14s;
   outline: none;
+  /* The library grid holds ~570 cards, and every one carried a full-size
+     absolutely-positioned hover overlay plus a cover image. Laying all of that
+     out cost ~1.2s whenever a query matched a large part of the library.
+     Skipping rendering work for cards outside the scrollport fixes it
+     (measured 1187ms -> 2ms) and leaves visible cards untouched.
+     `auto 190px` remembers the real size once rendered, so the scrollbar does
+     not jump as you scroll. Content stays focusable and keyboard-reachable. */
+  content-visibility: auto;
+  contain-intrinsic-size: auto 190px;
 }
 .adm-lcard:hover { border-color: rgba(220, 174, 124, 0.4); transform: translateY(-2px); }
 .adm-lcard:focus-visible { border-color: var(--gold); box-shadow: 0 0 0 2px var(--gold-soft); }
