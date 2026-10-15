@@ -767,10 +767,19 @@ function ingestLibraryData(data: LibraryResponse): void {
   for (const f of files) {
     if (f && IMG_FILE_RE.test(f.path)) libCovers.set(f.path.replace(/\.[^.]+$/, ''), f.path);
   }
+  /* bucket data changed — drop the derived list so the next read rebuilds it */
+  libEntriesCache = null;
 }
 
+/* Parsing a filename into title/artist/album/ID costs a regex per file, and
+   renderLibGrid() used to do it TWICE on every keystroke (once for the counts,
+   once inside libVisibleEntries). The result only changes when the bucket does,
+   so build it once and hand out the same array until ingestLibraryData runs. */
+let libEntriesCache: LibEntry[] | null = null;
+
 function buildLibEntries(): LibEntry[] {
-  return libFiles.map((f) => {
+  if (libEntriesCache) return libEntriesCache;
+  libEntriesCache = libFiles.map((f) => {
     const stem = f.path.replace(/\.[^.]+$/, '');
     const ext = f.path.slice(stem.length);
     const vidM = VID_SUFFIX_RE.exec(stem);
@@ -796,10 +805,12 @@ function buildLibEntries(): LibEntry[] {
       coverUrl: coverPath ? hfLibUrl(coverPath) : '',
     };
   });
+  return libEntriesCache;
 }
 
 function libVisibleEntries(): LibEntry[] {
-  let list = buildLibEntries();
+  /* slice() so the filter/sort below can never reorder the shared cache */
+  let list = buildLibEntries().slice();
   if (libFilter === 'nocover') list = list.filter((e) => !e.coverUrl);
   else if (libFilter === 'noid') list = list.filter((e) => !e.vid);
   const q = libQuery.toLowerCase();
@@ -1457,10 +1468,14 @@ function bind() {
     if (btn?.dataset.panel) switchTab(btn.dataset.panel);
   });
 
-  /* library browser controls */
+  /* library browser controls — the filter re-draws every card, so wait until
+     typing pauses (same trick the top search box uses) instead of doing it on
+     every single letter. */
+  let libFilterTimer: number | undefined;
   $('libSearchInput').addEventListener('input', () => {
     libQuery = ($('libSearchInput') as HTMLInputElement).value.trim();
-    renderLibGrid();
+    window.clearTimeout(libFilterTimer);
+    libFilterTimer = window.setTimeout(() => renderLibGrid(), 150);
   });
   $('libSort').addEventListener('change', () => {
     libSortMode = ($('libSort') as HTMLSelectElement).value;
