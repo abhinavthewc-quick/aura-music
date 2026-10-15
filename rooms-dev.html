@@ -1,0 +1,98 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<title>AURA rooms — sync test harness</title>
+<style>
+  :root { color-scheme: dark; }
+  body { background:#14100c; color:#e8dcc8; font:14px/1.5 system-ui, sans-serif; margin:0; padding:20px; }
+  h1 { font-size:18px; margin:0 0 4px; letter-spacing:.06em; }
+  .sub { color:#9a8b74; font-size:12px; margin-bottom:18px; }
+  .grid { display:grid; grid-template-columns: 1fr 1fr; gap:18px; max-width:1000px; }
+  .card { background:#1e1811; border:1px solid #33291d; border-radius:12px; padding:14px; }
+  .card h2 { font-size:12px; text-transform:uppercase; letter-spacing:.1em; color:#b98249; margin:0 0 10px; }
+  label { display:block; font-size:11px; color:#9a8b74; margin:8px 0 3px; }
+  input { width:100%; box-sizing:border-box; background:#120e09; border:1px solid #3a2f21; color:#e8dcc8;
+          border-radius:8px; padding:8px 10px; font:inherit; }
+  button { background:#2a2118; border:1px solid #4a3a28; color:#e8dcc8; border-radius:8px;
+           padding:7px 12px; font:inherit; cursor:pointer; margin:4px 4px 0 0; }
+  button:hover:not(:disabled) { background:#3a2d1f; }
+  button:disabled { opacity:.35; cursor:not-allowed; }
+  input[type=range] { padding:0; }
+  .row { display:flex; justify-content:space-between; font-family:ui-monospace,monospace; font-size:12px;
+         padding:2px 0; border-bottom:1px dashed #2e2519; }
+  .ok { color:#8fbf6a; } .warn { color:#d9a441; } .err { color:#d97060; }
+  .badge { display:inline-block; padding:1px 7px; border-radius:999px; font-size:11px; font-weight:700; }
+  .badge.admin { background:#b98249; color:#14100c; }
+  .badge.listener { background:#3a2f21; color:#c9b89c; }
+  ul { list-style:none; margin:6px 0 0; padding:0; }
+  li { display:flex; justify-content:space-between; align-items:center; padding:3px 0; font-size:13px; }
+  li button { margin:0; padding:2px 8px; font-size:11px; }
+  #chat { height:170px; overflow-y:auto; background:#120e09; border:1px solid #2e2519;
+          border-radius:8px; padding:8px; margin-bottom:8px; }
+  .msg { font-size:12px; margin-bottom:4px; }
+  .msg b { color:#b98249; margin-right:6px; }
+  .link { font-family:ui-monospace,monospace; font-size:10px; word-break:break-all; color:#7d8fa8;
+          background:#120e09; padding:5px; border-radius:6px; margin-top:4px; }
+  #status { font-size:12px; min-height:16px; }
+  .note { font-size:11px; color:#9a8b74; margin-top:6px; }
+  audio { width:100%; margin-top:8px; }
+</style>
+</head>
+<body>
+  <h1>AURA ROOMS — sync test harness</h1>
+  <div class="sub">Two windows on this machine. Create a room, copy the share link, open it in the second window.</div>
+
+  <div class="grid">
+    <div class="card">
+      <h2>Join</h2>
+      <label for="name">Your name</label>
+      <input id="name" value="listener" />
+      <label for="roomCode">Room code (leave blank to create)</label>
+      <input id="roomCode" placeholder="e.g. k7m2pq" />
+      <button id="createBtn">Create room</button>
+      <button id="joinBtn">Join</button>
+      <p id="status"></p>
+      <p class="note" id="listenerNote" style="display:none">You are a listener — you can see and chat, not control.</p>
+      <div id="adminOnly">
+        <label>Your admin link</label>
+        <div class="link" id="adminLink"></div>
+        <label>Share link (anyone)</label>
+        <div class="link" id="shareLink"></div>
+      </div>
+    </div>
+
+    <div class="card">
+      <h2>Now playing</h2>
+      <div class="row"><span>track</span><b id="nowTrack">—</b></div>
+      <div class="row"><span>state</span><b id="playState">—</b></div>
+      <div class="row"><span>position / duration</span><b><span id="pos">0:00</span> / <span id="dur">–:––</span></b></div>
+      <div class="row"><span>drift</span><b id="drift">0 ms</b></div>
+      <div class="row"><span>clock offset</span><b id="offset">0 ms</b></div>
+      <div class="row"><span>sync</span><b id="sync" class="ok">—</b></div>
+      <div class="row"><span>room</span><b><span id="roomId">—</span> · <span id="role" class="badge listener">—</span></b></div>
+      <input type="range" id="seek" min="0" max="180000" value="0" />
+      <button id="btnPlay">Play / pause</button>
+      <button id="btnAdd1">Queue Tone A</button>
+      <button id="btnAdd2">Queue Tone B</button>
+      <button id="btnNext">Skip to next</button>
+      <audio id="audio" loop></audio>
+    </div>
+
+    <div class="card">
+      <h2>People</h2>
+      <ul id="people"></ul>
+    </div>
+
+    <div class="card">
+      <h2>Chat</h2>
+      <div id="chat"></div>
+      <form id="chatForm">
+        <input id="chatInput" placeholder="say something…" autocomplete="off" />
+      </form>
+    </div>
+  </div>
+
+  <script type="module" src="/src/rooms/devHarness.ts"></script>
+</body>
+</html>
