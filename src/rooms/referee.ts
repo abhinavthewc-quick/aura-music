@@ -37,6 +37,36 @@ export interface RefereeEvents {
   finished(reason: string): void;
 }
 
+/**
+ * Timer injection. The referee runs unchanged in a browser tab (local
+ * development) and inside a Durable Object, which has no `window`.
+ */
+export interface RefereeTimers {
+  setTimeout(fn: () => void, ms: number): unknown;
+  clearTimeout(id: unknown): void;
+}
+
+const windowTimers: RefereeTimers = {
+  setTimeout: (fn, ms) => globalThis.setTimeout(fn, ms),
+  clearTimeout: (id) => globalThis.clearTimeout(id as ReturnType<typeof setTimeout>),
+};
+
+/** Everything the referee holds, in a shape that survives serialisation. */
+export interface RefereeState {
+  playback: PlaybackState;
+  queue: string[];
+  participants: Participant[];
+  adminKeys: [string, string][];
+  chat: ChatMessage[];
+  expiresAt: number | null;
+}
+
+export interface RefereeOptions {
+  timers?: RefereeTimers;
+  /** Called whenever authoritative state changes, so it can be persisted. */
+  onChange?: (state: RefereeState) => void;
+}
+
 interface ChatRateEntry { at: number[] }
 
 export class RoomReferee {
@@ -49,19 +79,81 @@ export class RoomReferee {
   private chat: ChatMessage[] = [];
   private chatRate = new Map<string, ChatRateEntry>();
   private expiresAt: number | null = null;
-  private rescueTimer: number | null = null;
-  private expiryTimer: number | null = null;
+  private rescueTimer: unknown = null;
+  private expiryTimer: unknown = null;
   private events: RefereeEvents;
+  private timers: RefereeTimers;
+  private onChange?: (state: RefereeState) => void;
   private startedAt = Date.now();
 
-  constructor(roomId: string, ownerKey: string, ownerId: string, events: RefereeEvents) {
+  constructor(
+    roomId: string,
+    ownerKey: string,
+    ownerId: string,
+    events: RefereeEvents,
+    options: RefereeOptions = {},
+  ) {
     this.roomId = roomId;
     this.events = events;
+    this.timers = options.timers ?? windowTimers;
+    this.onChange = options.onChange;
 
+    // An empty key means "no owner yet" — the Durable Object creates the room
+    // lazily and seeds the owner separately.
+    if (ownerKey) {
+      this.adminKeys.set(ownerKey, ownerId);
+      this.participants.set(ownerId, {
+        id: ownerId, name: 'host', role: 'admin', joinedAt: this.startedAt,
+      });
+    }
+  }
+
+  /**
+   * Make a key valid without creating a participant for it. Used when a room is
+   * created: the key is real before anybody connects, and whoever presents it
+   * first becomes the admin.
+   */
+  registerAdminKey(ownerKey: string): void {
+    if (!ownerKey || this.adminKeys.has(ownerKey)) return;
+    this.adminKeys.set(ownerKey, 'pending');
+    this.changed();
+  }
+
+  /**
+   * Register the room creator as the first admin. Ignored once the room has
+   * anybody in it, so a replayed create request cannot reset a live room.
+   */
+  seedOwner(ownerId: string, ownerKey: string, name = 'host'): void {
+    if (this.participants.size > 0) return;
+    this.participants.set(ownerId, { id: ownerId, name, role: 'admin', joinedAt: this.now() });
     this.adminKeys.set(ownerKey, ownerId);
-    this.participants.set(ownerId, {
-      id: ownerId, name: 'host', role: 'admin', joinedAt: this.startedAt,
-    });
+    this.broadcastParticipants();
+  }
+
+  /* ---- persistence (used by the Durable Object) ---- */
+
+  exportState(): RefereeState {
+    return {
+      playback: this.playback,
+      queue: this.queue,
+      participants: [...this.participants.values()],
+      adminKeys: [...this.adminKeys.entries()],
+      chat: this.chat,
+      expiresAt: this.expiresAt,
+    };
+  }
+
+  importState(state: RefereeState): void {
+    this.playback = state.playback ?? { ...EMPTY_PLAYBACK };
+    this.queue = state.queue ?? [];
+    this.participants = new Map((state.participants ?? []).map((p) => [p.id, p]));
+    this.adminKeys = new Map(state.adminKeys ?? []);
+    this.chat = state.chat ?? [];
+    this.expiresAt = state.expiresAt ?? null;
+  }
+
+  private changed(): void {
+    this.onChange?.(this.exportState());
   }
 
   now(): number {
@@ -78,12 +170,25 @@ export class RoomReferee {
     };
   }
 
+  /**
+   * Authority is possession of a key. The key is bound to whichever client
+   * last presented it, so an admin who reconnects from a new tab (and therefore
+   * a new clientId) keeps control instead of silently dropping to listener.
+   */
   private isAdmin(clientId: string, key?: string): boolean {
+    // The key is checked FIRST. On a fresh join the participant does not exist
+    // yet, so looking them up before validating the key would reject the very
+    // person presenting it.
+    if (key) {
+      for (const [k] of this.adminKeys) {
+        if (k === key) {
+          this.adminKeys.set(k, clientId);
+          return true;
+        }
+      }
+    }
     const p = this.participants.get(clientId);
-    if (!p) return false;
-    if (p.role === 'admin') return true;
-    if (key && this.adminKeys.get(key) === clientId) return true;
-    return false;
+    return p?.role === 'admin';
   }
 
   handle(clientId: string, message: ClientMessage): void {
@@ -116,10 +221,9 @@ export class RoomReferee {
         return;
 
       case 'control': {
-        if (!this.isAdmin(clientId, undefined) && !this.claimableBy(clientId)) {
-          this.events.deliver(clientId, { t: 'closing', reason: 'only admins control playback' });
-          return;
-        }
+        // Silently ignored rather than reported: telling someone the room
+        // closed because they pressed play would be alarming and wrong.
+        if (!this.isAdmin(clientId) && !this.claimableBy(clientId)) return;
         this.applyControl(clientId, message);
         return;
       }
@@ -139,7 +243,8 @@ export class RoomReferee {
           const admins = [...this.participants.values()].filter((p) => p.role === 'admin');
           if (admins.length <= 1 && target.role === 'admin') return;
           target.role = 'listener';
-          this.adminKeys.delete(this.keyFor(target.id));
+          const key = this.keyFor(target.id);
+          if (key) this.adminKeys.delete(key);
         } else {
           target.role = 'admin';
         }
@@ -267,22 +372,38 @@ export class RoomReferee {
     };
     this.chat.push(message);
     if (this.chat.length > CHAT_HISTORY) this.chat.shift();
+    this.changed();
     for (const id of this.participants.keys()) {
       this.events.deliver(id, { t: 'chat', message });
     }
   }
 
+  /**
+   * A participant's connection went away without a clean goodbye — the tab was
+   * closed, the network dropped, the socket died. Same effect as `bye`.
+   */
+  disconnect(clientId: string): void {
+    if (!this.participants.has(clientId)) return;
+    this.participants.delete(clientId);
+    this.chatRate.delete(clientId);
+    this.broadcastParticipants();
+    this.evaluateLifetime();
+  }
+
   private broadcastPlayback(): void {
+    this.changed();
     const payload: ServerMessage = { t: 'playback', playback: this.playback, serverTime: this.now() };
     for (const id of this.participants.keys()) this.events.deliver(id, payload);
   }
 
   private broadcastQueue(): void {
+    this.changed();
     const payload: ServerMessage = { t: 'queue', queue: this.queue, serverTime: this.now() };
     for (const id of this.participants.keys()) this.events.deliver(id, payload);
   }
 
   private broadcastParticipants(): void {
+    this.changed();
     const payload: ServerMessage = {
       t: 'participants',
       participants: [...this.participants.values()],
@@ -294,7 +415,7 @@ export class RoomReferee {
   /* ---- room lifetime ---- */
 
   private cancelExpiry(): void {
-    if (this.expiryTimer !== null) { window.clearTimeout(this.expiryTimer); this.expiryTimer = null; }
+    if (this.expiryTimer !== null) { this.timers.clearTimeout(this.expiryTimer); this.expiryTimer = null; }
     this.expiresAt = null;
   }
 
@@ -308,7 +429,8 @@ export class RoomReferee {
     // Nobody left. Start the grace countdown.
     if (this.expiryTimer !== null) return;
     this.expiresAt = this.now() + GRACE_MS;
-    this.expiryTimer = window.setTimeout(() => {
+    this.changed();
+    this.expiryTimer = this.timers.setTimeout(() => {
       this.events.finished('room closed — nobody came back');
     }, GRACE_MS);
   }
@@ -319,14 +441,14 @@ export class RoomReferee {
 
     // An admin left but listeners remain — give them a moment to take over
     // rather than pulling the music out from under everyone.
-    this.rescueTimer = window.setTimeout(() => {
+    this.rescueTimer = this.timers.setTimeout(() => {
       this.rescueTimer = null;
       this.events.finished('room closed — no admin left');
     }, ADMIN_RESCUE_MS);
   }
 
   private endRescue(): void {
-    if (this.rescueTimer !== null) { window.clearTimeout(this.rescueTimer); this.rescueTimer = null; }
+    if (this.rescueTimer !== null) { this.timers.clearTimeout(this.rescueTimer); this.rescueTimer = null; }
   }
 
   dispose(): void {

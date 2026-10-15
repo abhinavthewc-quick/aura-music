@@ -13,6 +13,7 @@
 import { createAudioTarget, type ResolvedTrack } from '../rooms/audioTarget';
 import { RoomClient } from '../rooms/roomClient';
 import { hostRoom, isRoomHosted, LocalTransport, newId, newKey, newRoomId } from '../rooms/local';
+import { WebSocketTransport } from '../rooms/wsTransport';
 
 const TRACKS: ResolvedTrack[] = [
   { key: 'tone-a', videoId: 'aaa', url: makeTone(220, 180), title: 'Tone A', artist: 'synth' },
@@ -68,6 +69,15 @@ async function start(name: string, requestedRoom: string | null, keyFromUrl: str
   if (client) { client.leave(); client = null; }
   if (stopHosting) { stopHosting(); stopHosting = null; }
 
+  // ?server=ws://host:port switches from the in-tab referee to the real
+  // Durable Object, so the same UI can be exercised against both.
+  const serverBase = new URLSearchParams(location.search).get('server');
+
+  if (serverBase) {
+    await startRemote(name, requestedRoom, keyFromUrl, serverBase);
+    return;
+  }
+
   const roomId = requestedRoom || newRoomId();
   const alreadyHosted = requestedRoom ? await isRoomHosted(requestedRoom) : false;
 
@@ -95,6 +105,39 @@ async function start(name: string, requestedRoom: string | null, keyFromUrl: str
   client.join(name);
 
   setStatus(isHost ? 'you created the room — you are the admin' : 'joined', 'ok');
+  render();
+}
+
+async function startRemote(name: string, requestedRoom: string | null, keyFromUrl: string | null, base: string) {
+  let roomId = requestedRoom;
+  let ownerKey = keyFromUrl;
+
+  if (!roomId) {
+    // The worker registers whichever key we hand it; it never sees or returns
+    // it, so the key stays ours to keep.
+    const myKey = newKey();
+    const res = await fetch(`${base.replace(/^ws/, 'http')}/?room=tmp${Date.now() % 100000}&action=create&k=${myKey}`);
+    if (!res.ok) { setStatus('could not create a room', 'err'); return; }
+    const created = await res.json();
+    roomId = created.roomId;
+    ownerKey = myKey;
+  }
+
+  const transport = new WebSocketTransport({
+    baseUrl: base, roomId, clientId, name, ...(ownerKey ? { adminKey: ownerKey } : {}),
+  });
+
+  client = new RoomClient({ roomId, ...(ownerKey ? { ownerKey } : {}) }, transport, clientId, target);
+  client.onChat = (m) => appendChat(m.name, m.text);
+  client.subscribe(render);
+
+  try {
+    await transport.connect();
+    client.join(name);
+    setStatus(ownerKey && !requestedRoom ? 'connected to the room server — you are the admin' : 'connected to the room server', 'ok');
+  } catch (err) {
+    setStatus(`✗ ${(err as Error).message}`, 'err');
+  }
   render();
 }
 

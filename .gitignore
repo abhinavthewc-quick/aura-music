@@ -4,3 +4,8 @@ dist/
 *.local
 __pycache__/
 *.pyc
+
+# Cloudflare local dev state (was previously showing up as untracked)
+.wrangler/
+rooms-worker/node_modules/
+rooms-worker/.wrangler/
