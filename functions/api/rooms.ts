@@ -1,9 +1,9 @@
-/* Room creation endpoint for the Pages site.
+/* Room endpoint for the Pages site.
  *
- * Cloudflare does not allow a Durable Object to live inside a Pages project, so
- * the referee itself lives in a separate worker (rooms-worker/). This endpoint
- * mints the room id and owner key, asks that worker to register the room, and
- * hands the browser back the URL it should open its WebSocket against.
+ * Cloudflare does not allow a Durable Object inside a Pages project, so the
+ * referee lives in a separate worker (rooms-worker/). Room ids, owner keys and
+ * WebSocket URLs are all minted there; this file only forwards the request and
+ * adds the human-facing share links, which need to know the site's origin.
  *
  * It deliberately does NOT require the admin Google session: friends and
  * family create rooms, not site administrators.
@@ -14,29 +14,19 @@ interface Env {
   ROOMS_WORKER_URL?: string;
 }
 
-/** Short, unambiguous room code people can read aloud. */
-const ALPHABET = 'abcdefghjkmnpqrstuvwxyz23456789';
-
 function json(body: unknown, status = 200): Response {
   return new Response(JSON.stringify(body), {
     status,
-    headers: {
-      'content-type': 'application/json',
-      'cache-control': 'no-store',
-    },
+    headers: { 'content-type': 'application/json', 'cache-control': 'no-store' },
   });
 }
 
-function newRoomId(): string {
-  const bytes = new Uint8Array(6);
-  crypto.getRandomValues(bytes);
-  return [...bytes].map((b) => ALPHABET[b % ALPHABET.length]).join('');
-}
-
-function newAdminKey(): string {
-  const bytes = new Uint8Array(16);
-  crypto.getRandomValues(bytes);
-  return [...bytes].map((b) => b.toString(16).padStart(2, '0')).join('');
+function urlOrigin(request: Request): string {
+  try {
+    return new URL(request.url).origin;
+  } catch {
+    return '';
+  }
 }
 
 export const onRequestPost = async ({ request, env }: { request: Request; env: Env }): Promise<Response> => {
@@ -53,27 +43,19 @@ export const onRequestPost = async ({ request, env }: { request: Request; env: E
   }
 
   if (body.action === 'create') {
-    // Retry on the vanishingly unlikely chance of a code collision.
-    for (let attempt = 0; attempt < 5; attempt++) {
-      const roomId = newRoomId();
-      const adminKey = newAdminKey();
+    const res = await fetch(`${workerUrl}/?action=create`).catch(() => null);
+    if (!res) return json({ error: 'the room server is unreachable — try again' }, 502);
+    if (!res.ok) return json({ error: 'could not create a room — try again' }, 502);
 
-      const res = await fetch(`${workerUrl}/?room=${roomId}&action=create&k=${adminKey}`).catch(() => null);
+    const created = await res.json().catch(() => ({}) as Record<string, unknown>);
+    if (!created.roomId) return json({ error: 'the room server sent an unexpected reply' }, 502);
 
-      if (!res) return json({ error: 'the room server is unreachable — try again' }, 502);
-      if (res.status === 429) return json({ error: 'too many rooms created — try again later' }, 429);
-      if (!res.ok) continue;
-
-      const origin = urlOrigin(request);
-      return json({
-        roomId,
-        adminKey,
-        wsBase: workerUrl.replace(/^http/, 'ws'),
-        shareUrl: `${origin}/#/room/${roomId}`,
-        adminUrl: `${origin}/#/room/${roomId}?k=${adminKey}`,
-      });
-    }
-    return json({ error: 'could not allocate a room — try again' }, 500);
+    const origin = urlOrigin(request);
+    return json({
+      ...created,
+      shareUrl: `${origin}/#/room/${created.roomId}`,
+      adminUrl: `${origin}/#/room/${created.roomId}?k=${created.adminKey}`,
+    });
   }
 
   if (body.action === 'exists') {
@@ -86,11 +68,3 @@ export const onRequestPost = async ({ request, env }: { request: Request; env: E
 
   return json({ error: 'unknown action' }, 400);
 };
-
-function urlOrigin(request: Request): string {
-  try {
-    return new URL(request.url).origin;
-  } catch {
-    return '';
-  }
-}

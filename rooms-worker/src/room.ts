@@ -54,6 +54,15 @@ function corsJson(body: unknown, status = 200): Response {
   });
 }
 
+/**
+ * The WebSocket URL clients should connect to, derived from the address this
+ * request arrived on. Works unchanged in local development and in production,
+ * which keeps the create path identical in both.
+ */
+function wsBaseOf(url: URL): string {
+  return url.protocol === 'https:' ? `wss://${url.host}` : `ws://${url.host}`;
+}
+
 export class RoomDO {
   private ctx: DurableObjectState;
   private env: Env;
@@ -97,17 +106,18 @@ export class RoomDO {
         // Wait for the write rather than relying on waitUntil: the caller may
         // immediately open a socket, and the object could be evicted first.
         await this.persist(referee);
-        return corsJson({ ok: true, roomId });
+        return corsJson({ ok: true, roomId, wsBase: wsBaseOf(url) });
       }
     }
 
     if (action === 'exists') {
       const stored = await this.ctx.storage.get<StoredRoom>('room');
-      if (!stored || stored.schema !== SCHEMA) return corsJson({ exists: false });
+      if (!stored || stored.schema !== SCHEMA) return corsJson({ exists: false, wsBase: wsBaseOf(url) });
       return corsJson({
         exists: true,
         people: stored.state.participants.length,
         emptySince: stored.idleSince || null,
+        wsBase: wsBaseOf(url),
       });
     }
 

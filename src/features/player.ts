@@ -5,6 +5,7 @@ import { closeUpNext, playNext, playPrevious, renderUpNext } from './queue';
 import { currentRadioStation, escapeHtml, radioAudio, stopRadio, updateRadioPlayerUI } from './radio';
 import { auraYTQueue, extractYouTubeId } from './search';
 import { auraSettings } from './settings';
+import { roomModeActive } from '../rooms/roomFlag';
 import { $, persistLikedHistory, savedLikeMap, state } from '../core/state';
 /* ===== 2955-2994 ===== */
     export const dynamicColorCache = {};
@@ -423,7 +424,14 @@ import { $, persistLikedHistory, savedLikeMap, state } from '../core/state';
     };
     state.audio.addEventListener('play',()=>{state.isPlaying=true;updatePlayState();updateMainMediaSession();});
     state.audio.addEventListener('pause',()=>{state.isPlaying=false;updatePlayState();updateMainMediaSession();});
-    state.audio.addEventListener('ended',()=>{if(state.repeatMode==='one'){state.audio.currentTime=0;state.audio.play();state.isPlaying=true;updatePlayState();return;}if(auraSettings.autoplayNext){playNext();}else if(!state.isPlaying) updatePlayState();});
+    /* A listening room owns what plays next, so the personal autoplay rules
+       stand down while one is active — otherwise a track finishing would race
+       the room and start something nobody else was expecting. */
+    state.audio.addEventListener('ended',()=>{
+      if(roomModeActive()) return;
+      if(state.repeatMode==='one'){state.audio.currentTime=0;state.audio.play();state.isPlaying=true;updatePlayState();return;}
+      if(auraSettings.autoplayNext){playNext();}else if(!state.isPlaying) updatePlayState();
+    });
     setInterval(()=>{
       if(!auraYTPlayer) return;
       try{

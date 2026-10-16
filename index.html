@@ -778,6 +778,66 @@ html.aura-loading,html.aura-loading body{overflow:hidden}
 
   <audio id="audioPlayer" preload="metadata"></audio>
 
+  <!-- listening rooms -->
+  <button class="room-fab" id="roomFab" type="button" title="Listening rooms">
+    <span class="room-live" aria-hidden="true"></span><span>Room</span>
+  </button>
+
+  <aside class="room-panel" id="roomPanel" aria-label="Listening room">
+    <div class="room-head">
+      <h3>Room</h3>
+      <span class="room-code" id="roomCode">—</span>
+      <span class="spacer"></span>
+      <span class="room-code" id="roomRole">—</span>
+      <button class="room-x" id="roomClose" type="button" aria-label="Close">×</button>
+    </div>
+
+    <div class="room-body" id="roomBody"></div>
+
+    <div class="room-status-wrap">
+      <p class="room-note" id="roomStatus"></p>
+
+      <div class="room-join">
+        <input class="room-code-input" id="roomCodeInput" placeholder="room code" autocomplete="off" spellcheck="false" aria-label="Room code">
+        <button id="roomJoin" type="button">Join</button>
+        <button id="roomCreate" type="button" class="primary">New room</button>
+      </div>
+
+      <div class="room-now">
+        <div class="room-row"><span class="k">now playing</span><span class="v" id="roomNow">—</span></div>
+        <div class="room-row"><span class="k">state</span><span class="v" id="roomState">—</span></div>
+        <div class="room-row"><span class="k">position</span><span class="v" id="roomPos">0:00</span></div>
+        <div class="room-row"><span class="k">sync</span><span class="v ok" id="roomDrift">0 ms</span></div>
+      </div>
+
+      <h4 class="room-h">In the room</h4>
+      <ul class="room-people" id="roomPeople"></ul>
+
+      <h4 class="room-h">Up next</h4>
+      <ul class="room-queue" id="roomQueue"></ul>
+
+      <p class="room-note" id="roomListenerNote" style="display:none">
+        You can listen and chat. An admin controls playback.
+      </p>
+
+      <div class="room-ctrls" id="roomAdminNote">
+        <button id="roomPlay" type="button">Play</button>
+        <button id="roomSkip" type="button">Skip</button>
+        <button id="roomQueueCurrent" type="button">Queue this track</button>
+        <button id="roomClearQueue" type="button">Clear queue</button>
+        <button id="roomLeave" type="button">Leave</button>
+      </div>
+
+      <div class="room-chat">
+        <div class="room-chat-log" id="roomChatLog"><span class="empty">no messages yet</span></div>
+        <form id="roomChatForm" autocomplete="off">
+          <input id="roomChatInput" placeholder="say something…" maxlength="500" aria-label="Message">
+          <button type="submit">Send</button>
+        </form>
+      </div>
+    </div>
+  </aside>
+
   <script type="module" src="/src/main.ts"></script>
 </body>
 </html>
