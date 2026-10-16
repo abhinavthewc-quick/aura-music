@@ -21,3 +21,15 @@
   margin-left: auto;
   flex-shrink: 0;
 }
+
+/* The desktop sidebar equivalent. It sits in MAIN MENU rather than the settings
+   group because the sidebar collapses by default and the collapsed state hides
+   that whole group — an entry there is invisible until someone expands it. */
+a.desktop-nav-link {
+  text-decoration: none;
+}
+
+a.desktop-nav-link:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
