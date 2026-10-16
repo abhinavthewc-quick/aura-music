@@ -93,7 +93,11 @@
     <p class="artist" id="nowArtist">—</p>
 
     <div class="progress" id="progressWrap">
-      <div class="bar"><div class="fill" id="fill"></div></div>
+      <div class="bar seekable" id="seekBar" role="slider" tabindex="0"
+           aria-label="Seek" aria-valuemin="0" aria-valuenow="0" aria-valuemax="100" aria-valuetext="0:00">
+        <div class="fill" id="fill"></div>
+        <div class="knob" id="knob"></div>
+      </div>
       <div class="times"><span id="tCur">0:00</span><span id="tDur">0:00</span></div>
     </div>
 
@@ -117,9 +121,6 @@
         <span class="count" id="qCount">0</span>
       </div>
       <ul class="list" id="queueList"></ul>
-      <div class="queue-add">
-        <button class="ghost sm full" id="addCurrent" type="button">+ Add what's playing to the queue</button>
-      </div>
 
       <div class="col-head chat-head"><h3>Add music</h3>
         <span class="count" id="libTotal"></span>

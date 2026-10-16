@@ -299,8 +299,17 @@ export class RoomReferee {
         this.playback = { ...this.playback, playing: true, positionMs: this.playback.positionMs, updatedAt: now };
         break;
       case 'pause':
-        // Freeze the position at the moment of the pause, not the last seek.
-        this.playback = { ...this.playback, playing: false, positionMs: this.playback.positionMs, updatedAt: now };
+        // Trust the position the pausing client reported: it is the only party
+        // that knows where the audio actually is. Using our own stored value
+        // would snap everyone back to the last seek instead.
+        this.playback = {
+          ...this.playback,
+          playing: false,
+          positionMs: typeof message.positionMs === 'number' && message.positionMs >= 0
+            ? message.positionMs
+            : this.playback.positionMs,
+          updatedAt: now,
+        };
         break;
       case 'seek':
         this.playback = { ...this.playback, positionMs: Math.max(0, message.positionMs ?? 0), updatedAt: now };

@@ -173,7 +173,11 @@ export class RoomClient {
   /* ---------------- commands ---------------- */
 
   play(): void { this.control('play'); }
-  pause(): void { this.control('pause'); }
+  pause(): void {
+    // Send where the audio actually is. Without this the server replies with
+    // the position from the last seek and everyone snaps back to it.
+    this.control('pause', { positionMs: Math.round(this.engine.positionMs) });
+  }
   seek(ms: number): void { this.control('seek', { positionMs: Math.max(0, Math.round(ms)) }); }
 
   playTrack(trackKey: string, videoId?: string | null): void {

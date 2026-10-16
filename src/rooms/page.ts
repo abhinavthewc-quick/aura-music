@@ -359,8 +359,12 @@ function live() {
   const dur = Number.isFinite(a.duration) ? a.duration * 1000 : 0;
   $('tCur').textContent = fmt(a.currentTime * 1000);
   $('tDur').textContent = dur ? fmt(dur) : '–:––';
-  const pct = dur ? (a.currentTime * 1000 / dur) * 100 : 0;
+  const pct = dur ? Math.max(0, Math.min(100, (a.currentTime * 1000 / dur) * 100)) : 0;
   ($('fill') as HTMLElement).style.width = pct + '%';
+  ($('knob') as HTMLElement).style.left = pct + '%';
+  const seekBar = $('seekBar');
+  seekBar.setAttribute('aria-valuenow', String(Math.round(pct)));
+  seekBar.setAttribute('aria-valuetext', fmt(a.currentTime * 1000));
 
   const blocked = v.playback.playing && a.paused;
   $('listenHint').hidden = !blocked;
@@ -394,7 +398,7 @@ function render(v: RoomView) {
 
   // Controls: admins drive. Listeners still see them so the screen does not
   // change shape between people, but they are inert.
-  for (const id of ['playBtn', 'nextBtn', 'prevBtn', 'addCurrent']) {
+  for (const id of ['playBtn', 'nextBtn', 'prevBtn', 'seekBar']) {
     ($(id) as HTMLButtonElement).disabled = !isAdmin;
   }
 
@@ -494,6 +498,48 @@ function pushChat(m: ChatMessage) {
   log.scrollTop = log.scrollHeight;
 }
 
+
+/* ---------------- seeking ---------------- */
+
+let scrubbing = false;
+
+function seekFromEvent(e: PointerEvent | MouseEvent): void {
+  const bar = $('seekBar');
+  const a = state.audio;
+  const dur = Number.isFinite(a.duration) ? a.duration : 0;
+  if (!dur || !client?.isAdmin) return;
+  const r = bar.getBoundingClientRect();
+  const ratio = Math.max(0, Math.min(1, (e.clientX - r.left) / r.width));
+  client.seek(Math.round(ratio * dur * 1000));
+}
+
+function wireSeek(): void {
+  const bar = $('seekBar');
+
+  bar.addEventListener('pointerdown', (e) => {
+    if (!client?.isAdmin) return;
+    scrubbing = true;
+    bar.setPointerCapture(e.pointerId);
+    seekFromEvent(e);
+  });
+  bar.addEventListener('pointermove', (e) => { if (scrubbing) seekFromEvent(e); });
+  bar.addEventListener('pointerup', (e) => {
+    scrubbing = false;
+    try { bar.releasePointerCapture(e.pointerId); } catch { /* already released */ }
+  });
+  bar.addEventListener('pointercancel', () => { scrubbing = false; });
+
+  bar.addEventListener('keydown', (e) => {
+    const a = state.audio;
+    if (!client?.isAdmin) return;
+    const dur = Number.isFinite(a.duration) ? a.duration * 1000 : 0;
+    if (!dur) return;
+    const step = e.shiftKey ? 10_000 : 5_000;
+    if (e.key === 'ArrowRight') { e.preventDefault(); client.seek(Math.min(dur, a.currentTime * 1000 + step)); }
+    if (e.key === 'ArrowLeft') { e.preventDefault(); client.seek(Math.max(0, a.currentTime * 1000 - step)); }
+  });
+}
+
 /* ---------------- controls ---------------- */
 
 function wireRoom() {
@@ -524,14 +570,6 @@ function wireRoom() {
     libTimer = window.setTimeout(() => renderResults(libSearch.value), 90);
   });
 
-  $('addCurrent').onclick = () => {
-    const song = state.songs[state.currentIndex];
-    if (!song) { banner('Play something from your library first, then add it.'); return; }
-    const key = trackKey(song);
-    if (!resolveTrack(key)) { banner('That track cannot be shared — rooms play the shared library only.'); return; }
-    client?.queueAdd(key);
-  };
-
   $('chatForm').onsubmit = (e) => {
     e.preventDefault();
     const input = $('chatInput') as HTMLInputElement;
@@ -551,6 +589,7 @@ async function boot() {
 
   wireJoin();
   wireRoom();
+  wireSeek();
   buildPills();
   showJoin();
 

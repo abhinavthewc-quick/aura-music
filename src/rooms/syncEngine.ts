@@ -69,8 +69,8 @@ export class SyncEngine {
 
   constructor(options: SyncEngineOptions = {}) {
     this.opts = {
-      correctionIntervalMs: options.correctionIntervalMs ?? 3000,
-      clockIntervalMs: options.clockIntervalMs ?? 10000,
+      correctionIntervalMs: options.correctionIntervalMs ?? 1000,
+      clockIntervalMs: options.clockIntervalMs ?? 3000,
       onError: options.onError,
     };
   }
@@ -103,6 +103,18 @@ export class SyncEngine {
     return this.nudging;
   }
 
+  /**
+   * Where this device's audio actually is right now.
+   *
+   * The server cannot know this — it only ever holds the position from the
+   * last seek. Whoever presses pause must therefore send their real position,
+   * or the server would tell every other device to jump back to the last seek
+   * point and the progress bar would snap to zero.
+   */
+  get positionMs(): number {
+    return this.target ? this.target.getPositionMs() : 0;
+  }
+
   attach(target: SyncTarget): void {
     this.target = target;
   }
@@ -122,6 +134,12 @@ export class SyncEngine {
     if (this.started) return;
     this.started = true;
     sendPing();
+    // A burst up front: the offset estimate is weakest exactly when someone
+    // joins, which is also when they are most likely to start playing. The
+    // lowest-RTT sample wins, so a few quick tries land a good one early.
+    window.setTimeout(sendPing, 120);
+    window.setTimeout(sendPing, 320);
+    window.setTimeout(sendPing, 700);
     this.clockTimer = window.setInterval(sendPing, this.opts.clockIntervalMs);
     this.correctionTimer = window.setInterval(() => void this.tick(), this.opts.correctionIntervalMs);
   }
