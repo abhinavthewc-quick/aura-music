@@ -36,6 +36,11 @@ export interface RoomView {
   driftMs: number;
   clockOffsetMs: number;
   inSync: boolean;
+  /** True while a gentle rate correction is running rather than a hard seek. */
+  nudging: boolean;
+  /** Best estimate of the server clock — drives the shared sync visual. */
+  serverNow: number;
+  clockReady: boolean;
   buffering: boolean;
   closed: string | null;
 }
@@ -267,6 +272,9 @@ export class RoomClient {
       driftMs: Math.round(this.engine.lastDriftMs),
       clockOffsetMs: Math.round(this.engine.clockOffsetMs),
       inSync: this.engine.inSync,
+      nudging: this.engine.isNudging,
+      serverNow: Math.round(this.engine.serverNow),
+      clockReady: this.engine.clockReady,
       buffering: this.buffering,
       closed: this.closedReason,
     };

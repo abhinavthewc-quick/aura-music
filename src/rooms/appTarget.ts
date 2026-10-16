@@ -8,7 +8,6 @@
  * room should not trigger on every correction.
  */
 
-import { loadSong } from '../features/player';
 import { state, trackKey } from '../core/state';
 import { ensureCatalog } from './catalogReady';
 import { roomModeActive, setRoomActive } from './roomFlag';
@@ -61,16 +60,14 @@ export function createAppTarget(onError?: (m: string) => void): SyncTarget {
       const track = resolveTrack(key);
       if (!song || !track) throw new Error('that track is not in the shared library');
 
+      // Deliberately does NOT go through the main player's loadSong(): the
+      // rooms page is standalone, and importing the player pulls in settings
+      // code that expects the main app's DOM to exist.
       currentKey = key;
-      // Reuse the real loader so the player UI reflects the room.
       const index = state.songs.indexOf(song);
-      if (index >= 0) {
-        state.currentIndex = index;
-        loadSong(index);
-      } else {
-        audio.src = track.url;
-        audio.load();
-      }
+      if (index >= 0) state.currentIndex = index;
+      audio.src = track.url;
+      audio.load();
 
       await new Promise<void>((resolveReady, rejectReady) => {
         const timer = window.setTimeout(() => {
@@ -104,6 +101,11 @@ export function createAppTarget(onError?: (m: string) => void): SyncTarget {
 
     pause(): void {
       audio.pause();
+      audio.playbackRate = 1;
+    },
+
+    setRate(rate: number): void {
+      audio.playbackRate = Math.max(0.5, Math.min(2, rate));
     },
   };
 }

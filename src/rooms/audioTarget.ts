@@ -96,5 +96,10 @@ export function createAudioTarget(options: AudioTargetOptions): SyncTarget {
     pause(): void {
       element.pause();
     },
+
+    setRate(rate: number): void {
+      // clamp so a stuck rate can never turn into chipmunk audio
+      element.playbackRate = Math.max(0.5, Math.min(2, rate));
+    },
   };
 }

@@ -23,7 +23,18 @@ export interface SyncTarget {
   seek(ms: number): void;
   play(): Promise<void>;
   pause(): void;
+  /**
+   * Optional playback-rate control. When present, small drift is corrected by
+   * nudging the rate instead of seeking — a seek is audible, a 1-2% rate change
+   * is not.
+   */
+  setRate?(rate: number): void;
 }
+
+/** Rate used to drift back into alignment. ~2% is inaudible for short bursts. */
+const NUDGE_RATE = 0.02;
+/** Beyond this a nudge cannot catch up in reasonable time — seek instead. */
+const NUDGE_MAX_MS = 400;
 
 export interface SyncEngineOptions {
   /** How often to re-check our position against the room's expectation. */
@@ -48,6 +59,13 @@ export class SyncEngine {
   lastDriftMs = 0;
   corrections = 0;
   private failures = 0;
+  /** True while a gentle rate correction is in progress. */
+  private nudging = false;
+
+  private setRate(target: SyncTarget, delta: number): void {
+    if (!target.setRate) return;
+    try { target.setRate(1 + delta); } catch { /* element refused */ }
+  }
 
   constructor(options: SyncEngineOptions = {}) {
     this.opts = {
@@ -78,6 +96,11 @@ export class SyncEngine {
   /** True when we are close enough to the room that the UI should read "live". */
   get inSync(): boolean {
     return Math.abs(this.lastDriftMs) < DRIFT_HARD_MS;
+  }
+
+  /** True while a gentle rate correction is running (vs a hard seek). */
+  get isNudging(): boolean {
+    return this.nudging;
   }
 
   attach(target: SyncTarget): void {
@@ -162,17 +185,29 @@ export class SyncEngine {
     const drift = actual - expected;
     this.lastDriftMs = drift;
 
-    const needsSeek =
+    const magnitude = Math.abs(drift);
+    const mustSeek =
       force ||
       applyingTrack ||
       !Number.isFinite(expected) ||
-      Math.abs(drift) > DRIFT_HARD_MS ||
-      // Jumping tracks but landing nowhere near the start is always wrong.
-      (applyingTrack && Math.abs(drift) > DRIFT_SOFT_MS);
+      magnitude > NUDGE_MAX_MS ||
+      (applyingTrack && magnitude > DRIFT_SOFT_MS);
 
-    if (needsSeek) {
+    if (mustSeek) {
+      // Big or deliberate jump: land exactly where the room is.
       target.seek(Math.max(0, Math.min(expected, safeDuration(target))));
-      if (drift > DRIFT_HARD_MS || applyingTrack) this.corrections++;
+      this.setRate(target, 0);
+      this.nudging = false;
+      if (magnitude > NUDGE_MAX_MS || applyingTrack) this.corrections++;
+    } else if (magnitude > DRIFT_SOFT_MS && target.setRate && playback.playing) {
+      // Small drift: ease back with a slight rate change rather than a seek.
+      // A seek here is the single most audible thing a sync system can do —
+      // it is what makes these tools feel "janky" to the people using them.
+      target.setRate(drift > 0 ? 1 - NUDGE_RATE : 1 + NUDGE_RATE);
+      this.nudging = true;
+    } else if (this.nudging) {
+      this.setRate(target, 0);
+      this.nudging = false;
     }
 
     // Playing/paused convergence. Note we deliberately let small drift stand

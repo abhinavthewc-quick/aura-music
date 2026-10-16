@@ -1,0 +1,147 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Listen Together — AURA Music</title>
+<meta name="description" content="Listen to music with friends, in sync.">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;700&family=Cormorant+Garamond:wght@600&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="/src/rooms/rooms.css">
+</head>
+<body>
+<svg width="0" height="0" style="position:absolute" aria-hidden="true">
+  <defs>
+    <symbol id="i-play" viewBox="0 0 24 24"><path d="M8 5v14l11-7z"/></symbol>
+    <symbol id="i-pause" viewBox="0 0 24 24"><path d="M6 5h4v14H6zm8 0h4v14h-4z"/></symbol>
+    <symbol id="i-next" viewBox="0 0 24 24"><path d="M6 5l9 7-9 7zM17 5h2v14h-2z"/></symbol>
+    <symbol id="i-copy" viewBox="0 0 24 24"><path d="M16 1H4a2 2 0 0 0-2 2v14h2V3h12zm3 4H8a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h11a2 2 0 0 0 2-2V7a2 2 0 0 0-2-2z"/></symbol>
+    <symbol id="i-x" viewBox="0 0 24 24"><path d="M19 6.4 17.6 5 12 10.6 6.4 5 5 6.4 10.6 12 5 17.6 6.4 19 12 13.4 17.6 19 19 17.6 13.4 12z"/></symbol>
+    <symbol id="i-send" viewBox="0 0 24 24"><path d="M2 21l21-9L2 3v7l15 2-15 2z"/></symbol>
+    <symbol id="i-star" viewBox="0 0 24 24"><path d="m12 2 3.1 6.3 6.9 1-5 4.9 1.2 6.8L12 17.8 5.8 21l1.2-6.8-5-4.9 6.9-1z"/></symbol>
+    <symbol id="i-headphone" viewBox="0 0 24 24"><path d="M12 3a9 9 0 0 0-9 9v7a2 2 0 0 0 2 2h3v-8H5v-1a7 7 0 0 1 14 0v1h-3v8h3a2 2 0 0 0 2-2v-7a9 9 0 0 0-9-9z"/></symbol>
+  </defs>
+</svg>
+
+<!-- ============================ JOIN ============================ -->
+<main class="join" id="joinView">
+  <div class="join-inner">
+    <div class="brand">
+      <span class="brand-mark">AURA</span>
+      <span class="brand-sub">listen together</span>
+    </div>
+
+    <h1 class="join-title" id="joinTitle">Join a room</h1>
+    <p class="join-sub" id="joinSub">Enter the code a friend shared with you.</p>
+
+    <label class="field">
+      <span class="field-label">Room code</span>
+      <input id="codeInput" class="field-input code" maxlength="12" autocomplete="off"
+             spellcheck="false" placeholder="e.g. k7m2pq" aria-label="Room code">
+    </label>
+
+    <label class="field">
+      <span class="field-label">Your name</span>
+      <input id="nameInput" class="field-input" maxlength="20" autocomplete="off"
+             placeholder="how friends will see you" aria-label="Your name">
+      <button class="linkish" id="shuffleName" type="button">pick another</button>
+    </label>
+
+    <button class="primary big" id="joinBtn" type="button">Join room</button>
+    <button class="ghost big" id="createBtn" type="button">Start a new room instead</button>
+
+    <p class="join-note">
+      <svg class="ic"><use href="#i-headphone"/></svg>
+      Use your device's built-in speakers. Bluetooth headphones add enough
+      delay to pull you out of sync.
+    </p>
+  </div>
+</main>
+
+<!-- ============================ ROOM ============================ -->
+<main class="room" id="roomView" hidden>
+  <header class="topbar">
+    <div class="topbar-left">
+      <span class="dot" id="liveDot" aria-hidden="true"></span>
+      <span class="code" id="roomCode">—</span>
+      <button class="icon-btn" id="copyBtn" type="button" title="Copy invite link" aria-label="Copy invite link">
+        <svg class="ic"><use href="#i-copy"/></svg>
+      </button>
+    </div>
+    <div class="topbar-right">
+      <span class="role-pill" id="rolePill">listener</span>
+      <button class="ghost sm" id="leaveBtn" type="button">Leave</button>
+    </div>
+  </header>
+
+  <!-- shared, identical-on-every-device confirmation that we are together -->
+  <div class="syncbar" id="syncbar" hidden>
+    <div class="pills" id="pills" aria-hidden="true"></div>
+    <div class="syncmeta">
+      <span id="syncLabel">in sync</span>
+      <span class="dotsep">·</span>
+      <span id="driftLabel">0 ms</span>
+    </div>
+  </div>
+
+  <div class="banner" id="banner" hidden></div>
+
+  <section class="stage">
+    <div class="art" id="art"><img id="artImg" alt="" decoding="async"></div>
+    <h2 class="title" id="nowTitle">Nothing playing</h2>
+    <p class="artist" id="nowArtist">—</p>
+
+    <div class="progress" id="progressWrap">
+      <div class="bar"><div class="fill" id="fill"></div></div>
+      <div class="times"><span id="tCur">0:00</span><span id="tDur">0:00</span></div>
+    </div>
+
+    <div class="controls">
+      <button class="ctl" id="prevBtn" type="button" aria-label="Previous in queue">⏮</button>
+      <button class="ctl big" id="playBtn" type="button" aria-label="Play or pause">
+        <svg class="ic"><use href="#i-play" id="playIcon"/></svg>
+      </button>
+      <button class="ctl" id="nextBtn" type="button" aria-label="Next in queue">
+        <svg class="ic"><use href="#i-next"/></svg>
+      </button>
+    </div>
+
+    <p class="hint" id="listenHint" hidden>Click anywhere to start the sound</p>
+  </section>
+
+  <div class="cols">
+    <section class="col">
+      <div class="col-head">
+        <h3>Up next</h3>
+        <span class="count" id="qCount">0</span>
+      </div>
+      <ul class="list" id="queueList"></ul>
+      <div class="queue-add">
+        <button class="ghost sm full" id="addCurrent" type="button">+ Add what's playing to the queue</button>
+      </div>
+    </section>
+
+    <section class="col">
+      <div class="col-head">
+        <h3>In the room</h3>
+        <span class="count" id="pCount">0</span>
+      </div>
+      <ul class="list people" id="peopleList"></ul>
+
+      <div class="col-head chat-head"><h3>Chat</h3></div>
+      <div class="chatlog" id="chatLog"><span class="empty">no messages yet</span></div>
+      <form class="chatbar" id="chatForm" autocomplete="off">
+        <input id="chatInput" placeholder="say something…" maxlength="500" aria-label="Message">
+        <button class="icon-btn solid" type="submit" aria-label="Send">
+          <svg class="ic"><use href="#i-send"/></svg>
+        </button>
+      </form>
+    </section>
+  </div>
+</main>
+
+<audio id="audioPlayer" preload="metadata"></audio>
+<script type="module" src="/src/rooms/page.ts"></script>
+</body>
+</html>
