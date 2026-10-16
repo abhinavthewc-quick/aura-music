@@ -3,7 +3,7 @@
 .profile-btn img{transform:scale(1.36);border-radius:50%}
 .profile-btn:focus-visible{outline:2px solid rgba(220,174,124,.7);outline-offset:2px}
 
-    /* Warm play controls only — preserve PEAK liquid-glass surfaces. */
+    /* Warm play controls only — preserve AURA liquid-glass surfaces. */
     .full-player-overlay .full-ctrl-btn.play-btn{
       background:linear-gradient(145deg,#f0c58d 0%,#e2ad70 52%,#c98b50 100%) !important;
       color:#24170e !important;

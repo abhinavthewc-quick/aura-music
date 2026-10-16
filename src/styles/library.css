@@ -1,4 +1,4 @@
-/* PEAK premium liquid-glass treatment for Library track rows */
+/* AURA premium liquid-glass treatment for Library track rows */
 .library-song, .song-item, .track-item, .library-item, .song-card, .track-card, .library-track {
   background: linear-gradient(135deg, rgba(255,255,255,.13), rgba(255,255,255,.045)) !important;
   border: 1px solid rgba(255,255,255,.20) !important;

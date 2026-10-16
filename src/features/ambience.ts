@@ -3,7 +3,7 @@ import { navClick } from '../ui/nav';
 import { radioAudio } from './radio';
 import { $, state } from '../core/state';
 /* ===== 4288-4645 ===== */
-    // PEAK Ambient Effects — procedural Web Audio, so no extra state.audio files are required.
+    // AURA Ambient Effects — procedural Web Audio, so no extra state.audio files are required.
     export const AURA_EFFECT_KEY='auraAmbientEffect_v1';
     export const ambientEffectConfig=[
       {key:'rain',icon:'fa-cloud-rain',name:'Gentle Rain',desc:'Steady, soft rainfall.'},

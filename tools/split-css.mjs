@@ -38,7 +38,7 @@ const chunks = [
 
 mkdirSync('src/styles', { recursive: true });
 
-let out = '// Peak Music — stylesheets. @import order mirrors the original cascade order.\n';
+let out = '// Aura Music — stylesheets. @import order mirrors the original cascade order.\n';
 chunks.forEach(([name, ranges], i) => {
   const css = slice(ranges).replace(/<\/?style[^>]*>/g, '');
   writeFileSync(`src/styles/${name}.css`, css.replace(/\s+$/, '') + '\n');

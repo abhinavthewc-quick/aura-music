@@ -20,15 +20,15 @@ expect(24, '<style>', 'cut-style-start');
 expect(2019, '</style>', 'cut-style-end');
 expect(2020, '</head>', 'keep-head');
 expect(2022, 'auraLoader', 'keep-loader-div');
-expect(2023, 'peak-orb-js', 'cut-orb-start');
+expect(2023, 'aura-orb-js', 'cut-orb-start');
 expect(2139, '</script>', 'cut-orb-end');
 expect(2866, '<script>', 'cut-main-start');
 expect(6303, '</script>', 'cut-main-end');
-expect(6305, 'peak-desktop-player-js', 'cut-mini-start');
+expect(6305, 'aura-desktop-player-js', 'cut-mini-start');
 expect(6431, '</script>', 'cut-mini-end');
 expect(6432, '</body>', 'keep-body-close');
 expect(6433, '</html>', 'keep-html-close');
-expect(6435, 'peak-vinyl-final-fix', 'cut-tail-start');
+expect(6435, 'aura-vinyl-final-fix', 'cut-tail-start');
 expect(6469, '</style>', 'cut-tail-end');
 
 const cutSet = new Set();

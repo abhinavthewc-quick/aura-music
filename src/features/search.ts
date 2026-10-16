@@ -41,11 +41,11 @@ import { $, state } from '../core/state';
     }
 
     /* ================================================================
-       PEAK MUSIC — YouTube search
+       AURA MUSIC — YouTube search
        Primary route: Jina Reader -> real YouTube search page.
        This avoids Google API keys, dead Stremio add-ons, and unstable
        public Piped instances. Results are real YouTube video IDs; playback
-       continues through PEAK's existing YouTube IFrame player.
+       continues through AURA's existing YouTube IFrame player.
        ================================================================ */
     /* Multi-source search: a static HTML page cannot call the YouTube/Spotify/
        SoundCloud SEARCH APIs without provider credentials or a backend, so
@@ -187,7 +187,7 @@ import { $, state } from '../core/state';
 
     /* YouTube Music — official search + official embedded playback.
        A YouTube Data API key is required for in-app search. The result is
-       played through YouTube's official IFrame Player API; PEAK does not
+       played through YouTube's official IFrame Player API; AURA does not
        extract, download, cache, or separate YouTube state.audio streams. */
     export let auraYoutubeKeyInvalid = false;
     export async function searchYouTubeMusic(query){
@@ -299,7 +299,7 @@ import { $, state } from '../core/state';
       if(!query){section.style.display='none'; if(list)list.innerHTML=''; return []}
       section.style.display='block'; renderMultiSourceButtons(query);
       const localWarning = (location.protocol==='file:')
-        ? 'You are opening PEAK as a local .html file. YouTube playback/search is most reliable when this page is hosted on HTTPS (for example GitHub Pages).'
+        ? 'You are opening AURA as a local .html file. YouTube playback/search is most reliable when this page is hosted on HTTPS (for example GitHub Pages).'
         : '';
       const token=++youtubeSearchToken; lastOnlineQuery=query;
       const slowTimer=setTimeout(()=>{ if(token===youtubeSearchToken && list && list.querySelector('.aura-state-loading')) list.innerHTML=stateHTML('slow','Still searching…','Your connection seems slow. Results will appear as soon as they load.'); },7000);

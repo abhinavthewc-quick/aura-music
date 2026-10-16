@@ -1,5 +1,5 @@
 /**
- * Entry point for the Peak Rooms worker.
+ * Entry point for the Aura Rooms worker.
  *
  * Every request is routed to the Durable Object for the room named in the URL,
  * so each room gets its own isolated memory and clock. The worker itself is

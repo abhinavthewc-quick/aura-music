@@ -1,4 +1,4 @@
-    /* ===== Login · Peak Music (premium: vinyl + aura, champagne on warm black) ===== */
+    /* ===== Login · Aura Music (premium: vinyl + aura, champagne on warm black) ===== */
     .welcome-screen{--lg-ivory:#f5ecdf;--lg-mute:#a99a88;--lg-gold:#e6bd92;--lg-gold-hi:#f8e4c0;--lg-copper:#c58f5c;--lg-line:rgba(230,189,146,.22);position:fixed;inset:0;z-index:1000;display:flex;overflow-x:hidden;overflow-y:auto;overscroll-behavior:contain;padding:calc(20px + env(safe-area-inset-top)) 20px calc(20px + env(safe-area-inset-bottom));color:var(--lg-ivory);background:radial-gradient(58% 40% at 50% 22%,rgba(232,150,92,.14),transparent 72%),radial-gradient(90% 55% at 50% 118%,rgba(122,40,62,.26),transparent 66%),linear-gradient(180deg,#0d0a08,#070504);opacity:1;visibility:visible;transition:opacity .45s ease,visibility .45s ease}
     .welcome-screen.hidden{opacity:0;visibility:hidden;pointer-events:none}
     .welcome-screen.hidden *{animation-play-state:paused!important}
