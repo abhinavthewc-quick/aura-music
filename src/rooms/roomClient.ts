@@ -176,10 +176,33 @@ export class RoomClient {
   }
 
   toggle(): void {
+    // Nothing loaded yet: start the queue rather than doing nothing, which is
+    // what made the room feel dead after queueing a first track.
+    if (!this.playback.trackKey) {
+      if (this.queue.length) {
+        this.queueNext();
+        // queueNext only changes the track; follow it with play so one press
+        // actually starts the music.
+        this.send({ t: 'control', action: 'play' });
+        return;
+      }
+      return;
+    }
     if (this.playback.playing) this.pause(); else this.play();
   }
 
-  queueAdd(trackKey: string): void { this.send({ t: 'queue', action: 'add', trackKey }); }
+  queueAdd(trackKey: string): void {
+    // An idle room should start the first track rather than parking it in a
+    // queue nobody will ever drain: the referee ignores `play` until a track
+    // is loaded, so queueing alone produced a room that looked alive but was
+    // silent.
+    if (!this.playback.trackKey) {
+      this.send({ t: 'control', action: 'track', trackKey });
+      this.send({ t: 'control', action: 'play' });
+      return;
+    }
+    this.send({ t: 'queue', action: 'add', trackKey });
+  }
   queueRemove(trackKey: string): void { this.send({ t: 'queue', action: 'remove', trackKey }); }
   queueClear(): void { this.send({ t: 'queue', action: 'clear' }); }
   queueNext(): void { this.send({ t: 'queue', action: 'next' }); }

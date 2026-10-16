@@ -8,7 +8,6 @@
  * track, artwork and seek bar on the main page stay truthful.
  */
 
-import { escapeHtml } from './radio';
 import { $, state, trackKey } from '../core/state';
 import { RoomClient, type RoomView } from '../rooms/roomClient';
 import { WebSocketTransport } from '../rooms/wsTransport';
@@ -22,6 +21,7 @@ let client: RoomClient | null = null;
 let unsubscribe: (() => void) | null = null;
 let transport: WebSocketTransport | null = null;
 let pollTimer: number | null = null;
+let shownBlockedHint = false;
 
 const $id = <T extends HTMLElement>(id: string) => document.getElementById(id) as T;
 
@@ -133,6 +133,8 @@ export async function joinRoom(roomId: string, adminKey: string | null, isHost =
 
   // While in a room the engine owns playback; this surfaces drift honestly.
   startPolling();
+  armAutoplayResume();
+  shownBlockedHint = false;
   render(client.view());
   setStatus('');
 }
@@ -150,11 +152,51 @@ export function leaveRoom(notify = true): void {
   if (notify) { closePanel(); toast('Left the room'); }
 }
 
+/**
+ * Browsers refuse to start audio without a genuine user gesture. If that
+ * happens the room would otherwise sit "playing" and silent, with a runaway
+ * drift readout and no explanation. So: watch for the first real interaction
+ * and start then, and say so in the meantime.
+ */
+function armAutoplayResume(): void {
+  const resume = () => {
+    if (client && client.view().playback.playing && state.audio.paused) {
+      state.audio.play().catch(() => {});
+    }
+  };
+  document.addEventListener('pointerdown', resume, { passive: true });
+  document.addEventListener('keydown', resume);
+  document.addEventListener('touchstart', resume, { passive: true });
+}
+
+/**
+ * Only the two readouts that genuinely change every frame get touched here.
+ * The rest of the panel is re-rendered from RoomClient's state events, which
+ * fire when something actually changes — re-rendering the whole panel on a
+ * timer is what made it feel janky.
+ */
 function startPolling(): void {
   if (pollTimer !== null) window.clearInterval(pollTimer);
   pollTimer = window.setInterval(() => {
-    if (client) render(client.view());
-  }, 700);
+    if (!client) return;
+    const v = client.view();
+    const pos = $id('roomPos');
+    const drift = $id('roomDrift');
+    const blocked = v.playback.playing && state.audio.paused;
+
+    if (pos) pos.textContent = fmt(state.audio.currentTime * 1000);
+    if (drift) {
+      drift.textContent = blocked ? 'waiting for you' : `${v.driftMs} ms`;
+      drift.className = blocked ? 'v warn' : v.inSync ? 'v ok' : 'v warn';
+    }
+    if (blocked && !shownBlockedHint) {
+      shownBlockedHint = true;
+      setStatus('⚠ your browser blocked the sound — click anywhere to start listening');
+    } else if (!blocked && shownBlockedHint) {
+      shownBlockedHint = false;
+      setStatus('');
+    }
+  }, 500);
 }
 
 function toast(text: string) {
@@ -344,10 +386,11 @@ export function bindRooms() {
     input.value = '';
   };
 
-  // Queue the current track from wherever the player is.
+  // Queue the current track from wherever the player is. If the room is idle
+  // this starts playing it, so one click always does something audible.
   $id('roomQueueCurrent').onclick = () => {
     const song = state.songs[state.currentIndex];
-    if (!song) return;
+    if (!song) { setStatus('play something from your library first', true); return; }
     const key = trackKey(song);
     if (!resolveTrack(key)) { setStatus('that track is not in the shared library', true); return; }
     client?.queueAdd(key);

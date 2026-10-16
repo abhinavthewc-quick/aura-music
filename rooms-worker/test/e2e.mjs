@@ -7,7 +7,8 @@
  */
 
 const BASE = process.argv[2] || 'ws://localhost:8794';
-const HTTP = BASE.startsWith('wss') ? 'https' + BASE.slice(3) : 'http' + BASE.slice(3);
+// strip the ws/wss scheme prefix, keeping the ':' so the URL stays valid
+const HTTP = BASE.replace(/^wss/, 'https').replace(/^ws/, 'http');
 const ROOM = 'e2e' + Math.random().toString(36).slice(2, 7);
 
 const results = [];
