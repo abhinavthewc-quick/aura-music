@@ -7,6 +7,7 @@
  */
 
 const BASE = process.argv[2] || 'ws://localhost:8794';
+const HTTP = BASE.startsWith('wss') ? 'https' + BASE.slice(3) : 'http' + BASE.slice(3);
 const ROOM = 'e2e' + Math.random().toString(36).slice(2, 7);
 
 const results = [];
@@ -50,7 +51,7 @@ function connect({ name, key, clientId }) {
 const OWNER_KEY = 'owner_' + Math.random().toString(36).slice(2, 10);
 
 // Seed the room exactly as the Pages endpoint would.
-const created = await fetch(`${BASE.replace('ws://', 'http://')}/?room=${ROOM}&action=create&k=${OWNER_KEY}`).then((r) => r.json());
+const created = await fetch(`${HTTP}/?room=${ROOM}&action=create&k=${OWNER_KEY}`).then((r) => r.json());
 check('room created', created.ok === true, JSON.stringify(created));
 
 const alice = connect({ name: 'alice', key: OWNER_KEY, clientId: 'a1' });
@@ -129,7 +130,7 @@ check('room keeps at least one admin', adminCount >= 1, `${adminCount} admin(s)`
 alice.close(); bob.close();
 
 /* --- room isolation --- */
-const otherExists = await fetch(`${BASE.replace('ws://', 'http://')}/?room=nope${Date.now()}&action=exists`).then((r) => r.json());
+const otherExists = await fetch(`${HTTP}/?room=nope${Date.now()}&action=exists`).then((r) => r.json());
 check('rooms are isolated by id', otherExists.exists === false, JSON.stringify(otherExists));
 
 const failed = results.filter((r) => !r.pass);

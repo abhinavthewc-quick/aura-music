@@ -3,6 +3,7 @@
   "name": "aura-rooms",
   "main": "src/index.ts",
   "compatibility_date": "2025-09-01",
+  "account_id": "78b14a211589525aa3b866632a83d155",
   "observability": {
     "enabled": true
   },
