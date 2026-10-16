@@ -79,11 +79,28 @@ check('pong carries server time', typeof pong.serverTime === 'number' && pong.se
 
 /* --- admin control reaches the listener --- */
 alice.send({ t: 'control', action: 'track', trackKey: 'song-1', videoId: 'v1' });
+const sentAt = Date.now();
 alice.send({ t: 'control', action: 'play' });
 // Wait for the settled state, not the intermediate track-change broadcast.
 const bPlay = await bob.waitFor((m) => m.t === 'playback' && m.playback.trackKey === 'song-1' && m.playback.playing === true);
 check('track propagated to listener', bPlay.playback.trackKey === 'song-1' && bPlay.playback.playing === true,
   `${bPlay.playback.trackKey} playing=${bPlay.playback.playing}`);
+
+/* --- play must schedule a start, not fire immediately ---
+   Every device has to download and decode the track before it can play, so a
+   start that fires on arrival means whoever loaded first gets a head start.
+   The room instead agrees on one future moment. */
+check('play schedules a shared start', typeof bPlay.playback.startAt === 'number' && bPlay.playback.startAt > sentAt,
+  `startAt=${bPlay.playback.startAt} (sent ${sentAt}, +${bPlay.playback.startAt - sentAt}ms)`);
+check('position does not advance before the start',
+  bPlay.playback.updatedAt === bPlay.playback.startAt,
+  `updatedAt=${bPlay.playback.updatedAt} startAt=${bPlay.playback.startAt}`);
+// A device that computes "expected position" from updatedAt must therefore see
+// the playhead still parked, not already running.
+const parkedPosition = bPlay.playback.positionMs +
+  Math.max(0, (bPlay.serverTime || Date.now()) - bPlay.playback.updatedAt);
+check('playhead stays parked until the agreed moment', parkedPosition <= bPlay.playback.positionMs + 1,
+  `computed ${Math.round(parkedPosition)} vs parked ${bPlay.playback.positionMs}`);
 
 /* --- listener control must be refused --- */
 bob.inbox.length = 0;
@@ -117,6 +134,11 @@ check('queue is visible to listener', q.queue.join(',') === 'song-2,song-3', q.q
 alice.send({ t: 'queue', action: 'next' });
 const skipped = await bob.waitFor((m) => m.t === 'playback' && m.playback.trackKey === 'song-2');
 check('skip advances the room', skipped.playback.trackKey === 'song-2', skipped.playback.trackKey);
+// Advancing mid-playback means everyone must download a different file, so it
+// needs a fresh agreed start just as pressing play does.
+check('skip while playing reschedules the start',
+  skipped.playback.playing === false || typeof skipped.playback.startAt === 'number',
+  `playing=${skipped.playback.playing} startAt=${skipped.playback.startAt}`);
 
 /* --- chat --- */
 bob.send({ t: 'chat', text: 'hello from bob' });

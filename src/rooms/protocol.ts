@@ -25,7 +25,15 @@ export interface PlaybackState {
   videoId: string | null;
   positionMs: number;
   playing: boolean;
+  /**
+   * The server time at which the audio reaches `positionMs`. This may be in the
+   * *future*: when it is, the room has agreed to begin at that instant and
+   * every client is counting down to the same moment rather than starting
+   * whenever its own message happened to arrive.
+   */
   updatedAt: number;
+  /** Non-null while a start is pending; the server time audio begins. */
+  startAt: number | null;
 }
 
 export interface ChatMessage {
@@ -78,6 +86,7 @@ export const EMPTY_PLAYBACK: PlaybackState = {
   positionMs: 0,
   playing: false,
   updatedAt: 0,
+  startAt: null,
 };
 
 /* Limits. Chat is capped so one enthusiastic person cannot flood the room. */
@@ -86,7 +95,26 @@ export const CHAT_HISTORY = 200;
 /** Messages allowed inside this window before a sender is ignored. */
 export const CHAT_RATE_COUNT = 5;
 export const CHAT_RATE_WINDOW_MS = 5000;
-/** Clients correct themselves only when they are this far out. */
-export const DRIFT_HARD_MS = 300;
+
+/**
+ * How far ahead of "now" a start is scheduled.
+ *
+ * This exists because starting immediately is the single worst thing a sync
+ * system can do: the track has to be downloaded and decoded first, and on a
+ * phone that can take seconds. Whoever's network is fastest starts first and
+ * everyone else is seconds behind before a single sample has been played.
+ * Agreeing on one future moment removes that race entirely — a late device
+ * simply joins mid-track and the convergence loop walks it back in.
+ */
+export const START_LEAD_MS = 4000;
+
+/** Convergence band.
+ *
+ * These used to be 300/120, which meant two devices could sit at opposite
+ * ends of the band — up to 240ms apart — and both be considered "in sync",
+ * because each was only ever compared against the server, never against each
+ * other. Correction is a ~1-2% rate nudge, which is inaudible, so the band can
+ * be tight and the nudge does the rest. */
+export const DRIFT_HARD_MS = 150;
 /** Below this we leave the local element alone — correcting is audible. */
-export const DRIFT_SOFT_MS = 120;
+export const DRIFT_SOFT_MS = 20;

@@ -8,7 +8,8 @@
 
 import { RoomClient } from './roomClient';
 import { WebSocketTransport } from './wsTransport';
-import { createAppTarget, resolveTrack } from './appTarget';
+import { resolveTrack } from './appTarget';
+import { WebAudioTarget } from './audioEngine';
 import { setRoomActive } from './roomFlag';
 import { ensureCatalog } from './catalogReady';
 import { fetchHfCatalog } from '../core/catalog';
@@ -28,6 +29,7 @@ const NAMES = ['listener', 'guest', 'sunny', 'quiet one', 'night owl', 'roadtrip
 
 let client: RoomClient | null = null;
 let transport: WebSocketTransport | null = null;
+let audio: WebAudioTarget | null = null;
 let unsub: (() => void) | null = null;
 let liveTimer: number | null = null;
 let sweepRaf = 0;
@@ -269,9 +271,19 @@ async function join(roomId: string, adminKey: string | null, isHost: boolean) {
     ...(adminKey ? { adminKey } : {}),
   });
 
+  // Room playback runs on Web Audio rather than an <audio> element, so that
+  // the playhead is computed from a high-resolution clock and corrected for
+  // this device's own output latency. Everything the app needs is read back
+  // through the client's view, so nothing else has to touch the engine.
+  audio = new WebAudioTarget({
+    resolve: resolveTrack,
+    onEnded: () => client?.trackEnded(),
+    onError: (message) => banner(message),
+  });
+
   client = new RoomClient(
     { roomId, ...(adminKey ? { ownerKey: adminKey } : {}) },
-    transport, clientId, createAppTarget(),
+    transport, clientId, audio,
   );
   client.onChat = pushChat;
 
@@ -301,10 +313,10 @@ async function join(roomId: string, adminKey: string | null, isHost: boolean) {
 }
 
 function armAutoplay() {
-  const resume = () => {
-    const a = state.audio;
-    if (client && client.view().playback.playing && a.paused) a.play().catch(() => {});
-  };
+  // The context stays suspended until the browser sees a real gesture. If the
+  // join click did not count (or the user came back later), pick audio up on
+  // the next interaction rather than sitting silent.
+  const resume = () => client?.resumeIfBlocked();
   for (const ev of ['pointerdown', 'keydown', 'touchstart']) {
     document.addEventListener(ev, resume, { passive: true });
   }
@@ -317,9 +329,8 @@ function leave() {
   if (liveTimer !== null) { clearInterval(liveTimer); liveTimer = null; }
   unsub?.(); unsub = null;
   client?.leave(); client = null; transport = null;
+  audio?.dispose(); audio = null;
   setRoomActive(false);
-  state.audio.pause();
-  state.audio.playbackRate = 1;
   try { history.replaceState(null, '', '/rooms'); } catch { /* ignore */ }
   showJoin();
 }
@@ -354,31 +365,48 @@ function stepSweep() {
 function live() {
   const v = client?.view();
   if (!v) return;
-  const a = state.audio;
 
-  const dur = Number.isFinite(a.duration) ? a.duration * 1000 : 0;
-  $('tCur').textContent = fmt(a.currentTime * 1000);
+  const pos = v.positionMs;
+  const dur = v.durationMs;
+  $('tCur').textContent = fmt(pos);
   $('tDur').textContent = dur ? fmt(dur) : '–:––';
-  const pct = dur ? Math.max(0, Math.min(100, (a.currentTime * 1000 / dur) * 100)) : 0;
+  const pct = dur ? Math.max(0, Math.min(100, (pos / dur) * 100)) : 0;
   ($('fill') as HTMLElement).style.width = pct + '%';
   ($('knob') as HTMLElement).style.left = pct + '%';
   const seekBar = $('seekBar');
   seekBar.setAttribute('aria-valuenow', String(Math.round(pct)));
-  seekBar.setAttribute('aria-valuetext', fmt(a.currentTime * 1000));
+  seekBar.setAttribute('aria-valuetext', fmt(pos));
 
-  const blocked = v.playback.playing && a.paused;
+  // A device whose audio is blocked by autoplay policy is the one case where
+  // nothing we do server-side can help, so ask for a gesture instead.
+  const blocked = v.playback.playing && v.blocked;
   $('listenHint').hidden = !blocked;
+  $('loadHint').hidden = !v.loading;
+
+  // Countdown to the one moment everyone agreed to begin.
+  const starting = v.startInMs != null;
+  $('countdown').hidden = !starting;
+  if (starting) {
+    // Round up so it reads 4,3,2,1 and hits GO exactly on the agreed instant
+    // rather than a frame early.
+    $('countdownNum').textContent = String(Math.max(1, Math.ceil((v.startInMs ?? 0) / 1000)));
+  }
 
   const bar = $('syncbar');
-  bar.hidden = !v.clockReady;
+  bar.hidden = !v.clockReady || starting;
   const meta = $('driftLabel').parentElement!;
-  if (blocked) {
+  if (starting) {
+    $('syncLabel').textContent = 'waiting for everyone';
+    $('driftLabel').textContent = v.loading ? 'loading' : 'ready';
+    meta.className = 'syncmeta ok';
+  } else if (blocked) {
     $('syncLabel').textContent = 'waiting for you';
     $('driftLabel').textContent = '';
     meta.className = 'syncmeta warn';
   } else {
     $('syncLabel').textContent = v.nudging ? 'gently correcting' : 'in sync';
-    $('driftLabel').textContent = `${v.driftMs} ms`;
+    $('driftLabel').textContent =
+      `${v.driftMs} ms${v.outputLatencyMs != null ? ` · ${v.outputLatencyMs} ms out` : ''}`;
     meta.className = v.inSync ? 'syncmeta ok' : 'syncmeta warn';
   }
 }
@@ -505,12 +533,11 @@ let scrubbing = false;
 
 function seekFromEvent(e: PointerEvent | MouseEvent): void {
   const bar = $('seekBar');
-  const a = state.audio;
-  const dur = Number.isFinite(a.duration) ? a.duration : 0;
+  const dur = client?.view().durationMs ?? 0;
   if (!dur || !client?.isAdmin) return;
   const r = bar.getBoundingClientRect();
   const ratio = Math.max(0, Math.min(1, (e.clientX - r.left) / r.width));
-  client.seek(Math.round(ratio * dur * 1000));
+  client.seek(Math.round(ratio * dur));
 }
 
 function wireSeek(): void {
@@ -530,13 +557,12 @@ function wireSeek(): void {
   bar.addEventListener('pointercancel', () => { scrubbing = false; });
 
   bar.addEventListener('keydown', (e) => {
-    const a = state.audio;
     if (!client?.isAdmin) return;
-    const dur = Number.isFinite(a.duration) ? a.duration * 1000 : 0;
-    if (!dur) return;
+    const v = client.view();
+    if (!v.durationMs) return;
     const step = e.shiftKey ? 10_000 : 5_000;
-    if (e.key === 'ArrowRight') { e.preventDefault(); client.seek(Math.min(dur, a.currentTime * 1000 + step)); }
-    if (e.key === 'ArrowLeft') { e.preventDefault(); client.seek(Math.max(0, a.currentTime * 1000 - step)); }
+    if (e.key === 'ArrowRight') { e.preventDefault(); client.seek(Math.min(v.durationMs, v.positionMs + step)); }
+    if (e.key === 'ArrowLeft') { e.preventDefault(); client.seek(Math.max(0, v.positionMs - step)); }
   });
 }
 
@@ -583,10 +609,6 @@ function wireRoom() {
 /* ---------------- boot ---------------- */
 
 async function boot() {
-  // A standalone <audio> element: this page has no business touching the main
-  // player's state, and the two must not fight over one element.
-  state.audio = document.getElementById('audioPlayer') as HTMLAudioElement;
-
   wireJoin();
   wireRoom();
   wireSeek();

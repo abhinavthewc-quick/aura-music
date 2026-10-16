@@ -112,6 +112,14 @@
     </div>
 
     <p class="hint" id="listenHint" hidden>Click anywhere to start the sound</p>
+    <p class="hint" id="loadHint" hidden>Getting the track ready…</p>
+
+    <!-- Everyone counts down to the same instant, so the room starts as one
+         rather than whenever each device finished downloading. -->
+    <div class="countdown" id="countdown" hidden aria-live="polite">
+      <b id="countdownNum">3</b>
+      <small>starting together</small>
+    </div>
   </section>
 
   <div class="cols">
@@ -151,7 +159,6 @@
   </div>
 </main>
 
-<audio id="audioPlayer" preload="metadata"></audio>
 <script type="module" src="/src/rooms/page.ts"></script>
 </body>
 </html>

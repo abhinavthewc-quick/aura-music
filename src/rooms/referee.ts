@@ -18,6 +18,7 @@ import {
   CHAT_RATE_COUNT,
   CHAT_RATE_WINDOW_MS,
   EMPTY_PLAYBACK,
+  START_LEAD_MS,
   type ChatMessage,
   type ClientMessage,
   type Participant,
@@ -296,7 +297,10 @@ export class RoomReferee {
     switch (message.action) {
       case 'play':
         if (!this.playback.trackKey) return;
-        this.playback = { ...this.playback, playing: true, positionMs: this.playback.positionMs, updatedAt: now };
+        // Resume and first-play both schedule a start a few seconds out rather
+        // than beginning immediately, so every device begins on the same
+        // instant instead of whenever its own download and decode finish.
+        this.scheduleStart(this.playback.positionMs);
         break;
       case 'pause':
         // Trust the position the pausing client reported: it is the only party
@@ -305,6 +309,7 @@ export class RoomReferee {
         this.playback = {
           ...this.playback,
           playing: false,
+          startAt: null,
           positionMs: typeof message.positionMs === 'number' && message.positionMs >= 0
             ? message.positionMs
             : this.playback.positionMs,
@@ -312,22 +317,55 @@ export class RoomReferee {
         };
         break;
       case 'seek':
-        this.playback = { ...this.playback, positionMs: Math.max(0, message.positionMs ?? 0), updatedAt: now };
+        this.playback = {
+          ...this.playback,
+          positionMs: Math.max(0, message.positionMs ?? 0),
+          updatedAt: now,
+          // A seek during a pending start keeps the agreed start moment; one
+          // during live playback drops it, since there is nothing to wait for.
+          startAt: this.playback.startAt != null && this.playback.startAt > now
+            ? this.playback.startAt
+            : null,
+        };
         break;
       case 'track': {
         if (!message.trackKey) return;
         const sameTrack = this.playback.trackKey === message.trackKey;
+        const positionMs = sameTrack ? this.playback.positionMs : 0;
         this.playback = {
           trackKey: message.trackKey,
           videoId: message.videoId ?? null,
-          positionMs: sameTrack ? this.playback.positionMs : 0,
+          positionMs,
           playing: this.playback.playing,
           updatedAt: now,
+          startAt: null,
         };
+        // Switching tracks mid-playback is the worst case for sync: everyone
+        // has to download a different file first. Schedule a fresh start so
+        // the room re-converges at a single agreed moment.
+        if (this.playback.playing) this.scheduleStart(positionMs);
         break;
       }
     }
     this.broadcastPlayback();
+  }
+
+  /**
+   * Begin playback at one agreed future instant.
+   *
+   * `updatedAt` is pushed into the future alongside `startAt`, which makes the
+   * client's "expected position" formula correct for free: before the start it
+   * clamps at `positionMs`, and after it advances from that same instant.
+   */
+  private scheduleStart(positionMs: number): void {
+    const startAt = this.now() + START_LEAD_MS;
+    this.playback = {
+      ...this.playback,
+      playing: true,
+      positionMs,
+      startAt,
+      updatedAt: startAt,
+    };
   }
 
   private applyQueue(clientId: string, message: Extract<ClientMessage, { t: 'queue' }>): void {
@@ -345,9 +383,16 @@ export class RoomReferee {
       case 'next': {
         const nextKey = this.queue.shift();
         if (nextKey) {
-          this.playback = { ...this.playback, trackKey: nextKey, positionMs: 0, updatedAt: now };
+          this.playback = {
+            ...this.playback, trackKey: nextKey, positionMs: 0, updatedAt: now, startAt: null,
+          };
+          // Same reasoning as a track change: a fresh download is due, so give
+          // the room an agreed moment to begin rather than racing it.
+          if (this.playback.playing) this.scheduleStart(0);
         } else {
-          this.playback = { ...this.playback, playing: false, positionMs: 0, updatedAt: now };
+          this.playback = {
+            ...this.playback, playing: false, positionMs: 0, updatedAt: now, startAt: null,
+          };
         }
         break;
       }

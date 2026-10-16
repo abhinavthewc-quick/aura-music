@@ -38,6 +38,18 @@ export interface RoomView {
   inSync: boolean;
   /** True while a gentle rate correction is running rather than a hard seek. */
   nudging: boolean;
+  /** Where our own playhead is, in ms. Drives the seek bar and time readout. */
+  positionMs: number;
+  /** Length of the current track in ms, or 0 when it is not known yet. */
+  durationMs: number;
+  /** Milliseconds until the agreed start, or null when nothing is scheduled. */
+  startInMs: number | null;
+  /** True while this device is downloading and decoding the current track. */
+  loading: boolean;
+  /** True when autoplay policy is refusing to start this device's audio. */
+  blocked: boolean;
+  /** Measured render-to-speaker latency of this device, when known. */
+  outputLatencyMs: number | null;
   /** Best estimate of the server clock — drives the shared sync visual. */
   serverNow: number;
   clockReady: boolean;
@@ -47,14 +59,26 @@ export interface RoomView {
 
 type Listener = (view: RoomView) => void;
 
+/** Implemented by the Web Audio engine, which can report its own latency. */
+interface LatencyAware {
+  outputLatencyMs: number;
+  latencyMeasured: boolean;
+}
+
+/** Implemented by the Web Audio engine. */
+interface BlockAware {
+  isBlocked(): boolean;
+}
+
 export class RoomClient {
   readonly roomId: string;
   private transport: RoomTransport;
   private engine: SyncEngine;
+  private target: SyncTarget;
   private listeners = new Set<Listener>();
 
   private participants: Participant[] = [];
-  private playback: PlaybackState = { trackKey: null, videoId: null, positionMs: 0, playing: false, updatedAt: 0 };
+  private playback: PlaybackState = { trackKey: null, videoId: null, positionMs: 0, playing: false, updatedAt: 0, startAt: null };
   private queue: string[] = [];
   private expiresAt: number | null = null;
   private you: Participant | null = null;
@@ -69,6 +93,7 @@ export class RoomClient {
     this.roomId = info.roomId;
     this.ownerKey = info.ownerKey;
     this.clientId = clientId;
+    this.target = target;
 
     this.engine = new SyncEngine({
       onError: () => { /* surfaced via view; the room keeps running */ },
@@ -221,6 +246,20 @@ export class RoomClient {
 
   say(text: string): void { this.send({ t: 'chat', text }); }
 
+  /**
+   * The audio engine reached the end of a track on its own. Only an admin may
+   * advance the room, and the server checks that again regardless — but the
+   * room would otherwise sit at the end of a track forever.
+   */
+  trackEnded(): void {
+    if (this.isAdmin) this.queueNext();
+  }
+
+  /** Retry playback after an autoplay block. Called from the first gesture. */
+  resumeIfBlocked(): void {
+    this.engine.resumeIfBlocked();
+  }
+
   setBuffering(value: boolean): void {
     if (this.buffering === value) return;
     this.buffering = value;
@@ -277,11 +316,24 @@ export class RoomClient {
       clockOffsetMs: Math.round(this.engine.clockOffsetMs),
       inSync: this.engine.inSync,
       nudging: this.engine.isNudging,
+      positionMs: Math.max(0, this.engine.positionMs),
+      durationMs: this.engine.durationMs,
+      startInMs: this.engine.startInMs,
+      loading: Boolean(this.playback.trackKey) && this.target.isBuffering(),
+      blocked: (this.target as unknown as Partial<BlockAware>).isBlocked?.() ?? false,
+      outputLatencyMs: this.measuredLatency(),
       serverNow: Math.round(this.engine.serverNow),
       clockReady: this.engine.clockReady,
       buffering: this.buffering,
       closed: this.closedReason,
     };
+  }
+
+  /** Only meaningful once the engine has measured it, rather than guessed. */
+  private measuredLatency(): number | null {
+    const t = this.target as unknown as Partial<LatencyAware>;
+    if (typeof t.outputLatencyMs !== 'number' || !t.latencyMeasured) return null;
+    return Math.round(t.outputLatencyMs);
   }
 
   private emit(): void {
@@ -297,6 +349,8 @@ export class RoomClient {
       clockReady: this.engine.clockReady,
       serverNow: Math.round(this.engine.serverNow),
       clientNow: Date.now(),
+      startInMs: this.engine.startInMs,
+      outputLatencyMs: this.measuredLatency(),
     };
   }
 }

@@ -1,0 +1,28 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <title>sync test — two listeners</title>
+  <style>
+    body { background:#0d0b09; color:#e8e2d8; font:14px/1.6 ui-monospace,SFMono-Regular,Menlo,monospace; padding:32px; }
+    h1 { font-size:16px; font-weight:600; margin:0 0 6px; }
+    p.sub { color:#8b8378; margin:0 0 22px; max-width:62ch; }
+    button { background:#c9a227; border:0; border-radius:6px; color:#150f09; cursor:pointer;
+             font:600 13px/1 inherit; padding:11px 18px; }
+    button:disabled { opacity:.45; cursor:default; }
+    pre { background:#16130f; border:1px solid #2a251e; border-radius:8px; margin-top:22px;
+          padding:16px; white-space:pre-wrap; }
+  </style>
+</head>
+<body>
+  <h1>sync test — two listeners</h1>
+  <p class="sub">
+    Builds two independent audio pipelines in this tab and measures the distance
+    between them, in ms. Not each device against the server — that number is
+    always near zero and proves nothing. Audio needs a click to start.
+  </p>
+  <button id="run" type="button">Run the test</button>
+  <pre id="out"></pre>
+  <script type="module" src="/src/rooms/syncTest.ts"></script>
+</body>
+</html>
