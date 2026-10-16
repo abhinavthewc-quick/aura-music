@@ -225,6 +225,69 @@ async function rateTrackingCheck(): Promise<{ pass: boolean; observedRatio: numb
   return { pass: Math.abs(observedRatio - rate) < 0.004, observedRatio: +observedRatio.toFixed(5), rate };
 }
 
+/**
+ * Pausing must actually stop the audio, and must keep stopping it.
+ *
+ * Regression: converge() used to seek before it paused. Under Web Audio a seek
+ * is a stop-and-restart, so the pause left a running source; the next tick saw
+ * the playhead advancing past a frozen expectation, sought again, and the track
+ * stuttered in one spot forever. Only a real source run for a few seconds after
+ * the pause catches that, so this plays through the engine's own tick loop
+ * rather than calling pause() once and asserting on it.
+ */
+async function pauseStaysPausedCheck(): Promise<{
+  pass: boolean; movedAfterPauseMs: number; position: number; restartsAfterPause: number;
+}> {
+  const target = new WebAudioTarget({ resolve: (key) => (key === TRACK.key ? TRACK : null) });
+  await target.unlock();
+  await target.load(TRACK.key);
+
+  const engine = new SyncEngine({ correctionIntervalMs: 100 });
+  engine.attach(target);
+  engine.start(() => {});
+
+  const startAt = Date.now() + 1200;
+  const playing: PlaybackState = {
+    trackKey: TRACK.key, videoId: null, positionMs: 0,
+    playing: true, updatedAt: startAt, startAt,
+  };
+  await engine.onPlayback(playing);
+  await sleep(2500);
+  const whilePlaying = engine.positionMs;
+  if (!target.isPlaying()) {
+    target.dispose();
+    return { pass: false, movedAfterPauseMs: -1, position: whilePlaying, restartsAfterPause: -1 };
+  }
+
+  // Pause, and report the playhead the way the UI does.
+  const paused: PlaybackState = {
+    ...playing, playing: false, startAt: null,
+    positionMs: whilePlaying, updatedAt: Date.now(),
+  };
+  await engine.onPlayback(paused);
+  const atPause = engine.positionMs;
+  // A pause legitimately tears down one source. Anything started after this
+  // point is the churn, so count from here rather than from construction.
+  const startsAtPause = target.starts;
+
+  // Let the correction loop run. Any movement means something restarted it.
+  await sleep(2500);
+  const later = engine.positionMs;
+  const restartsAfterPause = target.starts - startsAtPause;
+
+  engine.stop();
+  target.dispose();
+  // Any sizeable movement means something restarted it. A small negative
+  // reading is just the sub-millisecond settle of the final integrate() call.
+  const moved = later - atPause;
+  return {
+    pass: Math.abs(moved) < 5 && restartsAfterPause === 0,
+    movedAfterPauseMs: +moved.toFixed(1),
+    position: +atPause.toFixed(1),
+    restartsAfterPause,
+  };
+}
+
 const SCENARIOS: Scenario[] = [
   {
     name: 'scheduled start, both devices ready in time',
@@ -254,6 +317,13 @@ async function main(): Promise<void> {
   out.textContent = '';
 
   const results: ScenarioResult[] = [];
+
+  write('▸ pause stays paused');
+  const pauseCheck = await pauseStaysPausedCheck();
+  write(`   playhead moved ${pauseCheck.movedAfterPauseMs} ms in the 2.5s after pausing (from ${pauseCheck.position} ms)`);
+  write(`   sources restarted after pausing  ${pauseCheck.restartsAfterPause}`);
+  write(`   ${pauseCheck.pass ? 'PASS' : 'FAIL'}\n`);
+
   write('▸ reported position tracks the playback rate');
   const rateCheck = await rateTrackingCheck();
   write(`   asked for ${rateCheck.rate}×, measured ${rateCheck.observedRatio}×`);
@@ -270,9 +340,9 @@ async function main(): Promise<void> {
     write(`   ${r.pass ? 'PASS' : 'FAIL'}\n`);
   }
 
-  const pass = results.every((r) => r.pass) && rateCheck.pass;
+  const pass = results.every((r) => r.pass) && rateCheck.pass && pauseCheck.pass;
   write(pass ? 'ALL PASS' : 'FAILED');
-  (window as unknown as { __result: unknown }).__result = { pass, rateCheck, results };
+  (window as unknown as { __result: unknown }).__result = { pass, pauseCheck, rateCheck, results };
 }
 
 document.addEventListener('DOMContentLoaded', () => {

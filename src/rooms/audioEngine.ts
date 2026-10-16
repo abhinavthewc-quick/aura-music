@@ -146,6 +146,12 @@ export class WebAudioTarget implements SyncTarget {
     return this.latencyS * 1000;
   }
 
+  /**
+   * How many times a source has begun. Every seek restarts one, so this is
+   * the direct measure of whether the engine is churning the audio.
+   */
+  starts = 0;
+
   /** True once `getOutputTimestamp()` has given us a real reading. */
   get latencyMeasured(): boolean {
     return this.hasLatency;
@@ -325,6 +331,7 @@ export class WebAudioTarget implements SyncTarget {
 
     const when = this.ctx.currentTime + Math.max(0.005, delayS);
     src.start(when, clamped);
+    this.starts++;
     this.source = src;
     this.startedAtCtx = when;
     this.currentRate = 1;

@@ -262,7 +262,10 @@ export class SyncEngine {
 
     if (waitingForStart && playback.startAt != null) {
       this.pendingStartServerMs = playback.startAt;
-      if (target.isPlaying()) target.pause();
+      // stopSource() clears any queued start as well, so this cancels a start
+      // that has been scheduled but not yet reached — otherwise a pause during
+      // the countdown would still begin playing.
+      if (target.isPlaying() || target.hasPendingStart?.()) target.pause();
       if (applyingTrack || Math.abs(target.getPositionMs() - playback.positionMs) > 1) {
         target.seek(playback.positionMs);
       }
@@ -292,13 +295,31 @@ export class SyncEngine {
       !Number.isFinite(expected) ||
       magnitude > NUDGE_MAX_MS;
 
+    // Paused: stop, and do not touch the playhead.
+    //
+    // This has to come first. A seek while the room is paused is a
+    // stop-and-restart under Web Audio, which leaves the source playing; the
+    // play/pause block below then sees a running source and leaves it alone.
+    // The next tick finds the playhead advancing past a frozen expectation,
+    // seeks again, and the track stutters in place indefinitely.
+    if (!playback.playing) {
+      this.pendingStartServerMs = null;
+      if (target.isPlaying() || target.hasPendingStart?.()) target.pause();
+      this.setRate(target, 0);
+      this.nudging = false;
+      // The pause message carries the authoritative position, and the target
+      // already holds it from pausing, so there is nothing left to correct.
+      this.lastDriftMs = 0;
+      return;
+    }
+
     if (mustSeek) {
       // Big or deliberate jump: land exactly where the room is.
       target.seek(Math.max(0, Math.min(expected, safeDuration(target))));
       this.setRate(target, 0);
       this.nudging = false;
       if (magnitude > NUDGE_MAX_MS || applyingTrack) this.corrections++;
-    } else if (magnitude > DRIFT_SOFT_MS && target.setRate && playback.playing) {
+    } else if (magnitude > DRIFT_SOFT_MS && target.setRate) {
       // Small drift: ease back with a slight rate change rather than a seek.
       // A seek here is the single most audible thing a sync system can do —
       // it is what makes these tools feel "janky" to the people using them.
@@ -312,15 +333,9 @@ export class SyncEngine {
       this.nudging = false;
     }
 
-    // Playing/paused convergence. Note we deliberately let small drift stand
-    // rather than nudging constantly — audible micro-seeks are worse than
-    // 20ms of drift.
-    if (playback.playing) {
-      if (!target.isPlaying()) {
-        try { await target.play(); } catch { /* autoplay blocked; UI will prompt */ }
-      }
-    } else if (target.isPlaying()) {
-      target.pause();
+    // Only reached while playing. Paused returned above.
+    if (!target.isPlaying()) {
+      try { await target.play(); } catch { /* autoplay blocked; UI will prompt */ }
     }
   }
 }
