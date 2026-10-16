@@ -164,8 +164,8 @@ function toast(text: string) {
 
 /* ---------- rendering ---------- */
 
-function openPanel() { $id('roomPanel').classList.add('open'); $id('roomFab').classList.add('show'); }
-function closePanel() { $id('roomPanel').classList.remove('open'); $id('roomFab').classList.remove('show'); }
+function openPanel() { $id('roomPanel').classList.add('open'); }
+function closePanel() { $id('roomPanel').classList.remove('open'); }
 export function togglePanel() { $id('roomPanel').classList.toggle('open'); }
 
 function setStatus(text: string, isError = false) {

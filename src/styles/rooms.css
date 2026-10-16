@@ -2,14 +2,16 @@
    Deliberately plain and compact: the room sits beside the player rather than
    taking over the screen, so a shared track keeps the normal player chrome. */
 
+/* The button is the only way into a room, so it must be visible on load.
+   (It was originally hidden until the panel opened, which meant it could
+   never be clicked to open the panel in the first place.) */
 .room-fab {
   position: fixed; right: 18px; bottom: 18px; z-index: 80;
-  display: none; align-items: center; gap: 8px;
+  display: flex; align-items: center; gap: 8px;
   background: var(--gold); color: #17120d; border: none; cursor: pointer;
   border-radius: 999px; padding: 10px 16px; font: 700 13px/1 inherit;
   box-shadow: 0 6px 22px rgba(0, 0, 0, .45);
 }
-.room-fab.show { display: flex; }
 .room-fab:hover { filter: brightness(1.08); }
 .room-fab .room-live {
   width: 7px; height: 7px; border-radius: 50%; background: #d94f3d;
