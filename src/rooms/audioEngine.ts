@@ -28,9 +28,6 @@ const MAX_BUFFERED = 1;
 /** How far the output head may trail the render clock before we distrust it. */
 const MAX_PLAUSIBLE_LATENCY_S = 2;
 
-/** Smoothing for the measured latency. Output latency wanders; drift does not. */
-const LATENCY_EMA = 0.08;
-
 export interface WebAudioTargetOptions {
   resolve: (trackKey: string) => ResolvedTrack | null;
   onTrackChanged?: (track: ResolvedTrack) => void;
@@ -52,9 +49,22 @@ export class WebAudioTarget implements SyncTarget {
   /** Decoded buffers, oldest first. Kept tiny on purpose — see MAX_BUFFERED. */
   private buffers = new Map<string, AudioBuffer>();
 
-  /** ctx.currentTime at which the current source begins, and its track offset. */
+  /**
+   * Where the playhead is, integrated over time rather than derived from
+   * elapsed wall-clock.
+   *
+   * The obvious formula — (now - startedAt) + offset — is wrong the moment the
+   * rate changes: it assumes playbackRate is 1, so a speed-up would change the
+   * audio without moving the reported position. The sync loop would then see
+   * the same drift forever while the track quietly played 2% fast. Integrating
+   * keeps the reported position and the actual audio in agreement.
+   */
+  private positionMs = 0;
+  /** Audible-clock reading that `positionMs` was last integrated up to. */
+  private lastIntegratedCtx = 0;
+  private currentRate = 1;
+  /** ctx.currentTime at which the current source begins emitting. */
   private startedAtCtx = 0;
-  private offsetAtStartS = 0;
   private playing = false;
   /** True between scheduling a start and the moment that start actually arrives. */
   private startPending = false;
@@ -112,7 +122,13 @@ export class WebAudioTarget implements SyncTarget {
     const gap = this.ctx.currentTime - ts.contextTime;
     if (!Number.isFinite(gap) || gap < 0 || gap > MAX_PLAUSIBLE_LATENCY_S) return;
 
-    this.latencyS = this.hasLatency ? this.latencyS + (gap - this.latencyS) * LATENCY_EMA : gap;
+    // Taken as-is, not smoothed. The reported gap is stable to within a
+    // millisecond or two across samples, and it feeds the position
+    // calculation directly — so an exponential average would just spend the
+    // first seconds of playback slowly injecting its own error into the
+    // playhead, which is the one thing the engine cannot tolerate.
+    // One outlier is filtered instead, which is what the gap actually needs.
+    this.latencyS = gap;
     this.hasLatency = true;
   }
 
@@ -148,17 +164,42 @@ export class WebAudioTarget implements SyncTarget {
   }
 
   /**
+   * Bring the integrated playhead up to the audible clock.
+   *
+   * The step is integrated at the rate in force during it, so a correction that
+   * arrives mid-step is accounted for correctly rather than dropped.
+   */
+  private integrate(): void {
+    const audible = this.audibleCtxNow();
+    const step = audible - this.lastIntegratedCtx;
+    // A negative step means the scheduled start has not arrived yet. Moving the
+    // anchor here would bank the whole wait as played time the moment the start
+    // lands, which is how a countdown turned into a device claiming seconds of
+    // audio it had not produced. Leave the anchor where the start put it.
+    if (step <= 0) return;
+    // Any positive step is real: Web Audio renders on the audio thread, so if
+    // the main thread was busy or the tab was throttled the track still played
+    // and the position has to say so. Ignoring that was worse than the problem
+    // it was guarding against — a skipped step leaves a permanent gap that the
+    // sync loop then tries to close with a correction forever.
+    this.positionMs += step * 1000 * this.currentRate;
+    this.lastIntegratedCtx = audible;
+  }
+
+  /** Park the playhead at an absolute position and restart the integration. */
+  private anchor(positionMs: number, ctxTime: number): void {
+    this.positionMs = positionMs;
+    this.lastIntegratedCtx = ctxTime;
+  }
+
+  /**
    * Position of the audio *at the speaker*, not in the graph. Subtracting the
    * output latency is what makes two devices with different pipelines agree on
    * what is actually being heard at a given instant.
    */
   getPositionMs(): number {
-    if (!this.playing && !this.startPending) return this.offsetAtStartS * 1000;
-    // Before the scheduled start the source has not begun, so the playhead is
-    // wherever it was parked — never negative, never advanced.
-    const audible = this.audibleCtxNow();
-    const elapsed = Math.max(0, audible - this.startedAtCtx);
-    return (elapsed + this.offsetAtStartS) * 1000;
+    if (this.playing) this.integrate();
+    return Math.max(0, this.positionMs);
   }
 
   getTrackKey(): string | null { return this.currentKey; }
@@ -216,8 +257,10 @@ export class WebAudioTarget implements SyncTarget {
     }
 
     this.track = { ...track, durationMs: Math.round(buffer.duration * 1000) };
-    this.offsetAtStartS = 0;
     this.playing = false;
+    this.startPending = false;
+    this.currentRate = 1;
+    this.anchor(0, this.audibleCtxNow());
     this.opts.onTrackChanged?.(this.track);
   }
 
@@ -247,11 +290,13 @@ export class WebAudioTarget implements SyncTarget {
     src.onended = () => {
       // Ignore teardown we caused ourselves; only a natural end counts.
       if (this.source !== src) return;
+      this.integrate();
       const dur = src.buffer ? src.buffer.duration : 0;
       this.source = null;
       this.playing = false;
       this.startPending = false;
-      this.offsetAtStartS = dur;
+      this.currentRate = 1;
+      this.anchor(dur * 1000, this.audibleCtxNow());
       this.opts.onEnded?.();
     };
     return src;
@@ -282,7 +327,11 @@ export class WebAudioTarget implements SyncTarget {
     src.start(when, clamped);
     this.source = src;
     this.startedAtCtx = when;
-    this.offsetAtStartS = clamped;
+    this.currentRate = 1;
+    src.playbackRate.value = 1;
+    // Anchor at `when`: the audible clock reads `when` at the instant this
+    // frame leaves the speaker, because the latency is already subtracted.
+    this.anchor(clamped * 1000, when);
     this.playing = true;
     this.startPending = when > this.ctx.currentTime;
     return true;
@@ -325,9 +374,10 @@ export class WebAudioTarget implements SyncTarget {
   pause(): void {
     // Capture the real position before tearing the graph down, otherwise we
     // would lose the playhead entirely.
-    const at = this.getPositionMs() / 1000;
+    const at = this.getPositionMs();
     this.stopSource();
-    this.offsetAtStartS = at;
+    this.currentRate = 1;
+    this.anchor(at, this.audibleCtxNow());
   }
 
   /**
@@ -339,13 +389,18 @@ export class WebAudioTarget implements SyncTarget {
     const target = dur > 0
       ? Math.max(0, Math.min(ms / 1000, dur - 0.02))
       : Math.max(0, ms / 1000);
-    this.offsetAtStartS = target;
-    if (this.playing) this.startAt(target);
+    if (this.playing) { this.startAt(target); return; }
+    this.currentRate = 1;
+    this.anchor(target * 1000, this.audibleCtxNow());
   }
 
   setRate(rate: number): void {
-    if (!this.source) return;
     const r = Math.max(0.5, Math.min(2, rate));
+    if (!this.source) { this.currentRate = 1; return; }
+    // Integrate up to the change first, so the stretch already played at the
+    // old rate is not retroactively re-scaled.
+    if (this.playing) this.integrate();
+    this.currentRate = r;
     try { this.source.playbackRate.value = r; } catch { /* node gone */ }
   }
 

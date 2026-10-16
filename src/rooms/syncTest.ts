@@ -16,6 +16,13 @@
  *   2. One device starts 1200ms late, as a slow phone would. Proves the
  *      convergence loop actually walks it back — the old 120ms deadband let
  *      two devices sit 240ms apart and call that "in sync".
+ *
+ * Plus a check that the reported position tracks a rate change. Deriving the
+ * playhead from elapsed wall-clock is the obvious way to write it and it is
+ * silently wrong under correction: the audio speeds up but the reported
+ * position does not, so the loop sees the same drift forever and leaves the
+ * track running fast. That bug was found by watching the live UI sit at
+ * exactly -100ms and "gently correcting" indefinitely.
  */
 
 import { WebAudioTarget } from './audioEngine';
@@ -191,6 +198,33 @@ async function runScenario(s: Scenario): Promise<ScenarioResult> {
   };
 }
 
+/**
+ * Position must reflect the rate the audio is actually playing at.
+ *
+ * Returns the observed ratio: 1.0 is correct, and anything near 1.02 while
+ * playing at 1.02 means the reported position ignored the rate change.
+ */
+async function rateTrackingCheck(): Promise<{ pass: boolean; observedRatio: number; rate: number }> {
+  const target = new WebAudioTarget({ resolve: (key) => (key === TRACK.key ? TRACK : null) });
+  await target.unlock();
+  await target.load(TRACK.key);
+  await target.play();
+  await sleep(400);
+
+  const rate = 1.02;
+  const before = target.getPositionMs();
+  const wallBefore = performance.now();
+  target.setRate(rate);
+  await sleep(2000);
+  const advanced = target.getPositionMs() - before;
+  const wallElapsed = performance.now() - wallBefore;
+  const observedRatio = advanced / wallElapsed;
+
+  target.pause();
+  target.dispose();
+  return { pass: Math.abs(observedRatio - rate) < 0.004, observedRatio: +observedRatio.toFixed(5), rate };
+}
+
 const SCENARIOS: Scenario[] = [
   {
     name: 'scheduled start, both devices ready in time',
@@ -220,6 +254,11 @@ async function main(): Promise<void> {
   out.textContent = '';
 
   const results: ScenarioResult[] = [];
+  write('▸ reported position tracks the playback rate');
+  const rateCheck = await rateTrackingCheck();
+  write(`   asked for ${rateCheck.rate}×, measured ${rateCheck.observedRatio}×`);
+  write(`   ${rateCheck.pass ? 'PASS' : 'FAIL'}\n`);
+
   for (const s of SCENARIOS) {
     write(`▸ ${s.name}`);
     const r = await runScenario(s);
@@ -231,9 +270,9 @@ async function main(): Promise<void> {
     write(`   ${r.pass ? 'PASS' : 'FAIL'}\n`);
   }
 
-  const pass = results.every((r) => r.pass);
+  const pass = results.every((r) => r.pass) && rateCheck.pass;
   write(pass ? 'ALL PASS' : 'FAILED');
-  (window as unknown as { __result: unknown }).__result = { pass, results };
+  (window as unknown as { __result: unknown }).__result = { pass, rateCheck, results };
 }
 
 document.addEventListener('DOMContentLoaded', () => {
