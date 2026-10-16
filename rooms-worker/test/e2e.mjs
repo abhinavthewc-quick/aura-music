@@ -93,6 +93,21 @@ const aLatest = alice.inbox.filter((m) => m.t === 'playback');
 const stillPlaying = aLatest.length ? aLatest[aLatest.length - 1].playback.playing : true;
 check('listener cannot pause the room', stillPlaying === true, `playing=${stillPlaying}`);
 
+/* --- pause must report the live position, not the last seek ---
+   Regression: the referee stored positionMs from the last seek, so pausing
+   told every device to jump back to it and the progress bar reset to zero. */
+alice.inbox.length = 0; bob.inbox.length = 0;
+alice.send({ t: 'control', action: 'seek', positionMs: 42000 });
+await sleep(300);
+alice.send({ t: 'control', action: 'play' });
+await sleep(300);
+alice.send({ t: 'control', action: 'pause', positionMs: 96000 });
+const pPause = await bob.waitFor((m) => m.t === 'playback' && m.playback.playing === false);
+check('pause keeps the reported position', pPause.playback.positionMs === 96000,
+  `positionMs=${pPause.playback.positionMs} (expected 96000)`);
+alice.send({ t: 'control', action: 'play' });
+await sleep(400);
+
 /* --- queue --- */
 alice.send({ t: 'queue', action: 'add', trackKey: 'song-2' });
 alice.send({ t: 'queue', action: 'add', trackKey: 'song-3' });
