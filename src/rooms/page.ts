@@ -80,6 +80,110 @@ function buildPills() {
   }
 }
 
+
+/* ---------------- library explorer ----------------
+ * Search runs entirely on this device against the catalogue already in memory,
+ * so results are instant and cost nothing. Filtering happens through
+ * resolveTrack(), so anything listed here is guaranteed to be playable by
+ * every listener — no "not in your library" dead ends. */
+
+const MAX_RESULTS = 60;
+let libIndex: { key: string; title: string; artist: string; img: string }[] = [];
+
+function buildLibIndex(): void {
+  if (libIndex.length || !state.songs.length) return;
+  const seen = new Set<string>();
+  for (const song of state.songs) {
+    const key = trackKey(song);
+    if (seen.has(key)) continue;
+    if (!resolveTrack(key)) continue;   // must be shareable
+    seen.add(key);
+    libIndex.push({
+      key,
+      title: String(song.title || 'Unknown'),
+      artist: String(song.artist || 'Unknown artist'),
+      img: String(song.img || ''),
+    });
+  }
+  const el = $('libTotal');
+  if (el) el.textContent = libIndex.length ? String(libIndex.length) : '';
+}
+
+/** Split on the query so we can highlight the matched part without innerHTML. */
+function matches(title: string, artist: string, q: string): boolean {
+  return title.toLowerCase().includes(q) || artist.toLowerCase().includes(q);
+}
+
+function renderResults(q: string): void {
+  const ul = $('libResults');
+  ul.innerHTML = '';
+  const query = q.trim().toLowerCase();
+
+  if (!query) {
+    const li = document.createElement('li');
+    li.className = 'lib-empty';
+    li.textContent = 'Type to search. Results update as you type.';
+    ul.appendChild(li);
+    return;
+  }
+
+  const hits = libIndex.filter((t) => matches(t.title, t.artist, query)).slice(0, MAX_RESULTS);
+
+  if (!hits.length) {
+    const li = document.createElement('li');
+    li.className = 'lib-empty';
+    li.textContent = `Nothing in the library matches “${q.trim()}”.`;
+    ul.appendChild(li);
+    return;
+  }
+
+  const isAdmin = client?.isAdmin ?? false;
+
+  for (const t of hits) {
+    const li = document.createElement('li');
+
+    if (t.img) {
+      const img = document.createElement('img');
+      img.className = 'art-sm';
+      img.src = t.img;
+      img.alt = '';
+      img.loading = 'lazy';
+      img.decoding = 'async';
+      li.appendChild(img);
+    }
+
+    const txt = document.createElement('span');
+    txt.className = 'txt';
+    const t1 = document.createElement('span');
+    t1.className = 't';
+    t1.textContent = t.title;
+    const t2 = document.createElement('span');
+    t2.className = 'a';
+    t2.textContent = t.artist;
+    txt.appendChild(t1);
+    txt.appendChild(t2);
+    li.appendChild(txt);
+
+    const btn = document.createElement('button');
+    btn.className = 'add-btn';
+    btn.textContent = 'Add';
+    // Listeners can browse but not change the queue.
+    if (!isAdmin) {
+      btn.disabled = true;
+      btn.title = 'Only admins can change the queue';
+    } else {
+      btn.onclick = () => {
+        client?.queueAdd(t.key);
+        btn.textContent = 'Added';
+        btn.disabled = true;
+        setTimeout(() => { btn.textContent = 'Add'; btn.disabled = false; }, 1100);
+      };
+    }
+    li.appendChild(btn);
+    ul.appendChild(li);
+  }
+}
+
 /* ---------------- join screen ---------------- */
 
 function showJoin() {
@@ -367,6 +471,9 @@ function render(v: RoomView) {
     pl.appendChild(li);
   }
 
+  // The explorer's Add buttons depend on role, so refresh them when it changes.
+  renderResults(($('libSearch') as HTMLInputElement).value);
+
   if (v.closed) banner(`This room has closed — ${v.closed}`);
   live();
 }
@@ -408,6 +515,15 @@ function wireRoom() {
     } catch { banner('Could not copy — the link is in the address bar.'); }
   };
 
+  const libSearch = $('libSearch') as HTMLInputElement;
+  let libTimer: number | undefined;
+  libSearch.addEventListener('input', () => {
+    window.clearTimeout(libTimer);
+    // Cheap enough to feel live, but coalesce fast typing so a 576-track
+    // scan does not run once per keystroke.
+    libTimer = window.setTimeout(() => renderResults(libSearch.value), 90);
+  });
+
   $('addCurrent').onclick = () => {
     const song = state.songs[state.currentIndex];
     if (!song) { banner('Play something from your library first, then add it.'); return; }
@@ -445,6 +561,9 @@ async function boot() {
       if (tracks.length) setHfTracks(tracks);
     } catch { /* rooms degrade to "not in your library" */ }
   }
+
+  buildLibIndex();
+  renderResults('');
 
   // Deep link: /rooms?r=CODE&k=KEY
   const q = new URLSearchParams(location.search);

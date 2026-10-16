@@ -120,6 +120,15 @@
       <div class="queue-add">
         <button class="ghost sm full" id="addCurrent" type="button">+ Add what's playing to the queue</button>
       </div>
+
+      <div class="col-head chat-head"><h3>Add music</h3>
+        <span class="count" id="libTotal"></span>
+      </div>
+      <input id="libSearch" class="lib-search" placeholder="Search the library to queue a track"
+             autocomplete="off" spellcheck="false" aria-label="Search the library">
+      <div class="results-hint" id="libHint">Rooms play the shared library, so anything you add here is
+        something everyone else can hear.</div>
+      <ul class="list results" id="libResults"></ul>
     </section>
 
     <section class="col">
