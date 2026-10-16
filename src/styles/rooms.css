@@ -1,18 +1,23 @@
 /* Entry point to the listening rooms page. Deliberately a plain link rather
-   than a panel — the room deserves its own page, not an overlay on the player. */
+   than a panel — the room deserves its own page, not an overlay on the player.
 
-.room-link {
-  position: fixed; right: 18px; bottom: 18px; z-index: 80;
-  display: inline-flex; align-items: center; gap: 9px;
-  background: var(--gold); color: #150f09;
-  text-decoration: none; font-weight: 700; font-size: 13px;
-  border-radius: 999px; padding: 11px 17px;
-  box-shadow: 0 6px 22px rgba(0, 0, 0, .45);
-  transition: filter .15s, transform .08s;
+   It lives in the hamburger menu. It used to be a floating button pinned to the
+   bottom corner, which on a phone landed underneath the fixed tab bar and
+   competed with it for the same thumb. The menu is where every other
+   destination lives, so that is where this one belongs. */
+
+.menu-item-link {
+  display: flex;
+  align-items: center;
+  text-decoration: none;
+  color: inherit;
 }
-.room-link:hover { filter: brightness(1.08); }
-.room-link:active { transform: translateY(1px); }
-.room-link-dot {
-  width: 7px; height: 7px; border-radius: 50%; background: #7a2f24;
+
+.menu-item-link .room-link-dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: var(--accent);
+  margin-left: auto;
+  flex-shrink: 0;
 }
-@media (prefers-reduced-motion: reduce) { .room-link { transition: none; } }

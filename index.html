@@ -227,6 +227,10 @@ html.aura-loading,html.aura-loading body{overflow:hidden}
     <div class="side-menu-content">
       <h3 style="color:var(--accent);margin-bottom:20px">Menu</h3>
       <p id="themeToggleBtn" class="menu-item"><i class="fa-solid fa-sun" id="themeIcon"></i> <span id="themeLabel">Light Mode</span></p>
+      <a class="menu-item menu-item-link" id="roomsMenuLink" href="/rooms">
+        <i class="fa-solid fa-headphones"></i> Listen together
+        <span class="room-link-dot" aria-hidden="true"></span>
+      </a>
       <p class="menu-item" id="openSettingsBtn"><i class="fa-solid fa-sliders"></i> Settings</p>
       <p class="menu-item" id="openEffectsBtn"><i class="fa-solid fa-wand-magic-sparkles"></i> Effects</p>
       <p class="menu-item" id="openAboutBtn"><i class="fa-solid fa-circle-info"></i> About</p>
@@ -777,11 +781,6 @@ html.aura-loading,html.aura-loading body{overflow:hidden}
   </div>
 
   <audio id="audioPlayer" preload="metadata"></audio>
-
-  <a class="room-link" href="/rooms">
-    <span class="room-link-dot" aria-hidden="true"></span>
-    Listen together
-  </a>
 
   <script type="module" src="/src/main.ts"></script>
 </body>

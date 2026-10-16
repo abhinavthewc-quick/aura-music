@@ -35,7 +35,7 @@ import { $ } from '../core/state';
         indicator.style.setProperty('--nav-indicator-x', `${xCentered}px`);
         indicator.style.setProperty('--nav-indicator-y', `${yCentered}px`);
         indicator.offsetHeight;
-        indicator.style.transition='transform .55s cubic-bezier(.16,1,.3,1)';
+        indicator.style.transition='';
       }else{
         indicator.style.setProperty('--nav-indicator-x', `${xCentered}px`);
         indicator.style.setProperty('--nav-indicator-y', `${yCentered}px`);
