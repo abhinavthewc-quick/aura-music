@@ -17,7 +17,7 @@
 .profile-btn img{border-radius:50%;aspect-ratio:1/1}
 @media(max-width:480px){.header-profile-wrap{width:44px;height:44px;flex-basis:44px;min-width:44px}.profile-btn{width:44px!important;height:44px!important;min-width:44px}}
 
-/* ===== Round 2: warm tan radio theme, inline effects, Aura Picks ===== */
+/* ===== Round 2: warm tan radio theme, inline effects, Peak Picks ===== */
 :root{--tan:#dcae7c;--tan-2:#c58f5c;--tan-ink:#2b1a0d}
 .radio-tea-hero-content, .radio-tea-hero-content *{font-family:"DM Sans","Helvetica Neue",Arial,sans-serif}
 .radio-tea-hero{min-height:250px;border-color:rgba(220,174,124,.28)}
@@ -34,7 +34,7 @@
 /* inline effects panel (same look as stations window) */
 #radioEffectsPane .effects-card{width:100%;max-height:none;overflow:visible;border-radius:22px;box-shadow:0 14px 40px rgba(0,0,0,.25),inset 0 1px 0 rgba(255,255,255,.12)}
 #radioEffectsPane .effects-close{display:none}
-/* Home: soundscape + aura picks */
+/* Home: soundscape + peak picks */
 .soundscape-card{display:flex;align-items:center;gap:14px;padding:14px;margin:0 0 22px;border-radius:24px;cursor:pointer;background:linear-gradient(135deg,rgba(255,255,255,.09),rgba(255,255,255,.03));border:1px solid rgba(255,255,255,.14)}
 .soundscape-icon{width:56px;height:56px;flex:0 0 56px;border-radius:18px;display:flex;align-items:center;justify-content:center;font-size:22px;color:#f1cf9f;background:linear-gradient(135deg,rgba(255,255,255,.14),rgba(120,90,140,.25));border:1px solid rgba(255,255,255,.14)}
 .soundscape-text{flex:1;min-width:0}.soundscape-text b{display:block;font-size:16px;margin-bottom:3px}.soundscape-text span{display:block;font-size:11.5px;line-height:1.4;color:var(--text-sub)}

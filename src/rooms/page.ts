@@ -1,4 +1,4 @@
-/* AURA — listen together: page controller.
+/* PEAK — listen together: page controller.
  *
  * Owns the two screens (join, then room) and the room's lifetime. Playback is
  * driven entirely by the room: this device downloads the track straight from

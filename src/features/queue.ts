@@ -244,7 +244,7 @@ import { $, persistLikedHistory, savedLikeMap, state } from '../core/state';
 
     export async function playPrevious(){
       // Always resolve the current position from the actual YouTube result ID.
-      // This prevents a stale queue index from making AURA think we're at an end.
+      // This prevents a stale queue index from making PEAK think we're at an end.
       if(auraYTVideoId && auraYTQueue.length){
         let idx=auraYTQueue.findIndex(m=>{
           const mid=String(m?.id||'');

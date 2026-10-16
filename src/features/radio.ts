@@ -170,8 +170,8 @@ import { $, state } from '../core/state';
       try{
         navigator.mediaSession.metadata=new MediaMetadata({
           title:st.name || 'Live Radio',
-          artist:st.country || 'Aura Music Radio',
-          album:'Aura Music • Live Radio',
+          artist:st.country || 'Peak Music Radio',
+          album:'Peak Music • Live Radio',
           artwork:st.favicon?[{src:st.favicon,sizes:'512x512',type:'image/png'}]:[]
         });
         navigator.mediaSession.playbackState=radioAudio.paused?'paused':'playing';
@@ -224,7 +224,7 @@ import { $, state } from '../core/state';
     export async function radioMenuShare(){
       const st=currentRadioStation; if(!st) return;
       const url=st.homepage||st.url_resolved||st.url||'';
-      try{ if(navigator.share){ await navigator.share({title:st.name,text:'Listening to '+st.name+' on Aura Music',url}); return; } }catch(e){ return; }
+      try{ if(navigator.share){ await navigator.share({title:st.name,text:'Listening to '+st.name+' on Peak Music',url}); return; } }catch(e){ return; }
       radioMenuCopy();
     }
     export function radioMenuCopy(){

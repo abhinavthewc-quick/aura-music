@@ -1,5 +1,5 @@
 /**
- * Aura Rooms — Durable Object.
+ * Peak Rooms — Durable Object.
  *
  * Cloudflare does not allow a Durable Object to live inside a Pages project, so
  * this ships as its own small Worker. The Pages site binds to it by

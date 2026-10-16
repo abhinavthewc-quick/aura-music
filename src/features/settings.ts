@@ -77,7 +77,7 @@ import { $, state } from '../core/state';
       if(q) searchYouTubePro(q);
     };
     $('clearSearchHistoryBtn').onclick=()=>{localStorage.removeItem('auraSearchHistory_v1');if(typeof (window as any).renderSearchHistory==='function')(window as any).renderSearchHistory();toast('Recent searches cleared','trash-can');};
-    $('resetPreferencesBtn').onclick=()=>{if(confirm('Reset Aura Music preferences?')){auraSettings={...defaultAuraSettings};saveAuraSettings();applyAuraSettings();toast('Preferences restored','circle-check');}};
+    $('resetPreferencesBtn').onclick=()=>{if(confirm('Reset Peak Music preferences?')){auraSettings={...defaultAuraSettings};saveAuraSettings();applyAuraSettings();toast('Preferences restored','circle-check');}};
     applyAuraSettings();
 
 /* ===== 4695-4705 ===== */
@@ -168,7 +168,7 @@ import { $, state } from '../core/state';
     }
 
     export function changeProfileName(){
-      // Open the custom Aura Music modal instead of the browser prompt.
+      // Open the custom Peak Music modal instead of the browser prompt.
       $('profilePopover').classList.remove('active');
       $('profileBtn').setAttribute('aria-expanded', 'false');
       openNameModal();

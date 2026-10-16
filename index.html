@@ -18,17 +18,17 @@ html.aura-loading,html.aura-loading body{overflow:hidden}
 <script>window.__aura={sheets:0,fire:function(){this.sheets++;}};</script>
 <link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://cdnjs.cloudflare.com" crossorigin><link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;700&family=Cormorant+Garamond:wght@600&display=swap" rel="stylesheet" media="print" onload="this.media='all';__aura.fire()" onerror="__aura.fire()"><noscript><link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;700&family=Cormorant+Garamond:wght@600&display=swap" rel="stylesheet"></noscript>
   <meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Aura Music</title>
+  <title>Peak Music</title>
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" media="print" onload="this.media='all';__aura.fire()" onerror="__aura.fire()"><noscript><link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css"></noscript>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/jsmediatags/3.9.5/jsmediatags.min.js" defer></script>
   <link rel="stylesheet" href="/src/styles/main.css">
 </head>
 <body>
-<div id="auraLoader" role="status" aria-live="polite" aria-label="Loading Aura Music"><canvas id="auraLoaderCanvas"></canvas><div id="auraLoaderText">Getting ready<span class="d">.</span><span class="d">.</span><span class="d">.</span></div></div>
+<div id="auraLoader" role="status" aria-live="polite" aria-label="Loading Peak Music"><canvas id="auraLoaderCanvas"></canvas><div id="auraLoaderText">Getting ready<span class="d">.</span><span class="d">.</span><span class="d">.</span></div></div>
   <div class="net-banner" id="netBanner" role="status" aria-live="polite"></div>
   <div class="welcome-screen" id="welcomeScreen">
-    <button class="welcome-info" id="welcomeInfo" type="button" aria-label="Why AURA Music asks you to sign in" aria-expanded="false"><i class="fa-solid fa-circle-info"></i></button>
-    <div class="welcome-info-panel" id="welcomeInfoPanel" role="note"><strong>Why sign in with Google?</strong>Any Google account can enter — Google verifies it’s really you, then you pick a username that becomes yours inside Aura. Your name and preferences stay on this device.</div>
+    <button class="welcome-info" id="welcomeInfo" type="button" aria-label="Why PEAK Music asks you to sign in" aria-expanded="false"><i class="fa-solid fa-circle-info"></i></button>
+    <div class="welcome-info-panel" id="welcomeInfoPanel" role="note"><strong>Why sign in with Google?</strong>Any Google account can enter — Google verifies it’s really you, then you pick a username that becomes yours inside Peak. Your name and preferences stay on this device.</div>
     <div class="lg-shell">
       <div class="lg-stage" aria-hidden="true">
         <span class="lg-aura"></span>
@@ -38,7 +38,7 @@ html.aura-loading,html.aura-loading body{overflow:hidden}
         <span class="lg-pivot"></span>
       </div>
       <div class="lg-copy">
-        <h1 class="lg-brand">Aura Music</h1>
+        <h1 class="lg-brand">Peak Music</h1>
         <p class="lg-tag">Your personal space for music, radio and moments that feel like yours.</p>
         <div class="lg-form">
           <div class="lg-google" id="googleSignInBox">
@@ -60,10 +60,10 @@ html.aura-loading,html.aura-loading body{overflow:hidden}
           <div class="lg-picker" id="usernameStep" hidden>
             <p class="lg-auth-note" id="pickEmail"></p>
             <p class="lg-pick-title">Choose your username</p>
-            <p class="lg-auth-note" id="pickHint">This name is tied to your Google account and shows up across Aura. You can change it later in Settings.</p>
+            <p class="lg-auth-note" id="pickHint">This name is tied to your Google account and shows up across Peak. You can change it later in Settings.</p>
             <label class="lg-field"><input id="pickUsernameInput" type="text" maxlength="20" placeholder="e.g. vinyllover" autocomplete="off" spellcheck="false" aria-label="Username"></label>
             <p class="lg-auth-note lg-pick-err" id="pickUsernameErr" hidden></p>
-            <button class="lg-cta" id="pickUsernameGo" type="button">Enter Aura</button>
+            <button class="lg-cta" id="pickUsernameGo" type="button">Enter Peak</button>
             <button class="lg-pick-back" id="pickUsernameBack" type="button">Use a different account</button>
           </div>
         </div>
@@ -128,7 +128,7 @@ html.aura-loading,html.aura-loading body{overflow:hidden}
     <div class="name-modal-card">
       <div class="name-modal-icon"><i class="fa-solid fa-user-pen"></i></div>
       <h2 class="name-modal-title" id="nameModalTitle">Change your name</h2>
-      <p class="name-modal-subtitle">Choose the name you'd like to see across Aura Music.</p>
+      <p class="name-modal-subtitle">Choose the name you'd like to see across Peak Music.</p>
       <input class="name-modal-input" id="nameModalInput" type="text" maxlength="40" autocomplete="name" placeholder="Enter your name">
       <div class="name-modal-actions">
         <button class="name-modal-btn name-modal-cancel" id="nameModalCancel" type="button">Cancel</button>
@@ -165,7 +165,7 @@ html.aura-loading,html.aura-loading body{overflow:hidden}
   <div class="modal-overlay" id="settingsModal" role="dialog" aria-modal="true" aria-labelledby="settingsTitle" aria-hidden="true">
     <div class="settings-modal-card">
       <div class="settings-head">
-        <div class="settings-title-wrap"><div class="settings-icon"><i class="fa-solid fa-sliders"></i></div><div><h3 id="settingsTitle" style="margin:0;font-size:18px">Settings</h3><p style="margin:3px 0 0;color:var(--text-sub);font-size:10px">Make Aura Music work your way</p></div></div>
+        <div class="settings-title-wrap"><div class="settings-icon"><i class="fa-solid fa-sliders"></i></div><div><h3 id="settingsTitle" style="margin:0;font-size:18px">Settings</h3><p style="margin:3px 0 0;color:var(--text-sub);font-size:10px">Make Peak Music work your way</p></div></div>
         <button class="settings-close" id="settingsCloseBtn" type="button" aria-label="Close settings"><i class="fa-solid fa-xmark"></i></button>
       </div>
       <div class="settings-section">
@@ -197,7 +197,7 @@ html.aura-loading,html.aura-loading body{overflow:hidden}
         <div class="settings-section-label">Experience</div>
         <label class="settings-row"><div class="settings-row-main"><div class="settings-row-title">Reduce motion</div><div class="settings-row-sub">Tone down floating animations for a calmer interface.</div></div><input class="settings-switch" id="settingReduceMotion" type="checkbox"></label>
         <button class="settings-row settings-action" id="clearSearchHistoryBtn" type="button"><div class="settings-row-main"><div class="settings-row-title">Clear recent searches</div><div class="settings-row-sub">Remove only your saved search terms.</div></div><i class="fa-solid fa-trash-can" style="color:#ff6b8a"></i></button>
-        <button class="settings-row settings-action" id="resetPreferencesBtn" type="button"><div class="settings-row-main"><div class="settings-row-title">Reset preferences</div><div class="settings-row-sub">Restore Aura's settings to their default values.</div></div><i class="fa-solid fa-arrow-rotate-left" style="color:var(--accent)"></i></button>
+        <button class="settings-row settings-action" id="resetPreferencesBtn" type="button"><div class="settings-row-main"><div class="settings-row-title">Reset preferences</div><div class="settings-row-sub">Restore Peak's settings to their default values.</div></div><i class="fa-solid fa-arrow-rotate-left" style="color:var(--accent)"></i></button>
       </div>
     </div>
   </div>
@@ -208,8 +208,8 @@ html.aura-loading,html.aura-loading body{overflow:hidden}
       <button class="help-close" type="button" onclick="closeHelp()" aria-label="Close"><i class="fa-solid fa-xmark"></i></button>
       <div class="help-icon"><i class="fa-solid fa-life-ring"></i></div>
       <h3>Help &amp; Support</h3>
-      <p class="help-sub">Facing any issue with Aura Music? Get in touch and we'll help you out.</p>
-      <a class="help-row" id="helpGmail" href="mailto:abhinavthewc@gmail.com?subject=Aura%20Music%20Help">
+      <p class="help-sub">Facing any issue with Peak Music? Get in touch and we'll help you out.</p>
+      <a class="help-row" id="helpGmail" href="mailto:abhinavthewc@gmail.com?subject=Peak%20Music%20Help">
         <span class="help-row-icon gmail"><i class="fa-solid fa-envelope"></i></span>
         <span class="help-row-text"><b>Gmail</b><small>Send us an email</small></span>
         <i class="fa-solid fa-arrow-up-right-from-square help-row-go"></i>
@@ -243,8 +243,8 @@ html.aura-loading,html.aura-loading body{overflow:hidden}
   <div class="modal-overlay" id="aboutModal" role="dialog" aria-modal="true" aria-hidden="true">
     <div class="about-card">
       <button class="about-close" id="aboutCloseBtn" type="button" aria-label="Close"><i class="fa-solid fa-xmark"></i></button>
-      <div class="about-logo"><img src="./src/assets/about-logo.jpg" alt="Aura Music logo"></div>
-      <h3>AURA Music</h3>
+      <div class="about-logo"><img src="./src/assets/about-logo.jpg" alt="Peak Music logo"></div>
+      <h3>PEAK Music</h3>
       <p class="about-version">Personal build · v1.0</p>
       <p class="about-desc">A personal music player and library — bring your own tracks, browse live radio, layer ambient sound, and get help along the way from Beeboo.</p>
       <div class="about-list">
@@ -311,7 +311,7 @@ html.aura-loading,html.aura-loading body{overflow:hidden}
 
   <div class="app-container">
     <aside class="desktop-sidebar" id="desktopSidebar" aria-label="Desktop navigation">
-      <div class="desktop-brand"><button class="sidebar-toggle" id="sidebarToggle" type="button" aria-label="Toggle menu" title="Menu"><i class="fa-solid fa-bars"></i></button><div class="desktop-brand-mark"><img src="./src/assets/brand-logo.png" alt="Aura Music vinyl logo"></div><div><strong>AURA</strong><span>MUSIC</span></div></div>
+      <div class="desktop-brand"><button class="sidebar-toggle" id="sidebarToggle" type="button" aria-label="Toggle menu" title="Menu"><i class="fa-solid fa-bars"></i></button><div class="desktop-brand-mark"><img src="./src/assets/brand-logo.png" alt="Peak Music vinyl logo"></div><div><strong>PEAK</strong><span>MUSIC</span></div></div>
       <div class="desktop-nav-label">MAIN MENU</div>
       <button class="desktop-nav-btn active" data-tab="tabHome" onclick="navClick(this,'tabHome')"><i class="fa-solid fa-house"></i><span>Home</span></button>
       <button class="desktop-nav-btn" data-tab="tabSearch" onclick="navClick(this,'tabSearch')"><i class="fa-solid fa-magnifying-glass"></i><span>Search</span></button>
@@ -342,7 +342,7 @@ html.aura-loading,html.aura-loading body{overflow:hidden}
           <path d="M7 15H13" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
         </svg>
       </button> 
-      <span style="font-weight:800;letter-spacing:1px">AURA MUSIC</span>
+      <span style="font-weight:800;letter-spacing:1px">PEAK MUSIC</span>
       <div class="header-profile-wrap" id="profileWrap">
         <button class="profile-btn" id="profileBtn" type="button" aria-label="Open profile" aria-expanded="false"><img class="profile-photo" id="profilePhoto" alt="" hidden><span class="profile-initial" id="profileInitial" aria-hidden="true">U</span></button>
         <div class="profile-popover" id="profilePopover">
@@ -351,7 +351,7 @@ html.aura-loading,html.aura-loading body{overflow:hidden}
             <span class="profile-popover-avatar profile-initial" id="popupInitial" aria-hidden="true">U</span>
             <div style="min-width:0">
               <div class="profile-popover-name" id="popupProfileName">User</div>
-              <div class="profile-popover-email">Aura Music profile</div>
+              <div class="profile-popover-email">Peak Music profile</div>
             </div>
           </div>
           <div class="profile-info-row"><span class="profile-info-label">First login</span><span class="profile-info-value" id="profileFirstLogin">Not available</span></div>
@@ -364,9 +364,9 @@ html.aura-loading,html.aura-loading body{overflow:hidden}
     </div>
 
     <div class="tab-content active" id="tabHome">
-      <section class="desktop-home-hero" aria-label="Aura Music overview">
+      <section class="desktop-home-hero" aria-label="Peak Music overview">
         <div class="desktop-hero-copy">
-          <div class="desktop-hero-kicker"><span class="desktop-live-dot"></span> AURA MUSIC • PERSONAL SOUNDSPACE</div>
+          <div class="desktop-hero-kicker"><span class="desktop-live-dot"></span> PEAK MUSIC • PERSONAL SOUNDSPACE</div>
           <h2><em id="greetingLabel">Good evening</em><span id="displayUserName">User</span></h2>
           <div class="desktop-hero-actions">
             <button class="desktop-hero-primary" type="button" onclick="shuffleAll()"><i class="fa-solid fa-shuffle"></i> Shuffle your library</button>
@@ -395,7 +395,7 @@ html.aura-loading,html.aura-loading body{overflow:hidden}
             <span class="beeboo-face"><img src="./src/assets/beeboo-face.png" alt="Beeboo"></span>
             <div>
               <div class="beeboo-chat-head-title">Beeboo</div>
-              <div class="beeboo-chat-head-sub">Your AURA Music helper</div>
+              <div class="beeboo-chat-head-sub">Your PEAK Music helper</div>
             </div>
             <div class="beeboo-chat-head-context" id="beebooHeadContext"></div>
             <button class="beeboo-chat-close" id="beebooClearBtn" type="button" aria-label="Clear chat" title="Clear chat"><i class="fa-solid fa-broom"></i></button>
@@ -410,7 +410,7 @@ html.aura-loading,html.aura-loading body{overflow:hidden}
           </div>
           <div class="beeboo-chat-input-row">
             <button class="beeboo-voice-btn" id="beebooMicBtn" type="button" aria-label="Talk to Beeboo" title="Talk to Beeboo"><i class="fa-solid fa-microphone"></i></button>
-            <input type="text" id="beebooChatInput" placeholder="Ask Beeboo about AURA Music…" autocomplete="off">
+            <input type="text" id="beebooChatInput" placeholder="Ask Beeboo about PEAK Music…" autocomplete="off">
             <button class="beeboo-voice-btn beeboo-voice-toggle" id="beebooVoiceBtn" type="button" aria-label="Turn voice replies off" title="Voice replies on"><i class="fa-solid fa-volume-high"></i></button>
             <button class="beeboo-chat-send" id="beebooSendBtn" type="button" aria-label="Send"><i class="fa-solid fa-paper-plane"></i></button>
           </div>
@@ -428,7 +428,7 @@ html.aura-loading,html.aura-loading body{overflow:hidden}
 
       <div class="aura-picks">
         <div class="aura-picks-head">
-          <div><p class="aura-picks-kicker">AURA PICKS</p><h3>For this moment</h3></div>
+          <div><p class="aura-picks-kicker">PEAK PICKS</p><h3>For this moment</h3></div>
           <button type="button" class="aura-picks-refresh" onclick="renderAuraPicks(true)"><i class="fa-solid fa-shuffle"></i> Refresh mix</button>
         </div>
         <div class="aura-picks-scroll" id="auraPicksScroll"></div>
@@ -620,7 +620,7 @@ html.aura-loading,html.aura-loading body{overflow:hidden}
         <p class="upload-desc">Paste a YouTube video/song link and it's added to your library, playing through YouTube's own official embedded player — nothing is downloaded, ripped, or converted.</p>
         <input type="text" id="ytAddInput" class="admin-input" placeholder="Paste a YouTube link…" style="margin-bottom:10px">
         <button class="admin-btn secondary-yt" style="width:100%" onclick="addYouTubeTrack()"><i class="fa-brands fa-youtube" style="margin-right:8px"></i>Add to Library</button>
-        <p class="yt-note">Plays via YouTube's official player inside AURA — no ripping, downloading, or file conversion involved.</p>
+        <p class="yt-note">Plays via YouTube's official player inside PEAK — no ripping, downloading, or file conversion involved.</p>
       </div>
 
       <div class="upload-card">
@@ -715,7 +715,7 @@ html.aura-loading,html.aura-loading body{overflow:hidden}
       <i class="fa-solid fa-ellipsis" id="fullHeaderMenuBtn"></i>
     </div>
     <div class="full-player-art" id="fullPlayerArt"><img id="fullImg" src="" alt=""></div>
-    <div class="youtube-mode-badge" id="youtubeModeBadge">Official YouTube player • playing inside AURA</div>
+    <div class="youtube-mode-badge" id="youtubeModeBadge">Official YouTube player • playing inside PEAK</div>
     <div class="full-player-body">
       <div class="full-player-meta">
         <div><div id="fullTitle" style="font-size:18px;font-weight:700">Track</div><div id="fullArtist" style="font-size:13px;color:var(--text-sub)">Artist</div></div>

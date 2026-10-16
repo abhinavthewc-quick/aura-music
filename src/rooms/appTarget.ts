@@ -1,4 +1,4 @@
-/* Binds the room sync engine to AURA's real player.
+/* Binds the room sync engine to PEAK's real player.
  *
  * The harness plays a synthetic tone. This plays the actual library, and it
  * deliberately goes through the existing `loadSong()` so the normal player UI

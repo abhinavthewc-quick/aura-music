@@ -7,14 +7,14 @@ import { $, state } from '../core/state';
        This is intentionally a keyword-matched, canned-response helper rather
        than a real LLM-backed chatbot: a static HTML file has nowhere safe to
        keep an API key, and calling a real AI service needs a backend this
-       app doesn't have. Beeboo answers questions about using AURA Music,
+       app doesn't have. Beeboo answers questions about using PEAK Music,
        can tell you the current time/date and (with location permission)
        the local weather, and can pull a quick mood-matched pick from your
        own library — but it explicitly declines anything about code/how
        the app is built. */
     export const beebooQA = [
-      { keys:['how to use aura','how do i use aura','how do i use aura music','how to use aura music','use aura music','using aura music','what can i do here','what can i do on aura','how does aura work','aura tutorial','aura guide'],
-        a:"Sure — AURA Music is built around four simple areas: Home for your library and quick actions, Search for finding music, Radio for stations, and Add Music for bringing in tracks. Tap a song to play it, use the heart to favorite it, and open the ••• menu for queue, edit, remove, and other actions. Beeboo can also guide you through any one of those areas step by step." },
+      { keys:['how to use peak','how do i use peak','how do i use peak music','how to use peak music','use peak music','using peak music','what can i do here','what can i do on peak','how does peak work','peak tutorial','peak guide'],
+        a:"Sure — PEAK Music is built around four simple areas: Home for your library and quick actions, Search for finding music, Radio for stations, and Add Music for bringing in tracks. Tap a song to play it, use the heart to favorite it, and open the ••• menu for queue, edit, remove, and other actions. Beeboo can also guide you through any one of those areas step by step." },
       { keys:['home tab','home page','home screen','homepage'],
         a:"Home is your music dashboard. You'll see your greeting, Beeboo, quick actions such as Liked Songs, Shuffle, Local Files and Recently Played, plus your library. Tap any track to play it." },
       { keys:['player','music player','now playing','playback','pause','skip','next song','previous song'],
@@ -22,7 +22,7 @@ import { $, state } from '../core/state';
       { keys:['three dots','3 dots','more menu','options menu','ellipsis'],
         a:"The ••• menu is the track's action menu. Depending on the track, it can give you Play Next, Add to Queue, Add to Favorites, Edit Track, Remove from Library, and offline options." },
       { keys:['add song','add track','add music','upload','local file','local files','import music'],
-        a:"To add music, open Add Music (+). AURA supports the import options shown there, including local audio files and supported links. After adding a track, it appears in your library so you can play, favorite, edit, or queue it." },
+        a:"To add music, open Add Music (+). PEAK supports the import options shown there, including local audio files and supported links. After adding a track, it appears in your library so you can play, favorite, edit, or queue it." },
       { keys:['youtube','yt link','youtube link'],
         a:"For a YouTube track, open Add Music and use the YouTube link option. Paste the link and follow the on-screen controls. YouTube playback stays tied to YouTube's player rather than becoming a downloaded file." },
       { keys:['like','favorite','favourite','heart','liked songs'],
@@ -34,45 +34,45 @@ import { $, state } from '../core/state';
       { keys:['delete','remove song','remove track','remove from library'],
         a:"Open the track's ••• menu and choose Remove from Library. This only removes an added track from your library; it does not delete a song from the original service." },
       { keys:['edit','rename','change name','change title','change cover','edit track'],
-        a:"Use the ••• menu and choose Edit Track. From there you can update the track information supported by AURA, such as title, artist, or cover art." },
+        a:"Use the ••• menu and choose Edit Track. From there you can update the track information supported by PEAK, such as title, artist, or cover art." },
       { keys:['radio','stations','radio tab'],
         a:"Radio gives you stations you can browse and play. Open the Radio tab, choose a station, and use the normal player controls." },
       { keys:['offline','download','save offline'],
-        a:"Offline saving depends on how the track was added. Direct audio files can use AURA's offline option when available; streamed YouTube content is not turned into a downloadable copy by AURA." },
+        a:"Offline saving depends on how the track was added. Direct audio files can use PEAK's offline option when available; streamed YouTube content is not turned into a downloadable copy by PEAK." },
       { keys:['theme','dark mode','light mode','appearance'],
-        a:"Open the menu and choose Light Mode or Dark Mode. AURA remembers the selected theme for the next time you open the app." },
+        a:"Open the menu and choose Light Mode or Dark Mode. PEAK remembers the selected theme for the next time you open the app." },
       { keys:['settings','setting'],
         a:"Settings contains playback and app preferences such as autoplay, remembered volume, search history, online results, and reduced-motion options. Open it from the menu." },
       { keys:['effects','audio effects','sound effects','equalizer'],
-        a:"Effects is where AURA's available audio-visual or playback effects can be managed. Open the menu and choose Effects to see the controls available in your current build." },
+        a:"Effects is where PEAK's available audio-visual or playback effects can be managed. Open the menu and choose Effects to see the controls available in your current build." },
       { keys:['reset app','reset','clear app','clear everything'],
-        a:"Reset App clears AURA's stored app data and reloads the app. Because it can remove your saved library/settings, use it only when you really want a fresh start." },
+        a:"Reset App clears PEAK's stored app data and reloads the app. Because it can remove your saved library/settings, use it only when you really want a fresh start." },
       { keys:['profile','account','change my name','username','my name'],
-        a:"Tap your profile button to manage your profile options. You can change the name AURA uses when greeting you." },
+        a:"Tap your profile button to manage your profile options. You can change the name PEAK uses when greeting you." },
       { keys:['logout','log out','sign out'],
-        a:"Use Log out from the menu when you're finished. AURA will run its logout animation and return to the login/welcome flow." },
+        a:"Use Log out from the menu when you're finished. PEAK will run its logout animation and return to the login/welcome flow." },
       { keys:['mobile','phone','tablet','desktop','pc','computer','laptop','responsive'],
-        a:"AURA is responsive. On phones and tablets it uses the compact navigation and touch-friendly layout; on larger screens it switches to the desktop sidebar and wider music layout." },
+        a:"PEAK is responsive. On phones and tablets it uses the compact navigation and touch-friendly layout; on larger screens it switches to the desktop sidebar and wider music layout." },
       { keys:['beeboo','ai','chatbot','chat bot','voice assistant','voice'],
-        a:"I'm Beeboo, AURA Music's built-in helper. I can explain the app, guide you through features, answer common AURA questions, pick tracks from your library by mood, and listen to you through the microphone when voice input is supported." },
+        a:"I'm Beeboo, PEAK Music's built-in helper. I can explain the app, guide you through features, answer common PEAK questions, pick tracks from your library by mood, and listen to you through the microphone when voice input is supported." },
       { keys:['what are you','who are you'],
-        a:"I'm Beeboo 🐾 — the AURA Music helper. Think of me as the guide inside the app: ask about a feature, a track action, settings, or how to use AURA." },
+        a:"I'm Beeboo 🐾 — the PEAK Music helper. Think of me as the guide inside the app: ask about a feature, a track action, settings, or how to use PEAK." },
       { keys:['thank','thanks','thank you'],
         a:"You're welcome! 🐾 Enjoy your music." },
       { keys:['hello','hi','hey','good morning','good evening','good night'],
-        a:"Hey! 🐾 What would you like to do in AURA Music? You can ask about the player, library, Search, Radio, Add Music, Settings, Effects, or anything else about the app." },
-      { keys:['what is aura','what is aura music','about aura','what is this app','what is this website','tell me about aura'],
-        a:"AURA Music is a personal music player and library app. You add your own tracks — local files or supported links — organize and play them, browse radio stations, and I'm here (Beeboo) to help along the way." },
-      { keys:['who made this','who made aura','who created this','who created aura','who built this','who built aura','made you'],
-        a:"AURA Music was custom-built for this user's own library and listening experience — it's a personal project rather than a public commercial product." },
-      { keys:['is this free','is aura free','cost','price','subscription','pay for'],
-        a:"There's no subscription here — AURA runs as a personal app for your own library, so there's no price or paywall built in." },
+        a:"Hey! 🐾 What would you like to do in PEAK Music? You can ask about the player, library, Search, Radio, Add Music, Settings, Effects, or anything else about the app." },
+      { keys:['what is peak','what is peak music','about peak','what is this app','what is this website','tell me about peak'],
+        a:"PEAK Music is a personal music player and library app. You add your own tracks — local files or supported links — organize and play them, browse radio stations, and I'm here (Beeboo) to help along the way." },
+      { keys:['who made this','who made peak','who created this','who created peak','who built this','who built peak','made you'],
+        a:"PEAK Music was custom-built for this user's own library and listening experience — it's a personal project rather than a public commercial product." },
+      { keys:['is this free','is peak free','cost','price','subscription','pay for'],
+        a:"There's no subscription here — PEAK runs as a personal app for your own library, so there's no price or paywall built in." },
       { keys:['microphone','mic','speak to you','talk to you','language support','what languages','which languages'],
         a:"You can talk to me! Tap the microphone in this chat to speak instead of typing, and use the language picker to choose the language for voice input and my spoken replies." }
     ];
     export const beebooCodeKeys = ['source code','api key','backend','repo','github','script tag','function(','<script'];
-    export const beebooBuildKeys = ['code','html','javascript','js ','css','how is this built','how is the website built','how is the app built','how was aura made','how did you make aura'];
-    export const beebooSuggestions = ["How do I use AURA Music?", "How do I add a song?", "What can the player do?", "Show me how Liked Songs works"];
+    export const beebooBuildKeys = ['code','html','javascript','js ','css','how is this built','how is the website built','how is the app built','how was peak made','how did you make peak'];
+    export const beebooSuggestions = ["How do I use PEAK Music?", "How do I add a song?", "What can the player do?", "Show me how Liked Songs works"];
 
     // Mood keyword → a friendly label used when introducing the picks.
     export const beebooMoods = [
@@ -157,10 +157,10 @@ import { $, state } from '../core/state';
         if(/\b(my name|who am i|do you know me|know my name)\b/.test(q)) return { text: _n ? `You're ${_n}! 🐾 Glad you're here.` : "I don't have your name yet — you can set it in your profile and I'll use it." }; }
 
       if(beebooBuildKeys.some(k => q.includes(k))){
-        return { text: "I can explain the AURA Music experience and what each part of the website does, but I won't expose private source code, keys, or backend credentials. If you mean how to use a feature, tell me the feature and I'll walk you through it." };
+        return { text: "I can explain the PEAK Music experience and what each part of the website does, but I won't expose private source code, keys, or backend credentials. If you mean how to use a feature, tell me the feature and I'll walk you through it." };
       }
       if(beebooCodeKeys.some(k => q.includes(k))){
-        return { text: "I can explain what AURA Music does and how its features work from the user's side, but I won't expose private keys or internal code. Ask me about the player, library, Search, Radio, Add Music, Settings, Effects, or Beeboo." };
+        return { text: "I can explain what PEAK Music does and how its features work from the user's side, but I won't expose private keys or internal code. Ask me about the player, library, Search, Radio, Add Music, Settings, Effects, or Beeboo." };
       }
 
       if(/\b(time|clock)\b/.test(q)) return { text: beebooTimeText() };
@@ -172,7 +172,7 @@ import { $, state } from '../core/state';
       // "help" / "what can you do" gets a concise, scannable capability list
       // instead of forcing people to guess what to ask.
       if(/\b(help|what can you do|what do you do|commands|menu|options)\b/.test(q)){
-        return { text: "Here's what I can help with:\n• Explaining any AURA Music feature — Home, Search, Radio, Add Music, Settings, Effects, and more\n• Track actions — play, queue, favorite, edit, remove\n• The current time, date, and local weather\n• Picking a few songs from your library to match a mood\n• Voice input/output in several languages (mic + language picker below)\n\nJust ask naturally, or tap a suggestion below!" };
+        return { text: "Here's what I can help with:\n• Explaining any PEAK Music feature — Home, Search, Radio, Add Music, Settings, Effects, and more\n• Track actions — play, queue, favorite, edit, remove\n• The current time, date, and local weather\n• Picking a few songs from your library to match a mood\n• Voice input/output in several languages (mic + language picker below)\n\nJust ask naturally, or tap a suggestion below!" };
       }
 
       // A short goodbye deserves a proper send-off rather than the generic
@@ -182,7 +182,7 @@ import { $, state } from '../core/state';
         return { text: "Bye for now! 🐾 Enjoy the music — I'll be right here if you need anything." };
       }
 
-      // Natural conversation gets handled before AURA feature keywords.
+      // Natural conversation gets handled before PEAK feature keywords.
       // This prevents greetings such as "sughamano" / "സുഖമാണോ" from
       // accidentally matching help/home/like keywords and returning a feature tutorial.
       const greetingPatterns = [
@@ -271,8 +271,8 @@ import { $, state } from '../core/state';
         return { text: `I can do that once you have some music in your library. Add a few tracks, then tell me the mood again and I'll pick from them.` };
       }
 
-      if(/\b(website|site|app|aura)\b/.test(q)){
-        return { text: "I can help with the AURA Music app itself. Ask me what a button does, how to play or queue a song, how to add music, how Search or Radio works, how to manage favorites, or how Settings and Effects work." };
+      if(/\b(website|site|app|peak)\b/.test(q)){
+        return { text: "I can help with the PEAK Music app itself. Ask me what a button does, how to play or queue a song, how to add music, how Search or Radio works, how to manage favorites, or how Settings and Effects work." };
       }
 
       return { text: "Hmm, I'm not quite sure about that one yet! 🐾 Try asking about the player, Home, Search, Radio, Add Music, Liked Songs, the queue, Settings, Effects, your profile, or just say \"help\" for a quick list.", fallback:true };
@@ -353,7 +353,7 @@ import { $, state } from '../core/state';
     }
 
     export function beebooGreetIntro(){
-      appendBeebooMessage(beebooHello()+" I'm Beeboo 🐾 I can help you use AURA Music, manage your library, control playback, understand settings, or pick music from your library. You can also talk to me with the microphone.", 'bot');
+      appendBeebooMessage(beebooHello()+" I'm Beeboo 🐾 I can help you use PEAK Music, manage your library, control playback, understand settings, or pick music from your library. You can also talk to me with the microphone.", 'bot');
       renderBeebooSuggestions();
     }
 

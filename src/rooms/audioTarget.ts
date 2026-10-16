@@ -1,6 +1,6 @@
 /* Adapts an HTMLAudioElement to the SyncTarget interface.
  *
- * Deliberately knows nothing about the rest of AURA. In production the element
+ * Deliberately knows nothing about the rest of PEAK. In production the element
  * handed in is the app's existing `state.audio`; in development it is a plain
  * element in the test harness. Keeping the coupling at this one seam is what
  * lets the sync engine be exercised without the whole app.

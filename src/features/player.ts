@@ -51,7 +51,7 @@ import { $, persistLikedHistory, savedLikeMap, state } from '../core/state';
 /* ===== 3057-3057 ===== */
     export function mediaSessionAction(action,handler){ try{ navigator.mediaSession.setActionHandler(action,handler); }catch(e){} }
 /* ===== 5363-5555 ===== */
-    /* Integrated YouTube player: the existing AURA full-player becomes the
+    /* Integrated YouTube player: the existing PEAK full-player becomes the
        Now Playing screen for YouTube results. The official YouTube iframe stays
        visible; it is not hidden behind a custom/fake state.audio element. */
     export let auraYTPlayer = null;
@@ -62,7 +62,7 @@ import { $, persistLikedHistory, savedLikeMap, state } from '../core/state';
     export let auraYTReadyPromise = null;
     export let auraYTPendingPlay = false;
     export let auraYTPlayerReady = false;
-    // The AURA UI owns the user's playback intent. YouTube state can lag by a
+    // The PEAK UI owns the user's playback intent. YouTube state can lag by a
     // moment (especially on mobile), so we keep the requested state separately.
     export let auraYTDesiredPlaying = false;
 
@@ -81,7 +81,7 @@ import { $, persistLikedHistory, savedLikeMap, state } from '../core/state';
       return auraYTReadyPromise;
     }
 
-    // Preload the official YouTube IFrame API early so the first AURA Play
+    // Preload the official YouTube IFrame API early so the first PEAK Play
     // tap is not lost while the API script is still downloading.
     setTimeout(()=>{ try{ ensureYouTubeAPI().catch(()=>{}); }catch(e){} },0);
 
@@ -152,7 +152,7 @@ import { $, persistLikedHistory, savedLikeMap, state } from '../core/state';
 
       try{
         // IMPORTANT: finish loading the API and create the player before the
-        // user is expected to press AURA Play. This avoids the mobile race where
+        // user is expected to press PEAK Play. This avoids the mobile race where
         // playVideo() is called before the iframe is ready and gets blocked.
         await ensureYouTubeAPI();
         auraYTPlayer=new YT.Player('auraYTFrameHost',{
@@ -189,11 +189,11 @@ import { $, persistLikedHistory, savedLikeMap, state } from '../core/state';
                 updatePlayState();
                 if(auraSettings.autoplayNext && auraYTQueue.length){ setTimeout(()=>{ playNext(); },250); }
               }
-              // BUFFERING / CUED / UNSTARTED do not change the AURA play state.
+              // BUFFERING / CUED / UNSTARTED do not change the PEAK play state.
             },
             onAutoplayBlocked:()=>{
-              // Do not flip AURA into a fake playing state when the browser blocks
-              // scripted playback. The user can press AURA Play again directly.
+              // Do not flip PEAK into a fake playing state when the browser blocks
+              // scripted playback. The user can press PEAK Play again directly.
               auraYTPendingPlay=false;
               auraYTDesiredPlaying=false;
               state.isPlaying=false;
@@ -294,9 +294,9 @@ import { $, persistLikedHistory, savedLikeMap, state } from '../core/state';
       if(!s || (auraYTPlayer || auraYTVideoId)) return; // YouTube playback manages its own session state
       try{
         navigator.mediaSession.metadata = new MediaMetadata({
-          title: s.title || 'AURA Music',
+          title: s.title || 'PEAK Music',
           artist: s.artist || '',
-          album: 'AURA Music',
+          album: 'PEAK Music',
           artwork: s.img ? [{src:s.img, sizes:'512x512', type:'image/png'}] : []
         });
         navigator.mediaSession.playbackState = state.audio.paused ? 'paused' : 'playing';
@@ -370,7 +370,7 @@ import { $, persistLikedHistory, savedLikeMap, state } from '../core/state';
       $('playIcon').className = $('fullPlayIcon').className = icon;
     }
 
-    // AURA play/pause controls — explicitly wired here so both the mini
+    // PEAK play/pause controls — explicitly wired here so both the mini
     // player button and the full-player button always use the same handler.
     // This is especially important for YouTube playback because the button
     // must call the YouTube IFrame API player instance.
@@ -381,7 +381,7 @@ import { $, persistLikedHistory, savedLikeMap, state } from '../core/state';
     export function togglePlay(){
       if(auraYTPlayer){
         if(!auraYTPlayerReady){
-          toast('AURA player is still loading…','spinner');
+          toast('PEAK player is still loading…','spinner');
           return;
         }
         try{
@@ -404,7 +404,7 @@ import { $, persistLikedHistory, savedLikeMap, state } from '../core/state';
         return;
       }
       if(auraYTVideoId){
-        toast('AURA player is still loading…','spinner');
+        toast('PEAK player is still loading…','spinner');
         return;
       }
       if(!state.audio.src) playSong(0);
@@ -450,7 +450,7 @@ import { $, persistLikedHistory, savedLikeMap, state } from '../core/state';
       if(window.matchMedia('(min-width:900px)').matches && !e.target.closest('.song-info')) return;
       $('fullPlayerOverlay').classList.add('active'); renderUpNext();
     };
-    // Minimize the AURA full player without touching playback. The previous
+    // Minimize the PEAK full player without touching playback. The previous
     // handler paused the YouTube iframe when the user tapped the down arrow,
     // which made the song stop unexpectedly. Hiding the overlay is enough:
     // the YouTube IFrame remains alive and keeps playing underneath it.

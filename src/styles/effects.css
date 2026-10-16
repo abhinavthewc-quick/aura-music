@@ -1,4 +1,4 @@
-/* AURA Ambient Effects */
+/* PEAK Ambient Effects */
 .effects-modal{position:fixed;inset:0;z-index:10050;display:none;align-items:flex-end;justify-content:center;background:rgba(0,0,0,.48);backdrop-filter:blur(12px);-webkit-backdrop-filter:blur(12px)}
 .effects-modal.active{display:flex}
 .effects-card{width:min(620px,100%);max-height:88vh;overflow:auto;padding:18px;border:1px solid rgba(255,255,255,.18);border-radius:28px 28px 0 0;background:linear-gradient(145deg,rgba(30,35,48,.92),rgba(10,13,22,.88));box-shadow:0 -20px 60px rgba(0,0,0,.42),inset 0 1px 0 rgba(255,255,255,.16);backdrop-filter:blur(28px) saturate(165%);-webkit-backdrop-filter:blur(28px) saturate(165%)}

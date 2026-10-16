@@ -1,4 +1,4 @@
-/* AURA orb: a spinning sphere of soft dots. Used for the full-screen intro loader and the small in-app loading states. */
+/* PEAK orb: a spinning sphere of soft dots. Used for the full-screen intro loader and the small in-app loading states. */
 (function(){
   var TAU=Math.PI*2, GA=Math.PI*(3-Math.sqrt(5)), D=3.2, reduce=false;
   try{ reduce=window.matchMedia('(prefers-reduced-motion:reduce)').matches; }catch(e){}
