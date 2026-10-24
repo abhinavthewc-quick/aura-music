@@ -306,5 +306,5 @@ import { $, persistLikedHistory, savedLikeMap, state } from '../core/state';
     };
     $('fullPrevBtn').onclick=e=>{e.stopPropagation();playPrevious(true);};
     $('fullNextBtn').onclick=e=>{e.stopPropagation();playNext(true);};
-    $('nextBtn').onclick=e=>{e.stopPropagation();playNext(false);};
+    $('nextBtn').onclick=e=>{e.stopPropagation();playNext(true);};
 
