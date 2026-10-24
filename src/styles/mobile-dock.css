@@ -1,0 +1,126 @@
+/* ============================================================
+   Bottom dock (mobile) — reference design:
+   one dark pill with 4 labeled tabs (Home/Library/Radio/Add)
+   plus a separate round search button, and the mini player
+   resting above it in the same warm, glassy style.
+   Imported last in main.css so it wins the cascade.
+   ============================================================ */
+
+/* ---------- dock ---------- */
+.mobile-dock{
+  position:fixed;
+  bottom:calc(10px + var(--safe-bottom, 0px));
+  left:50%;transform:translateX(-50%);
+  width:calc(100% - 24px);max-width:470px;
+  height:76px;
+  display:flex;align-items:center;gap:10px;
+  z-index:90;
+}
+@media (min-width:900px){.mobile-dock{display:none!important}}
+
+/* the pill (was position:fixed; now a child of the dock) */
+.nav-bar{
+  position:static;
+  width:auto;height:100%;max-width:none;
+  transform:none;
+  flex:1;min-width:0;
+  border-radius:39px;
+  padding:6px;
+  background:linear-gradient(165deg,rgba(50,40,28,.94),rgba(24,18,12,.96));
+  border:1px solid rgba(230,189,146,.12);
+  box-shadow:0 16px 40px rgba(0,0,0,.42),inset 0 1px 0 rgba(255,236,210,.10);
+  -webkit-backdrop-filter:blur(28px) saturate(160%);
+  backdrop-filter:blur(28px) saturate(160%);
+}
+body.light-theme .nav-bar{
+  background:linear-gradient(165deg,rgba(255,250,242,.95),rgba(248,238,224,.93));
+  border-color:rgba(120,85,45,.18);
+  box-shadow:0 12px 32px rgba(120,85,45,.2),inset 0 1px 0 rgba(255,255,255,.9);
+}
+
+/* active pill: warm bronze segment (JS positions/sizes it) */
+.nav-indicator{
+  width:72px;border-radius:30px;
+  background:linear-gradient(160deg,rgba(126,80,38,.58),rgba(76,49,24,.42));
+  border:1px solid rgba(230,170,105,.24);
+  box-shadow:0 6px 16px rgba(0,0,0,.25),inset 0 1px 0 rgba(255,220,170,.22);
+}
+body.light-theme .nav-indicator{
+  background:linear-gradient(160deg,rgba(231,178,115,.32),rgba(203,142,80,.22));
+  border-color:rgba(170,110,55,.25);
+  box-shadow:0 4px 10px rgba(150,95,45,.12);
+}
+
+/* labeled tabs: icon above text */
+.nav-bar .nav-btn{
+  flex-direction:column;
+  gap:5px;
+  height:64px;
+  font-size:12px;font-weight:600;letter-spacing:.2px;
+  color:rgba(255,236,210,.62);
+  transition:color .25s ease,transform .15s ease;
+}
+.nav-bar .nav-btn .nav-label{font-size:11px;font-weight:600;letter-spacing:.2px;line-height:1}
+.nav-bar .nav-btn i{width:18px;height:18px;font-size:18px}
+.nav-btn:active{transform:scale(.94)}
+body.light-theme .nav-bar .nav-btn{color:rgba(70,55,40,.78)}
+
+/* circular search button beside the pill */
+.nav-fab{
+  flex:0 0 62px;width:62px;height:62px;border-radius:50%;
+  border:1px solid rgba(230,189,146,.14)!important;
+  background:linear-gradient(165deg,rgba(50,40,28,.94),rgba(24,18,12,.96))!important;
+  box-shadow:0 16px 40px rgba(0,0,0,.42),inset 0 1px 0 rgba(255,236,210,.10);
+  color:#e8b57e;font-size:19px;
+  transition:transform .2s ease,background .25s ease,color .25s ease;
+  cursor:pointer;
+}
+.nav-fab:hover{color:#f0cdA2}
+.nav-fab:active{transform:scale(.93)}
+.nav-fab.active{
+  background:linear-gradient(160deg,rgba(126,80,38,.58),rgba(76,49,24,.42))!important;
+  border-color:rgba(230,170,105,.30)!important;
+}
+body.light-theme .nav-fab{
+  background:linear-gradient(165deg,rgba(255,250,242,.95),rgba(248,238,224,.93))!important;
+  border-color:rgba(120,85,45,.2)!important;
+  color:#a97233;
+  box-shadow:0 12px 32px rgba(120,85,45,.2),inset 0 1px 0 rgba(255,255,255,.9);
+}
+body.light-theme .nav-fab.active{
+  background:linear-gradient(160deg,rgba(231,178,115,.35),rgba(203,142,80,.25))!important;
+  color:#8a5518;
+}
+
+/* room above the dock for the floating player */
+@media (max-width:899px){
+  .app-container{padding-bottom:calc(190px + var(--safe-bottom, 0px))}
+  .player-bar,.radio-player-bar{bottom:calc(98px + var(--safe-bottom, 0px))!important}
+}
+
+/* ---------- mini player: reference look ---------- */
+/* thumbnail: rounded square */
+.player-bar .song-info img{width:48px;height:48px;border-radius:14px}
+.player-bar .song-info > div{min-width:0}
+.player-bar .song-title{font-size:16px}
+/* subtitle swaps artist for a static "Now playing" on phones */
+.player-bar .mini-np{display:none}
+@media (max-width:899px){
+  .player-bar{padding:11px 15px;border-radius:26px}
+  .player-bar .song-artist{display:none}
+  .player-bar .mini-np{display:block;font-size:12.5px;color:rgba(255,240,220,.55);margin-top:2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+  .player-bar .mini-progress-track{display:none}
+  /* flat white transport icons, no circles (reference) */
+  .player-bar .ctrl-glass-btn{
+    width:42px;height:42px;
+    background:transparent!important;border:0!important;box-shadow:none!important;
+    -webkit-backdrop-filter:none!important;backdrop-filter:none!important;
+    color:#fff!important;font-size:21px;border-radius:0;
+  }
+  .player-bar .ctrl-glass-btn.play-primary{background:transparent!important;color:#fff!important;font-size:23px}
+  .radio-player-bar{padding:10px 14px;border-radius:24px}
+}
+@media (min-width:900px){
+  .player-bar .mini-np{display:none!important}
+}
+body.light-theme .player-bar .mini-np{color:rgba(90,60,30,.6)}

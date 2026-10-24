@@ -664,12 +664,12 @@ html.aura-loading,html.aura-loading body{overflow:hidden}
       <input type="range" class="mini-seek desk-only" id="miniSeek" min="0" max="100" step="any" value="0" aria-label="Seek">
       <div class="song-info">
         <img id="currentImg" src="" alt="">
-        <div><div id="currentTitle" class="song-title">Select Track</div><div id="currentArtist" class="song-artist">--</div></div>
+        <div><div id="currentTitle" class="song-title">Select Track</div><div id="currentArtist" class="song-artist">--</div><div class="mini-np">Now playing</div></div>
       </div>
       <div class="mini-controls">
         <button class="glass-btn ctrl-glass-btn desk-only" id="miniPrevBtn" type="button" aria-label="Previous track"><i class="fa-solid fa-backward-step"></i></button>
         <button class="glass-btn ctrl-glass-btn play-primary" id="playPauseBtn"><i class="fa-solid fa-play" id="playIcon"></i></button>
-        <button class="glass-btn ctrl-glass-btn" id="nextBtn"><i class="fa-solid fa-forward-step"></i></button>
+        <button class="glass-btn ctrl-glass-btn" id="nextBtn"><i class="fa-solid fa-forward"></i></button>
         <span class="mini-time desk-only" id="miniTime">0:00 / 0:00</span>
       </div>
       <div class="mini-right desk-only">
@@ -698,13 +698,15 @@ html.aura-loading,html.aura-loading body{overflow:hidden}
       </div>
     </div>
 
-    <div class="nav-bar" id="mainNavBar">
-      <div class="nav-indicator" id="navIndicator" aria-hidden="true"></div>
-      <button class="glass-btn nav-btn active" onclick="navClick(this,'tabHome')" aria-label="Home"><i class="fa-solid fa-house"></i></button>
-      <button class="glass-btn nav-btn" id="navSearchBtn" onclick="navClick(this,'tabSearch')" aria-label="Search"><i class="fa-solid fa-magnifying-glass"></i></button>
-      <button class="glass-btn nav-btn" onclick="navClick(this,'tabLibrary')" aria-label="Library"><i class="fa-solid fa-layer-group"></i></button>
-      <button class="glass-btn nav-btn" id="navRadioBtn" onclick="navClick(this,'tabRadio')" aria-label="Radio"><i class="fa-solid fa-radio"></i></button>
-      <button class="glass-btn nav-btn" onclick="navClick(this,'tabProfile')" aria-label="Add Music"><i class="fa-solid fa-plus"></i></button>
+    <div class="mobile-dock">
+      <div class="nav-bar" id="mainNavBar">
+        <div class="nav-indicator" id="navIndicator" aria-hidden="true"></div>
+        <button class="glass-btn nav-btn active" id="navHomeBtn" onclick="navClick(this,'tabHome')" aria-label="Home"><i class="fa-solid fa-house"></i><span class="nav-label">Home</span></button>
+        <button class="glass-btn nav-btn" id="navLibraryBtn" onclick="navClick(this,'tabLibrary')" aria-label="Library"><i class="fa-solid fa-book-open"></i><span class="nav-label">Library</span></button>
+        <button class="glass-btn nav-btn" id="navRadioBtn" onclick="navClick(this,'tabRadio')" aria-label="Radio"><i class="fa-solid fa-radio"></i><span class="nav-label">Radio</span></button>
+        <button class="glass-btn nav-btn" id="navAddBtn" onclick="navClick(this,'tabProfile')" aria-label="Add Music"><i class="fa-solid fa-plus"></i><span class="nav-label">Add</span></button>
+      </div>
+      <button class="glass-btn nav-fab" id="navSearchFab" onclick="navClick(this,'tabSearch')" aria-label="Search"><i class="fa-solid fa-magnifying-glass"></i></button>
     </div>
   </div>
 

@@ -1,1 +1,1 @@
-  .nav-bar .nav-label, .nav-bar .nav-text, .nav-bar .nav-title, .nav-bar span:not(.fa-solid):not(.fa-regular):not(.fa-brands) { display:none !important; }
+/* Bottom-dock labels are part of the nav design now (see mobile-dock.css). */

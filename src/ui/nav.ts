@@ -22,8 +22,8 @@ import { $ } from '../core/state';
       const w=er.width;
       const h=er.height;
 
-      const iw=Math.min(78, Math.max(58, w-8));
-      const ih=Math.min(46, h);
+      const iw=Math.min(80, Math.max(58, w-6));
+      const ih=Math.min(60, h);
       const xCentered=x + (w-iw)/2;
       const yCentered=y + (h-ih)/2;
 
@@ -43,9 +43,10 @@ import { $ } from '../core/state';
     }
 
     export function navClick(el,tabId){
-      document.querySelectorAll('.nav-bar .nav-btn').forEach(b=>b.classList.remove('active'));
+      document.querySelectorAll('.nav-bar .nav-btn, .nav-fab').forEach(b=>b.classList.remove('active'));
       if(el && el.classList) el.classList.add('active');
-      if(el && el.classList && el.classList.contains('nav-btn')) moveNavIndicator(el);
+      const ind=document.getElementById('navIndicator'); if(ind) ind.style.opacity = tabId==='tabSearch' ? '0' : '1';
+      if(el && el.classList && el.classList.contains('nav-btn') && tabId!=='tabSearch') moveNavIndicator(el);
       document.querySelectorAll('.desktop-nav-btn[data-tab]').forEach(b=>b.classList.toggle('active',b.dataset.tab===tabId));
       document.querySelectorAll('.tab-content').forEach(t=>t.classList.remove('active'));
       $(tabId).classList.add('active');
