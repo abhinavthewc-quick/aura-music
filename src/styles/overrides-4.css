@@ -10,14 +10,14 @@
       box-shadow:0 12px 30px rgba(207,143,80,.24),inset 0 1px 0 rgba(255,255,255,.42) !important;
     }
     .full-player-overlay .full-seek-slider{
-      background:var(--slider-track) !important;
+      background:rgba(255,255,255,.22) !important;
     }
     .full-player-overlay .full-seek-slider::-webkit-slider-thumb{
-      background:var(--slider-fill) !important;
-      box-shadow:-1000px 0 0 996px var(--slider-fill) !important;
+      background:#fff !important;
+      box-shadow:-1000px 0 0 996px #fff !important;
     }
-    .full-player-overlay .full-seek-slider::-moz-range-progress{background:var(--slider-fill) !important}
-    .full-player-overlay .full-seek-slider::-moz-range-thumb{background:var(--slider-fill) !important}
+    .full-player-overlay .full-seek-slider::-moz-range-progress{background:#fff !important}
+    .full-player-overlay .full-seek-slider::-moz-range-thumb{background:#fff !important}
 
     /* Mini/task player: keep the existing liquid-glass background, warm only the play button and progress fill. */
     .player-bar .ctrl-glass-btn.play-primary,

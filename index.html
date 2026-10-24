@@ -715,6 +715,7 @@ html.aura-loading,html.aura-loading body{overflow:hidden}
   </div>
 
   <div class="full-player-overlay" id="fullPlayerOverlay">
+    <div class="fp-bg" aria-hidden="true"><div class="fp-bg-layer" id="fpBgA"></div><div class="fp-bg-layer" id="fpBgB"></div></div>
     <div class="full-player-header">
       <i class="fa-solid fa-chevron-down" id="closeFullPlayerBtn" style="font-size:20px;cursor:pointer"></i>
       <span id="fullHeaderTitle" style="font-weight:600;max-width:200px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">Track</span>
@@ -729,7 +730,6 @@ html.aura-loading,html.aura-loading body{overflow:hidden}
       </div>
       <div class="full-seek-slider-wrap">
         <input type="range" id="fullSeekSlider" class="full-seek-slider" value="0" min="0" max="100">
-        <div class="seek-end-dot"></div>
       </div>
       <div class="full-seek-times"><span id="fullCurrentTime">0:00</span><span id="fullDurationTime">0:00</span></div>
       <div class="full-controls">

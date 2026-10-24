@@ -9,42 +9,146 @@ import { roomModeActive } from '../rooms/roomFlag';
 import { $, persistLikedHistory, savedLikeMap, state } from '../core/state';
 /* ===== 2955-2994 ===== */
     export const dynamicColorCache = {};
+
+    /* ---------- color helpers ---------- */
+    function rgbToHsl(r,g,b){
+      r/=255; g/=255; b/=255;
+      const max=Math.max(r,g,b), min=Math.min(r,g,b);
+      let h=0, s=0; const l=(max+min)/2;
+      if(max!==min){
+        const d=max-min;
+        s = l>0.5 ? d/(2-max-min) : d/(max+min);
+        if(max===r) h=(g-b)/d + (g<b?6:0);
+        else if(max===g) h=(b-r)/d + 2;
+        else h=(r-g)/d + 4;
+        h/=6;
+      }
+      return [h,s,l];
+    }
+    function hue2rgb(p,q,t){
+      if(t<0) t+=1; if(t>1) t-=1;
+      if(t<1/6) return p+(q-p)*6*t;
+      if(t<1/2) return q;
+      if(t<2/3) return p+(q-p)*(2/3-t)*6;
+      return p;
+    }
+    function hslToRgb(h,s,l){
+      if(s===0){ const v=Math.round(l*255); return [v,v,v]; }
+      const q = l<0.5 ? l*(1+s) : l+s-l*s;
+      const p = 2*l-q;
+      return [Math.round(hue2rgb(p,q,h+1/3)*255), Math.round(hue2rgb(p,q,h)*255), Math.round(hue2rgb(p,q,h-1/3)*255)];
+    }
+    function relLum(r,g,b){
+      const f=v=>{ v/=255; return v<=0.03928 ? v/12.92 : Math.pow((v+0.055)/1.055,2.4); };
+      return 0.2126*f(r)+0.7152*f(g)+0.0722*f(b);
+    }
+    function contrastWithWhite(r,g,b){ return 1.05/(relLum(r,g,b)+0.05); }
+
+    /* Derive a color from a hue-weighted bucket: saturation boosted, lightness
+       clamped and contrast-checked against white text (>=4.5). */
+    function pickColor(bk, satF, targetL){
+      const avg = [bk.r/bk.w, bk.g/bk.w, bk.b/bk.w];
+      const [h, s0] = rgbToHsl(avg[0], avg[1], avg[2]);
+      const s = Math.min(1, s0*satF + 0.06);
+      let l = targetL, guard = 0;
+      let rgb = hslToRgb(h, s, l);
+      while(contrastWithWhite(rgb[0], rgb[1], rgb[2]) < 4.5 && l > 0.10 && guard++ < 40){
+        l -= 0.02;
+        rgb = hslToRgb(h, s, l);
+      }
+      return rgb;
+    }
+
     export function setDynamicColorVar(rgbStr){
       $('fullPlayerOverlay').style.setProperty('--dynamic-color', rgbStr ? `rgba(${rgbStr},0.55)` : 'transparent');
     }
+
+    /* Cross-fade (600ms, CSS opacity on .fp-bg-layer) the art-derived gradient
+       in the full player between two stacked layers. Never blocks opening the
+       player: it is a plain DOM style update, no image wait. */
+    let fpGradientKey = '';
+    let fpBgSlot = 0;
+    function applyPlayerGradient(c){
+      const a = $('fpBgA'), b = $('fpBgB');
+      if(!a || !b) return;
+      const key = c ? c.top + c.mid + c.bottom : 'none';
+      if(key === fpGradientKey) return;
+      fpGradientKey = key;
+      const layers = [a, b];
+      const cur = layers[fpBgSlot], next = layers[1 - fpBgSlot];
+      next.style.background = c ? `linear-gradient(180deg, ${c.top} 0%, ${c.mid} 52%, ${c.bottom} 100%)` : '';
+      void next.offsetWidth;
+      next.classList.add('fp-bg-on');
+      cur.classList.remove('fp-bg-on');
+      fpBgSlot = 1 - fpBgSlot;
+      const art = $('fullPlayerArt');
+      if(art) art.style.setProperty('--art-shadow', c ? c.shadow : 'rgba(0,0,0,.5)');
+    }
+
     export function applyDynamicPlayerColor(imgUrl){
-      if(!imgUrl){ setDynamicColorVar(null); return; }
-      if(dynamicColorCache[imgUrl] !== undefined){ setDynamicColorVar(dynamicColorCache[imgUrl]); return; }
+      if(!imgUrl){ applyPlayerGradient(null); setDynamicColorVar(null); return; }
+      const cached = dynamicColorCache[imgUrl];
+      if(cached !== undefined){
+        applyPlayerGradient(cached);
+        setDynamicColorVar(cached ? cached.top.slice(4,-1) : null);
+        return;
+      }
       const img = new Image();
       img.crossOrigin = 'anonymous';
       img.onload = () => {
         try{
-          const size = 24;
+          const size = 32, HUES = 14;
           const canvas = document.createElement('canvas');
           canvas.width = size; canvas.height = size;
           const ctx = canvas.getContext('2d');
           ctx.drawImage(img, 0, 0, size, size);
           const data = ctx.getImageData(0, 0, size, size).data;
-          let r=0,g=0,b=0,weightTotal=0;
+          const buckets:any[] = new Array(HUES).fill(null).map(()=>({r:0,g:0,b:0,w:0}));
+          let vibrant = 0, muted = 0;
           for(let i=0;i<data.length;i+=4){
             if(data[i+3] < 128) continue;
-            const rr=data[i], gg=data[i+1], bb=data[i+2];
-            const max=Math.max(rr,gg,bb), min=Math.min(rr,gg,bb);
-            const sat = max-min;
-            // Favour more saturated pixels so a busy cover doesn't just average to grey.
-            const weight = 1 + sat/35;
-            r += rr*weight; g += gg*weight; b += bb*weight; weightTotal += weight;
+            const r=data[i], g=data[i+1], b=data[i+2];
+            const [h,s,l] = rgbToHsl(r,g,b);
+            if(s < .16 || l < .08 || l > .93){ muted++; continue; }   // dull/near-black/near-white
+            const w = s * (1 - Math.abs(l-0.45)*1.4);                 // favour vivid, mid-tone pixels
+            if(w <= 0){ muted++; continue; }
+            const bk = buckets[Math.min(HUES-1, Math.floor(h*HUES))];
+            bk.r += r*w; bk.g += g*w; bk.b += b*w; bk.w += w;
+            vibrant++;
           }
-          if(!weightTotal) throw new Error('no readable pixels');
-          const color = `${Math.round(r/weightTotal)},${Math.round(g/weightTotal)},${Math.round(b/weightTotal)}`;
-          dynamicColorCache[imgUrl] = color;
-          setDynamicColorVar(color);
+          // Art that is overwhelmingly gray/bright or washed out -> dark tint fallback.
+          if(!vibrant || vibrant/(vibrant+muted) < 0.06) throw new Error('art is too gray');
+          // Dominant hue bucket...
+          let d = 0;
+          for(let k=1;k<HUES;k++) if(buckets[k].w > buckets[d].w) d = k;
+          // ...and a secondary hue at least 3 bins away (dropped if negligible).
+          let s2 = -1;
+          for(let k=0;k<HUES;k++){
+            if(k===d) continue;
+            const dist = Math.min(Math.abs(k-d), HUES-Math.abs(k-d));
+            if(dist < 3) continue;
+            if(s2 === -1 || buckets[k].w > buckets[s2].w) s2 = k;
+          }
+          if(s2 !== -1 && buckets[s2].w < buckets[d].w*0.18) s2 = -1;
+          const topRgb = pickColor(buckets[d], 1.25, 0.44);
+          const midSrc = s2 !== -1 ? buckets[s2] : buckets[d];
+          const midRgb = pickColor(midSrc, 1.1, 0.20);
+          const botRgb = pickColor(buckets[d], 0.55, 0.07);
+          dynamicColorCache[imgUrl] = {
+            top: `rgb(${topRgb.join(',')})`,
+            mid: `rgb(${midRgb.join(',')})`,
+            bottom: `rgb(${botRgb.join(',')})`,
+            shadow: `rgba(${topRgb.join(',')},.4)`
+          };
+          applyPlayerGradient(dynamicColorCache[imgUrl]);
+          setDynamicColorVar(topRgb.join(','));
         }catch(err){
           dynamicColorCache[imgUrl] = null;
+          applyPlayerGradient(null);
           setDynamicColorVar(null);
         }
       };
-      img.onerror = () => { dynamicColorCache[imgUrl] = null; setDynamicColorVar(null); };
+      img.onerror = () => { dynamicColorCache[imgUrl] = null; applyPlayerGradient(null); setDynamicColorVar(null); };
       img.src = imgUrl;
     }
 
@@ -376,6 +480,8 @@ import { $, persistLikedHistory, savedLikeMap, state } from '../core/state';
     export function updatePlayState(){
       const icon = state.isPlaying ? "fa-solid fa-pause" : "fa-solid fa-play";
       $('playIcon').className = $('fullPlayIcon').className = icon;
+      // Apple-Music artwork pulse: springs between scale(1) and scale(.8)
+      $('fullPlayerOverlay').classList.toggle('art-paused', !state.isPlaying);
     }
 
     // AURA play/pause controls — explicitly wired here so both the mini
@@ -438,15 +544,6 @@ import { $, persistLikedHistory, savedLikeMap, state } from '../core/state';
         if(tuApi && tuApi.apply) tuApi.apply(pct);
       }
     });
-    state.audio.ontimeupdate=()=>{
-      if(state.audio.duration){
-        const pct=(state.audio.currentTime/state.audio.duration)*100;
-        $('progressFill').style.width=pct+'%';
-        $('fullSeekSlider').value=pct;
-        $('fullCurrentTime').textContent=fmt(state.audio.currentTime);
-        $('fullDurationTime').textContent=fmt(state.audio.duration);
-      }
-    };
     state.audio.addEventListener('play',()=>{state.isPlaying=true;updatePlayState();updateMainMediaSession();});
     state.audio.addEventListener('pause',()=>{state.isPlaying=false;updatePlayState();updateMainMediaSession();});
     /* A listening room owns what plays next, so the personal autoplay rules
@@ -465,8 +562,21 @@ import { $, persistLikedHistory, savedLikeMap, state } from '../core/state';
       }catch(e){}
     },500);
     $('fullSeekSlider').oninput=()=>{
-      if(auraYTPlayer){ try{ const d=auraYTPlayer.getDuration(); auraYTPlayer.seekTo((Number($('fullSeekSlider').value)/100)*d,true); }catch(e){} return; }
-      if(state.audio.duration) state.audio.currentTime=(Number($('fullSeekSlider').value)/100)*state.audio.duration;
+      const pct=Number($('fullSeekSlider').value)||0;
+      if(auraYTPlayer){
+        try{
+          const d=auraYTPlayer.getDuration();
+          if(isFinite(d) && d>0){
+            const t=(pct/100)*d;
+            auraYTPlayer.seekTo(t,true);
+            $('fullCurrentTime').textContent=fmt(t);
+          }
+        }catch(e){} return;
+      }
+      if(state.audio.duration && isFinite(state.audio.duration) && state.audio.duration > 0){
+        state.audio.currentTime=(pct/100)*state.audio.duration;
+        $('fullCurrentTime').textContent=fmt((pct/100)*state.audio.duration);
+      }
     };
 
 
