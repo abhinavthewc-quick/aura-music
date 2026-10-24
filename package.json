@@ -10,11 +10,12 @@
     "typecheck": "tsc --noEmit"
   },
   "devDependencies": {
+    "libsodium-wrappers": "^0.8.4",
     "typescript": "^5.9.3",
     "vite": "^7.1.12"
   },
   "dependencies": {
-    "@types/libsodium-wrappers": "^0.7.14",
-    "libsodium-wrappers": "^0.8.4"
+    "@noble/hashes": "^2.4.0",
+    "tweetnacl": "^1.0.3"
   }
 }

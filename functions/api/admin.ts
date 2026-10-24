@@ -5,6 +5,8 @@
    session token (HMAC keyed on GH_TOKEN, verified against ADMIN_PASSWORD).
    The email must match the allow-list before any GitHub API call is made. */
 
+import { sealBox, fromBase64, toBase64 } from '../../lib/sealedBox.js';
+
 const REPO = 'abhinavthewc-quick/aura-music';
 const WORKFLOW_FILE = 'upload-music.yml';
 const ALLOWED_EMAILS = new Set([
@@ -1473,16 +1475,16 @@ export const onRequestPost = async ({ request, env, ctx }: {
         if (value.length > MAX_SECRET_BYTES) return json({ error: 'value too large' }, 400);
 
         const pub = await gh<{ key: string; key_id: string }>(env, `/repos/${REPO}/actions/secrets/public-key`);
-        const sodium = (await import('libsodium-wrappers')).default;
-        await sodium.ready;
-        const sealed = sodium.crypto_box_seal(
-          sodium.from_string(value),
-          sodium.from_base64(pub.key, sodium.base64_variants.ORIGINAL),
-        );
+        // Pure-JS sealed box. libsodium-wrappers was the obvious tool here and
+        // is what this used to call, but it is Emscripten and compiles wasm at
+        // runtime, which the Workers runtime refuses — every save failed with
+        // "Wasm code generation disallowed by embedder". See
+        // functions/lib/sealedBox.ts.
+        const sealed = sealBox(new TextEncoder().encode(value), fromBase64(pub.key));
         await gh(env, `/repos/${REPO}/actions/secrets/${name}`, {
           method: 'PUT',
           body: JSON.stringify({
-            encrypted_value: sodium.to_base64(sealed, sodium.base64_variants.ORIGINAL),
+            encrypted_value: toBase64(sealed),
             key_id: pub.key_id,
           }),
         });

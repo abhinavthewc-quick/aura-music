@@ -17,5 +17,5 @@
     "forceConsistentCasingInFileNames": true,
     "types": ["vite/client"]
   },
-  "include": ["src/**/*.ts", "src/**/*.d.ts", "functions/**/*.ts"]
+  "include": ["src/**/*.ts", "src/**/*.d.ts", "functions/**/*.ts", "lib/**/*.ts"]
 }
