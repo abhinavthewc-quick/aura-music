@@ -1,4 +1,5 @@
 import { $ } from './state';
+import { DEFAULT_COVER } from './catalog';
 /* ===== 2942-2954 ===== */
     export function fmt(sec){
       if(!sec || !isFinite(sec) || sec < 0) return '0:00';
@@ -13,6 +14,21 @@ import { $ } from './state';
        style. Best-effort: if the image host doesn't allow canvas pixel
        reads (no CORS headers), it just quietly falls back to the app's
        normal background — nothing breaks either way. */
+/* ---------- Failed artwork fallback ----------
+   One delegated listener covers every <img> in the app (home cards, library,
+   search results, player…). The load "error" event doesn't bubble, so this
+   runs in the capture phase. Anything that fails — or was saved with an
+   empty/missing URL — gets swapped for the app's vinyl placeholder so no
+   browser broken-image glyph is ever visible. */
+    export function installCoverFallback(){
+      document.addEventListener('error',(e:any)=>{
+        const el=e.target;
+        if(!el || el.tagName!=='IMG' || el.dataset.coverFallback) return;
+        el.dataset.coverFallback='1';
+        el.src=DEFAULT_COVER;
+      },true);
+    }
+
 /* ===== 2995-3005 ===== */
     /* Toast Notifications */
     export function toast(msg, icon='circle-check'){

@@ -1,6 +1,7 @@
 import { artistMergeKey, timeGreeting, toast } from '../core/dom';
 import { playSong } from './player';
 import { escapeHtml } from './radio';
+import { DEFAULT_COVER } from '../core/catalog';
 import { $, state } from '../core/state';
 /* ===== 3075-3096 ===== */
     export function setGreeting(){
@@ -39,7 +40,7 @@ import { $, state } from '../core/state';
           <div class="quick-tile-text"><div class="qt-title">Liked Songs</div><div class="qt-sub">${favCount} track${favCount!==1?'s':''}</div></div>
         </div>`,
         last ? `<div class="quick-tile" onclick="resumeLastPlayed()">
-          <div class="quick-tile-art"><img src="${last.img}"></div>
+          <div class="quick-tile-art"><img src="${escapeHtml(last.img||DEFAULT_COVER)}"></div>
           <div class="quick-tile-text"><div class="qt-title">Jump Back In</div><div class="qt-sub">${last.title}</div></div>
         </div>` : `<div class="quick-tile" onclick="shuffleAll()">
           <div class="quick-tile-art cat-shuffle"><i class="fa-solid fa-shuffle"></i></div>
@@ -83,11 +84,11 @@ import { $, state } from '../core/state';
       container.innerHTML = artists.map((g:any)=>{
         const cards = g.songs.map(s=>{
           const idx = state.songs.findIndex(item=>item.id===s.id);
-          return `<div class="spotlight-card" onclick="playSong(${idx})"><img src="${s.img}"><p class="sc-title">${s.title}</p><p class="sc-sub">${s.artist}</p></div>`;
+          return `<div class="spotlight-card" onclick="playSong(${idx})"><img src="${escapeHtml(s.img||DEFAULT_COVER)}"><p class="sc-title">${s.title}</p><p class="sc-sub">${s.artist}</p></div>`;
         }).join('');
         return `<div class="artist-spotlight-block" style="margin-bottom:24px">
           <div class="spotlight-header">
-            <img class="spotlight-avatar" src="${g.songs[0].img}" alt="">
+            <img class="spotlight-avatar" src="${escapeHtml(g.songs[0].img||DEFAULT_COVER)}" alt="">
             <div><p style="font-size:11px;color:var(--text-sub)">More from</p><p style="font-size:16px;font-weight:800">${g.name}</p></div>
           </div>
           <div class="recent-scroll">${cards}</div>
@@ -106,7 +107,7 @@ import { $, state } from '../core/state';
       }
       c.innerHTML=auraPickIds.map(id=>{
         const i=state.songs.findIndex(s=>s.id===id), s=state.songs[i]; if(!s) return '';
-        return `<div class="aura-pick" onclick="playSong(${i})"><img src="${escapeHtml(s.img||'')}" alt="" loading="lazy"><span class="aura-pick-play"><i class="fa-solid fa-play"></i></span><div class="aura-pick-info"><b>${escapeHtml(s.title||'')}</b><span>${escapeHtml(s.artist||'')}</span></div></div>`;
+        return `<div class="aura-pick" onclick="playSong(${i})"><img src="${escapeHtml(s.img||DEFAULT_COVER)}" alt="" loading="lazy"><span class="aura-pick-play"><i class="fa-solid fa-play"></i></span><div class="aura-pick-info"><b>${escapeHtml(s.title||'')}</b><span>${escapeHtml(s.artist||'')}</span></div></div>`;
       }).join('');
     }
     setTimeout(()=>renderAuraPicks(),0);
