@@ -121,28 +121,36 @@ import { state } from '../core/state';
     const pct = Number(fullSeek.value)||0;
     if(pct !== lastMiniPct){
       lastMiniPct = pct;
-      const tl = $('miniTimelineFill'), bar = $('miniPlayer');
-      if(tl && bar){ tl.style.width = pct + '%'; bar.classList.toggle('mini-timeline-mobile-active', isOn(mini)); }
+      const tl = $('miniTimelineFill'), thumb = $('miniTimelineThumb'), endEl = $('miniTimelineEnd'), bar = $('miniPlayer');
+      if(bar){
+        if(tl) tl.style.width = pct + '%';
+        if(thumb) thumb.style.left = pct + '%';
+        if(endEl) endEl.style.left = pct + '%';
+        bar.classList.toggle('mini-timeline-mobile-active', isOn(mini));
+      }
     }
   }, 250);
 
-  /* keep the mobile timeline in sync with playback and with bar visibility */
+  /* keep the mobile timeline in sync whenever the bar is shown/hidden */
   function syncMiniTimelineFromFull(){
     if(!mq.matches) return;
     const pct = Number(fullSeek.value)||0;
     if(pct !== lastMiniPct){
       lastMiniPct = pct;
-      const tl = $('miniTimelineFill'), thumb = $('miniTimelineThumb'), bar = $('miniPlayer');
-      if(tl && bar){
-        tl.style.width = pct + '%';
+      const tl = $('miniTimelineFill'), thumb = $('miniTimelineThumb'), endEl = $('miniTimelineEnd'), bar = $('miniPlayer');
+      if(bar){
+        if(tl) tl.style.width = pct + '%';
         if(thumb) thumb.style.left = pct + '%';
+        if(endEl) endEl.style.left = pct + '%';
         bar.classList.toggle('mini-timeline-mobile-active', isOn(mini));
       }
     }
   }
   mo.observe($('miniSeek'), {attributes:true, attributeFilter:['style','value']});
   new MutationObserver(syncMiniTimelineFromFull).observe(fullSeek, {attributes:true, attributeFilter:['value']});
-  new MutationObserver(()=>{ if(mq.matches) syncMiniTimelineFromFull(); }).observe($('fullSeekSlider'), {attributes:true, attributeFilter:['value','style']});
+  new MutationObserver(()=>{
+    if(mq.matches) syncMiniTimelineFromFull();
+  }).observe($('fullSeekSlider'), {attributes:true, attributeFilter:['value','style']});
 
   /* ---- keyboard: Esc closes the big player ---- */
   document.addEventListener('keydown', e => {

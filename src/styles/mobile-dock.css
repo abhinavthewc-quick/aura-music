@@ -185,8 +185,24 @@ body.light-theme .nav-fab.active{
     box-shadow:0 0 0 2px rgba(0,0,0,.12);
     display:none;
   }
+  .player-bar .mini-timeline-mobile-end{
+    position:absolute;
+    left:100%;
+    top:50%;
+    transform:translate(-50%,-50%);
+    width:9px;
+    height:9px;
+    border-radius:50%;
+    background:#f1e3cf;
+    box-shadow:0 0 0 2px rgba(0,0,0,.12);
+    pointer-events:none;
+    opacity:0;
+  }
+  .player-bar .mini-timeline-mobile-active .mini-timeline-mobile-end{
+    opacity:1;
+  }
   .player-bar .mini-timeline-mobile-active .mini-timeline-mobile-fill::after{
-    display:block;
+    display:none;
   }
   /* flat white transport icons, no circles (reference).
      Includes .play-primary explicitly: overrides-4.css paints a warm glow box
@@ -212,21 +228,9 @@ body.light-theme .player-bar .mini-timeline-mobile-fill,
 body.light-theme .player-bar .mini-timeline-mobile-fill::after{
   background:#b0813f;
 }
-body.light-theme .player-bar .mini-timeline-mobile-thumb::before{
+body.light-theme .player-bar .mini-timeline-mobile-end{
   background:#b0813f;
   box-shadow:0 0 0 2px rgba(176,129,63,.22);
-}
-body.light-theme .player-bar .mini-timeline-mobile-fill,
-body.light-theme .player-bar .mini-timeline-mobile-fill::after{
-  background:#b0813f;
-}
-body.light-theme .player-bar .mini-timeline-mobile-thumb::before{
-  background:#b0813f;
-  box-shadow:0 0 0 2px rgba(176,129,63,.22);
-}
-body.light-theme .player-bar .mini-timeline-mobile-fill,
-body.light-theme .player-bar .mini-timeline-mobile-fill::after{
-  background:#b0813f;
 }
 body.light-theme .player-bar .mini-timeline-mobile-thumb::before{
   background:#b0813f;
