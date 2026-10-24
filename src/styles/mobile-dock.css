@@ -45,6 +45,9 @@ body.light-theme .nav-bar{
   border:1px solid rgba(230,170,105,.24);
   box-shadow:0 6px 16px rgba(0,0,0,.25),inset 0 1px 0 rgba(255,220,170,.22);
 }
+/* the old design drew a white shine along the indicator's top edge — reads as
+   a stray hairline above the active tab; the reference has no such line */
+.nav-bar .nav-indicator::after{display:none!important}
 body.light-theme .nav-indicator{
   background:linear-gradient(160deg,rgba(231,178,115,.32),rgba(203,142,80,.22));
   border-color:rgba(170,110,55,.25);
@@ -110,14 +113,20 @@ body.light-theme .nav-fab.active{
   .player-bar .song-artist{display:none}
   .player-bar .mini-np{display:block;font-size:12.5px;color:rgba(255,240,220,.55);margin-top:2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
   .player-bar .mini-progress-track{display:none}
-  /* flat white transport icons, no circles (reference) */
-  .player-bar .ctrl-glass-btn{
+  /* flat white transport icons, no circles (reference).
+     Includes .play-primary explicitly: overrides-4.css paints a warm glow box
+     on it with !important at higher specificity, which would otherwise show
+     through behind the pause icon. */
+  .player-bar .ctrl-glass-btn,
+  .player-bar .ctrl-glass-btn.play-primary{
     width:42px;height:42px;
-    background:transparent!important;border:0!important;box-shadow:none!important;
+    background:transparent!important;border:0!important;border-color:transparent!important;box-shadow:none!important;
     -webkit-backdrop-filter:none!important;backdrop-filter:none!important;
+    filter:none!important;
     color:#fff!important;font-size:21px;border-radius:0;
   }
-  .player-bar .ctrl-glass-btn.play-primary{background:transparent!important;color:#fff!important;font-size:23px}
+  /* and the bar's own top shimmer reads as a stray line: remove it on mobile */
+  .player-bar::after{display:none!important}
   .radio-player-bar{padding:10px 14px;border-radius:24px}
 }
 @media (min-width:900px){
