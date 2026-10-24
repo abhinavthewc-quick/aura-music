@@ -18,7 +18,9 @@
 }
 @media (min-width:900px){.mobile-dock{display:none!important}}
 
-/* the pill (was position:fixed; now a child of the dock) */
+/* the pill (was position:fixed; now a child of the dock).
+   Translucent enough for real glassmorphism: the backdrop blur + saturation
+   does the work, the warm tint is just a wash. */
 .nav-bar{
   position:static;
   width:auto;height:100%;max-width:none;
@@ -26,16 +28,16 @@
   flex:1;min-width:0;
   border-radius:39px;
   padding:6px;
-  background:linear-gradient(165deg,rgba(50,40,28,.94),rgba(24,18,12,.96));
-  border:1px solid rgba(230,189,146,.12);
-  box-shadow:0 16px 40px rgba(0,0,0,.42),inset 0 1px 0 rgba(255,236,210,.10);
-  -webkit-backdrop-filter:blur(28px) saturate(160%);
-  backdrop-filter:blur(28px) saturate(160%);
+  background:linear-gradient(165deg,rgba(50,40,28,.55),rgba(24,18,12,.62));
+  border:1px solid rgba(230,189,146,.16);
+  box-shadow:0 16px 40px rgba(0,0,0,.32),inset 0 1px 0 rgba(255,236,210,.14);
+  -webkit-backdrop-filter:blur(26px) saturate(170%) brightness(1.02);
+  backdrop-filter:blur(26px) saturate(170%) brightness(1.02);
 }
 body.light-theme .nav-bar{
-  background:linear-gradient(165deg,rgba(255,250,242,.95),rgba(248,238,224,.93));
+  background:linear-gradient(165deg,rgba(255,250,242,.62),rgba(248,238,224,.56));
   border-color:rgba(120,85,45,.18);
-  box-shadow:0 12px 32px rgba(120,85,45,.2),inset 0 1px 0 rgba(255,255,255,.9);
+  box-shadow:0 12px 32px rgba(120,85,45,.16),inset 0 1px 0 rgba(255,255,255,.85);
 }
 
 /* active pill: warm bronze segment (JS positions/sizes it) */
@@ -71,9 +73,11 @@ body.light-theme .nav-bar .nav-btn{color:rgba(70,55,40,.78)}
 /* circular search button beside the pill */
 .nav-fab{
   flex:0 0 62px;width:62px;height:62px;border-radius:50%;
-  border:1px solid rgba(230,189,146,.14)!important;
-  background:linear-gradient(165deg,rgba(50,40,28,.94),rgba(24,18,12,.96))!important;
-  box-shadow:0 16px 40px rgba(0,0,0,.42),inset 0 1px 0 rgba(255,236,210,.10);
+  border:1px solid rgba(230,189,146,.16)!important;
+  background:linear-gradient(165deg,rgba(50,40,28,.55),rgba(24,18,12,.62))!important;
+  box-shadow:0 16px 40px rgba(0,0,0,.32),inset 0 1px 0 rgba(255,236,210,.14);
+  -webkit-backdrop-filter:blur(26px) saturate(170%) brightness(1.02);
+  backdrop-filter:blur(26px) saturate(170%) brightness(1.02);
   color:#e8b57e;font-size:19px;
   transition:transform .2s ease,background .25s ease,color .25s ease;
   cursor:pointer;
@@ -85,10 +89,10 @@ body.light-theme .nav-bar .nav-btn{color:rgba(70,55,40,.78)}
   border-color:rgba(230,170,105,.30)!important;
 }
 body.light-theme .nav-fab{
-  background:linear-gradient(165deg,rgba(255,250,242,.95),rgba(248,238,224,.93))!important;
+  background:linear-gradient(165deg,rgba(255,250,242,.62),rgba(248,238,224,.56))!important;
   border-color:rgba(120,85,45,.2)!important;
   color:#a97233;
-  box-shadow:0 12px 32px rgba(120,85,45,.2),inset 0 1px 0 rgba(255,255,255,.9);
+  box-shadow:0 12px 32px rgba(120,85,45,.16),inset 0 1px 0 rgba(255,255,255,.85);
 }
 body.light-theme .nav-fab.active{
   background:linear-gradient(160deg,rgba(231,178,115,.35),rgba(203,142,80,.25))!important;
