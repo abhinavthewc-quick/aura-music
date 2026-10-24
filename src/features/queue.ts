@@ -260,12 +260,18 @@ import { $, persistLikedHistory, savedLikeMap, state } from '../core/state';
         const prevIndex=(idx-1+auraYTQueue.length)%auraYTQueue.length;
         state.auraYTQueueIndex=prevIndex;
         await playYouTubeProResult(auraYTQueue[prevIndex]);
+        if(keepFull && !window.matchMedia('(min-width:900px)').matches){
+          $('fullPlayerOverlay').classList.add('active');
+        }
         return;
       }
       if(!state.songs.length) return;
       let i=state.currentIndex-1;
       if(i<0) i=state.songs.length-1;
-      playSong(i);
+      playSong(i, keepFull);
+      if(keepFull && !window.matchMedia('(min-width:900px)').matches){
+        $('fullPlayerOverlay').classList.add('active');
+      }
     }
 
     export async function playNext(keepFull=false){
@@ -290,13 +296,19 @@ import { $, persistLikedHistory, savedLikeMap, state } from '../core/state';
         if(state.isShuffle && auraYTQueue.length>1){ do{ nextIndex=Math.floor(Math.random()*auraYTQueue.length); }while(nextIndex===idx); }
         state.auraYTQueueIndex=nextIndex;
         await playYouTubeProResult(auraYTQueue[nextIndex]);
+        if(keepFull && !window.matchMedia('(min-width:900px)').matches){
+          $('fullPlayerOverlay').classList.add('active');
+        }
         return;
       }
       if(!state.songs.length) return;
       let i=state.currentIndex+1;
       if(state.isShuffle && state.songs.length>1){ do{ i=Math.floor(Math.random()*state.songs.length); }while(i===state.currentIndex); }
       if(i>=state.songs.length) i=0;
-      playSong(i);
+      playSong(i, keepFull);
+      if(keepFull && !window.matchMedia('(min-width:900px)').matches){
+        $('fullPlayerOverlay').classList.add('active');
+      }
       renderUpNext();
     }
 
@@ -306,5 +318,5 @@ import { $, persistLikedHistory, savedLikeMap, state } from '../core/state';
     };
     $('fullPrevBtn').onclick=e=>{e.stopPropagation();playPrevious(true);};
     $('fullNextBtn').onclick=e=>{e.stopPropagation();playNext(true);};
-    $('nextBtn').onclick=e=>{e.stopPropagation();playNext(true);};
+    $('nextBtn').onclick=e=>{e.stopPropagation();playNext(false);};
 

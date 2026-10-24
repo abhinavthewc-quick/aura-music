@@ -343,13 +343,16 @@ import { $, persistLikedHistory, savedLikeMap, state } from '../core/state';
     state.audio.addEventListener('durationchange', refreshDurationDisplay);
 
     export let lastPlayRequestAt=0;
-    export function playSong(i){
+    export function playSong(i, keepFull=false){
       lastPlayRequestAt=Date.now();
       const s=state.songs[i];
       if(!s) return;
       if(s.isYouTube && s.videoId){
         state.currentIndex=i;
         playYouTubeInsideAura(s.videoId,s.title,s.img,!!s.favorite,true);
+        if(keepFull && !window.matchMedia('(min-width:900px)').matches){
+          $('fullPlayerOverlay').classList.add('active');
+        }
         return;
       }
       stopAuraYouTube();
@@ -357,12 +360,15 @@ import { $, persistLikedHistory, savedLikeMap, state } from '../core/state';
       resetFullPlayerArtToImage(s.img||'');
       const keepBigPlayer = window.matchMedia('(min-width:900px)').matches && $('fullPlayerOverlay').classList.contains('active');
       stopRadio();
-      if(keepBigPlayer) $('fullPlayerOverlay').classList.add('active');
+      if(keepBigPlayer || keepFull) $('fullPlayerOverlay').classList.add('active');
       if(s.missing){ toast('This file is unavailable — please re-add it', 'triangle-exclamation'); return; }
       state.currentIndex=i; loadSong(i); state.audio.play(); state.isPlaying=true;
       $('miniPlayer').classList.add('active');
       updatePlayState(); filterSongs(); addToRecent(s);
       updateLibNowPlaying();
+      if(keepFull && !window.matchMedia('(min-width:900px)').matches){
+        $('fullPlayerOverlay').classList.add('active');
+      }
     }
 
     export function updatePlayState(){
