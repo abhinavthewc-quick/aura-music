@@ -113,96 +113,36 @@ body.light-theme .nav-fab.active{
 /* subtitle swaps artist for a static "Now playing" on phones */
 .player-bar .mini-np{display:none}
 @media (max-width:899px){
-  .player-bar{padding:11px 15px;border-radius:26px}
+  .player-bar{padding:11px 15px;border-radius:26px;overflow:hidden}
   .player-bar .song-artist{display:none}
   .player-bar .mini-np{display:block;font-size:12.5px;color:rgba(255,240,220,.55);margin-top:2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
   .player-bar .mini-progress-track{display:none}
-  /* mobile timeline: thin thumb-centered track under the track info.
-     Matches the AURA glass pill, not the reference card exactly. */
-  .player-bar .mini-timeline-mobile{
-    position:relative;
-    height:18px;
-    margin-top:10px;
-    display:flex;
-    align-items:center;
-  }
-  .player-bar .mini-timeline-mobile-track{
+  /* mobile bottom-edge progress line: a thin accent track along the bottom
+     edge of the pill, clipped inside its rounded corners by the bar's
+     overflow:hidden. Driven by the same state.audio as the full player. */
+  .player-bar .mini-edge-progress{
     position:absolute;
     left:0;
     right:0;
-    top:50%;
-    transform:translateY(-50%);
+    bottom:0;
     height:3px;
-    border-radius:3px;
-    background:rgba(255,255,255,.16);
-    pointer-events:none;
+    background:rgba(255,255,255,.15);
+    pointer-events:auto;
+    cursor:pointer;
+    touch-action:none;
+    z-index:2;
   }
-  .player-bar .mini-timeline-mobile-fill{
+  .player-bar .mini-edge-fill{
     position:absolute;
     left:0;
-    top:50%;
-    transform:translateY(-50%);
-    height:3px;
-    border-radius:3px;
-    background:#f1e3cf;
+    top:0;
+    bottom:0;
+    width:100%;
+    transform:scaleX(0);
+    transform-origin:left;
+    background:#e6b77b;
+    transition:transform .1s linear;
     pointer-events:none;
-    width:0%;
-    transition:width .1s linear;
-  }
-  .player-bar .mini-timeline-mobile-thumb{
-    position:absolute;
-    left:0;
-    top:50%;
-    transform:translate(-50%,-50%);
-    width:12px;
-    height:12px;
-    border-radius:50%;
-    background:#fff;
-    box-shadow:0 0 0 2px rgba(0,0,0,.18);
-    pointer-events:none;
-  }
-  .player-bar .mini-timeline-mobile-thumb::before{
-    content:"";
-    position:absolute;
-    left:0;
-    top:50%;
-    transform:translate(-50%,-50%);
-    width:12px;
-    height:12px;
-    border-radius:50%;
-    background:#fff;
-    box-shadow:0 0 0 2px rgba(0,0,0,.18);
-  }
-  .player-bar .mini-timeline-mobile-fill::after{
-    content:"";
-    position:absolute;
-    top:-3px;
-    right:-3px;
-    width:9px;
-    height:9px;
-    border-radius:50%;
-    background:#f1e3cf;
-    box-shadow:0 0 0 2px rgba(0,0,0,.12);
-    display:none;
-  }
-  .player-bar .mini-timeline-mobile-end{
-    position:absolute;
-    left:100%;
-    top:50%;
-    transform:translate(-50%,-50%);
-    width:9px;
-    height:9px;
-    border-radius:50%;
-    background:#f1e3cf;
-    box-shadow:0 0 0 2px rgba(0,0,0,.12);
-    pointer-events:none;
-    opacity:0;
-  }
-  .player-bar .mini-timeline-mobile-active .mini-timeline-mobile-end{
-    opacity:1;
-  }
-  .player-bar .mini-timeline-mobile-active .mini-timeline-mobile-fill::after{
-    display:none;
   }
   /* flat white transport icons, no circles (reference).
      Includes .play-primary explicitly: overrides-4.css paints a warm glow box
@@ -222,17 +162,7 @@ body.light-theme .nav-fab.active{
 }
 @media (min-width:900px){
   .player-bar .mini-np{display:none!important}
+  .player-bar .mini-edge-progress{display:none}
 }
 body.light-theme .player-bar .mini-np{color:rgba(90,60,30,.6)}
-body.light-theme .player-bar .mini-timeline-mobile-fill,
-body.light-theme .player-bar .mini-timeline-mobile-fill::after{
-  background:#b0813f;
-}
-body.light-theme .player-bar .mini-timeline-mobile-end{
-  background:#b0813f;
-  box-shadow:0 0 0 2px rgba(176,129,63,.22);
-}
-body.light-theme .player-bar .mini-timeline-mobile-thumb::before{
-  background:#b0813f;
-  box-shadow:0 0 0 2px rgba(176,129,63,.22);
-}
+body.light-theme .player-bar .mini-edge-fill{background:#a8642a}

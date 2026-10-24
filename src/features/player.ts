@@ -314,6 +314,8 @@ import { $, persistLikedHistory, savedLikeMap, state } from '../core/state';
       $('fullSeekSlider').value = 0;
       $('fullCurrentTime').textContent = '0:00';
       $('fullDurationTime').textContent = '0:00';
+      const resetApi = (window as any).__auraMiniProgress;
+      if(resetApi && resetApi.reset) resetApi.reset(false);
       applyDynamicPlayerColor(s.img);
       updateMainMediaSession();
       state.audio.load();
@@ -419,6 +421,23 @@ import { $, persistLikedHistory, savedLikeMap, state } from '../core/state';
       updatePlayState();
     }
     
+    state.audio.addEventListener('loadedmetadata', ()=>{
+      if(state.audio.duration && isFinite(state.audio.duration) && state.audio.duration > 0){
+        const lmdApi = (window as any).__auraMiniProgress;
+        if(lmdApi && lmdApi.apply) lmdApi.apply(0, false);
+      }
+    });
+    state.audio.addEventListener('timeupdate', ()=>{
+      if(state.audio.duration && isFinite(state.audio.duration) && state.audio.duration > 0){
+        const pct=(state.audio.currentTime/state.audio.duration)*100;
+        $('progressFill').style.width=pct+'%';
+        $('fullSeekSlider').value=pct;
+        $('fullCurrentTime').textContent=fmt(state.audio.currentTime);
+        $('fullDurationTime').textContent=fmt(state.audio.duration);
+        const tuApi = (window as any).__auraMiniProgress;
+        if(tuApi && tuApi.apply) tuApi.apply(pct);
+      }
+    });
     state.audio.ontimeupdate=()=>{
       if(state.audio.duration){
         const pct=(state.audio.currentTime/state.audio.duration)*100;

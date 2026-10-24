@@ -74,11 +74,101 @@ import { state } from '../core/state';
 
   /* ---- seek line ---- */
   const seek = $('miniSeek'), fullSeek = $('fullSeekSlider');
+  const miniProgressFill = $('progressFill'), miniProgressTrack = $('miniProgressTrack');
+  const miniProgressDash = $('miniProgressTap');
+  const edgeHost = $('miniEdgeProgress');
+  const edgeFill = $('miniEdgeFill');
+  let edgeDragActive = false;
+  let miniProgressPct = 0;
+  function applyMiniProgress(pct, animate=true){
+    miniProgressPct = pct;
+    if(miniProgressFill && miniProgressTrack){
+      miniProgressFill.style.transition = animate ? 'transform .1s linear' : 'none';
+      miniProgressFill.style.transform = `scaleX(${pct / 100})`;
+      miniProgressTrack.style.transform = `scaleX(${pct / 100})`;
+    }
+    if(miniProgressDash){
+        miniProgressDash.style.transform = `scaleX(${pct / 100})`;
+    }
+    if(edgeFill){
+      edgeFill.style.transition = animate ? 'transform .1s linear' : 'none';
+      edgeFill.style.transform = `scaleX(${pct / 100})`;
+    }
+  }
+  function resetMiniProgress(animate=false){
+    applyMiniProgress(0, animate);
+  }
+  /* Exposed for player.ts: loadSong() resets the line on song change and the
+     state.audio 'timeupdate' listener keeps it in sync with the full player. */
+  (window as any).__auraMiniProgress = { apply: applyMiniProgress, reset: resetMiniProgress };
   seek.addEventListener('input', () => {
     seek.style.setProperty('--seek-pct', seek.value + '%');
     fullSeek.value = seek.value;
     fullSeek.dispatchEvent(new Event('input'));   // reuses the existing seek logic (state.audio + YouTube)
   });
+  if(miniProgressDash){
+    miniProgressDash.addEventListener('pointerdown', e => {
+      e.stopPropagation();
+      e.preventDefault();
+      miniProgressDash.setPointerCapture?(miniProgressDash.setPointerCapture(e.pointerId)):(miniProgressDash.addEventListener('pointermove', onMiniProgressDrag));
+      updateMiniProgressFromPointer(e);
+    });
+    miniProgressDash.addEventListener('pointermove', onMiniProgressDrag);
+    miniProgressDash.addEventListener('pointerup', e => {
+      e.stopPropagation();
+      e.preventDefault();
+      miniProgressDash.releasePointerCapture?.(e.pointerId);
+    });
+    miniProgressDash.addEventListener('pointercancel', e => {
+      e.stopPropagation();
+      miniProgressDash.removeEventListener('pointermove', onMiniProgressDrag);
+    });
+  }
+  function onMiniProgressDrag(e){
+    if(!miniProgressDash) return;
+    updateMiniProgressFromPointer(e);
+  }
+  function updateMiniProgressFromPointer(e){
+    if(!miniProgressDash || !state.audio || !isFinite(state.audio.duration) || state.audio.duration <= 0) return;
+    const rect = miniProgressDash.getBoundingClientRect();
+    if(rect.width <= 0) return;
+    const x = Math.max(0, Math.min(rect.width, (e.clientX || 0) - rect.left));
+    const pct = Math.max(0, Math.min(100, (x / rect.width) * 100));
+    if(state.audio.duration){
+      state.audio.currentTime = (pct / 100) * state.audio.duration;
+    }
+  }
+  /* Optional: tap/drag the bottom-edge progress line to seek. stopPropagation
+     on every event keeps the taps from opening the full player or touching the
+     pause/next buttons above the line. */
+  if(edgeHost){
+    const edgeSeek = e => {
+      if(!state.audio || !isFinite(state.audio.duration) || state.audio.duration <= 0) return;
+      const rect = edgeHost.getBoundingClientRect();
+      if(rect.width <= 0) return;
+      const x = Math.max(0, Math.min(rect.width, (e.clientX || 0) - rect.left));
+      const pct = Math.max(0, Math.min(100, (x / rect.width) * 100));
+      if(edgeFill){
+        edgeFill.style.transition = 'none';
+        edgeFill.style.transform = `scaleX(${pct / 100})`;
+      }
+      state.audio.currentTime = (pct / 100) * state.audio.duration;
+    };
+    edgeHost.addEventListener('pointerdown', e => {
+      e.stopPropagation(); e.preventDefault();
+      edgeDragActive = true;
+      edgeHost.setPointerCapture?.(e.pointerId);
+      edgeSeek(e);
+    });
+    edgeHost.addEventListener('pointermove', e => { if(edgeDragActive){ e.preventDefault(); edgeSeek(e); } });
+    edgeHost.addEventListener('pointerup', e => {
+      e.stopPropagation();
+      edgeDragActive = false;
+      edgeHost.releasePointerCapture?.(e.pointerId);
+    });
+    edgeHost.addEventListener('pointercancel', () => { edgeDragActive = false; });
+    edgeHost.addEventListener('click', e => e.stopPropagation());
+  }
 
   /* ---- volume (also finally makes the "Remember volume" setting meaningful) ---- */
   const vol = $('miniVolume'), volIcon = $('miniVolIcon');
@@ -121,36 +211,13 @@ import { state } from '../core/state';
     const pct = Number(fullSeek.value)||0;
     if(pct !== lastMiniPct){
       lastMiniPct = pct;
-      const tl = $('miniTimelineFill'), thumb = $('miniTimelineThumb'), endEl = $('miniTimelineEnd'), bar = $('miniPlayer');
-      if(bar){
-        if(tl) tl.style.width = pct + '%';
-        if(thumb) thumb.style.left = pct + '%';
-        if(endEl) endEl.style.left = pct + '%';
-        bar.classList.toggle('mini-timeline-mobile-active', isOn(mini));
+      if(edgeFill && !edgeDragActive){
+        edgeFill.style.transition = 'transform .1s linear';
+        edgeFill.style.transform = `scaleX(${pct / 100})`;
       }
     }
   }, 250);
 
-  /* keep the mobile timeline in sync whenever the bar is shown/hidden */
-  function syncMiniTimelineFromFull(){
-    if(!mq.matches) return;
-    const pct = Number(fullSeek.value)||0;
-    if(pct !== lastMiniPct){
-      lastMiniPct = pct;
-      const tl = $('miniTimelineFill'), thumb = $('miniTimelineThumb'), endEl = $('miniTimelineEnd'), bar = $('miniPlayer');
-      if(bar){
-        if(tl) tl.style.width = pct + '%';
-        if(thumb) thumb.style.left = pct + '%';
-        if(endEl) endEl.style.left = pct + '%';
-        bar.classList.toggle('mini-timeline-mobile-active', isOn(mini));
-      }
-    }
-  }
-  mo.observe($('miniSeek'), {attributes:true, attributeFilter:['style','value']});
-  new MutationObserver(syncMiniTimelineFromFull).observe(fullSeek, {attributes:true, attributeFilter:['value']});
-  new MutationObserver(()=>{
-    if(mq.matches) syncMiniTimelineFromFull();
-  }).observe($('fullSeekSlider'), {attributes:true, attributeFilter:['value','style']});
 
   /* ---- keyboard: Esc closes the big player ---- */
   document.addEventListener('keydown', e => {
