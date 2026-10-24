@@ -242,7 +242,10 @@ import { $, persistLikedHistory, savedLikeMap, state } from '../core/state';
     document.addEventListener('keydown',e=>{if(e.key==='Escape') closeUpNext();});
 
 
-    export async function playPrevious(){
+    export async function playPrevious(keepFull=false){
+      if(keepFull && !window.matchMedia('(min-width:900px)').matches){
+        $('fullPlayerOverlay').classList.add('active');
+      }
       // Always resolve the current position from the actual YouTube result ID.
       // This prevents a stale queue index from making AURA think we're at an end.
       if(auraYTVideoId && auraYTQueue.length){
@@ -265,11 +268,14 @@ import { $, persistLikedHistory, savedLikeMap, state } from '../core/state';
       playSong(i);
     }
 
-    export async function playNext(){
+    export async function playNext(keepFull=false){
       if(manualQueue.length){
         const nextId = manualQueue.shift();
         const idx = state.songs.findIndex(s => String(s.id) === String(nextId));
         if(idx !== -1){ playSong(idx); renderUpNext(); return; }
+      }
+      if(keepFull && !window.matchMedia('(min-width:900px)').matches){
+        $('fullPlayerOverlay').classList.add('active');
       }
       if(auraYTVideoId && auraYTQueue.length){
         let idx=auraYTQueue.findIndex(m=>{
@@ -298,7 +304,7 @@ import { $, persistLikedHistory, savedLikeMap, state } from '../core/state';
       e.stopPropagation();
       if(state.songs[state.currentIndex]) openTrackMenu(e, state.songs[state.currentIndex].id);
     };
-    $('fullPrevBtn').onclick=e=>{e.stopPropagation();playPrevious();};
-    $('fullNextBtn').onclick=e=>{e.stopPropagation();playNext();};
-    $('nextBtn').onclick=e=>{e.stopPropagation();playNext();};
+    $('fullPrevBtn').onclick=e=>{e.stopPropagation();playPrevious(true);};
+    $('fullNextBtn').onclick=e=>{e.stopPropagation();playNext(true);};
+    $('nextBtn').onclick=e=>{e.stopPropagation();playNext(false);};
 
