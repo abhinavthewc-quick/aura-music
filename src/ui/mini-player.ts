@@ -111,13 +111,33 @@ import { state } from '../core/state';
       if(liked){ ml.classList.remove('mini-heart-pop'); void ml.offsetWidth; ml.classList.add('mini-heart-pop'); }
     }
   }
+  let lastMiniPct = -1;
   setInterval(() => {
     if(!mq.matches) return;
     if(document.activeElement !== seek){ seek.value = fullSeek.value; seek.style.setProperty('--seek-pct', (parseFloat(fullSeek.value)||0) + '%'); }
     $('miniTime').textContent = $('fullCurrentTime').textContent + ' / ' + $('fullDurationTime').textContent;
     syncLike(false); syncModes();
     try{ if(auraYTPlayer && auraYTPlayerReady && auraYTPlayer !== ytSeen) applyVolume(false); }catch(e){}
+    const pct = Number(fullSeek.value)||0;
+    if(pct !== lastMiniPct){
+      lastMiniPct = pct;
+      const tl = $('miniTimelineFill'), bar = $('miniPlayer');
+      if(tl && bar){ tl.style.width = pct + '%'; bar.classList.toggle('mini-timeline-mobile-active', isOn(mini)); }
+    }
   }, 250);
+
+  /* keep the mobile timeline in sync whenever the bar is shown/hidden */
+  const miniPct = () => Number(fullSeek.value||0);
+  mo.observe($('miniSeek'), {attributes:true, attributeFilter:['style','value']});
+  new MutationObserver(()=>{
+    if(!mq.matches) return;
+    const pct = miniPct();
+    if(pct !== lastMiniPct){
+      lastMiniPct = pct;
+      const tl = $('miniTimelineFill'), bar = $('miniPlayer');
+      if(tl && bar){ tl.style.width = pct + '%'; bar.classList.toggle('mini-timeline-mobile-active', isOn(mini)); }
+    }
+  }).observe(fullSeek, {attributes:true, attributeFilter:['value']});
 
   /* ---- keyboard: Esc closes the big player ---- */
   document.addEventListener('keydown', e => {

@@ -117,6 +117,71 @@ body.light-theme .nav-fab.active{
   .player-bar .song-artist{display:none}
   .player-bar .mini-np{display:block;font-size:12.5px;color:rgba(255,240,220,.55);margin-top:2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
   .player-bar .mini-progress-track{display:none}
+  /* mobile timeline: thin thumb-centered track under the track info.
+     Matches the AURA glass pill, not the reference card exactly. */
+  .player-bar .mini-timeline-mobile{
+    position:relative;
+    height:18px;
+    margin-top:10px;
+    display:flex;
+    align-items:center;
+  }
+  .player-bar .mini-timeline-mobile-thumb{
+    position:absolute;
+    left:0;
+    right:0;
+    top:50%;
+    transform:translateY(-50%);
+    height:3px;
+    border-radius:3px;
+    background:rgba(255,255,255,.16);
+    pointer-events:none;
+  }
+  .player-bar .mini-timeline-mobile-fill{
+    position:absolute;
+    left:0;
+    top:50%;
+    transform:translateY(-50%);
+    height:3px;
+    border-radius:3px;
+    background:#f1e3cf;
+    pointer-events:none;
+  }
+  .player-bar .mini-timeline-mobile-thumb::before{
+    content:"";
+    position:absolute;
+    left:0;
+    top:50%;
+    transform:translate(-50%,-50%);
+    width:12px;
+    height:12px;
+    border-radius:50%;
+    background:#fff;
+    box-shadow:0 0 0 2px rgba(0,0,0,.18);
+  }
+  .player-bar .mini-timeline-mobile-fill::after{
+    content:"";
+    position:absolute;
+    top:-3px;
+    right:-3px;
+    width:9px;
+    height:9px;
+    border-radius:50%;
+    background:#f1e3cf;
+    box-shadow:0 0 0 2px rgba(0,0,0,.12);
+  }
+  .player-bar .mini-timeline-mobile-thumb::before,
+  .player-bar .mini-timeline-mobile-fill::after{
+    display:none;
+  }
+  .player-bar .mini-timeline-mobile-fill{
+    width:0%;
+    transition:width .15s linear;
+  }
+  .player-bar .mini-timeline-mobile-active .mini-timeline-mobile-thumb::before,
+  .player-bar .mini-timeline-mobile-active .mini-timeline-mobile-fill::after{
+    display:block;
+  }
   /* flat white transport icons, no circles (reference).
      Includes .play-primary explicitly: overrides-4.css paints a warm glow box
      on it with !important at higher specificity, which would otherwise show
@@ -137,3 +202,27 @@ body.light-theme .nav-fab.active{
   .player-bar .mini-np{display:none!important}
 }
 body.light-theme .player-bar .mini-np{color:rgba(90,60,30,.6)}
+body.light-theme .player-bar .mini-timeline-mobile-fill,
+body.light-theme .player-bar .mini-timeline-mobile-fill::after{
+  background:#b0813f;
+}
+body.light-theme .player-bar .mini-timeline-mobile-thumb::before{
+  background:#b0813f;
+  box-shadow:0 0 0 2px rgba(176,129,63,.22);
+}
+body.light-theme .player-bar .mini-timeline-mobile-fill,
+body.light-theme .player-bar .mini-timeline-mobile-fill::after{
+  background:#b0813f;
+}
+body.light-theme .player-bar .mini-timeline-mobile-thumb::before{
+  background:#b0813f;
+  box-shadow:0 0 0 2px rgba(176,129,63,.22);
+}
+body.light-theme .player-bar .mini-timeline-mobile-fill,
+body.light-theme .player-bar .mini-timeline-mobile-fill::after{
+  background:#b0813f;
+}
+body.light-theme .player-bar .mini-timeline-mobile-thumb::before{
+  background:#b0813f;
+  box-shadow:0 0 0 2px rgba(176,129,63,.22);
+}
