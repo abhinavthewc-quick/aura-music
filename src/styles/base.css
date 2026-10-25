@@ -18,7 +18,6 @@
       --dyn-rgb-hi: 240,197,141;
       --dyn-rgb-lo: 201,139,80;
       --dyn-fg: #24170e;
-      --dynamic-color: rgba(var(--dyn-rgb), .55);
       --nav-bg: rgba(10,14,23,.8);
       --profile-glass-bg: linear-gradient(135deg, rgba(20,30,52,.48), rgba(8,14,28,.30));
       --profile-glass-border: rgba(255,255,255,.16);
