@@ -89,25 +89,6 @@ html.aura-loading,html.aura-loading body{overflow:hidden}
     <div class="login-subcaption">Getting your music ready…</div>
   </div>
 
-  <div class="bl-overlay" id="beebooListen" role="dialog" aria-modal="true" aria-label="Beeboo is listening" aria-hidden="true">
-    <button class="bl-close" id="beebooListenClose" type="button" aria-label="Cancel voice input"><i class="fa-solid fa-xmark"></i></button>
-    <div class="bl-stage">
-      <button class="bl-orb" id="beebooListenOrb" type="button" aria-label="Done speaking">
-        <span class="bl-halo bl-halo-1"></span>
-        <span class="bl-halo bl-halo-2"></span>
-        <span class="bl-glow"></span>
-        <span class="bl-bloom"><span class="bl-ring bl-ring-a"></span></span>
-        <span class="bl-ring bl-ring-a"></span>
-        <span class="bl-ring bl-ring-b"></span>
-        <span class="bl-ring bl-ring-c"></span>
-        <span class="bl-core"></span>
-      </button>
-      <p class="bl-title" id="beebooListenTitle">I’m listening…</p>
-      <p class="bl-sub" id="beebooListenSub" aria-live="polite"></p>
-    </div>
-    <div class="bl-horizon" aria-hidden="true"></div>
-  </div>
-
   <div class="toast-container" id="toastContainer"></div>
 
   <div class="track-sheet-overlay" id="trackSheetOverlay">
@@ -246,12 +227,11 @@ html.aura-loading,html.aura-loading body{overflow:hidden}
       <div class="about-logo"><img src="./src/assets/about-logo.jpg" alt="Aura Music logo"></div>
       <h3>AURA Music</h3>
       <p class="about-version">Personal build · v1.0</p>
-      <p class="about-desc">A personal music player and library — bring your own tracks, browse live radio, layer ambient sound, and get help along the way from Beeboo.</p>
+      <p class="about-desc">A personal music player and library — bring your own tracks, browse live radio, and layer ambient sound.</p>
       <div class="about-list">
         <div class="about-row"><i class="fa-solid fa-check"></i> Your own library, played your way</div>
         <div class="about-row"><i class="fa-solid fa-check"></i> Live radio from stations worldwide</div>
         <div class="about-row"><i class="fa-solid fa-check"></i> Layered ambient effects &amp; focus timer</div>
-        <div class="about-row"><i class="fa-solid fa-check"></i> Beeboo, your in-app helper</div>
       </div>
       <p class="about-footer">Made for one library, one listener.</p>
     </div>
@@ -364,59 +344,10 @@ html.aura-loading,html.aura-loading body{overflow:hidden}
     </div>
 
     <div class="tab-content active" id="tabHome">
-      <section class="desktop-home-hero" aria-label="Aura Music overview">
-        <div class="desktop-hero-copy">
-          <div class="desktop-hero-kicker"><span class="desktop-live-dot"></span> AURA MUSIC • PERSONAL SOUNDSPACE</div>
-          <h2><em id="greetingLabel">Good evening</em><span id="displayUserName">User</span></h2>
-          <div class="desktop-hero-actions">
-            <button class="desktop-hero-primary" type="button" onclick="shuffleAll()"><i class="fa-solid fa-shuffle"></i> Shuffle your library</button>
-            <button class="desktop-hero-secondary" type="button" onclick="navClick(document.getElementById('navSearchBtn'),'tabSearch')"><i class="fa-solid fa-compass"></i> Explore music</button>
-            <button class="desktop-hero-secondary hero-chat-btn" type="button" onclick="document.getElementById('beebooOpenBtn').click()"><i class="fa-solid fa-comment-dots"></i> Chat with Beeboo</button>
-          </div>
-        </div>
-        <button class="beeboo-mascot-btn" id="beebooOpenBtn" type="button" aria-label="Open Beeboo, your AI chat helper">
-          <span class="beeboo-face-wrap">
-            <span class="beeboo-face">
-              <img src="./src/assets/beeboo-face.png" alt="Beeboo">
-            </span>
-            <span class="beeboo-online-dot"></span>
-          </span>
-          <span class="beeboo-bubble" id="beebooGreetBubble">Hi there! 👋</span>
-        </button>
-        <div class="hero-vinyl" aria-hidden="true">
-          <div class="hero-vinyl-aura"></div>
-          <img class="hero-vinyl-record" src="./src/assets/hero-vinyl.png" alt="">
-        </div>
-      </section>
-
-      <div class="beeboo-chat-overlay" id="beebooChatOverlay">
-        <div class="beeboo-chat-panel">
-          <div class="beeboo-chat-head">
-            <span class="beeboo-face"><img src="./src/assets/beeboo-face.png" alt="Beeboo"></span>
-            <div>
-              <div class="beeboo-chat-head-title">Beeboo</div>
-              <div class="beeboo-chat-head-sub">Your AURA Music helper</div>
-            </div>
-            <div class="beeboo-chat-head-context" id="beebooHeadContext"></div>
-            <button class="beeboo-chat-close" id="beebooClearBtn" type="button" aria-label="Clear chat" title="Clear chat"><i class="fa-solid fa-broom"></i></button>
-            <button class="beeboo-chat-close" id="beebooCloseBtn" type="button" aria-label="Close"><i class="fa-solid fa-xmark"></i></button>
-          </div>
-          <div class="beeboo-chat-note" role="note">🐾 Beeboo can make mistakes sometimes. If a reply looks wrong, ask again or rephrase your question.</div>
-      <div class="beeboo-chat-body" id="beebooChatBody"></div>
-          <div class="beeboo-suggest-row" id="beebooSuggestRow"></div>
-          <div class="beeboo-language-row">
-            <label for="beebooLanguageSelect"><i class="fa-solid fa-language"></i><span>Voice language</span></label>
-            <select id="beebooLanguageSelect" aria-label="Choose Beeboo voice language"></select>
-          </div>
-          <div class="beeboo-chat-input-row">
-            <button class="beeboo-voice-btn" id="beebooMicBtn" type="button" aria-label="Talk to Beeboo" title="Talk to Beeboo"><i class="fa-solid fa-microphone"></i></button>
-            <input type="text" id="beebooChatInput" placeholder="Ask Beeboo about AURA Music…" autocomplete="off">
-            <button class="beeboo-voice-btn beeboo-voice-toggle" id="beebooVoiceBtn" type="button" aria-label="Turn voice replies off" title="Voice replies on"><i class="fa-solid fa-volume-high"></i></button>
-            <button class="beeboo-chat-send" id="beebooSendBtn" type="button" aria-label="Send"><i class="fa-solid fa-paper-plane"></i></button>
-          </div>
-          <div class="beeboo-voice-status" id="beebooVoiceStatus" aria-live="polite"></div>
-        </div>
-      </div>
+      <!-- The hero went away. The greeting ids stay: four modules write the
+           signed-in name and the time of day into them. This is the same <h2>,
+           just small enough to read as a page header instead of a banner. -->
+      <h2 class="home-greeting"><em id="greetingLabel">Good evening</em><span id="displayUserName">User</span></h2>
 
       <div class="quick-grid" id="quickGrid"></div>
 

@@ -224,7 +224,7 @@ import { state } from '../core/state';
     if(e.key !== 'Escape' || !mq.matches) return;
     const t = e.target && e.target.tagName;
     if(t === 'INPUT' || t === 'TEXTAREA' || t === 'SELECT') return;
-    if(document.querySelector('.modal-overlay.active, .track-sheet-overlay.active, .beeboo-chat-overlay.active')) return;
+    if(document.querySelector('.modal-overlay.active, .track-sheet-overlay.active')) return;
     if(isOn(overlay)) $('closeFullPlayerBtn').click();
     else if(isOn(radioOverlay)) $('closeRadioFullPlayerBtn').click();
   });

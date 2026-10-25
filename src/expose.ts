@@ -18,7 +18,6 @@ import {
 import {
   openAbout, openEffects, openRadioEffectsTab, setRadioSegment, toggleAmbientLayer,
 } from './features/ambience';
-import { sendBeebooMessage } from './features/beeboo';
 import {
   closeRadioSheetThen, loadRadioStations, radioMenuCopy, radioMenuShare,
   radioMenuSite, stopRadio, toggleRadioPlay,
@@ -37,7 +36,6 @@ Object.assign(globalThis, {
   renderAuraPicks, resumeLastPlayed, shuffleAll,
   changeProfileName, closeHelp, logoutUser, openHelp, openSettings,
   openAbout, openEffects, openRadioEffectsTab, setRadioSegment, toggleAmbientLayer,
-  sendBeebooMessage,
   closeRadioSheetThen, loadRadioStations, radioMenuCopy, radioMenuShare,
   radioMenuSite, stopRadio, toggleRadioPlay,
 });
