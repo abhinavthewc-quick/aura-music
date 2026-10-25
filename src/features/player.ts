@@ -59,8 +59,35 @@ import { $, persistLikedHistory, savedLikeMap, state } from '../core/state';
       return rgb;
     }
 
+    /* The scanned cover color drives more than the full player's background:
+       every transport control (play buttons, seek fills, active toggles)
+       reads the --dyn-* variables. They are written on <html> so all
+       surfaces inherit, and when nothing scanned they are removed so the
+       warm :root defaults in base.css take back over — a control never sits
+       on an undefined var. */
     export function setDynamicColorVar(rgbStr){
-      $('fullPlayerOverlay').style.setProperty('--dynamic-color', rgbStr ? `rgba(${rgbStr},0.55)` : 'transparent');
+      const root = document.documentElement.style;
+      if(!rgbStr){
+        root.removeProperty('--dyn-rgb');
+        root.removeProperty('--dyn-rgb-hi');
+        root.removeProperty('--dyn-rgb-lo');
+        root.removeProperty('--dyn-fg');
+        return;
+      }
+      const [r,g,b] = String(rgbStr).split(',').map(Number);
+      if([r,g,b].some(v => !Number.isFinite(v))) return;
+      // Soft-lit gradient stops around the base color, like the hard-coded
+      // warm ramp this replaces (240/226/201 ≈ +6% / 0% / -11%).
+      const clamp=c=>Math.max(0,Math.min(255,Math.round(c)));
+      const hi=[r,g,b].map(c=>clamp(c+(255-c)*0.35));
+      const lo=[r,g,b].map(c=>clamp(c*0.88));
+      root.setProperty('--dyn-rgb',`${Math.round(r)},${Math.round(g)},${Math.round(b)}`);
+      root.setProperty('--dyn-rgb-hi',hi.join(','));
+      root.setProperty('--dyn-rgb-lo',lo.join(','));
+      // The color that reaches here (pickColor above) is lightness-clamped
+      // until white text clears 4.5:1 on it, so the control label is always
+      // white while art colors are active; the warm fallback keeps its dark.
+      root.setProperty('--dyn-fg','#ffffff');
     }
 
     /* Cross-fade (600ms, CSS opacity on .fp-bg-layer) the art-derived gradient

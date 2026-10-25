@@ -1,5 +1,5 @@
 import { copyToClipboard, showTrackSheet, stateHTML, toast } from '../core/dom';
-import { mediaSessionAction, updatePlayState } from './player';
+import { mediaSessionAction, updatePlayState, applyDynamicPlayerColor } from './player';
 import { closeTrackMenu } from './queue';
 import { $, state } from '../core/state';
 /* ===== 5623-5819 ===== */
@@ -74,6 +74,9 @@ import { $, state } from '../core/state';
       $('radioFullName').textContent=st?.name || 'Nothing playing';
       $('radioFullMeta').textContent=st ? `${st.country || 'Live station'}${st.tags ? ' • '+String(st.tags).split(',').slice(0,3).join(' • ') : ''}` : 'Live station';
       const logo=st?.favicon || '';
+      // Same cover-color scan the music player uses, so the transport
+      // controls take the station's art rather than the last song's color.
+      applyDynamicPlayerColor(logo);
       ['radioMiniArt','radioNowArt'].forEach(id=>{ const el=$(id); if(!el)return; el.innerHTML=logo?`<img src="${escapeHtml(logo)}" alt="" onerror="this.style.display='none'">`:'<i class="fa-solid fa-radio"></i>'; });
       $('radioVinylCover').src=logo || '';
       $('radioMiniPlayBtn').innerHTML=`<i class="fa-solid fa-${playing?'pause':'play'}"></i>`;

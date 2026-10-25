@@ -9,7 +9,16 @@
       --glass-btn-border: rgba(255,255,255,.18);
       --player-bg: rgba(15,23,42,.95);
       --full-player-bg: linear-gradient(180deg,#2b3330,#121517);
-      --dynamic-color: transparent;
+      /* Album-art theming. While a track with readable cover art plays,
+         setDynamicColorVar() writes --dyn-rgb plus a lighter and a darker
+         stop and a label color onto <html>; every player control reads those.
+         Without them (nothing scanned, CORS failure, no art) these warm
+         defaults are the exact palette the controls had before theming. */
+      --dyn-rgb: 226,173,112;
+      --dyn-rgb-hi: 240,197,141;
+      --dyn-rgb-lo: 201,139,80;
+      --dyn-fg: #24170e;
+      --dynamic-color: rgba(var(--dyn-rgb), .55);
       --nav-bg: rgba(10,14,23,.8);
       --profile-glass-bg: linear-gradient(135deg, rgba(20,30,52,.48), rgba(8,14,28,.30));
       --profile-glass-border: rgba(255,255,255,.16);
