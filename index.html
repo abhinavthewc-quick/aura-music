@@ -718,6 +718,10 @@ html.aura-loading,html.aura-loading body{overflow:hidden}
     </div>
   </div>
 
+  <!-- Read by the Aura Music PreMiD activity. Hidden, text-only: no layout or
+       accessibility impact. The app refreshes these attributes once a second. -->
+  <div id="auraPresence" hidden aria-hidden="true"></div>
+
   <audio id="audioPlayer" preload="metadata"></audio>
 
   <script type="module" src="/src/main.ts"></script>

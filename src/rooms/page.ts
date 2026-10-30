@@ -729,16 +729,7 @@ function wirePartPicker(roomId: string): void {
   select(myPart);
   if (trimWrap) trimWrap.hidden = myPart === 'full';
 
-  const loadTrim = () => {
-    const saved = localStorage.getItem(`auraRoomTrim_${roomId}`);
-    myTrim = saved ? Number(saved) : 0;
-    if (!Number.isFinite(myTrim)) myTrim = 0;
-    slider.value = String(myTrim);
-    trimVal.textContent = String(myTrim);
-    audio?.setTrim(myPart, myTrim);
-  };
-  loadTrim();
-
+  // Add click handlers FIRST, before any localStorage access that might throw
   btns.forEach((b) => {
     b.addEventListener('click', () => {
       const part = b.dataset.part as 'full' | 'bass' | 'highs';
@@ -747,10 +738,31 @@ function wirePartPicker(roomId: string): void {
     });
   });
 
+  // Then load trim (localStorage access wrapped in try-catch)
+  try {
+    const saved = localStorage.getItem(`auraRoomTrim_${roomId}`);
+    myTrim = saved ? Number(saved) : 0;
+    if (!Number.isFinite(myTrim)) myTrim = 0;
+    slider.value = String(myTrim);
+    trimVal.textContent = String(myTrim);
+    audio?.setTrim(myPart, myTrim);
+  } catch (err) {
+    console.warn('[page] wirePartPicker: localStorage error', err);
+    myTrim = 0;
+    slider.value = '0';
+    trimVal.textContent = '0';
+  }
+
+  if (trimWrap) trimWrap.hidden = myPart === 'full';
+
   slider.addEventListener('input', () => {
     myTrim = Number(slider.value);
     trimVal.textContent = String(myTrim);
-    localStorage.setItem(`auraRoomTrim_${roomId}`, String(myTrim));
+    try {
+      localStorage.setItem(`auraRoomTrim_${roomId}`, String(myTrim));
+    } catch (err) {
+      console.warn('[page] wirePartPicker: localStorage setItem error', err);
+    }
     audio?.setTrim(myPart, myTrim);
   });
 }

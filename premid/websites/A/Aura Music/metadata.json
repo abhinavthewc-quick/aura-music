@@ -1,0 +1,89 @@
+{
+  "$schema": "https://schemas.premid.app/metadata/1.17",
+  "apiVersion": 1,
+  "author": {
+    "name": "your-discord-username",
+    "id": "000000000000000000"
+  },
+  "service": "Aura Music",
+  "description": {
+    "en": "A personal music player with your own library, live radio and synchronized listening rooms. See what you are playing, right on your Discord profile."
+  },
+  "url": "aura-music-01g.pages.dev",
+  "regExp": "^https?[:][/][/](aura-music-01g[.]pages[.]dev|(localhost|127[.]0[.]0[.]1)[:]5173)(?:[/?#]|$)",
+  "version": "1.0.0",
+  "logo": "https://aura-music-01g.pages.dev/aura-logo.png",
+  "thumbnail": "https://aura-music-01g.pages.dev/aura-thumbnail.png",
+  "color": "#B98249",
+  "category": "music",
+  "tags": [
+    "music",
+    "radio",
+    "audio"
+  ],
+  "allowURLOverrides": true,
+  "settings": [
+    {
+      "id": "privacy",
+      "title": "Privacy Mode",
+      "icon": "fad fa-shield-alt",
+      "value": false
+    },
+    {
+      "id": "cover",
+      "title": "Show Cover Art",
+      "icon": "fad fa-images",
+      "value": true,
+      "if": {
+        "privacy": false
+      }
+    },
+    {
+      "id": "timestamps",
+      "title": "Show Playback Progress",
+      "icon": "fad fa-stopwatch",
+      "value": true,
+      "if": {
+        "privacy": false
+      }
+    },
+    {
+      "id": "displayType",
+      "title": "Pick Status Display",
+      "icon": "fad fa-user-edit",
+      "value": 0,
+      "values": [
+        "Activity Name",
+        "Artist Name",
+        "Song Title"
+      ],
+      "if": {
+        "privacy": false
+      }
+    },
+    {
+      "id": "buttons",
+      "title": "Show Buttons",
+      "icon": "fad fa-compress-arrows-alt",
+      "value": true,
+      "if": {
+        "privacy": false
+      }
+    },
+    {
+      "id": "hidePaused",
+      "title": "Hide When Paused",
+      "icon": "fad fa-pause-circle",
+      "value": false,
+      "if": {
+        "privacy": false
+      }
+    },
+    {
+      "id": "browsing",
+      "title": "Show Browsing",
+      "icon": "fad fa-compass",
+      "value": true
+    }
+  ]
+}
