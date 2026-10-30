@@ -1,4 +1,6 @@
-import { ActivityType, Assets, StatusDisplayType, getTimestamps, supports } from 'premid'
+import type { AuraState } from './state.js'
+import { ActivityType, Assets, getTimestamps, StatusDisplayType, supports } from 'premid'
+import { clip, httpImage, readDomState, SITE_NAME, youtubeUrl } from './state.js'
 
 /* ------------------------------------------------------------------------- *
  * Discord application ID
@@ -9,35 +11,13 @@ import { ActivityType, Assets, StatusDisplayType, getTimestamps, supports } from
  * ------------------------------------------------------------------------- */
 const CLIENT_ID = '000000000000000000'
 
-/* Where the site lives. Change these two lines if you deploy elsewhere, and
- * keep metadata.json's url/regExp/logo/thumbnail in sync. */
+/* Where the site lives. Change this if you deploy elsewhere, and keep
+ * metadata.json's url/regExp/logo/thumbnail in sync. */
 const SITE_URL = 'https://aura-music-01g.pages.dev'
-const SITE_NAME = 'Aura Music'
 
-enum ActivityAssets {
-  Logo = `${SITE_URL}/aura-logo.png`,
-}
+const LOGO_URL = `${SITE_URL}/aura-logo.png`
 
 const presence = new Presence({ clientId: CLIENT_ID })
-
-/* Mirrors AuraPresenceState in src/core/presence.ts. */
-interface AuraState {
-  v: number
-  site: string
-  kind: 'idle' | 'track' | 'radio'
-  title: string
-  artist: string
-  album: string
-  cover: string
-  url: string
-  videoId: string
-  duration: number
-  position: number
-  playing: boolean
-  live: boolean
-  tab: string
-  updatedAt: number
-}
 
 interface Settings {
   privacy: boolean
@@ -57,59 +37,6 @@ interface Settings {
  *   2. window.AuraPresence  — live object whose getState() has a fresh position
  *   3. #auraPresence[data-*] — text attributes, readable by any content script
  * ------------------------------------------------------------------------- */
-
-function number(value: unknown): number {
-  const n = Number(value)
-  return Number.isFinite(n) ? n : 0
-}
-
-function httpImage(url: unknown, fallback: string): string {
-  const value = String(url || '').trim()
-  if (/^https:\/\//i.test(value))
-    return value
-  if (/^http:\/\//i.test(value))
-    return value.replace(/^http:/i, 'https:')
-  return fallback
-}
-
-function readDomState(): AuraState | null {
-  const el = document.getElementById('auraPresence')
-  if (!el)
-    return null
-
-  const data = el.dataset
-  const live = data.live === '1'
-  const playing = data.playing === '1'
-  const duration = number(data.duration)
-  let position = number(data.position)
-
-  /* Attributes are refreshed once a second, so bridge the gap while a track
-   * plays. When paused this is skipped: the stored position is the truth. */
-  if (playing && !live && duration > 0) {
-    const age = Math.max(0, Date.now() - number(data.updatedAt)) / 1000
-    position = Math.min(duration, position + Math.min(age, 5))
-  }
-
-  const kind = data.kind === 'track' || data.kind === 'radio' ? data.kind : 'idle'
-
-  return {
-    v: number(data.v),
-    site: data.site || SITE_NAME,
-    kind,
-    title: data.title || '',
-    artist: data.artist || '',
-    album: data.album || '',
-    cover: data.cover || '',
-    url: data.url || '',
-    videoId: data.videoId || '',
-    duration,
-    position,
-    playing,
-    live,
-    tab: data.tab || '',
-    updatedAt: number(data.updatedAt),
-  }
-}
 
 async function readPageState(): Promise<AuraState | null> {
   if (supports(presence, 'getPageVariable')) {
@@ -140,7 +67,7 @@ async function readPageState(): Promise<AuraState | null> {
 async function getSetting<T extends string | number | boolean>(id: string, fallback: T): Promise<T> {
   try {
     const value = await presence.getSetting<T>(id)
-    return value === undefined || value === null ? fallback : value
+    return value ?? fallback
   }
   catch {
     return fallback
@@ -165,15 +92,6 @@ async function getSettings(): Promise<Settings> {
  * Building the activity
  * ------------------------------------------------------------------------- */
 
-function clip(value: string, max = 128): string {
-  const text = String(value || '').trim()
-  return text.length > max ? `${text.slice(0, max - 1)}…` : text
-}
-
-function youtubeUrl(videoId: string): string {
-  return `https://music.youtube.com/watch?v=${encodeURIComponent(videoId)}`
-}
-
 /** When the user is not playing anything: "Browsing Aura Music — Library". */
 function browsingPresence(state: AuraState | null, settings: Settings, since: number): PresenceData | null {
   if (!settings.browsing)
@@ -182,7 +100,7 @@ function browsingPresence(state: AuraState | null, settings: Settings, since: nu
   const tab = clip(state?.tab || '', 64)
   const data: PresenceData = {
     type: ActivityType.Playing,
-    largeImageKey: ActivityAssets.Logo,
+    largeImageKey: LOGO_URL,
     details: `Browsing ${SITE_NAME}`,
     startTimestamp: since,
   }
@@ -208,7 +126,7 @@ function trackPresence(state: AuraState, settings: Settings): PresenceData {
 
   const data: PresenceData = {
     type: ActivityType.Listening,
-    largeImageKey: settings.cover ? httpImage(state.cover, ActivityAssets.Logo) : ActivityAssets.Logo,
+    largeImageKey: settings.cover ? httpImage(state.cover, LOGO_URL) : LOGO_URL,
     largeImageText: clip(state.album || artist || (isRadio ? 'Live radio' : SITE_NAME)),
     details: clip(state.title) || SITE_NAME,
     state: artist || undefined,
@@ -235,7 +153,7 @@ function trackPresence(state: AuraState, settings: Settings): PresenceData {
   else if (settings.displayType === 2)
     data.statusDisplayType = StatusDisplayType.Details
 
-  if (isRadio) {
+  if (isRadio && state.playing) {
     data.smallImageKey = Assets.Live
     data.smallImageText = 'Live radio'
   }
@@ -283,7 +201,7 @@ presence.on('UpdateData', async () => {
   if (settings.privacy) {
     return presence.setActivity({
       type: ActivityType.Listening,
-      largeImageKey: ActivityAssets.Logo,
+      largeImageKey: LOGO_URL,
       details: `Listening to ${SITE_NAME}`,
     })
   }

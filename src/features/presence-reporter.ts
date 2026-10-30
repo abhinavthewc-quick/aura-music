@@ -147,7 +147,12 @@ function reportIdle(): void {
   });
 }
 
-function report(): void {
+let lastPublishAt = 0;
+
+function report(force = false): void {
+  const now = Date.now();
+  if (!force && now - lastPublishAt < 800) return;
+  lastPublishAt = now;
   try {
     if (reportRadio() || reportYouTube() || reportLocalTrack()) return;
     reportIdle();
@@ -157,5 +162,13 @@ function report(): void {
 }
 
 installPresence();
-report();
+report(true);
+
+/* Media events keep the snapshot fresh even when the tab is in the background
+   and its timers are being throttled; the interval is the idle heartbeat. */
+state.audio.addEventListener('timeupdate', () => report());
+state.audio.addEventListener('play', () => report(true));
+state.audio.addEventListener('pause', () => report(true));
+state.audio.addEventListener('seeked', () => report(true));
+document.addEventListener('visibilitychange', () => report(true));
 setInterval(report, 1000);

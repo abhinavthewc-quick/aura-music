@@ -710,7 +710,13 @@ function wireSeek(): void {
 
 /* ---------------- controls ---------------- */
 
+let wirePartPickerDone = false;
+
 function wirePartPicker(roomId: string): void {
+  if (wirePartPickerDone) {
+    console.log('[page] wirePartPicker already done, skipping');
+    return;
+  }
   console.log('[page] wirePartPicker called for room:', roomId);
   const wrap = $('partPick');
   const trimWrap = $('trimWrap') as HTMLElement | null;
