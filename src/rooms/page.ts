@@ -317,6 +317,7 @@ async function join(roomId: string, adminKey: string | null, isHost: boolean) {
   wirePartPicker(roomId);
   // Expose for debugging (like dev harness)
   (window as any).__room = () => client;
+  console.log('[page] wirePartPicker done, __room set');
   history.replaceState(null, '', `/rooms?r=${roomId}${adminKey ? '&k=' + adminKey : ''}`);
 
   $('joinView').hidden = true;
@@ -710,11 +711,16 @@ function wireSeek(): void {
 /* ---------------- controls ---------------- */
 
 function wirePartPicker(roomId: string): void {
+  console.log('[page] wirePartPicker called for room:', roomId);
   const wrap = $('partPick');
   const trimWrap = $('trimWrap') as HTMLElement | null;
   const slider = $('trimSlider') as HTMLInputElement | null;
   const trimVal = $('trimVal') as HTMLElement | null;
-  if (!wrap || !slider || !trimVal) return;
+  if (!wrap || !slider || !trimVal) {
+    console.warn('[page] wirePartPicker: missing elements', { wrap: !!wrap, slider: !!slider, trimVal: !!trimVal });
+    return;
+  }
+  // ... rest of function
 
   const btns = wrap.querySelectorAll('.part-btn');
   const select = (part: string) => {
@@ -736,6 +742,7 @@ function wirePartPicker(roomId: string): void {
   btns.forEach((b) => {
     b.addEventListener('click', () => {
       const part = b.dataset.part as 'full' | 'bass' | 'highs';
+      console.log('[page] part button clicked:', part);
       client?.setPart(part);
     });
   });
