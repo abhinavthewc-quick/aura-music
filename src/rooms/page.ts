@@ -11,12 +11,11 @@ import { WebSocketTransport } from './wsTransport';
 import { resolveTrack } from './appTarget';
 import { WebAudioTarget } from './audioEngine';
 import { setRoomActive } from './roomFlag';
-import { ensureCatalog } from './catalogReady';
-import { fetchHfCatalog } from '../core/catalog';
-import { setHfTracks, state, trackKey } from '../core/state';
+import { ensureCatalog, refreshCatalog, onCatalogRefreshed } from './catalogReady';
+import { state, trackKey, rebuildSongs } from '../core/state';
 import { DEFAULT_COVER } from '../core/catalog';
 import type { RoomView } from './roomClient';
-import type { ChatMessage } from './protocol';
+import { DRIFT_HARD_MS, DRIFT_SOFT_MS, type ChatMessage } from './protocol';
 
 const NAME_KEY = 'auraRoomName_v1';
 const ROOM_KEY = 'auraRecentRooms_v1';
@@ -32,8 +31,25 @@ let transport: WebSocketTransport | null = null;
 let audio: WebAudioTarget | null = null;
 let unsub: (() => void) | null = null;
 let liveTimer: number | null = null;
+let catalogTimer: number | null = null;
 let sweepRaf = 0;
 let pills: HTMLElement[] = [];
+
+/* Render diffing: the room view re-paints on every server message, and
+   messages used to arrive constantly (pings, queue broadcasts). Rebuild only
+   the sub-views whose inputs actually changed. */
+let lastQueueSig = '';
+let lastPeopleSig = '';
+let lastRenderRole = '';
+let lastLibQuery = '';
+let lastUnresolvedRefresh = 0;
+let scrubbing = false;
+let scrubPreviewMs = 0;
+
+/* This device's output band and trim, persisted per room so the choice
+   survives a reconnect. The server is authoritative; this is the local echo. */
+let myPart: 'full' | 'bass' | 'highs' = 'full';
+let myTrim = 0;
 
 /* ---------------- small helpers ---------------- */
 
@@ -92,8 +108,8 @@ function buildPills() {
 const MAX_RESULTS = 60;
 let libIndex: { key: string; title: string; artist: string; img: string }[] = [];
 
-function buildLibIndex(): void {
-  if (libIndex.length || !state.songs.length) return;
+function rebuildLibIndex(): void {
+  libIndex = [];
   const seen = new Set<string>();
   for (const song of state.songs) {
     const key = trackKey(song);
@@ -298,6 +314,7 @@ async function join(roomId: string, adminKey: string | null, isHost: boolean) {
   client.join(name);
   unsub = client.subscribe(render);
   setRoomActive(true);
+  wirePartPicker(roomId);
   history.replaceState(null, '', `/rooms?r=${roomId}${adminKey ? '&k=' + adminKey : ''}`);
 
   $('joinView').hidden = true;
@@ -368,12 +385,15 @@ function live() {
 
   const pos = v.positionMs;
   const dur = v.durationMs;
-  $('tCur').textContent = fmt(pos);
+  if (!scrubbing) {
+    $('tCur').textContent = fmt(pos);
+    const pct = dur ? Math.max(0, Math.min(100, (pos / dur) * 100)) : 0;
+    ($('fill') as HTMLElement).style.width = pct + '%';
+    ($('knob') as HTMLElement).style.left = pct + '%';
+  }
   $('tDur').textContent = dur ? fmt(dur) : '–:––';
-  const pct = dur ? Math.max(0, Math.min(100, (pos / dur) * 100)) : 0;
-  ($('fill') as HTMLElement).style.width = pct + '%';
-  ($('knob') as HTMLElement).style.left = pct + '%';
   const seekBar = $('seekBar');
+  const pct = dur ? Math.max(0, Math.min(100, (pos / dur) * 100)) : 0;
   seekBar.setAttribute('aria-valuenow', String(Math.round(pct)));
   seekBar.setAttribute('aria-valuetext', fmt(pos));
 
@@ -413,15 +433,82 @@ function live() {
 
 /* ---------------- rendering ---------------- */
 
+function peopleSig(v: RoomView): string {
+  return v.participants.map((p) => `${p.id}:${p.role}:${p.part}`).join('¬');
+}
+
+function queueSig(v: RoomView): string {
+  return `${v.playback.trackKey ?? ''}¬${v.queue.join('¬')}`;
+}
+
+/** Refresh the search results only when the query or the role/lib changed. */
+function maybeRenderResults(): void {
+  const input = $('libSearch') as HTMLInputElement;
+  const query = input.value;
+  if (vRoleDirty || query !== lastLibQuery) {
+    vRoleDirty = false;
+    lastLibQuery = query;
+    renderResults(query);
+  }
+}
+
+let vRoleDirty = false;
+
+/* Apply this device's output band to the audio graph and to the engine's
+   correction bands. Only ever called with the server's answer: the referee
+   may refuse a band (one bass anchor per room), so a click is echoed back
+   before anything changes audibly. */
+function applyPart(part: 'full' | 'bass' | 'highs'): void {
+  myPart = part;
+  audio?.setPart(part);
+  audio?.setTrim(part, myTrim);
+  // Split playback puts two devices into one physical space, where their
+  // errors sum instead of averaging out — so hold them to a tighter drift
+  // budget than a room of independent listeners gets.
+  client?.setBands(
+    part === 'full' ? DRIFT_SOFT_MS : 8,
+    part === 'full' ? DRIFT_HARD_MS : 80,
+  );
+}
+
 function render(v: RoomView) {
   const isAdmin = v.role === 'admin';
 
+  // The server is authoritative for this device's part; correct the local echo
+  // if it disagreed (e.g. the bass anchor was already taken).
+  const yourPart = v.you?.part ?? 'full';
+  if (yourPart !== myPart) {
+    myPart = yourPart;
+    const wrap = $('partPick');
+    if (wrap) {
+      for (const b of wrap.querySelectorAll('.part-btn')) {
+        b.classList.toggle('active', b.dataset.part === myPart);
+      }
+    }
+    applyPart(myPart);
+  }
+
+  const anchor = v.participants.find((p) => p.part === 'bass' && p.id !== v.you?.id);
+  const hint = $('partHint') as HTMLElement | null;
+  if (hint) {
+    if (myPart === 'bass') hint.textContent = 'You are the bass anchor.';
+    else if (anchor) hint.textContent = `Bass anchor is ${anchor.name}.`;
+    else hint.textContent = '';
+  }
+
+  const trimWrap = $('trimWrap') as HTMLElement | null;
+  if (trimWrap) trimWrap.hidden = myPart === 'full';
+
   $('roomCode').textContent = v.roomId;
   const pill = $('rolePill');
-  pill.textContent = v.role;
-  pill.className = 'role-pill' + (isAdmin ? ' admin' : '');
-  $('liveDot').classList.toggle('pulse', !v.closed);
+  if (v.role !== lastRenderRole) {
+    lastRenderRole = v.role;
+    pill.textContent = v.role;
+    pill.className = 'role-pill' + (isAdmin ? ' admin' : '');
+    vRoleDirty = true; // Add buttons depend on role
+  }
 
+  $('liveDot').classList.toggle('pulse', !v.closed);
   setPlayIcon(v.playback.playing);
 
   // Controls: admins drive. Listeners still see them so the screen does not
@@ -431,82 +518,118 @@ function render(v: RoomView) {
   }
 
   const track = v.playback.trackKey ? resolveTrack(v.playback.trackKey) : null;
-  $('nowTitle').textContent = track ? track.title : 'Nothing playing';
-  $('nowArtist').textContent = track ? track.artist : (isAdmin ? 'Queue a track to start' : 'Waiting for the host');
+  if (track) {
+    $('nowTitle').textContent = track.title;
+    $('nowArtist').textContent = track.artist;
+  } else {
+    $('nowTitle').textContent = 'Nothing playing';
+    $('nowArtist').textContent = isAdmin ? 'Queue a track to start' : 'Waiting for the host';
+  }
   const art = $('artImg') as HTMLImageElement;
   art.src = track?.img || DEFAULT_COVER;
 
-  // Queue
-  const q = $('queueList');
-  q.innerHTML = '';
-  $('qCount').textContent = String(v.queue.length);
-  if (!v.queue.length) {
-    const li = document.createElement('li');
-    li.className = 'empty-row';
-    li.textContent = isAdmin ? 'Nothing queued — add what you are playing' : 'Nothing queued yet';
-    q.appendChild(li);
-  }
-  v.queue.forEach((key, i) => {
-    const t = resolveTrack(key);
-    const li = document.createElement('li');
-    const idx = document.createElement('span');
-    idx.className = 'idx';
-    idx.textContent = String(i + 1);
-    const nm = document.createElement('span');
-    nm.className = 'nm';
-    nm.textContent = t ? `${t.title} — ${t.artist}` : 'not in your library';
-    li.appendChild(idx); li.appendChild(nm);
-    if (isAdmin) {
-      const rm = document.createElement('button');
-      rm.className = 'promo';
-      rm.textContent = '✕';
-      rm.title = 'Remove from queue';
-      rm.onclick = () => client?.queueRemove(key);
-      li.appendChild(rm);
+  // Queue: rebuild only when it actually changed.
+  if (queueSig(v) !== lastQueueSig) {
+    lastQueueSig = queueSig(v);
+    const q = $('queueList');
+    q.innerHTML = '';
+    $('qCount').textContent = String(v.queue.length);
+    if (!v.queue.length) {
+      const li = document.createElement('li');
+      li.className = 'empty-row';
+      li.textContent = isAdmin ? 'Nothing queued — add what you are playing' : 'Nothing queued yet';
+      q.appendChild(li);
     }
-    q.appendChild(li);
-  });
+    v.queue.forEach((key, i) => {
+      const t = resolveTrack(key);
+      const li = document.createElement('li');
+      const idx = document.createElement('span');
+      idx.className = 'idx';
+      idx.textContent = String(i + 1);
+      const nm = document.createElement('span');
+      nm.className = 'nm';
+      nm.textContent = t ? `${t.title} — ${t.artist}` : 'not in your library';
+      li.appendChild(idx); li.appendChild(nm);
+      if (isAdmin) {
+        const rm = document.createElement('button');
+        rm.className = 'promo';
+        rm.textContent = '✕';
+        rm.title = 'Remove from queue';
+        rm.onclick = () => client?.queueRemove(key);
+        li.appendChild(rm);
+      }
+      q.appendChild(li);
+    });
 
-  // People
-  const pl = $('peopleList');
-  pl.innerHTML = '';
-  $('pCount').textContent = String(v.participants.length);
-  for (const p of v.participants) {
-    const li = document.createElement('li');
-    const who = document.createElement('span');
-    who.className = 'who';
-    if (p.role === 'admin') {
-      const s = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
-      s.setAttribute('class', 'star');
-      const use = document.createElementNS('http://www.w3.org/2000/svg', 'use');
-      use.setAttribute('href', '#i-star');
-      s.appendChild(use);
-      who.appendChild(s);
+    // A just-uploaded track can resolve late: if anything in the room still
+    // shows "not in your library", pick up the fresh catalogue.
+    const unresolved = v.queue.some((key) => !resolveTrack(key));
+    if (unresolved && Date.now() - lastUnresolvedRefresh > 20_000) {
+      lastUnresolvedRefresh = Date.now();
+      void refreshLibrary();
     }
-    const nm = document.createElement('span');
-    nm.textContent = p.name;
-    who.appendChild(nm);
-    if (v.you && p.id === v.you.id) {
-      const me = document.createElement('span');
-      me.className = 'me-tag';
-      me.textContent = 'you';
-      who.appendChild(me);
-    }
-    li.appendChild(who);
-    if (isAdmin && v.you && p.id !== v.you.id) {
-      const b = document.createElement('button');
-      b.className = 'promo';
-      b.textContent = p.role === 'admin' ? 'remove admin' : 'make admin';
-      b.onclick = () => (p.role === 'admin' ? client?.demote(p.id) : client?.promote(p.id));
-      li.appendChild(b);
-    }
-    pl.appendChild(li);
+  } else {
+    $('qCount').textContent = String(v.queue.length);
   }
 
-  // The explorer's Add buttons depend on role, so refresh them when it changes.
-  renderResults(($('libSearch') as HTMLInputElement).value);
+  // People: rebuild only when the roster changed.
+  if (peopleSig(v) !== lastPeopleSig) {
+    lastPeopleSig = peopleSig(v);
+    const pl = $('peopleList');
+    pl.innerHTML = '';
+    $('pCount').textContent = String(v.participants.length);
+    for (const p of v.participants) {
+      const li = document.createElement('li');
+      const who = document.createElement('span');
+      who.className = 'who';
+      if (p.role === 'admin') {
+        const s = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+        s.setAttribute('class', 'star');
+        const use = document.createElementNS('http://www.w3.org/2000/svg', 'use');
+        use.setAttribute('href', '#i-star');
+        s.appendChild(use);
+        who.appendChild(s);
+      }
+      const nm = document.createElement('span');
+      nm.textContent = p.name;
+      who.appendChild(nm);
+      if (p.part !== 'full') {
+        const badge = document.createElement('span');
+        badge.className = 'part-badge';
+        badge.textContent = p.part === 'bass' ? 'SUB' : 'HIGHS';
+        who.appendChild(badge);
+      }
+      if (v.you && p.id === v.you.id) {
+        const me = document.createElement('span');
+        me.className = 'me-tag';
+        me.textContent = 'you';
+        who.appendChild(me);
+      }
+      li.appendChild(who);
+      if (isAdmin && v.you && p.id !== v.you.id) {
+        const b = document.createElement('button');
+        b.className = 'promo';
+        b.textContent = p.role === 'admin' ? 'remove admin' : 'make admin';
+        b.onclick = () => (p.role === 'admin' ? client?.demote(p.id) : client?.promote(p.id));
+        li.appendChild(b);
+      }
+      pl.appendChild(li);
+    }
+  } else {
+    $('pCount').textContent = String(v.participants.length);
+  }
+
+  maybeRenderResults();
 
   if (v.closed) banner(`This room has closed — ${v.closed}`);
+
+  // A track the room is playing that nobody can resolve yet: the catalogue
+  // may have been updated since this device joined.
+  if (v.playback.trackKey && !track && Date.now() - lastUnresolvedRefresh > 20_000) {
+    lastUnresolvedRefresh = Date.now();
+    void refreshLibrary();
+  }
+
   live();
 }
 
@@ -529,7 +652,14 @@ function pushChat(m: ChatMessage) {
 
 /* ---------------- seeking ---------------- */
 
-let scrubbing = false;
+function renderScrub(ms: number): void {
+  const dur = client?.view().durationMs ?? 0;
+  if (!dur) return;
+  const pct = Math.max(0, Math.min(100, (ms / dur) * 100));
+  ($('fill') as HTMLElement).style.width = pct + '%';
+  ($('knob') as HTMLElement).style.left = pct + '%';
+  $('tCur').textContent = fmt(ms);
+}
 
 function seekFromEvent(e: PointerEvent | MouseEvent): void {
   const bar = $('seekBar');
@@ -537,7 +667,8 @@ function seekFromEvent(e: PointerEvent | MouseEvent): void {
   if (!dur || !client?.isAdmin) return;
   const r = bar.getBoundingClientRect();
   const ratio = Math.max(0, Math.min(1, (e.clientX - r.left) / r.width));
-  client.seek(Math.round(ratio * dur));
+  scrubPreviewMs = Math.round(ratio * dur);
+  renderScrub(scrubPreviewMs);
 }
 
 function wireSeek(): void {
@@ -553,6 +684,7 @@ function wireSeek(): void {
   bar.addEventListener('pointerup', (e) => {
     scrubbing = false;
     try { bar.releasePointerCapture(e.pointerId); } catch { /* already released */ }
+    if (client?.isAdmin) client.seek(scrubPreviewMs);
   });
   bar.addEventListener('pointercancel', () => { scrubbing = false; });
 
@@ -567,6 +699,45 @@ function wireSeek(): void {
 }
 
 /* ---------------- controls ---------------- */
+
+function wirePartPicker(roomId: string): void {
+  const wrap = $('partPick');
+  const trimWrap = $('trimWrap') as HTMLElement | null;
+  const slider = $('trimSlider') as HTMLInputElement | null;
+  const trimVal = $('trimVal') as HTMLElement | null;
+  if (!wrap || !slider || !trimVal) return;
+
+  const btns = wrap.querySelectorAll('.part-btn');
+  const select = (part: string) => {
+    btns.forEach((b) => b.classList.toggle('active', b.dataset.part === part));
+  };
+  select(myPart);
+  if (trimWrap) trimWrap.hidden = myPart === 'full';
+
+  const loadTrim = () => {
+    const saved = localStorage.getItem(`auraRoomTrim_${roomId}`);
+    myTrim = saved ? Number(saved) : 0;
+    if (!Number.isFinite(myTrim)) myTrim = 0;
+    slider.value = String(myTrim);
+    trimVal.textContent = String(myTrim);
+    audio?.setTrim(myPart, myTrim);
+  };
+  loadTrim();
+
+  btns.forEach((b) => {
+    b.addEventListener('click', () => {
+      const part = b.dataset.part as 'full' | 'bass' | 'highs';
+      client?.setPart(part);
+    });
+  });
+
+  slider.addEventListener('input', () => {
+    myTrim = Number(slider.value);
+    trimVal.textContent = String(myTrim);
+    localStorage.setItem(`auraRoomTrim_${roomId}`, String(myTrim));
+    audio?.setTrim(myPart, myTrim);
+  });
+}
 
 function wireRoom() {
   $('playBtn').onclick = () => client?.toggle();
@@ -606,6 +777,34 @@ function wireRoom() {
   };
 }
 
+async function refreshLibrary() {
+  await refreshCatalog();
+  rebuildLibIndex();
+  maybeRenderResults();
+  if (client) render(client.view());
+}
+
+function startCatalogKeepAlive() {
+  if (catalogTimer !== null) return;
+  const tick = async () => {
+    if (document.visibilityState === 'visible') await refreshLibrary();
+    catalogTimer = window.setTimeout(tick, 30_000);
+  };
+  catalogTimer = window.setTimeout(tick, 30_000);
+}
+
+function wireCatalogRefresh(): void {
+  // Pick up newly uploaded tracks without reloading: when the tab comes back
+  // into view, on focus, on a timer while the room is open, and whenever any
+  // other tab (the admin uploader, say) refreshes the catalogue.
+  onCatalogRefreshed(() => { void refreshLibrary(); });
+  window.addEventListener('visibilitychange', () => {
+    if (document.visibilityState === 'visible') void refreshLibrary();
+  });
+  window.addEventListener('focus', () => void refreshLibrary());
+  startCatalogKeepAlive();
+}
+
 /* ---------------- boot ---------------- */
 
 async function boot() {
@@ -615,16 +814,14 @@ async function boot() {
   buildPills();
   showJoin();
 
-  // Load the shared catalogue so tracks can be resolved by key.
-  if (!state.songs.length) {
-    try {
-      const tracks = await fetchHfCatalog();
-      if (tracks.length) setHfTracks(tracks);
-    } catch { /* rooms degrade to "not in your library" */ }
-  }
-
-  buildLibIndex();
+  // The shared catalogue: paint from cache immediately, refresh from the
+  // bucket, and keep refreshing so newly uploaded tracks show up live.
+  rebuildSongs();
+  await ensureCatalog(6000);
+  rebuildLibIndex();
   renderResults('');
+
+  wireCatalogRefresh();
 
   // Deep link: /rooms?r=CODE&k=KEY
   const q = new URLSearchParams(location.search);

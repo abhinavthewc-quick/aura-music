@@ -78,7 +78,7 @@ export class RoomClient {
   private listeners = new Set<Listener>();
 
   private participants: Participant[] = [];
-  private playback: PlaybackState = { trackKey: null, videoId: null, positionMs: 0, playing: false, updatedAt: 0, startAt: null };
+  private playback: PlaybackState = { trackKey: null, videoId: null, positionMs: 0, playing: false, updatedAt: 0, startAt: null, rev: 0 };
   private queue: string[] = [];
   private expiresAt: number | null = null;
   private you: Participant | null = null;
@@ -87,7 +87,8 @@ export class RoomClient {
   private closedReason: string | null = null;
 
   private clientId: string;
-  private clockPingTimer: number | null = null;
+  /** Last toggle press, ms — guards against double taps. */
+  private lastToggle = 0;
 
   constructor(info: RoomConnectionInfo, transport: RoomTransport, clientId: string, target: SyncTarget) {
     this.roomId = info.roomId;
@@ -104,7 +105,9 @@ export class RoomClient {
     transport.onMessage((m) => this.handle(m));
     transport.onClose((reason) => {
       this.closedReason = reason;
-      this.stopPings();
+      // Nothing left to stay in step with, and a dead socket would only queue
+      // the engine's pings forever.
+      this.engine.stop();
       this.emit();
     });
   }
@@ -118,11 +121,12 @@ export class RoomClient {
       name,
       ...(this.ownerKey ? { adminKey: this.ownerKey } : {}),
     });
-    this.startPings();
+    // Clock sync is owned by SyncEngine (burst on welcome, then pings). The
+    // room client used to run its own 10s ping loop on top of it — two loops
+    // fighting over the same clock samples was noise, not precision.
   }
 
   leave(): void {
-    this.stopPings();
     this.engine.stop();
     this.transport.close();
   }
@@ -156,6 +160,10 @@ export class RoomClient {
         return;
 
       case 'playback':
+        // The server may replay a state we have already converged on (a
+        // reconnect, a duplicate broadcast). Ignoring it keeps the correction
+        // loop from re-seeking on a message that changed nothing.
+        if (m.playback.rev <= this.playback.rev) return;
         this.playback = m.playback;
         void this.engine.onPlayback(m.playback);
         this.emit();
@@ -181,7 +189,7 @@ export class RoomClient {
 
       case 'closing':
         this.closedReason = m.reason;
-        this.stopPings();
+        this.engine.stop();
         this.emit();
         return;
 
@@ -206,10 +214,19 @@ export class RoomClient {
   seek(ms: number): void { this.control('seek', { positionMs: Math.max(0, Math.round(ms)) }); }
 
   playTrack(trackKey: string, videoId?: string | null): void {
-    this.control('track', { trackKey, videoId: videoId ?? null });
+    // `start` makes the referee schedule the agreed moment itself: an idle
+    // room needs the full load lead, not the short resume one, because every
+    // device has to download and decode before the downbeat.
+    this.control('track', { trackKey, videoId: videoId ?? null, start: true });
   }
 
   toggle(): void {
+    // Ignore double taps within 300 ms — two play messages in quick succession
+    // used to push the agreed start further out every time.
+    const now = Date.now();
+    if (now - this.lastToggle < 300) return;
+    this.lastToggle = now;
+
     // Nothing loaded yet: start the queue rather than doing nothing, which is
     // what made the room feel dead after queueing a first track.
     if (!this.playback.trackKey) {
@@ -225,14 +242,30 @@ export class RoomClient {
     if (this.playback.playing) this.pause(); else this.play();
   }
 
+  /** Listener-selected output band: full / bass / highs. Personal output
+   * shaping — any participant may set it, admin authority is untouched. */
+  setPart(part: 'full' | 'bass' | 'highs'): void {
+    this.send({ t: 'part', part });
+  }
+
+  /** Narrow this device's correction bands while it plays a split band: two
+   * devices summing into one physical space must not be allowed to drift as
+   * far apart as a room of independent listeners. */
+  setBands(softMs: number, hardMs: number): void {
+    this.engine.setBands(softMs, hardMs);
+  }
+
   queueAdd(trackKey: string): void {
     // An idle room should start the first track rather than parking it in a
     // queue nobody will ever drain: the referee ignores `play` until a track
     // is loaded, so queueing alone produced a room that looked alive but was
     // silent.
     if (!this.playback.trackKey) {
-      this.send({ t: 'control', action: 'track', trackKey });
-      this.send({ t: 'control', action: 'play' });
+      // One message, not two. `track` alone left the room holding a cold
+      // track with no start; the follow-up `play` then scheduled with the
+      // short resume lead, which is nowhere near long enough for a first
+      // load — everyone missed the downbeat and straggled in mid-track.
+      this.send({ t: 'control', action: 'track', trackKey, start: true });
       return;
     }
     this.send({ t: 'queue', action: 'add', trackKey });
@@ -282,18 +315,9 @@ export class RoomClient {
     this.send({ t: 'ping', sentAt: Date.now() });
   }
 
-  private startPings(): void {
-    this.stopPings();
-    this.ping();
-    this.clockPingTimer = window.setInterval(() => this.ping(), 10000);
-  }
-
-  private stopPings(): void {
-    if (this.clockPingTimer !== null) {
-      window.clearInterval(this.clockPingTimer);
-      this.clockPingTimer = null;
-    }
-  }
+  /* Pings are owned by SyncEngine now (burst on welcome, then one interval).
+   * There is deliberately no client-side ping loop left here: two loops
+   * fighting over the same clock samples was noise, not precision. */
 
   /* ---------------- view ---------------- */
 

@@ -31,6 +31,9 @@ import {
 export const GRACE_MS = 3 * 60 * 1000;
 /** How long listeners can claim control after the last admin leaves. */
 export const ADMIN_RESCUE_MS = 30 * 1000;
+/** Resume after a pause: the track is already decoded everywhere, so a short
+ * lead is enough. New-track loads need START_LEAD_MS. */
+export const RESUME_LEAD_MS = 800;
 
 export interface RefereeEvents {
   deliver(clientId: string, message: ServerMessage): void;
@@ -105,6 +108,7 @@ export class RoomReferee {
       this.adminKeys.set(ownerKey, ownerId);
       this.participants.set(ownerId, {
         id: ownerId, name: 'host', role: 'admin', joinedAt: this.startedAt,
+        part: 'full',
       });
     }
   }
@@ -126,7 +130,7 @@ export class RoomReferee {
    */
   seedOwner(ownerId: string, ownerKey: string, name = 'host'): void {
     if (this.participants.size > 0) return;
-    this.participants.set(ownerId, { id: ownerId, name, role: 'admin', joinedAt: this.now() });
+    this.participants.set(ownerId, { id: ownerId, name, role: 'admin', joinedAt: this.now(), part: 'full' });
     this.adminKeys.set(ownerKey, ownerId);
     this.broadcastParticipants();
   }
@@ -202,6 +206,7 @@ export class RoomReferee {
           name: message.name || 'listener',
           role,
           joinedAt: known?.joinedAt ?? this.now(),
+          part: message.part ?? 'full',
         });
         if (message.adminKey && this.adminKeys.get(message.adminKey) === clientId) {
           this.participants.get(clientId)!.role = 'admin';
@@ -232,6 +237,10 @@ export class RoomReferee {
       case 'queue': {
         if (!this.isAdmin(clientId)) return;
         this.applyQueue(clientId, message);
+        // Queue mutations that do not change playback must not re-broadcast
+        // playback: the client treats every playback message as a reason to
+        // seek, so broadcasting it on every add/remove restarts the audio on
+        // every device and throws the room out of sync.
         return;
       }
 
@@ -255,6 +264,24 @@ export class RoomReferee {
 
       case 'chat': {
         this.pushChat(clientId, message.text);
+        return;
+      }
+
+      /** A listener chooses their own output band — personal output shaping,
+       * not playback control, so any participant may set it. */
+      case 'part': {
+        const part = message.part;
+        if (part !== 'full' && part !== 'bass' && part !== 'highs') return;
+        const p = this.participants.get(clientId);
+        if (!p) return;
+        if (part === 'bass') {
+          // One bass anchor per room: two subs in one physical space sum and
+          // can cancel each other.
+          const taken = [...this.participants.values()].some((x) => x.id !== clientId && x.part === 'bass');
+          if (taken) return;
+        }
+        p.part = part;
+        this.broadcastParticipants();
         return;
       }
 
@@ -297,10 +324,13 @@ export class RoomReferee {
     switch (message.action) {
       case 'play':
         if (!this.playback.trackKey) return;
-        // Resume and first-play both schedule a start a few seconds out rather
-        // than beginning immediately, so every device begins on the same
-        // instant instead of whenever its own download and decode finish.
-        this.scheduleStart(this.playback.positionMs);
+        // If a start is already agreed and still in the future, keep it: a
+        // double-tap (or a late duplicate message) must not push the start
+        // further out every time it arrives.
+        if (this.playback.startAt != null && this.playback.startAt > now) break;
+        // Resume: the track is already decoded on every device, so a short
+        // lead is enough. New-track loads use the full lead.
+        this.scheduleStart(this.playback.positionMs, RESUME_LEAD_MS);
         break;
       case 'pause':
         // Trust the position the pausing client reported: it is the only party
@@ -314,6 +344,7 @@ export class RoomReferee {
             ? message.positionMs
             : this.playback.positionMs,
           updatedAt: now,
+          rev: this.playback.rev + 1,
         };
         break;
       case 'seek':
@@ -326,6 +357,7 @@ export class RoomReferee {
           startAt: this.playback.startAt != null && this.playback.startAt > now
             ? this.playback.startAt
             : null,
+          rev: this.playback.rev + 1,
         };
         break;
       case 'track': {
@@ -339,11 +371,12 @@ export class RoomReferee {
           playing: this.playback.playing,
           updatedAt: now,
           startAt: null,
+          rev: this.playback.rev + 1,
         };
         // Switching tracks mid-playback is the worst case for sync: everyone
         // has to download a different file first. Schedule a fresh start so
         // the room re-converges at a single agreed moment.
-        if (this.playback.playing) this.scheduleStart(positionMs);
+        if (message.start || this.playback.playing) this.scheduleStart(positionMs);
         break;
       }
     }
@@ -356,15 +389,18 @@ export class RoomReferee {
    * `updatedAt` is pushed into the future alongside `startAt`, which makes the
    * client's "expected position" formula correct for free: before the start it
    * clamps at `positionMs`, and after it advances from that same instant.
+   * `leadMs` defaults to START_LEAD_MS; resumes use RESUME_LEAD_MS because the
+   * track is already decoded on every device.
    */
-  private scheduleStart(positionMs: number): void {
-    const startAt = this.now() + START_LEAD_MS;
+  private scheduleStart(positionMs: number, leadMs: number = START_LEAD_MS): void {
+    const startAt = this.now() + leadMs;
     this.playback = {
       ...this.playback,
       playing: true,
       positionMs,
       startAt,
       updatedAt: startAt,
+      rev: this.playback.rev + 1,
     };
   }
 
@@ -385,6 +421,7 @@ export class RoomReferee {
         if (nextKey) {
           this.playback = {
             ...this.playback, trackKey: nextKey, positionMs: 0, updatedAt: now, startAt: null,
+            rev: this.playback.rev + 1,
           };
           // Same reasoning as a track change: a fresh download is due, so give
           // the room an agreed moment to begin rather than racing it.
@@ -392,14 +429,14 @@ export class RoomReferee {
         } else {
           this.playback = {
             ...this.playback, playing: false, positionMs: 0, updatedAt: now, startAt: null,
+            rev: this.playback.rev + 1,
           };
         }
         break;
       }
     }
-    this.events.deliver(clientId, { t: 'pong', sentAt: now, serverTime: now }); // keep client clock fresh
     this.broadcastQueue();
-    this.broadcastPlayback();
+    if (message.action === 'next') this.broadcastPlayback();
   }
 
   private pushChat(clientId: string, text: string): void {

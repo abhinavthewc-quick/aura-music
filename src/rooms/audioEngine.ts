@@ -14,9 +14,17 @@
 
 import type { SyncTarget } from './syncEngine';
 import type { ResolvedTrack } from './audioTarget';
+import type { Part } from './protocol';
 
 /** Small scheduling headroom so start() is never called in the past. */
 const SCHEDULE_AHEAD_S = 0.06;
+
+/** Crossover between bass and highs, in Hz. LR4 (cascaded biquads) sums flat
+ * when the two legs are time-aligned, and below ~120 Hz the bass is summed to
+ * mono — standard sub practice, and it keeps one speaker from fighting itself. */
+const CROSSOVER_HZ = 120;
+/** Longest trim delay a device can apply to its own output, in seconds. */
+const MAX_TRIM_S = 0.3;
 
 /**
  * One decoded track is ~100MB, so we keep exactly this many and no more.
@@ -44,10 +52,29 @@ export class WebAudioTarget implements SyncTarget {
   private gain: GainNode;
   private source: AudioBufferSourceNode | null = null;
 
+  /** The split graph: source → chain, then one leg per band, summed at master. */
+  private chain: GainNode;
+  private fullGain: GainNode;
+  private bassGain: GainNode;
+  private highsGain: GainNode;
+  private bassDelay: DelayNode;
+  private highsDelay: DelayNode;
+  private fullDelay: DelayNode;
+  private master: GainNode;
+
+  /** Which part of the mix this device plays. Listener-controlled. */
+  private part: Part = 'full';
+  /** Output-delay trim per part, in ms. Applied as a DelayNode on that leg —
+   * the sync loop never sees it, since it measures clock position, not content. */
+  private trimMs = { full: 0, bass: 0, highs: 0 };
+
   private track: ResolvedTrack | null = null;
   private currentKey: string | null = null;
   /** Decoded buffers, oldest first. Kept tiny on purpose — see MAX_BUFFERED. */
   private buffers = new Map<string, AudioBuffer>();
+
+  /** The server time of the start this target has queued, or null. */
+  private scheduledStart: { atServerMs: number; fromMs: number } | null = null;
 
   /**
    * Where the playhead is, integrated over time rather than derived from
@@ -88,9 +115,49 @@ export class WebAudioTarget implements SyncTarget {
     const Ctor: typeof AudioContext =
       (window as unknown as { webkitAudioContext?: typeof AudioContext }).webkitAudioContext || window.AudioContext;
     this.ctx = new Ctor({ latencyHint: 'interactive' });
-    this.gain = this.ctx.createGain();
-    this.gain.connect(this.ctx.destination);
+    this.master = this.ctx.createGain();
+    this.master.connect(this.ctx.destination);
+
+    // Permanent filter graph — built once, never rewired on seeks or restarts.
+    this.chain = this.ctx.createGain();
+    this.fullGain = this.ctx.createGain();
+    this.bassGain = this.ctx.createGain();
+    this.highsGain = this.ctx.createGain();
+
+    // Bass sums to mono: non-directional, and keeps stereo from cancelling itself.
+    const mono = this.ctx.createGain();
+    mono.channelCount = 1;
+    mono.channelCountMode = 'explicit';
+    mono.channelInterpretation = 'speakers';
+
+    const biquad = (type: BiquadFilterType) => {
+      const f = this.ctx.createBiquadFilter();
+      f.type = type;
+      f.Q.value = 1 / Math.sqrt(2);
+      f.frequency.value = CROSSOVER_HZ;
+      return f;
+    };
+    const lp1 = biquad('lowpass'), lp2 = biquad('lowpass');
+    const hp1 = biquad('highpass'), hp2 = biquad('highpass');
+
+    this.bassDelay = this.ctx.createDelay(MAX_TRIM_S);
+    this.highsDelay = this.ctx.createDelay(MAX_TRIM_S);
+    this.fullDelay = this.ctx.createDelay(MAX_TRIM_S);
+
+    this.chain.connect(this.fullGain);
+    this.chain.connect(mono);
+    mono.connect(lp1); lp1.connect(lp2); lp2.connect(this.bassGain);
+    this.chain.connect(hp1); hp1.connect(hp2); hp2.connect(this.highsGain);
+
+    this.fullGain.connect(this.fullDelay); this.fullDelay.connect(this.master);
+    this.bassGain.connect(this.bassDelay); this.bassDelay.connect(this.master);
+    this.highsGain.connect(this.highsDelay); this.highsDelay.connect(this.master);
+
+    // Old public volume control: now rides on the master gain after the split.
+    this.gain = this.master;
     this.seedLatencyFallback();
+
+    this.setPart('full');
   }
 
   /* ---------------- the audible clock ---------------- */
@@ -266,6 +333,7 @@ export class WebAudioTarget implements SyncTarget {
     this.playing = false;
     this.startPending = false;
     this.currentRate = 1;
+    this.clearScheduledStart();
     this.anchor(0, this.audibleCtxNow());
     this.opts.onTrackChanged?.(this.track);
   }
@@ -292,7 +360,7 @@ export class WebAudioTarget implements SyncTarget {
     const src = this.ctx.createBufferSource();
     src.buffer = buffer;
     src.playbackRate.value = 1;
-    src.connect(this.gain);
+    src.connect(this.chain);
     src.onended = () => {
       // Ignore teardown we caused ourselves; only a natural end counts.
       if (this.source !== src) return;
@@ -302,6 +370,7 @@ export class WebAudioTarget implements SyncTarget {
       this.playing = false;
       this.startPending = false;
       this.currentRate = 1;
+      this.clearScheduledStart();
       this.anchor(dur * 1000, this.audibleCtxNow());
       this.opts.onEnded?.();
     };
@@ -316,6 +385,7 @@ export class WebAudioTarget implements SyncTarget {
     }
     this.playing = false;
     this.startPending = false;
+    this.clearScheduledStart();
   }
 
   /**
@@ -346,6 +416,8 @@ export class WebAudioTarget implements SyncTarget {
 
   async play(): Promise<void> {
     if (!(await this.unlock())) throw new Error('audio is blocked');
+    // A direct play is not a server-scheduled start.
+    this.scheduledStart = null;
     this.startAt(this.getPositionMs() / 1000);
   }
 
@@ -357,7 +429,17 @@ export class WebAudioTarget implements SyncTarget {
   schedulePlay(atServerMs: number, fromMs: number, serverNowMs: number): boolean {
     const delayS = (atServerMs - serverNowMs) / 1000;
     if (!Number.isFinite(delayS) || delayS < 0 || delayS > 30) return false;
-    return this.startAt(Math.max(0, fromMs) / 1000, delayS);
+    const ok = this.startAt(Math.max(0, fromMs) / 1000, delayS);
+    if (ok) {
+      this.scheduledStart = { atServerMs, fromMs: Math.max(0, fromMs) };
+    } else {
+      this.scheduledStart = null;
+    }
+    return ok;
+  }
+
+  getScheduledStart(): { atServerMs: number; fromMs: number } | null {
+    return this.scheduledStart;
   }
 
   /** Best-effort context resume. False means a gesture is still required. */
@@ -387,6 +469,11 @@ export class WebAudioTarget implements SyncTarget {
     this.anchor(at, this.audibleCtxNow());
   }
 
+  /** A scheduled start is no longer valid once the graph is torn down. */
+  private clearScheduledStart(): void {
+    this.scheduledStart = null;
+  }
+
   /**
    * Seeking is a stop-and-restart, which is genuinely sample-accurate with
    * Web Audio — no rounding to the nearest frame the way an element does.
@@ -396,6 +483,8 @@ export class WebAudioTarget implements SyncTarget {
     const target = dur > 0
       ? Math.max(0, Math.min(ms / 1000, dur - 0.02))
       : Math.max(0, ms / 1000);
+    // A direct seek is not a server-scheduled start.
+    this.scheduledStart = null;
     if (this.playing) { this.startAt(target); return; }
     this.currentRate = 1;
     this.anchor(target * 1000, this.audibleCtxNow());
@@ -414,6 +503,38 @@ export class WebAudioTarget implements SyncTarget {
   setVolume(v: number): void {
     try { this.gain.gain.value = Math.max(0, Math.min(1, v)); } catch { /* ignore */ }
   }
+
+  /** Which part of the mix this device plays: full range, bass only, highs only. */
+  getPart(): Part { return this.part; }
+
+  /** Listener selects their output band. Gains ramp over a few ms so switching
+   * mid-track never clicks. */
+  setPart(part: Part): void {
+    this.part = part;
+    const now = this.ctx.currentTime;
+    const ramp = now + 0.03;
+    const rampGain = (g: GainNode, target: number) => {
+      g.gain.cancelScheduledValues(now);
+      g.gain.setValueAtTime(g.gain.value, now);
+      g.gain.linearRampToValueAtTime(target, ramp);
+    };
+    rampGain(this.fullGain, part === 'full' ? 1 : 0);
+    rampGain(this.bassGain, part === 'bass' ? 1 : 0);
+    rampGain(this.highsGain, part === 'highs' ? 1 : 0);
+  }
+
+  /** Output-delay trim for one part, in ms. Only this device hears it — the
+   * sync loop measures clock position, not content, so it cannot fight the
+   * trim. Used to align what this device sounds like with the others in the
+   * same room. */
+  setTrim(part: Part, ms: number): void {
+    const clamped = Math.max(0, Math.min(MAX_TRIM_S * 1000, ms));
+    this.trimMs[part] = clamped;
+    const delay = part === 'full' ? this.fullDelay : part === 'bass' ? this.bassDelay : this.highsDelay;
+    try { delay.delayTime.setValueAtTime(clamped / 1000, this.ctx.currentTime); } catch { /* offline context */ }
+  }
+
+  getTrim(part: Part): number { return this.trimMs[part]; }
 
   dispose(): void {
     this.stopSource();

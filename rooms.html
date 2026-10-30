@@ -111,6 +111,21 @@
       </button>
     </div>
 
+    <!-- Listener shapes their own output: full range, bass only, or highs only.
+         It is personal output shaping — like choosing your own volume — not
+         playback control, so admin authority is untouched. -->
+    <div class="part-pick" id="partPick">
+      <span class="part-label">This device plays</span>
+      <button class="part-btn active" data-part="full">Full range</button>
+      <button class="part-btn" data-part="bass">Bass</button>
+      <button class="part-btn" data-part="highs">Highs</button>
+      <span class="part-hint" id="partHint"></span>
+    </div>
+    <div class="trim-wrap" id="trimWrap" hidden>
+      <label>Device timing <span id="trimVal">0</span> ms</label>
+      <input type="range" id="trimSlider" min="0" max="300" step="10" value="0" aria-label="Output delay trim">
+    </div>
+
     <p class="hint" id="listenHint" hidden>Click anywhere to start the sound</p>
     <p class="hint" id="loadHint" hidden>Getting the track ready…</p>
 

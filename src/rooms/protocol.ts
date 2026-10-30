@@ -11,12 +11,16 @@
  */
 
 export type Role = 'admin' | 'listener';
+/** Which part of the mix this device plays. 'full' is ordinary room listening. */
+export type Part = 'full' | 'bass' | 'highs';
 
 export interface Participant {
   id: string;
   name: string;
   role: Role;
   joinedAt: number;
+  /** Which band this device plays: full range, bass only, or highs only. */
+  part: Part;
 }
 
 /** What the room is doing right now. `updatedAt` is the server's clock. */
@@ -34,6 +38,9 @@ export interface PlaybackState {
   updatedAt: number;
   /** Non-null while a start is pending; the server time audio begins. */
   startAt: number | null;
+  /** Increments on every authoritative playback change; clients ignore replays
+    * of a state they have already converged on. */
+  rev: number;
 }
 
 export interface ChatMessage {
@@ -56,16 +63,20 @@ export type ControlAction = 'play' | 'pause' | 'seek' | 'track';
 
 export type ClientMessage =
   /** Open a connection. `adminKey` is what proves you may control playback. */
-  | { t: 'hello'; clientId: string; name: string; adminKey?: string }
+  | { t: 'hello'; clientId: string; name: string; adminKey?: string; part?: Part }
   /** Clock sync. Server answers with `pong` carrying the same `sentAt`. */
   | { t: 'ping'; sentAt: number }
-  /** Admin only. Seek carries `positionMs`; track carries `trackKey`/`videoId`. */
-  | { t: 'control'; action: ControlAction; positionMs?: number; trackKey?: string; videoId?: string }
+  /** Admin only. Seek carries `positionMs`; track carries `trackKey`/`videoId`.
+   * `start` asks the referee to schedule a start — used when queueing the first
+   * track of an idle room, so one message both changes track and begins. */
+  | { t: 'control'; action: ControlAction; start?: boolean; positionMs?: number; trackKey?: string; videoId?: string }
   /** Admin only. */
   | { t: 'queue'; action: 'add' | 'remove' | 'clear' | 'next'; trackKey?: string }
   /** Admin only. */
   | { t: 'role'; action: 'promote' | 'demote'; participantId: string }
   | { t: 'chat'; text: string }
+  /** This device's output band (full / bass / highs). Listener-controlled. */
+  | { t: 'part'; part: Part }
   | { t: 'buffering'; buffering: boolean }
   | { t: 'bye' };
 
@@ -87,6 +98,7 @@ export const EMPTY_PLAYBACK: PlaybackState = {
   playing: false,
   updatedAt: 0,
   startAt: null,
+  rev: 0,
 };
 
 /* Limits. Chat is capped so one enthusiastic person cannot flood the room. */

@@ -361,3 +361,44 @@ button:focus-visible, input:focus-visible { outline: 2px solid var(--gold); outl
 .add-btn:disabled { background: var(--ok); cursor: default; opacity: .9; }
 
 .lib-empty { color: var(--dimmer); font-style: italic; font-size: 12.5px; padding: 8px 0; }
+
+/* ---------------- output band (frequency split) ---------------- */
+
+.part-pick {
+  display: flex; align-items: center; gap: 10px;
+  margin: 22px 0 6px; flex-wrap: wrap;
+}
+.part-label {
+  font-size: 11px; letter-spacing: .12em; text-transform: uppercase;
+  color: var(--dimmer); font-weight: 700; flex: none;
+}
+.part-btn {
+  background: var(--panel); border: 1px solid var(--line); color: var(--dim);
+  border-radius: 9px; padding: 6px 12px; font-size: 12.5px;
+  transition: background .15s, border-color .15s, color .15s;
+}
+.part-btn:hover:not(.active) { background: var(--panel-2); border-color: #453628; color: var(--text); }
+.part-btn.active {
+  background: var(--gold); border-color: var(--gold); color: #150f09;
+}
+.part-hint {
+  margin-left: auto; font-size: 12.5px; color: var(--dim); flex: none;
+  min-width: 150px; text-align: right;
+}
+.trim-wrap {
+  display: flex; align-items: center; gap: 10px;
+  margin: 10px 0 0; font-size: 12.5px; color: var(--dim);
+}
+.trim-wrap input { flex: 1; min-width: 0; height: 6px; border-radius: 3px;
+  background: var(--panel-2); border: none; appearance: none; }
+.trim-wrap input::-webkit-slider-thumb {
+  width: 16px; height: 16px; border-radius: 50%; background: var(--gold);
+  cursor: pointer;
+}
+.trim-wrap label span { font-variant-numeric: tabular-nums; flex: none; min-width: 24px; text-align: right; }
+
+.part-badge {
+  font-size: 10px; font-weight: 700; letter-spacing: .06em;
+  padding: 1px 6px; border-radius: 999px; flex: none;
+  background: rgba(185, 130, 73, .15); color: var(--gold);
+}

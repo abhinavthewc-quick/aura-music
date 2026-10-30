@@ -141,6 +141,7 @@ async function runScenario(s: Scenario): Promise<ScenarioResult> {
     playing: true,
     updatedAt: startAt,
     startAt,
+    rev: 0,
   };
 
   await engineA.onPlayback(playback);
@@ -249,7 +250,7 @@ async function pauseStaysPausedCheck(): Promise<{
   const startAt = Date.now() + 1200;
   const playing: PlaybackState = {
     trackKey: TRACK.key, videoId: null, positionMs: 0,
-    playing: true, updatedAt: startAt, startAt,
+    playing: true, updatedAt: startAt, startAt, rev: 0,
   };
   await engine.onPlayback(playing);
   await sleep(2500);

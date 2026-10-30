@@ -32,6 +32,10 @@ export interface SyncTarget {
   schedulePlay?(atServerMs: number, fromMs: number, serverNowMs: number): boolean;
   /** True while a scheduled start is still in the future. */
   hasPendingStart?(): boolean;
+  /** The server time of the start this target has queued, or null if none.
+   * Lets the engine avoid cancelling and re-scheduling a correct start on
+   * every correction tick — doing that is exactly what desyncs devices. */
+  getScheduledStart?(): { atServerMs: number; fromMs: number } | null;
   /** Resume a context suspended by autoplay policy. */
   unlock?(): Promise<boolean>;
   /**
@@ -46,12 +50,9 @@ export interface SyncTarget {
 const NUDGE_RATE = 0.02;
 /** Beyond this a nudge cannot catch up in reasonable time — seek instead. */
 const NUDGE_MAX_MS = DRIFT_HARD_MS;
-/** Below this a rate correction is pure waste — it cannot close the gap. */
-const NUDGE_MIN_MS = 4;
-/** How long to give a device to reach a scheduled start before giving up on it. */
-const START_SLACK_MS = 300;
-/** How long to let an audio engine honour a start it has queued for itself. */
-const TARGET_START_GRACE_MS = 6000;
+/** How long past the agreed moment a device may still be holding its own
+ * scheduled start before the engine gives up on it. */
+const PENDING_START_GRACE_MS = 6000;
 
 export interface SyncEngineOptions {
   /** How often to re-check our position against the room's expectation. */
@@ -60,6 +61,10 @@ export interface SyncEngineOptions {
   clockIntervalMs?: number;
   /** Called when we give up trying (repeated load failures). */
   onError?: (message: string) => void;
+  /** Drift below which no correction is applied (default 20 ms). */
+  softMs?: number;
+  /** Drift beyond which a hard seek is used instead of a nudge (default 150 ms). */
+  hardMs?: number;
 }
 
 export class SyncEngine {
@@ -90,6 +95,8 @@ export class SyncEngine {
     this.opts = {
       correctionIntervalMs: options.correctionIntervalMs ?? 500,
       clockIntervalMs: options.clockIntervalMs ?? 3000,
+      softMs: options.softMs ?? DRIFT_SOFT_MS,
+      hardMs: options.hardMs ?? DRIFT_HARD_MS,
       onError: options.onError,
     };
   }
@@ -150,13 +157,21 @@ export class SyncEngine {
     return Math.max(0, this.pendingStartServerMs - this.clock.serverNow());
   }
 
+  /** Tighten or relax the correction bands. Used when a room member is playing
+   * the bass split: devices sharing one physical space must sum in the air,
+   * so the steady-state spread between them needs to stay small. */
+  setBands(softMs: number, hardMs: number): void {
+    this.opts.softMs = softMs;
+    this.opts.hardMs = hardMs;
+  }
+
   /**
    * Give the audio engine another chance after an autoplay block. Called from
    * the UI's first real interaction.
    */
   resumeIfBlocked(): void {
     void this.target?.unlock?.().then((ok) => {
-      if (ok) void this.converge(true);
+      if (ok) void this.converge();
     });
   }
 
@@ -199,7 +214,7 @@ export class SyncEngine {
   /** Authoritative state arrived from the referee. Converge on it. */
   async onPlayback(playback: PlaybackState): Promise<void> {
     this.playback = playback;
-    await this.converge(true);
+    await this.converge();
   }
 
   /**
@@ -208,15 +223,13 @@ export class SyncEngine {
    */
   private async tick(): Promise<void> {
     if (!this.playback || !this.target) return;
-    await this.converge(false);
+    await this.converge();
   }
 
   /**
    * Bring the local audio in line with the room.
-   * @param force true when the change is authoritative and must be applied
-   *             even if the difference is small (someone pressed pause).
    */
-  private async converge(force: boolean): Promise<void> {
+  private async converge(): Promise<void> {
     const target = this.target;
     const playback = this.playback;
     if (!target || !playback) return;
@@ -245,40 +258,61 @@ export class SyncEngine {
 
     const serverNow = this.clock.serverNow();
 
-    // Waiting for the agreed start moment. Hold the playhead where the room
-    // will begin and queue the start, rather than beginning on whichever
-    // device happened to finish loading first.
+    // Waiting for the agreed start moment. Every device in the room was told
+    // the same startAt, so the only thing that matters is whether that moment
+    // has arrived yet. While waiting, hold the playhead at the agreed
+    // position and queue one start — and crucially, do NOT cancel and
+    // re-schedule a start that is already correct: the old loop paused and
+    // rescheduled on every 500 ms tick, which is precisely what desynced
+    // devices on almost every press of play.
     //
-    // The engine's own grace period covers the normal case; the target's
-    // pending start covers the honest one, where a device was still decoding
-    // when the room said "go" and has therefore scheduled itself a moment
-    // later. Fighting that would defeat the scheduling entirely.
-    const waitingForStart =
-      playback.playing &&
-      playback.startAt != null &&
-      (serverNow < playback.startAt + START_SLACK_MS ||
-        (target.hasPendingStart?.() === true &&
-          serverNow < playback.startAt + TARGET_START_GRACE_MS));
+    // The second half of the condition matters just as much. A source queued
+    // for the room's moment stays "pending" for the frames between startAt and
+    // the instant it actually fires, and for those frames it reports itself as
+    // not playing. Leaving that window early makes the play/pause block at the
+    // bottom call play(), which throws the agreed start away and restarts the
+    // source a scheduling headroom later — so every device begins at its own
+    // slightly different instant. That is the very spread an agreed moment
+    // exists to kill, and it showed up as 20-60 ms of start-up divergence.
+    const startAt = playback.playing ? playback.startAt : null;
+    const beforeStart = startAt != null && serverNow < startAt;
+    const holdingOwnStart =
+      !beforeStart &&
+      startAt != null &&
+      target.hasPendingStart?.() === true &&
+      serverNow < startAt + PENDING_START_GRACE_MS;
 
-    if (waitingForStart && playback.startAt != null) {
-      this.pendingStartServerMs = playback.startAt;
-      // stopSource() clears any queued start as well, so this cancels a start
-      // that has been scheduled but not yet reached — otherwise a pause during
-      // the countdown would still begin playing.
-      if (target.isPlaying() || target.hasPendingStart?.()) target.pause();
-      if (applyingTrack || Math.abs(target.getPositionMs() - playback.positionMs) > 1) {
-        target.seek(playback.positionMs);
-      }
-      this.setRate(target, 0);
-      this.nudging = false;
-      this.lastDriftMs = 0;
-      if (!target.hasPendingStart?.()) {
+    if (startAt != null && (beforeStart || holdingOwnStart)) {
+      this.pendingStartServerMs = startAt;
+      const scheduled = target.getScheduledStart?.();
+      const alreadyScheduled =
+        scheduled != null && Math.abs(scheduled.atServerMs - startAt) < 500;
+
+      if (!alreadyScheduled && beforeStart) {
+        // Cancel anything queued at the wrong time, then schedule the room's
+        // moment. Pausing also cancels a start that has not fired yet.
+        if (target.isPlaying() || target.hasPendingStart?.()) target.pause();
+        if (applyingTrack || Math.abs(target.getPositionMs() - playback.positionMs) > 1) {
+          target.seek(playback.positionMs);
+        }
+        this.setRate(target, 0);
+        this.nudging = false;
+        this.lastDriftMs = 0;
         await target.unlock?.();
-        target.schedulePlay?.(playback.startAt, playback.positionMs, serverNow);
+        target.schedulePlay?.(startAt, playback.positionMs, serverNow);
+      } else if (holdingOwnStart) {
+        // The moment is here and this device's own start is about to fire.
+        // Re-arming it would move the downbeat; hold still and let it land.
+        this.setRate(target, 0);
+        this.nudging = false;
+        this.lastDriftMs = 0;
       }
       return;
     }
 
+    // The agreed moment has passed (or is not set): converge normally. A
+    // device that missed the start — still decoding when it fired — lands here
+    // and joins mid-track on the next tick instead of waiting forever.
     this.pendingStartServerMs = null;
 
     // Where should the playhead be, right now, according to the room?
@@ -290,10 +324,9 @@ export class SyncEngine {
 
     const magnitude = Math.abs(drift);
     const mustSeek =
-      force ||
       applyingTrack ||
       !Number.isFinite(expected) ||
-      magnitude > NUDGE_MAX_MS;
+      magnitude > this.opts.hardMs;
 
     // Paused: stop, and do not touch the playhead.
     //
@@ -318,8 +351,8 @@ export class SyncEngine {
       target.seek(Math.max(0, Math.min(expected, safeDuration(target))));
       this.setRate(target, 0);
       this.nudging = false;
-      if (magnitude > NUDGE_MAX_MS || applyingTrack) this.corrections++;
-    } else if (magnitude > DRIFT_SOFT_MS && target.setRate) {
+      if (magnitude > this.opts.hardMs || applyingTrack) this.corrections++;
+    } else if (magnitude > this.opts.softMs && target.setRate) {
       // Small drift: ease back with a slight rate change rather than a seek.
       // A seek here is the single most audible thing a sync system can do —
       // it is what makes these tools feel "janky" to the people using them.

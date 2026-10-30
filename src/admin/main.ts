@@ -273,6 +273,8 @@ async function refreshLibrary(force = false): Promise<void> {
       syncResultRows();
       renderQueue();
       if (!$('panelLibrary').hidden) renderLibGrid();
+      // Notify other tabs (like open rooms) that the catalogue has changed.
+      new BroadcastChannel('aura-catalog').postMessage({ t: 'refresh', at: Date.now() });
     } catch { /* status line already surfaced */ }
     finally { libraryLoading = null; }
   })();
