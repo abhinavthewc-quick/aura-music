@@ -315,6 +315,8 @@ async function join(roomId: string, adminKey: string | null, isHost: boolean) {
   unsub = client.subscribe(render);
   setRoomActive(true);
   wirePartPicker(roomId);
+  // Expose for debugging (like dev harness)
+  (window as any).__room = () => client;
   history.replaceState(null, '', `/rooms?r=${roomId}${adminKey ? '&k=' + adminKey : ''}`);
 
   $('joinView').hidden = true;
