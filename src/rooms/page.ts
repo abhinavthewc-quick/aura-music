@@ -341,9 +341,16 @@ function armAutoplay() {
 
 /* ---------------- leaving ---------------- */
 
+let catalogUnsub: (() => void) | null = null;
+const catalogKeepers = new Array<() => void>();
+
 function leave() {
   cancelAnimationFrame(sweepRaf);
   if (liveTimer !== null) { clearInterval(liveTimer); liveTimer = null; }
+  if (catalogTimer !== null) { clearTimeout(catalogTimer); catalogTimer = null; }
+  catalogUnsub?.(); catalogUnsub = null;
+  catalogKeepers.forEach((off) => off());
+  catalogKeepers.length = 0;
   unsub?.(); unsub = null;
   client?.leave(); client = null; transport = null;
   audio?.dispose(); audio = null;
@@ -797,11 +804,15 @@ function wireCatalogRefresh(): void {
   // Pick up newly uploaded tracks without reloading: when the tab comes back
   // into view, on focus, on a timer while the room is open, and whenever any
   // other tab (the admin uploader, say) refreshes the catalogue.
-  onCatalogRefreshed(() => { void refreshLibrary(); });
-  window.addEventListener('visibilitychange', () => {
-    if (document.visibilityState === 'visible') void refreshLibrary();
-  });
-  window.addEventListener('focus', () => void refreshLibrary());
+  catalogUnsub = onCatalogRefreshed(() => { void refreshLibrary(); });
+  const onVisible = () => { if (document.visibilityState === 'visible') void refreshLibrary(); };
+  const onFocus = () => void refreshLibrary();
+  window.addEventListener('visibilitychange', onVisible);
+  window.addEventListener('focus', onFocus);
+  catalogKeepers.push(
+    () => window.removeEventListener('visibilitychange', onVisible),
+    () => window.removeEventListener('focus', onFocus),
+  );
   startCatalogKeepAlive();
 }
 

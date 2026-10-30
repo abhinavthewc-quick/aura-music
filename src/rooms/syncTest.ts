@@ -96,6 +96,9 @@ interface Scenario {
   /** Ignore samples before this, so decode and catch-up is not counted. */
   settleMs: number;
   budgetMs: number;
+  /** Tighter correction bands, as used when a room member plays the bass split. */
+  softMs?: number;
+  hardMs?: number;
 }
 
 interface ScenarioResult {
@@ -125,8 +128,8 @@ async function runScenario(s: Scenario): Promise<ScenarioResult> {
   await targetA.load(TRACK.key);
   await targetB.load(TRACK.key);
 
-  const engineA = new SyncEngine({ correctionIntervalMs: SAMPLE_MS });
-  const engineB = new SyncEngine({ correctionIntervalMs: SAMPLE_MS });
+  const engineA = new SyncEngine({ correctionIntervalMs: SAMPLE_MS, softMs: s.softMs, hardMs: s.hardMs });
+  const engineB = new SyncEngine({ correctionIntervalMs: SAMPLE_MS, softMs: s.softMs, hardMs: s.hardMs });
   engineA.attach(targetA);
   engineB.attach(s.lateByMs ? startLate(targetB, s.lateByMs) : targetB);
   engineA.start(() => {});
@@ -305,6 +308,15 @@ const SCENARIOS: Scenario[] = [
     // its job, not the steady state we are measuring.
     settleMs: 5000,
     budgetMs: SPREAD_BUDGET_MS,
+  },
+  {
+    name: 'tight bands, both devices start together (bass split)',
+    lateByMs: 0,
+    runMs: 6000,
+    settleMs: 800,
+    softMs: 8,
+    hardMs: 80,
+    budgetMs: TIGHT_BUDGET_MS,
   },
 ];
 
