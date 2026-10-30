@@ -14,6 +14,7 @@ import { createAudioTarget, type ResolvedTrack } from '../rooms/audioTarget';
 import { RoomClient } from '../rooms/roomClient';
 import { hostRoom, isRoomHosted, LocalTransport, newId, newKey, newRoomId } from '../rooms/local';
 import { WebSocketTransport } from '../rooms/wsTransport';
+import type { Part } from '../rooms/protocol';
 
 const TRACKS: ResolvedTrack[] = [
   { key: 'tone-a', videoId: 'aaa', url: makeTone(220, 180), title: 'Tone A', artist: 'synth' },
@@ -45,6 +46,10 @@ function makeTone(freq: number, seconds: number): string {
 
 const $ = <T extends HTMLElement>(id: string) => document.getElementById(id) as T;
 
+/* Part picker state for the dev harness. */
+let myPart: Part = 'full';
+let myTrim = 0;
+
 /* ---------------- wiring ---------------- */
 
 const audio = $<HTMLAudioElement>('audio');
@@ -63,6 +68,72 @@ const target = createAudioTarget({
 function setStatus(text: string, kind: 'ok' | 'warn' | 'err' | '' = '') {
   $('status').textContent = text;
   $('status').className = kind;
+}
+
+/** Wire the output band picker (full / bass / highs) and trim slider. */
+function wirePartPicker(roomId: string): void {
+  const wrap = $('partPick');
+  const trimWrap = $('trimWrap') as HTMLElement | null;
+  const slider = $('trimSlider') as HTMLInputElement | null;
+  const trimVal = $('trimVal') as HTMLElement | null;
+  if (!wrap || !slider || !trimVal) return;
+
+  const btns = wrap.querySelectorAll('.part-btn');
+  const select = (part: string) => {
+    btns.forEach((b) => b.classList.toggle('active', b.dataset.part === part));
+  };
+  select(myPart);
+  if (trimWrap) trimWrap.hidden = myPart === 'full';
+
+  const loadTrim = () => {
+    const saved = localStorage.getItem(`auraRoomTrim_${roomId}`);
+    myTrim = saved ? Number(saved) : 0;
+    if (!Number.isFinite(myTrim)) myTrim = 0;
+    slider.value = String(myTrim);
+    trimVal.textContent = String(myTrim);
+    client?.setTrim?.(myPart, myTrim);
+  };
+  loadTrim();
+
+  btns.forEach((b) => {
+    b.addEventListener('click', () => {
+      const part = b.dataset.part as Part;
+      client?.setPart(part);
+    });
+  });
+
+  slider.addEventListener('input', () => {
+    myTrim = Number(slider.value);
+    trimVal.textContent = String(myTrim);
+    localStorage.setItem(`auraRoomTrim_${roomId}`, String(myTrim));
+    client?.setTrim?.(myPart, myTrim);
+  });
+}
+
+/** Update the part picker UI from the server's view. */
+function updatePartPickerUI(v: any): void {
+  const yourPart = v.you?.part ?? 'full';
+  if (yourPart !== myPart) {
+    myPart = yourPart;
+    const wrap = $('partPick');
+    if (wrap) {
+      for (const b of wrap.querySelectorAll('.part-btn')) {
+        b.classList.toggle('active', b.dataset.part === myPart);
+      }
+    }
+    client?.setTrim?.(myPart, myTrim);
+  }
+
+  const anchor = v.participants.find((p: any) => p.part === 'bass' && p.id !== v.you?.id);
+  const hint = $('partHint') as HTMLElement | null;
+  if (hint) {
+    if (myPart === 'bass') hint.textContent = 'You are the bass anchor.';
+    else if (anchor) hint.textContent = `Bass anchor is ${anchor.name}.`;
+    else hint.textContent = '';
+  }
+
+  const trimWrap = $('trimWrap') as HTMLElement | null;
+  if (trimWrap) trimWrap.hidden = myPart === 'full';
 }
 
 async function start(name: string, requestedRoom: string | null, keyFromUrl: string | null) {
@@ -104,6 +175,7 @@ async function start(name: string, requestedRoom: string | null, keyFromUrl: str
   client.subscribe(render);
   client.join(name);
 
+  wirePartPicker(roomId);
   setStatus(isHost ? 'you created the room — you are the admin' : 'joined', 'ok');
   render();
 }
@@ -134,6 +206,7 @@ async function startRemote(name: string, requestedRoom: string | null, keyFromUr
   try {
     await transport.connect();
     client.join(name);
+    wirePartPicker(roomId);
     setStatus(ownerKey && !requestedRoom ? 'connected to the room server — you are the admin' : 'connected to the room server', 'ok');
   } catch (err) {
     setStatus(`✗ ${(err as Error).message}`, 'err');
@@ -161,6 +234,7 @@ function render() {
   if (!c) return;
   const v = c.view();
 
+  updatePartPickerUI(v);
   $('roomId').textContent = v.roomId;
   $('role').textContent = v.role;
   $('role').className = v.role === 'admin' ? 'admin' : 'listener';

@@ -248,6 +248,11 @@ export class RoomClient {
     this.send({ t: 'part', part });
   }
 
+  /** Set output-delay trim for the current part (ms). Forwarded to the audio target. */
+  setTrim(part: 'full' | 'bass' | 'highs', ms: number): void {
+    (this.target as any).setTrim?.(part, ms);
+  }
+
   /** Narrow this device's correction bands while it plays a split band: two
    * devices summing into one physical space must not be allowed to drift as
    * far apart as a room of independent listeners. */
