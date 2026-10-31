@@ -151,25 +151,6 @@ await sleep(700);
 const floodCount = alice.inbox.filter((m) => m.t === 'chat' && m.message.text.startsWith('flood ')).length;
 check('chat flood is rate limited', floodCount <= 5, `${floodCount}/12 accepted (limit 5 per 5s)`);
 
-/* --- output band (frequency split) --- */
-alice.send({ t: 'part', part: 'bass' });
-await sleep(300);
-const aParts = await alice.waitFor((m) => m.t === 'participants' && m.participants.some(p => p.part === 'bass'));
-check('self-selects bass band', aParts.participants.find(p => p.id === aWelcome.you.id)?.part === 'bass',
-  `part=${aParts.participants.find(p => p.id === aWelcome.you.id)?.part}`);
-
-// Only one bass anchor per room: a second client asking for bass is refused.
-bob.send({ t: 'part', part: 'bass' });
-await sleep(300);
-const bParts = await bob.waitFor((m) => m.t === 'participants');
-check('second bass request is refused', bParts.participants.find(p => p.id === bWelcome.you.id)?.part === 'full',
-  `part=${bParts.participants.find(p => p.id === bWelcome.you.id)?.part}`);
-
-alice.send({ t: 'part', part: 'full' });
-await sleep(300);
-const aFull = await alice.waitFor((m) => m.t === 'participants' && m.participants.every(p => p.part !== 'bass'));
-check('leaving bass frees the anchor', !!aFull, JSON.stringify(aFull.participants.map(p => `${p.id}:${p.part}`)));
-
 /* --- promotion --- */
 const bobId = bWelcome.you.id;
 alice.send({ t: 'role', action: 'promote', participantId: bobId });

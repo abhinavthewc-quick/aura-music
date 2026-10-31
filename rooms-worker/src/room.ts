@@ -26,7 +26,7 @@ export interface Env {
   ROOM_SCHEMA?: string;
 }
 
-const SCHEMA = 'v2';
+const SCHEMA = 'v3';
 /** How often an idle room re-checks that it is still supposed to exist. */
 const ALARM_MS = 30_000;
 

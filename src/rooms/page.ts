@@ -15,7 +15,7 @@ import { ensureCatalog, refreshCatalog, onCatalogRefreshed } from './catalogRead
 import { state, trackKey, rebuildSongs } from '../core/state';
 import { DEFAULT_COVER } from '../core/catalog';
 import type { RoomView } from './roomClient';
-import { DRIFT_HARD_MS, DRIFT_SOFT_MS, type ChatMessage } from './protocol';
+import type { ChatMessage } from './protocol';
 
 const NAME_KEY = 'auraRoomName_v1';
 const ROOM_KEY = 'auraRecentRooms_v1';
@@ -45,11 +45,6 @@ let lastLibQuery = '';
 let lastUnresolvedRefresh = 0;
 let scrubbing = false;
 let scrubPreviewMs = 0;
-
-/* This device's output band and trim, persisted per room so the choice
-   survives a reconnect. The server is authoritative; this is the local echo. */
-let myPart: 'full' | 'bass' | 'highs' = 'full';
-let myTrim = 0;
 
 /* ---------------- small helpers ---------------- */
 
@@ -314,10 +309,6 @@ async function join(roomId: string, adminKey: string | null, isHost: boolean) {
   client.join(name);
   unsub = client.subscribe(render);
   setRoomActive(true);
-  wirePartPicker(roomId);
-  // Expose for debugging (like dev harness)
-  (window as any).__room = () => client;
-  console.log('[page] wirePartPicker done, __room set');
   history.replaceState(null, '', `/rooms?r=${roomId}${adminKey ? '&k=' + adminKey : ''}`);
 
   $('joinView').hidden = true;
@@ -357,6 +348,12 @@ function leave() {
   unsub?.(); unsub = null;
   client?.leave(); client = null; transport = null;
   audio?.dispose(); audio = null;
+  // Forget per-room render signatures so rejoining repaints every panel.
+  lastQueueSig = '';
+  lastPeopleSig = '';
+  lastRenderRole = '';
+  lastLibQuery = '';
+  vRoleDirty = true;
   setRoomActive(false);
   try { history.replaceState(null, '', '/rooms'); } catch { /* ignore */ }
   showJoin();
@@ -444,7 +441,7 @@ function live() {
 /* ---------------- rendering ---------------- */
 
 function peopleSig(v: RoomView): string {
-  return v.participants.map((p) => `${p.id}:${p.role}:${p.part}`).join('¬');
+  return v.participants.map((p) => `${p.id}:${p.role}`).join('¬');
 }
 
 function queueSig(v: RoomView): string {
@@ -464,50 +461,8 @@ function maybeRenderResults(): void {
 
 let vRoleDirty = false;
 
-/* Apply this device's output band to the audio graph and to the engine's
-   correction bands. Only ever called with the server's answer: the referee
-   may refuse a band (one bass anchor per room), so a click is echoed back
-   before anything changes audibly. */
-function applyPart(part: 'full' | 'bass' | 'highs'): void {
-  myPart = part;
-  audio?.setPart(part);
-  audio?.setTrim(part, myTrim);
-  // Split playback puts two devices into one physical space, where their
-  // errors sum instead of averaging out — so hold them to a tighter drift
-  // budget than a room of independent listeners gets.
-  client?.setBands(
-    part === 'full' ? DRIFT_SOFT_MS : 8,
-    part === 'full' ? DRIFT_HARD_MS : 80,
-  );
-}
-
 function render(v: RoomView) {
   const isAdmin = v.role === 'admin';
-
-  // The server is authoritative for this device's part; correct the local echo
-  // if it disagreed (e.g. the bass anchor was already taken).
-  const yourPart = v.you?.part ?? 'full';
-  if (yourPart !== myPart) {
-    myPart = yourPart;
-    const wrap = $('partPick');
-    if (wrap) {
-      for (const b of wrap.querySelectorAll('.part-btn')) {
-        b.classList.toggle('active', b.dataset.part === myPart);
-      }
-    }
-    applyPart(myPart);
-  }
-
-  const anchor = v.participants.find((p) => p.part === 'bass' && p.id !== v.you?.id);
-  const hint = $('partHint') as HTMLElement | null;
-  if (hint) {
-    if (myPart === 'bass') hint.textContent = 'You are the bass anchor.';
-    else if (anchor) hint.textContent = `Bass anchor is ${anchor.name}.`;
-    else hint.textContent = '';
-  }
-
-  const trimWrap = $('trimWrap') as HTMLElement | null;
-  if (trimWrap) trimWrap.hidden = myPart === 'full';
 
   $('roomCode').textContent = v.roomId;
   const pill = $('rolePill');
@@ -603,12 +558,6 @@ function render(v: RoomView) {
       const nm = document.createElement('span');
       nm.textContent = p.name;
       who.appendChild(nm);
-      if (p.part !== 'full') {
-        const badge = document.createElement('span');
-        badge.className = 'part-badge';
-        badge.textContent = p.part === 'bass' ? 'SUB' : 'HIGHS';
-        who.appendChild(badge);
-      }
       if (v.you && p.id === v.you.id) {
         const me = document.createElement('span');
         me.className = 'me-tag';
@@ -710,69 +659,6 @@ function wireSeek(): void {
 
 /* ---------------- controls ---------------- */
 
-let wirePartPickerDone = false;
-
-function wirePartPicker(roomId: string): void {
-  if (wirePartPickerDone) {
-    console.log('[page] wirePartPicker already done, skipping');
-    return;
-  }
-  console.log('[page] wirePartPicker called for room:', roomId);
-  const wrap = $('partPick');
-  const trimWrap = $('trimWrap') as HTMLElement | null;
-  const slider = $('trimSlider') as HTMLInputElement | null;
-  const trimVal = $('trimVal') as HTMLElement | null;
-  if (!wrap || !slider || !trimVal) {
-    console.warn('[page] wirePartPicker: missing elements', { wrap: !!wrap, slider: !!slider, trimVal: !!trimVal });
-    return;
-  }
-  // ... rest of function
-
-  const btns = wrap.querySelectorAll('.part-btn');
-  const select = (part: string) => {
-    btns.forEach((b) => b.classList.toggle('active', b.dataset.part === part));
-  };
-  select(myPart);
-  if (trimWrap) trimWrap.hidden = myPart === 'full';
-
-  // Add click handlers FIRST, before any localStorage access that might throw
-  btns.forEach((b) => {
-    b.addEventListener('click', () => {
-      const part = b.dataset.part as 'full' | 'bass' | 'highs';
-      console.log('[page] part button clicked:', part);
-      client?.setPart(part);
-    });
-  });
-
-  // Then load trim (localStorage access wrapped in try-catch)
-  try {
-    const saved = localStorage.getItem(`auraRoomTrim_${roomId}`);
-    myTrim = saved ? Number(saved) : 0;
-    if (!Number.isFinite(myTrim)) myTrim = 0;
-    slider.value = String(myTrim);
-    trimVal.textContent = String(myTrim);
-    audio?.setTrim(myPart, myTrim);
-  } catch (err) {
-    console.warn('[page] wirePartPicker: localStorage error', err);
-    myTrim = 0;
-    slider.value = '0';
-    trimVal.textContent = '0';
-  }
-
-  if (trimWrap) trimWrap.hidden = myPart === 'full';
-
-  slider.addEventListener('input', () => {
-    myTrim = Number(slider.value);
-    trimVal.textContent = String(myTrim);
-    try {
-      localStorage.setItem(`auraRoomTrim_${roomId}`, String(myTrim));
-    } catch (err) {
-      console.warn('[page] wirePartPicker: localStorage setItem error', err);
-    }
-    audio?.setTrim(myPart, myTrim);
-  });
-}
-
 function wireRoom() {
   $('playBtn').onclick = () => client?.toggle();
   $('nextBtn').onclick = () => client?.queueNext();
@@ -832,6 +718,18 @@ function wireCatalogRefresh(): void {
   // into view, on focus, on a timer while the room is open, and whenever any
   // other tab (the admin uploader, say) refreshes the catalogue.
   catalogUnsub = onCatalogRefreshed(() => { void refreshLibrary(); });
+
+  // The admin page announces a finished refresh on this channel. Listen for
+  // it so a song uploaded while a room is open appears immediately; the poll
+  // above still covers browsers without BroadcastChannel.
+  try {
+    const channel = new BroadcastChannel('aura-catalog');
+    channel.onmessage = (e) => {
+      if (e.data?.t === 'refresh') void refreshLibrary();
+    };
+    catalogKeepers.push(() => channel.close());
+  } catch { /* unsupported: the poll is enough */ }
+
   const onVisible = () => { if (document.visibilityState === 'visible') void refreshLibrary(); };
   const onFocus = () => void refreshLibrary();
   window.addEventListener('visibilitychange', onVisible);

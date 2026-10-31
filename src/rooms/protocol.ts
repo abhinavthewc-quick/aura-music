@@ -11,16 +11,12 @@
  */
 
 export type Role = 'admin' | 'listener';
-/** Which part of the mix this device plays. 'full' is ordinary room listening. */
-export type Part = 'full' | 'bass' | 'highs';
 
 export interface Participant {
   id: string;
   name: string;
   role: Role;
   joinedAt: number;
-  /** Which band this device plays: full range, bass only, or highs only. */
-  part: Part;
 }
 
 /** What the room is doing right now. `updatedAt` is the server's clock. */
@@ -63,7 +59,7 @@ export type ControlAction = 'play' | 'pause' | 'seek' | 'track';
 
 export type ClientMessage =
   /** Open a connection. `adminKey` is what proves you may control playback. */
-  | { t: 'hello'; clientId: string; name: string; adminKey?: string; part?: Part }
+  | { t: 'hello'; clientId: string; name: string; adminKey?: string }
   /** Clock sync. Server answers with `pong` carrying the same `sentAt`. */
   | { t: 'ping'; sentAt: number }
   /** Admin only. Seek carries `positionMs`; track carries `trackKey`/`videoId`.
@@ -75,8 +71,6 @@ export type ClientMessage =
   /** Admin only. */
   | { t: 'role'; action: 'promote' | 'demote'; participantId: string }
   | { t: 'chat'; text: string }
-  /** This device's output band (full / bass / highs). Listener-controlled. */
-  | { t: 'part'; part: Part }
   | { t: 'buffering'; buffering: boolean }
   | { t: 'bye' };
 

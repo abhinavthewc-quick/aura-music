@@ -157,14 +157,6 @@ export class SyncEngine {
     return Math.max(0, this.pendingStartServerMs - this.clock.serverNow());
   }
 
-  /** Tighten or relax the correction bands. Used when a room member is playing
-   * the bass split: devices sharing one physical space must sum in the air,
-   * so the steady-state spread between them needs to stay small. */
-  setBands(softMs: number, hardMs: number): void {
-    this.opts.softMs = softMs;
-    this.opts.hardMs = hardMs;
-  }
-
   /**
    * Give the audio engine another chance after an autoplay block. Called from
    * the UI's first real interaction.

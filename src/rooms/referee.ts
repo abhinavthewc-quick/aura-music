@@ -108,7 +108,6 @@ export class RoomReferee {
       this.adminKeys.set(ownerKey, ownerId);
       this.participants.set(ownerId, {
         id: ownerId, name: 'host', role: 'admin', joinedAt: this.startedAt,
-        part: 'full',
       });
     }
   }
@@ -130,7 +129,7 @@ export class RoomReferee {
    */
   seedOwner(ownerId: string, ownerKey: string, name = 'host'): void {
     if (this.participants.size > 0) return;
-    this.participants.set(ownerId, { id: ownerId, name, role: 'admin', joinedAt: this.now(), part: 'full' });
+    this.participants.set(ownerId, { id: ownerId, name, role: 'admin', joinedAt: this.now() });
     this.adminKeys.set(ownerKey, ownerId);
     this.broadcastParticipants();
   }
@@ -206,7 +205,6 @@ export class RoomReferee {
           name: message.name || 'listener',
           role,
           joinedAt: known?.joinedAt ?? this.now(),
-          part: message.part ?? 'full',
         });
         if (message.adminKey && this.adminKeys.get(message.adminKey) === clientId) {
           this.participants.get(clientId)!.role = 'admin';
@@ -264,24 +262,6 @@ export class RoomReferee {
 
       case 'chat': {
         this.pushChat(clientId, message.text);
-        return;
-      }
-
-      /** A listener chooses their own output band — personal output shaping,
-       * not playback control, so any participant may set it. */
-      case 'part': {
-        const part = message.part;
-        if (part !== 'full' && part !== 'bass' && part !== 'highs') return;
-        const p = this.participants.get(clientId);
-        if (!p) return;
-        if (part === 'bass') {
-          // One bass anchor per room: two subs in one physical space sum and
-          // can cancel each other.
-          const taken = [...this.participants.values()].some((x) => x.id !== clientId && x.part === 'bass');
-          if (taken) return;
-        }
-        p.part = part;
-        this.broadcastParticipants();
         return;
       }
 

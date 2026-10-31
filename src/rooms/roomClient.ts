@@ -242,24 +242,6 @@ export class RoomClient {
     if (this.playback.playing) this.pause(); else this.play();
   }
 
-  /** Listener-selected output band: full / bass / highs. Personal output
-   * shaping — any participant may set it, admin authority is untouched. */
-  setPart(part: 'full' | 'bass' | 'highs'): void {
-    this.send({ t: 'part', part });
-  }
-
-  /** Set output-delay trim for the current part (ms). Forwarded to the audio target. */
-  setTrim(part: 'full' | 'bass' | 'highs', ms: number): void {
-    (this.target as any).setTrim?.(part, ms);
-  }
-
-  /** Narrow this device's correction bands while it plays a split band: two
-   * devices summing into one physical space must not be allowed to drift as
-   * far apart as a room of independent listeners. */
-  setBands(softMs: number, hardMs: number): void {
-    this.engine.setBands(softMs, hardMs);
-  }
-
   queueAdd(trackKey: string): void {
     // An idle room should start the first track rather than parking it in a
     // queue nobody will ever drain: the referee ignores `play` until a track
