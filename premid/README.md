@@ -36,6 +36,7 @@ The hidden element looks like this while a library track plays:
      data-v="1" data-site="Aura Music" data-kind="track"
      data-title="Starboy" data-artist="The Weeknd" data-album="Starboy"
      data-cover="https://…/Starboy.jpg" data-url="https://…/"
+     data-link="https://…/?play=hf%3AStarboy%20%5B3_g2un5M350%5D.opus"
      data-video-id="3_g2un5M350" data-duration="230.4" data-position="42.1"
      data-playing="1" data-live="0" data-tab="Home"
      data-updated-at="1699999999999"></div>
@@ -47,6 +48,8 @@ The hidden element looks like this while a library track plays:
   to extrapolate the position between one-second ticks)
 - `tab`: the active section (`Home`, `Search`, `Library`, `Radio`, `Add Music`)
 - `cover`: absolute `http(s)` URL, or empty when the art is a placeholder
+- `link`: deep link that opens and plays this exact item in Aura — used by the
+  activity's button and clickable title
 
 The site side lives in `src/core/presence.ts` (publisher) and
 `src/features/presence-reporter.ts` (reads the player once a second). It is
@@ -55,6 +58,14 @@ site before testing**, or the activity will only show browsing mode.
 
 The activity does not scrape player markup, so restyling the UI cannot break the
 Discord status — only a change to the contract above would.
+
+### Deep links
+
+The site accepts `?play=<track id>` and `?play=yt:<videoId>`
+([`src/features/deeplink.ts`](../../src/features/deeplink.ts)). On load it starts
+that track, clears the parameter and leaves the rest of the session untouched.
+That is what the **Listen in Aura Music** button and the clickable song title
+point at, so pressing them does not just open the home screen.
 
 ---
 
@@ -96,7 +107,8 @@ cp -R "premid/websites/A/Aura Music" "Activities/websites/A/"
 
 Then:
 
-1. Install the PreMiD extension + desktop app: <https://premid.app/downloads>
+1. Install the PreMiD extension: <https://premid.app/downloads> (no desktop app
+   is needed — PreMiD links Discord through OAuth).
 2. Extension settings (⚙️) → enable **Activity Developer Mode**.
 3. In the `Activities` repo: `npx pmd dev "Aura Music"`.
 4. Open <https://aura-music-01g.pages.dev> (or `http://localhost:5173` while
@@ -113,17 +125,24 @@ npx pmd dev "Aura Music" --validate
 
 - Nothing playing → "Browsing Aura Music" with the current tab and a timer.
 - A library/YouTube track → song title, artist, cover, elapsed/remaining bar.
+- The **Listen in Aura Music** button opens the site already playing that track.
+  The song title, artist and cover are clickable too (`details_url`,
+  `state_url`, `large_image url`), so there is always a way through even when a
+  Discord client hides activity buttons in the compact card.
 - Pause → pause icon, timer disappears (Discord cannot show a frozen bar).
 - Seek → the bar jumps to the new position within a second.
-- YouTube playback → a **Play on YouTube** button (plus **Open Aura Music**).
+- YouTube playback → **Listen in Aura Music** plus a **Play on YouTube** button.
 - Live radio → station name, `Live radio`, no timer.
 - Settings → privacy mode, cover on/off, timestamps, status display
   (app/artist/song), buttons, hide-when-paused, browsing.
 
 ## 5. Publishing (optional)
 
-Personal use is fine as a sideloaded dev activity — just keep the folder in your
-local `Activities` clone and run `pmd dev` when you want the status.
+Personal use is fine as a sideloaded dev activity. `pmd dev` is only the
+loader/updater: the extension stores the activity (its `devActivities` store) and
+keeps running it after the CLI stops, so you do not need a terminal open all the
+time. Re-run `pmd dev` after editing the activity files, after clearing extension
+data, or if a browser update removes it.
 
 To submit it to the PreMiD store:
 
@@ -146,6 +165,8 @@ To submit it to the PreMiD store:
   both directions.
 - Artwork is restricted to `http(s)` URLs (data URIs fall back to the logo),
   because Discord cannot fetch `data:` images.
+- The primary button and `details_url` use the `link` from the page, so they
+  deep-link to the exact track instead of the site root.
 - `metadata.json` validates against `https://schemas.premid.app/metadata/1.17`.
 - Not covered yet: `rooms.html` ("Listen together") is a separate page with its
   own player, so a synced room shows browsing mode. It can publish the same

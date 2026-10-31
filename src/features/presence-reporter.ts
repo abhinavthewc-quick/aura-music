@@ -38,6 +38,15 @@ function youtubeVideoUrl(videoId: string): string {
   return videoId ? `https://music.youtube.com/watch?v=${encodeURIComponent(videoId)}` : '';
 }
 
+/* Deep link understood by src/features/deeplink.ts. The activity uses it for
+   its "Listen in Aura Music" button and clickable song title. */
+function appLink(song: any): string {
+  const origin = location.origin;
+  if (!song) return origin + '/';
+  if (song.isYouTube && song.videoId) return `${origin}/?play=yt:${encodeURIComponent(String(song.videoId))}`;
+  return `${origin}/?play=${encodeURIComponent(String(song.id))}`;
+}
+
 function reportRadio(): boolean {
   const station = currentRadioStation as any;
   if (!station) return false;
@@ -53,6 +62,7 @@ function reportRadio(): boolean {
     album: '',
     cover: isHttp(station.favicon) ? String(station.favicon) : '',
     url: location.origin + '/',
+    link: location.origin + '/',
     videoId: '',
     duration: 0,
     position: 0,
@@ -90,6 +100,7 @@ function reportYouTube(): boolean {
     album: 'YouTube Music',
     cover: isHttp(auraYTPoster) ? auraYTPoster : `https://i.ytimg.com/vi/${auraYTVideoId}/mqdefault.jpg`,
     url: youtubeVideoUrl(auraYTVideoId),
+    link: `${location.origin}/?play=yt:${encodeURIComponent(auraYTVideoId)}`,
     videoId: auraYTVideoId,
     duration,
     position,
@@ -120,6 +131,7 @@ function reportLocalTrack(): boolean {
     album: String(song.album || ''),
     cover: isHttp(song.img) ? String(song.img) : '',
     url: location.origin + '/',
+    link: appLink(song),
     videoId: String(song.videoId || ''),
     duration,
     position,
@@ -138,6 +150,7 @@ function reportIdle(): void {
     album: '',
     cover: '',
     url: location.origin + '/',
+    link: location.origin + '/',
     videoId: '',
     duration: 0,
     position: 0,

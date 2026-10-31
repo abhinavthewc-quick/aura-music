@@ -5,7 +5,7 @@
  *
  * Contract (see src/core/presence.ts in the Aura Music repo):
  *   #auraPresence[data-kind|data-title|data-artist|data-album|data-cover|
- *                  data-url|data-video-id|data-duration|data-position|
+ *                  data-url|data-link|data-video-id|data-duration|data-position|
  *                  data-playing|data-live|data-tab|data-updated-at]
  *   window.auraPresence / window.AuraPresence.getState()
  */
@@ -21,6 +21,8 @@ export interface AuraState {
   album: string
   cover: string
   url: string
+  /** Deep link that plays this exact item in Aura ('' when unavailable). */
+  link: string
   videoId: string
   duration: number
   position: number
@@ -43,6 +45,12 @@ export function httpImage(url: unknown, fallback: string): string {
   if (/^http:\/\//i.test(value))
     return value.replace(/^http:/i, 'https:')
   return fallback
+}
+
+/** Clickable targets must keep their scheme: localhost dev is http, not https. */
+export function httpLink(url: unknown, fallback: string): string {
+  const value = String(url || '').trim()
+  return /^https?:\/\//i.test(value) ? value : fallback
 }
 
 export function clip(value: string, max = 128): string {
@@ -83,6 +91,7 @@ export function readDomState(now = Date.now()): AuraState | null {
     album: data.album || '',
     cover: data.cover || '',
     url: data.url || '',
+    link: data.link || '',
     videoId: data.videoId || '',
     duration,
     position,

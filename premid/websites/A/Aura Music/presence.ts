@@ -1,6 +1,6 @@
 import type { AuraState } from './state.js'
 import { ActivityType, Assets, getTimestamps, StatusDisplayType, supports } from 'premid'
-import { clip, httpImage, readDomState, SITE_NAME, youtubeUrl } from './state.js'
+import { clip, httpImage, httpLink, readDomState, SITE_NAME, youtubeUrl } from './state.js'
 
 /* ------------------------------------------------------------------------- *
  * Discord application — "Aura Music"
@@ -98,10 +98,13 @@ function browsingPresence(state: AuraState | null, settings: Settings, since: nu
     return null
 
   const tab = clip(state?.tab || '', 64)
+  const link = httpLink(state?.link, SITE_URL)
   const data: PresenceData = {
     type: ActivityType.Playing,
     largeImageKey: LOGO_URL,
     details: `Browsing ${SITE_NAME}`,
+    detailsUrl: link,
+    largeImageUrl: link,
     startTimestamp: since,
   }
 
@@ -111,7 +114,7 @@ function browsingPresence(state: AuraState | null, settings: Settings, since: nu
   if (settings.buttons) {
     data.buttons = [{
       label: `Open ${SITE_NAME}`,
-      url: SITE_URL,
+      url: link,
     }]
   }
 
@@ -123,23 +126,30 @@ function trackPresence(state: AuraState, settings: Settings): PresenceData {
   const position = Math.min(Math.max(0, state.position || 0), duration || Number.POSITIVE_INFINITY)
   const artist = clip(state.artist)
   const isRadio = state.kind === 'radio'
+  const link = httpLink(state.link, SITE_URL)
 
   const data: PresenceData = {
     type: ActivityType.Listening,
     largeImageKey: settings.cover ? httpImage(state.cover, LOGO_URL) : LOGO_URL,
     largeImageText: clip(state.album || artist || (isRadio ? 'Live radio' : SITE_NAME)),
     details: clip(state.title) || SITE_NAME,
+    detailsUrl: link,
+    stateUrl: link,
+    largeImageUrl: link,
     state: artist || undefined,
   }
 
   if (settings.buttons) {
+    /* The first button is the deep link that opens this exact track in Aura.
+     * Discord renders buttons in the activity card; if it hides them, the
+     * song title itself is clickable through detailsUrl above. */
     const buttons: [ButtonData, ButtonData?] = [{
-      label: `Open ${SITE_NAME}`,
-      url: SITE_URL,
+      label: isRadio ? `Open ${SITE_NAME}` : `Listen in ${SITE_NAME}`,
+      url: link,
     }]
 
     if (state.videoId) {
-      buttons.unshift({
+      buttons.push({
         label: 'Play on YouTube',
         url: youtubeUrl(state.videoId),
       })

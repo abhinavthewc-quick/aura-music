@@ -33,6 +33,8 @@ export interface AuraPresenceState {
   cover: string;
   /** Canonical link to open for this item (site or YouTube watch page). */
   url: string;
+  /** Deep link that opens and plays this exact item in Aura ('' if none). */
+  link: string;
   videoId: string;
   /** Seconds; 0 when unknown or live (radio). */
   duration: number;
@@ -57,6 +59,7 @@ function idleState(): AuraPresenceState {
     album: '',
     cover: '',
     url: '',
+    link: '',
     videoId: '',
     duration: 0,
     position: 0,
@@ -81,6 +84,7 @@ function writeElement(el: HTMLElement, s: AuraPresenceState): void {
   el.setAttribute('data-album', s.album);
   el.setAttribute('data-cover', s.cover);
   el.setAttribute('data-url', s.url);
+  el.setAttribute('data-link', s.link);
   el.setAttribute('data-video-id', s.videoId);
   el.setAttribute('data-duration', String(s.duration));
   el.setAttribute('data-position', String(s.position));
