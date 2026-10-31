@@ -3,7 +3,7 @@ import { DEFAULT_COVER, fetchHfCatalog } from '../core/catalog';
 import { renderArtistSpotlight, renderAuraPicks, renderQuickAccess } from './home';
 import { filterSongs, loadSong, playSong, resetFullPlayerArtToImage, stopAuraYouTube, updatePlayState } from './player';
 import { filterSearchTab, getYouTubeIdFromUrl } from './search';
-import { $, persistLikedHistory, rebuildSongs, savedLikeMap, setHfTracks, state } from '../core/state';
+import { $, getPlayCount, persistLikedHistory, rebuildSongs, recordPlayCount, savedLikeMap, setHfTracks, state, trackKey } from '../core/state';
 /* ===== 3006-3012 ===== */
     /* Library Count */
     /* Home sections rebuild a lot of markup; coalesce the many callers
@@ -23,6 +23,9 @@ import { $, persistLikedHistory, rebuildSongs, savedLikeMap, setHfTracks, state 
 
 /* ===== 3016-3037 ===== */
     export function addToRecent(song){
+      if(song){
+        recordPlayCount(song.id, trackKey(song));
+      }
       state.recentlyPlayed = state.recentlyPlayed.filter(s => s.id !== song.id);
       state.recentlyPlayed.unshift({id:song.id,title:song.title,artist:song.artist,img:song.img});
       state.recentlyPlayed = state.recentlyPlayed.slice(0,10);
@@ -443,8 +446,13 @@ import { $, persistLikedHistory, rebuildSongs, savedLikeMap, setHfTracks, state 
         c.innerHTML = stateHTML('noresults','No tracks found','Try a different spelling or another filter.');
         return;
       }
+      // Sort most played songs at the top, rest downwards
+      const sorted = [...list].sort((a, b) => {
+        const diff = getPlayCount(b) - getPlayCount(a);
+        return diff !== 0 ? diff : 0;
+      });
       const indexById = songIndexById();
-      c.innerHTML = list.map(s => songItemHTML(s, indexById.get(String(s.id)))).join('');
+      c.innerHTML = sorted.map(s => songItemHTML(s, indexById.get(String(s.id)))).join('');
     }
 
 /* ===== Library tab view switcher: Tracks / Artists / Albums / Films ===== */
@@ -550,8 +558,13 @@ import { $, persistLikedHistory, rebuildSongs, savedLikeMap, setHfTracks, state 
         else if(state.catalogError) c.innerHTML = stateHTML('error','Couldn\'t load your library','The remote catalogue is unreachable. Check your connection and try again.','Try again','retryCatalog()');
         else c.innerHTML=stateHTML('empty','Your library is empty','Add your own songs or search online to get started.','Search music',"goTab('tabSearch')");
       }else if(libView==='tracks'){
+        // Sort most played songs at the top, rest downwards
+        const sorted = [...state.songs].sort((a, b) => {
+          const diff = getPlayCount(b) - getPlayCount(a);
+          return diff !== 0 ? diff : 0;
+        });
         const indexById = songIndexById();
-        c.innerHTML=state.songs.map(s => songItemHTML(s, indexById.get(String(s.id)))).join('');
+        c.innerHTML=sorted.map(s => songItemHTML(s, indexById.get(String(s.id)))).join('');
       }else{
         renderGroups(libView);
       }

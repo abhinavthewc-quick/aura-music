@@ -3,6 +3,17 @@ import { readCatalogCache } from './catalog';
 // Mutable shared store. Every cross-module-reassigned top-level `let` from the
 // original single-file app lives here so feature modules can read/write it.
 export const AURA_LIKED_KEY='auraLikedSongs_v2';
+export const AURA_PLAY_COUNTS_KEY='aura_play_counts_v1';
+
+export const playCountMap: Record<string, number> = (() => {
+  try {
+    const raw = localStorage.getItem(AURA_PLAY_COUNTS_KEY);
+    const parsed = raw ? JSON.parse(raw) : {};
+    return typeof parsed === 'object' && parsed !== null ? parsed : {};
+  } catch {
+    return {};
+  }
+})();
 
 export const state = {
   hfSongs: readCatalogCache() as any[],
@@ -22,6 +33,36 @@ export const state = {
   catalogLoading: false,
   catalogError: false,
 };
+
+// Seed play counts from recentlyPlayed if playCountMap is initially empty
+try {
+  if (Object.keys(playCountMap).length === 0 && Array.isArray(state.recentlyPlayed)) {
+    state.recentlyPlayed.forEach((s: any, idx: number) => {
+      if (s?.id) {
+        playCountMap[String(s.id)] = Math.max(1, 10 - idx);
+      }
+    });
+    localStorage.setItem(AURA_PLAY_COUNTS_KEY, JSON.stringify(playCountMap));
+  }
+} catch {}
+
+export function getPlayCount(s: any): number {
+  if (!s) return 0;
+  const idKey = String(s.id);
+  const tk = trackKey(s);
+  return Math.max(playCountMap[idKey] || 0, playCountMap[tk] || 0);
+}
+
+export function recordPlayCount(songId: string | number, tKey?: string) {
+  const idKey = String(songId);
+  playCountMap[idKey] = (playCountMap[idKey] || 0) + 1;
+  if (tKey) {
+    playCountMap[tKey] = (playCountMap[tKey] || 0) + 1;
+  }
+  try {
+    localStorage.setItem(AURA_PLAY_COUNTS_KEY, JSON.stringify(playCountMap));
+  } catch {}
+}
 
 export const savedLikeMap = Object.fromEntries(state.auraLikedHistory.map((x: any) => [String(x.id), true]));
 /* Older likes used numeric ids from the hardcoded catalog; match those by
@@ -70,7 +111,13 @@ export function rebuildSongs() {
     seen.add(k);
     added.push(s);
   }
-  state.songs = [...hf, ...added];
+  // Most played songs at the top, rest downwards
+  state.songs = [...hf, ...added].sort((a: any, b: any) => {
+    const countA = getPlayCount(a);
+    const countB = getPlayCount(b);
+    if (countB !== countA) return countB - countA;
+    return 0;
+  });
   if (current) {
     let idx = state.songs.findIndex((s: any) => String(s.id) === String(current.id));
     if (idx === -1) idx = state.songs.findIndex((s: any) => trackKey(s) === trackKey(current));
