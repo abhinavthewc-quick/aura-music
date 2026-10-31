@@ -404,7 +404,7 @@ import { $, getPlayCount, persistLikedHistory, rebuildSongs, recordPlayCount, sa
       if($('tabSearch').classList.contains('active')) filterSearchTab();
     }
 
-    function songIndexById(){
+    export function songIndexById(){
       const map = new Map<string, number>();
       state.songs.forEach((s, i) => map.set(String(s.id), i));
       return map;
@@ -418,14 +418,27 @@ import { $, getPlayCount, persistLikedHistory, rebuildSongs, recordPlayCount, sa
     }
 
     export function songItemHTML(s, songIdx?){
-      const index = songIdx === undefined ? state.songs.findIndex(item => item.id === s.id) : songIdx;
+      let index = -1;
+      if(typeof songIdx === 'number' && songIdx >= 0 && songIdx < state.songs.length){
+        const candidate = state.songs[songIdx];
+        if(candidate && (candidate.id === s.id || String(candidate.id) === String(s.id))){
+          index = songIdx;
+        }
+      }
+      if(index === -1){
+        index = state.songs.findIndex(item => item.id === s.id || String(item.id) === String(s.id));
+      }
+      if(index === -1 && s.title){
+        index = state.songs.findIndex(item => item.title === s.title && item.artist === s.artist);
+      }
       const title = escapeHtml(s.title || 'Untitled');
       const artist = escapeHtml(s.artist || 'Unknown Artist');
       const cover = escapeHtml(s.img || DEFAULT_COVER);
-      return `<div class="song-item ${index===state.currentIndex?'active':''}" role="button" tabindex="0" aria-label="Play ${title} by ${artist}" onclick="playSong(${index})">
+      const favTarget = index >= 0 ? index : `'${escapeHtml(String(s.id))}'`;
+      return `<div class="song-item ${index >= 0 && index===state.currentIndex?'active':''}" role="button" tabindex="0" aria-label="Play ${title} by ${artist}" onclick="playSong(${index})">
           <div class="song-info"><img src="${cover}" alt="" loading="lazy" decoding="async"><div><div class="song-title">${title}</div><div class="song-artist">${artist}</div></div></div>
           <div class="song-item-actions">
-            <button type="button" class="song-item-like ${s.favorite?'active':''}" aria-label="${s.favorite?'Unlike':'Like'} ${title}" aria-pressed="${s.favorite?'true':'false'}" onclick="toggleFavorite(event, ${index})"><i class="fa-${s.favorite?'solid':'regular'} fa-heart" aria-hidden="true"></i></button>
+            <button type="button" class="song-item-like ${s.favorite?'active':''}" aria-label="${s.favorite?'Unlike':'Like'} ${title}" aria-pressed="${s.favorite?'true':'false'}" onclick="toggleFavorite(event, ${favTarget})"><i class="fa-${s.favorite?'solid':'regular'} fa-heart" aria-hidden="true"></i></button>
             <button type="button" class="song-item-menu-btn" data-song-menu="${escapeHtml(String(s.id))}" aria-label="More options for ${title}"><i class="fa-solid fa-ellipsis" aria-hidden="true"></i></button>
           </div>
         </div>`;

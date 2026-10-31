@@ -1,6 +1,6 @@
 import { AURA_JAMENDO_CLIENT_ID, AURA_YOUTUBE_API_KEY } from '../core/config';
 import { fetchYouTubeMeta, stateHTML, toast } from '../core/dom';
-import { songItemHTML, updateLibCount } from './library';
+import { songIndexById, songItemHTML, updateLibCount } from './library';
 import { navClick } from '../ui/nav';
 import { playSong, playYouTubeInsideAura, playYouTubeProResult } from './player';
 import { escapeHtml } from './radio';
@@ -26,8 +26,11 @@ import { $, state } from '../core/state';
     })();
 /* ===== 4992-5362 ===== */
     export function renderSearchResults(list){
-      const c=$('searchResultsList');
-      c.innerHTML=list.length?list.map(songItemHTML).join('') : stateHTML('noresults','No matches found','Check the spelling, or search online below for more songs.');
+      const c=$('searchResultsList'); if(!c) return;
+      const indexById = songIndexById();
+      c.innerHTML=list.length
+        ? list.map(s => songItemHTML(s, indexById.get(String(s.id)))).join('')
+        : stateHTML('noresults','No matches found','Check the spelling, or search online below for more songs.');
     }
 
     export let searchCategory='all';
