@@ -435,7 +435,17 @@ import { $, persistLikedHistory, savedLikeMap, state } from '../core/state';
     }
 
     export function loadSong(i){
-      const s=state.songs[i]; if(!s) return; state.audio.src=s.url;
+      const s=state.songs[i]; if(!s) return;
+      state.audio.src=s.url;
+      // Resilient fallback: if edge proxy has a transient failure, seamlessly fall back to direct Hugging Face URL
+      state.audio.onerror = () => {
+        if (s.hfUrl && state.audio.src !== s.hfUrl) {
+          console.warn('[Aura Audio] Edge proxy unreachable, falling back to direct Hugging Face URL');
+          state.audio.src = s.hfUrl;
+          state.audio.load();
+          state.audio.play().catch(() => {});
+        }
+      };
       $('currentImg').src=$('fullImg').src=s.img;
       $('currentTitle').textContent=$('fullTitle').textContent=$('fullHeaderTitle').textContent=s.title;
       $('currentArtist').textContent=$('fullArtist').textContent=s.artist;

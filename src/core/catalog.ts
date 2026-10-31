@@ -40,6 +40,13 @@ export function hfFileUrl(path: string): string {
   );
 }
 
+/**
+ * Edge proxy URL with OCI Hyderabad hot-caching and byte-range streaming.
+ */
+export function getAudioStreamUrl(path: string): string {
+  return '/api/audio?path=' + encodeURIComponent(path);
+}
+
 /* YouTube's auto-generated channels publish as "<Artist> - Topic" — strip the
    suffix so one artist groups as one artist everywhere in the UI. */
 export function cleanArtist(name: string): string {
@@ -186,7 +193,9 @@ export async function fetchHfCatalog(): Promise<any[]> {
       year: m?.y || '',
       duration: typeof m?.d === 'number' ? m.d : 0,
       videoId,
-      url: hfFileUrl(a.path),
+      url: getAudioStreamUrl(a.path),
+      hfUrl: hfFileUrl(a.path),
+      hfPath: a.path,
       img: cover ? hfFileUrl(cover) : DEFAULT_COVER,
       favorite: false,
       isHf: true,
