@@ -48,6 +48,20 @@
       }
     },
     {
+      "id": "activityType",
+      "title": "Activity Type",
+      "description": "Discord hides activity buttons on some Listening cards. Switch to Playing if you want the button to show.",
+      "icon": "fad fa-music",
+      "value": 0,
+      "values": [
+        "Listening",
+        "Playing"
+      ],
+      "if": {
+        "privacy": false
+      }
+    },
+    {
       "id": "displayType",
       "title": "Pick Status Display",
       "icon": "fad fa-user-edit",

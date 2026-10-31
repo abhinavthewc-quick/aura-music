@@ -24,6 +24,7 @@ interface Settings {
   cover: boolean
   timestamps: boolean
   displayType: number
+  activityType: number
   buttons: boolean
   hidePaused: boolean
   browsing: boolean
@@ -75,17 +76,18 @@ async function getSetting<T extends string | number | boolean>(id: string, fallb
 }
 
 async function getSettings(): Promise<Settings> {
-  const [privacy, cover, timestamps, displayType, buttons, hidePaused, browsing] = await Promise.all([
+  const [privacy, cover, timestamps, displayType, activityType, buttons, hidePaused, browsing] = await Promise.all([
     getSetting('privacy', false),
     getSetting('cover', true),
     getSetting('timestamps', true),
     getSetting('displayType', 0),
+    getSetting('activityType', 0),
     getSetting('buttons', true),
     getSetting('hidePaused', false),
     getSetting('browsing', true),
   ])
 
-  return { privacy, cover, timestamps, displayType, buttons, hidePaused, browsing }
+  return { privacy, cover, timestamps, displayType, activityType, buttons, hidePaused, browsing }
 }
 
 /* ------------------------------------------------------------------------- *
@@ -128,8 +130,12 @@ function trackPresence(state: AuraState, settings: Settings): PresenceData {
   const isRadio = state.kind === 'radio'
   const link = httpLink(state.link, SITE_URL)
 
-  const data: PresenceData = {
-    type: ActivityType.Listening,
+  /* Listening is the honest type for music, but some Discord clients hide
+   * the activity buttons on Listening cards; the setting lets the user try
+   * Playing, which uses the same card plus buttons. */
+  const mediaType = settings.activityType === 1 ? ActivityType.Playing : ActivityType.Listening
+  const data = {
+    type: mediaType,
     largeImageKey: settings.cover ? httpImage(state.cover, LOGO_URL) : LOGO_URL,
     largeImageText: clip(state.album || artist || (isRadio ? 'Live radio' : SITE_NAME)),
     details: clip(state.title) || SITE_NAME,
@@ -137,7 +143,7 @@ function trackPresence(state: AuraState, settings: Settings): PresenceData {
     stateUrl: link,
     largeImageUrl: link,
     state: artist || undefined,
-  }
+  } as PresenceData
 
   if (settings.buttons) {
     /* The first button is the deep link that opens this exact track in Aura.

@@ -134,7 +134,9 @@ npx pmd dev "Aura Music" --validate
 - YouTube playback → **Listen in Aura Music** plus a **Play on YouTube** button.
 - Live radio → station name, `Live radio`, no timer.
 - Settings → privacy mode, cover on/off, timestamps, status display
-  (app/artist/song), buttons, hide-when-paused, browsing.
+  (app/artist/song), **activity type (Listening/Playing)**, buttons,
+  hide-when-paused, browsing. If Discord hides the button on a Listening card,
+  switch Activity Type to Playing and compare.
 
 ## 5. Publishing (optional)
 
@@ -167,6 +169,9 @@ To submit it to the PreMiD store:
   because Discord cannot fetch `data:` images.
 - The primary button and `details_url` use the `link` from the page, so they
   deep-link to the exact track instead of the site root.
+- Discord's activity card does not always render buttons (the payload includes
+  them; the client decides). The title, artist and cover are therefore also
+  clickable, and the Activity Type setting can switch the card to Playing.
 - `metadata.json` validates against `https://schemas.premid.app/metadata/1.17`.
 - Not covered yet: `rooms.html` ("Listen together") is a separate page with its
   own player, so a synced room shows browsing mode. It can publish the same
