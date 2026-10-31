@@ -3,13 +3,13 @@ import { ActivityType, Assets, getTimestamps, StatusDisplayType, supports } from
 import { clip, httpImage, readDomState, SITE_NAME, youtubeUrl } from './state.js'
 
 /* ------------------------------------------------------------------------- *
- * Discord application ID
+ * Discord application — "Aura Music"
  *
- * Create one at https://discord.com/developers/applications ("New Application"),
- * name it "Aura Music" (that name is what Discord shows next to the status),
- * upload public/aura-logo.png as its icon, then paste the Application ID here.
+ * https://discord.com/developers/applications/1566089897905758259
+ * The app name is what Discord shows next to the status. Upload
+ * public/aura-logo.png as the app icon so the fallback artwork looks right.
  * ------------------------------------------------------------------------- */
-const CLIENT_ID = '000000000000000000'
+const CLIENT_ID = '1566089897905758259'
 
 /* Where the site lives. Change this if you deploy elsewhere, and keep
  * metadata.json's url/regExp/logo/thumbnail in sync. */
