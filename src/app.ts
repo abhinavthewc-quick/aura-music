@@ -3,7 +3,7 @@ import { fetchHfCatalog } from './core/catalog';
 import { getProfileUsername, getSession, setProfileUsername } from './core/session';
 import { setGreeting } from './features/home';
 import { applyPlayDeepLink } from './features/deeplink';
-import { hydrateLocalTracks, renderRecent, renderSongs, updateLibCount } from './features/library';
+import { hydrateLocalTracks, renderLibrary, renderRecent, renderSongs, updateLibCount } from './features/library';
 import { auraYTPlayer, auraYTVideoId, lastPlayRequestAt, loadSong } from './features/player';
 import { updateProfilePopup } from './features/settings';
 import { $, setHfTracks, state } from './core/state';
@@ -38,6 +38,10 @@ import { $, setHfTracks, state } from './core/state';
         if(!localStorage.getItem('auraUserName')) localStorage.setItem('auraUserName', name);
       }
       setGreeting();
+      /* Paint skeletons (instead of "no tracks") while the first remote
+         catalogue request is in flight and there is no cache to show. */
+      state.catalogLoading = !state.hfSongs.length;
+      state.catalogError = false;
       await hydrateLocalTracks();
       renderSongs(state.songs); if(state.songs.length) loadSong(0); updateLibCount(); renderRecent();
       updateProfilePopup();
@@ -49,14 +53,21 @@ import { $, setHfTracks, state } from './core/state';
       /* Catalog lives in the Hugging Face bucket — refresh it in the background
          (the list is painted instantly from localStorage cache, if any). */
       fetchHfCatalog().then((tracks)=>{
+        state.catalogLoading = false;
+        state.catalogError = false;
         const hadSongs = state.songs.length > 0;
         setHfTracks(tracks);
         renderSongs(state.songs);
         renderRecent();
         updateLibCount();
         if(!hadSongs && state.songs.length) loadSong(state.currentIndex);
+        if($('tabLibrary').classList.contains('active')) renderLibrary();
         applyPlayDeepLink();
       }).catch(()=>{
+        state.catalogLoading = false;
+        state.catalogError = true;
+        renderSongs(state.songs);
+        if($('tabLibrary').classList.contains('active')) renderLibrary();
         if(!state.hfSongs.length) toast('Could not load the Hugging Face catalog — showing local files only.','triangle-exclamation');
       });
     })();

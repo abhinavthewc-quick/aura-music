@@ -5,7 +5,7 @@ import { navClick, goTab } from './ui/nav';
 import { playSong } from './features/player';
 import { queueTrackAction, openTrackMenu } from './features/queue';
 import {
-  addNewTrack, addYouTubeTrack, closeEditModal, saveEditedTrack,
+  addNewTrack, addYouTubeTrack, closeEditModal, retryCatalog, saveEditedTrack,
   setLibView, toggleFavorite, toggleStatsPanel,
 } from './features/library';
 import {
@@ -30,7 +30,7 @@ Object.assign(globalThis, {
   navClick, goTab,
   playSong,
   queueTrackAction, openTrackMenu,
-  addNewTrack, addYouTubeTrack, closeEditModal, saveEditedTrack,
+  addNewTrack, addYouTubeTrack, closeEditModal, retryCatalog, saveEditedTrack,
   setLibView, toggleFavorite, toggleStatsPanel,
   goToSearchCategory, playOutsideResult, retryOnlineSearch, runSearchChip,
   renderAuraPicks, resumeLastPlayed, shuffleAll,

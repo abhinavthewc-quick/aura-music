@@ -212,9 +212,9 @@ import { $, persistLikedHistory, savedLikeMap, state } from '../core/state';
       return auraYTReadyPromise;
     }
 
-    // Preload the official YouTube IFrame API early so the first AURA Play
-    // tap is not lost while the API script is still downloading.
-    setTimeout(()=>{ try{ ensureYouTubeAPI().catch(()=>{}); }catch(e){} },0);
+    /* The YouTube IFrame API is loaded on demand by playYouTubeInsideAura().
+       Preloading it here pulled YouTube's third-party script on every visit,
+       including the majority that only play library/radio audio. */
 
     export function resetFullPlayerArtToImage(poster){
       const art=$('fullPlayerArt');
@@ -440,6 +440,7 @@ import { $, persistLikedHistory, savedLikeMap, state } from '../core/state';
       $('currentTitle').textContent=$('fullTitle').textContent=$('fullHeaderTitle').textContent=s.title;
       $('currentArtist').textContent=$('fullArtist').textContent=s.artist;
       $('fullLikeBtn').className=`like-btn ${s.favorite?'active':''}`;
+      $('fullLikeBtn').setAttribute('aria-pressed', s.favorite ? 'true' : 'false');
       $('fullLikeBtn').innerHTML=`<i class="fa-${s.favorite?'solid':'regular'} fa-heart"></i>`;
       $('progressFill').style.width = '0%';
       $('fullSeekSlider').value = 0;
@@ -495,7 +496,7 @@ import { $, persistLikedHistory, savedLikeMap, state } from '../core/state';
       stopRadio();
       if(keepBigPlayer || keepFull) $('fullPlayerOverlay').classList.add('active');
       if(s.missing){ toast('This file is unavailable — please re-add it', 'triangle-exclamation'); return; }
-      state.currentIndex=i; loadSong(i); state.audio.play(); state.isPlaying=true;
+      state.currentIndex=i; loadSong(i); state.audio.play().catch(()=>{ state.isPlaying=false; updatePlayState(); }); state.isPlaying=true;
       $('miniPlayer').classList.add('active');
       updatePlayState(); filterSongs(); addToRecent(s);
       updateLibNowPlaying();
@@ -507,6 +508,9 @@ import { $, persistLikedHistory, savedLikeMap, state } from '../core/state';
     export function updatePlayState(){
       const icon = state.isPlaying ? "fa-solid fa-pause" : "fa-solid fa-play";
       $('playIcon').className = $('fullPlayIcon').className = icon;
+      const label = state.isPlaying ? 'Pause' : 'Play';
+      $('fullPlayBtn')?.setAttribute('aria-label', label);
+      $('playPauseBtn')?.setAttribute('aria-label', label);
       // Apple-Music artwork pulse: springs between scale(1) and scale(.8)
       $('fullPlayerOverlay').classList.toggle('art-paused', !state.isPlaying);
     }
@@ -550,7 +554,7 @@ import { $, persistLikedHistory, savedLikeMap, state } from '../core/state';
       }
       if(!state.audio.src) playSong(0);
       else if(state.isPlaying){ state.audio.pause(); state.isPlaying=false; }
-      else{ state.audio.play(); state.isPlaying=true; }
+      else{ state.audio.play().catch(()=>{ state.isPlaying=false; updatePlayState(); }); state.isPlaying=true; }
       updatePlayState();
     }
     
@@ -578,11 +582,11 @@ import { $, persistLikedHistory, savedLikeMap, state } from '../core/state';
        the room and start something nobody else was expecting. */
     state.audio.addEventListener('ended',()=>{
       if(roomModeActive()) return;
-      if(state.repeatMode==='one'){state.audio.currentTime=0;state.audio.play();state.isPlaying=true;updatePlayState();return;}
+      if(state.repeatMode==='one'){state.audio.currentTime=0;state.audio.play().catch(()=>{ state.isPlaying=false; updatePlayState(); });state.isPlaying=true;updatePlayState();return;}
       if(auraSettings.autoplayNext){playNext();}else if(!state.isPlaying) updatePlayState();
     });
     setInterval(()=>{
-      if(!auraYTPlayer) return;
+      if(!auraYTPlayer || document.hidden) return;
       try{
         const d=auraYTPlayer.getDuration()||0, c=auraYTPlayer.getCurrentTime()||0;
         if(d){ $('fullSeekSlider').value=(c/d)*100; $('fullCurrentTime').textContent=fmt(c); $('fullDurationTime').textContent=fmt(d); }

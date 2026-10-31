@@ -22,18 +22,18 @@ import { $, persistLikedHistory, savedLikeMap, state } from '../core/state';
       const canSaveOffline = !song.isYouTube && !!song.url;
 
       const rows = [];
-      rows.push(`<div class="track-sheet-row" onclick="queueTrackAction('playNext')"><i class="fa-solid fa-list-ol"></i>Play Next</div>`);
-      rows.push(`<div class="track-sheet-row" onclick="queueTrackAction('addQueue')"><i class="fa-solid fa-layer-group"></i>Add to Queue</div>`);
-      rows.push(`<div class="track-sheet-row${song.favorite?' active-row':''}" onclick="queueTrackAction('favorite')"><i class="fa-${song.favorite?'solid':'regular'} fa-heart"></i>${song.favorite?'Remove from Favorites':'Add to Favorites'}</div>`);
+      rows.push(`<div role="button" tabindex="0" class="track-sheet-row" onclick="queueTrackAction('playNext')"><i class="fa-solid fa-list-ol"></i>Play Next</div>`);
+      rows.push(`<div role="button" tabindex="0" class="track-sheet-row" onclick="queueTrackAction('addQueue')"><i class="fa-solid fa-layer-group"></i>Add to Queue</div>`);
+      rows.push(`<div role="button" tabindex="0" class="track-sheet-row${song.favorite?' active-row':''}" onclick="queueTrackAction('favorite')"><i class="fa-${song.favorite?'solid':'regular'} fa-heart"></i>${song.favorite?'Remove from Favorites':'Add to Favorites'}</div>`);
       if(isAdded){
-        rows.push(`<div class="track-sheet-row" onclick="queueTrackAction('edit')"><i class="fa-solid fa-pen"></i>Edit Track</div>`);
+        rows.push(`<div role="button" tabindex="0" class="track-sheet-row" onclick="queueTrackAction('edit')"><i class="fa-solid fa-pen"></i>Edit Track</div>`);
       }
-      rows.push(`<div class="track-sheet-row" onclick="queueTrackAction('share')"><i class="fa-solid fa-share-nodes"></i>Share</div>`);
+      rows.push(`<div role="button" tabindex="0" class="track-sheet-row" onclick="queueTrackAction('share')"><i class="fa-solid fa-share-nodes"></i>Share</div>`);
       if(canSaveOffline){
-        rows.push(`<div class="track-sheet-row" onclick="queueTrackAction('download')"><i class="fa-solid fa-download"></i>Save Offline</div>`);
+        rows.push(`<div role="button" tabindex="0" class="track-sheet-row" onclick="queueTrackAction('download')"><i class="fa-solid fa-download"></i>Save Offline</div>`);
       }
       if(isAdded){
-        rows.push(`<div class="track-sheet-row danger" onclick="queueTrackAction('delete')"><i class="fa-solid fa-trash"></i>Remove from Library</div>`);
+        rows.push(`<div role="button" tabindex="0" class="track-sheet-row danger" onclick="queueTrackAction('delete')"><i class="fa-solid fa-trash"></i>Remove from Library</div>`);
       }
       showTrackSheet({img:song.img, title:song.title, artist:song.artist, rowsHtml:rows.join('')});
     }
@@ -140,7 +140,7 @@ import { $, persistLikedHistory, savedLikeMap, state } from '../core/state';
       }
       list.innerHTML=items.map(song=>{
         const liked=!!song.favorite;
-        return `<div class="up-next-row" data-up-next-id="${escapeHtml(song.id)}">
+        return `<div class="up-next-row" role="button" tabindex="0" data-up-next-id="${escapeHtml(song.id)}">
           <img class="up-next-cover" src="${escapeHtml(song.img||'')}" alt="" loading="lazy" decoding="async">
           <div class="up-next-info"><div class="up-next-song-title">${escapeHtml(song.title||'Untitled')}</div><div class="up-next-song-artist">${escapeHtml(song.artist||'Unknown Artist')}</div></div>
           <div class="up-next-actions">
@@ -320,3 +320,15 @@ import { $, persistLikedHistory, savedLikeMap, state } from '../core/state';
     $('fullNextBtn').onclick=e=>{e.stopPropagation();playNext(true);};
     $('nextBtn').onclick=e=>{e.stopPropagation();playNext(false);};
 
+
+/* Song-row menus live in library markup and carry their id in a data
+   attribute. Delegating here means ids like "hf:<bucket path>" never have to be
+   embedded inside an inline onclick as JavaScript source. */
+document.addEventListener('click', (e) => {
+  const target = e.target as HTMLElement;
+  const btn = target?.closest?.('[data-song-menu]') as HTMLElement | null;
+  if (!btn) return;
+  e.preventDefault();
+  e.stopPropagation();
+  openTrackMenu(e, btn.dataset.songMenu || '');
+}, true);

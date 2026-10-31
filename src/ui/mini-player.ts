@@ -197,17 +197,22 @@ import { state } from '../core/state';
     const ml = $('miniLikeBtn');
     if(force || ml.classList.contains('active') !== liked){
       ml.classList.toggle('active', liked);
+      ml.setAttribute('aria-pressed', liked ? 'true' : 'false');
+      ml.setAttribute('aria-label', liked ? 'Unlike' : 'Like');
       ml.innerHTML = '<i class="fa-' + (liked ? 'solid' : 'regular') + ' fa-heart"></i>';
       if(liked){ ml.classList.remove('mini-heart-pop'); void ml.offsetWidth; ml.classList.add('mini-heart-pop'); }
     }
   }
-  let lastMiniPct = -1;
+  let lastMiniPct = -1, lastMiniTime = '';
   setInterval(() => {
-    if(!mq.matches) return;
-    if(document.activeElement !== seek){ seek.value = fullSeek.value; seek.style.setProperty('--seek-pct', (parseFloat(fullSeek.value)||0) + '%'); }
-    $('miniTime').textContent = $('fullCurrentTime').textContent + ' / ' + $('fullDurationTime').textContent;
-    syncLike(false); syncModes();
+    /* Keep a newly-created YouTube player's volume in sync even before the
+       dock opens, then skip the UI work entirely while nothing is on screen. */
     try{ if(auraYTPlayer && auraYTPlayerReady && auraYTPlayer !== ytSeen) applyVolume(false); }catch(e){}
+    if(!mq.matches || (!isOn(overlay) && !isOn(mini))) return;
+    if(document.activeElement !== seek){ seek.value = fullSeek.value; seek.style.setProperty('--seek-pct', (parseFloat(fullSeek.value)||0) + '%'); }
+    const timeText = $('fullCurrentTime').textContent + ' / ' + $('fullDurationTime').textContent;
+    if(timeText !== lastMiniTime){ lastMiniTime = timeText; $('miniTime').textContent = timeText; }
+    syncLike(false); syncModes();
     const pct = Number(fullSeek.value)||0;
     if(pct !== lastMiniPct){
       lastMiniPct = pct;

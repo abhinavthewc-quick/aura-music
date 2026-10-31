@@ -1,4 +1,4 @@
-import { copyToClipboard, showTrackSheet, stateHTML, toast } from '../core/dom';
+import { copyToClipboard, escapeHtml, showTrackSheet, stateHTML, toast } from '../core/dom';
 import { mediaSessionAction, updatePlayState, applyDynamicPlayerColor } from './player';
 import { closeTrackMenu } from './queue';
 import { $, state } from '../core/state';
@@ -15,9 +15,8 @@ import { $, state } from '../core/state';
     export let radioSearchToken = 0;
     export let currentRadioQuery = 'top';
 
-    export function escapeHtml(value){
-      return String(value ?? '').replace(/[&<>'"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;',"'":'&#39;','"':'&quot;'}[c]));
-    }
+    /* Re-exported for the modules that already import it from here. */
+    export { escapeHtml };
 
     export function radioApiUrl(params){
       const qs = new URLSearchParams(params);
@@ -46,8 +45,8 @@ import { $, state } from '../core/state';
           const name=escapeHtml(st.name || 'Unknown Station');
           const country=escapeHtml(st.country || '');
           const tags=escapeHtml((st.tags||'').split(',').slice(0,2).join(' • '));
-          const logo=st.favicon ? `<img src="${escapeHtml(st.favicon)}" alt="" onerror="this.style.display='none'">` : '<i class="fa-solid fa-radio"></i>';
-          return `<div class="radio-station" data-radio-index="${i}">
+          const logo=st.favicon ? `<img src="${escapeHtml(st.favicon)}" alt="" loading="lazy" decoding="async" onerror="this.style.display='none'">` : '<i class="fa-solid fa-radio"></i>';
+          return `<div class="radio-station" role="button" tabindex="0" data-radio-index="${i}">
             <div class="radio-station-art">${logo}</div>
             <div class="radio-station-main"><div class="radio-station-name">${name}</div><div class="radio-station-meta">${country}${country&&tags?' • ':''}${tags||'Live station'}</div></div>
             <button class="radio-play-btn" type="button" aria-label="Play ${name}"><i class="fa-solid fa-play"></i></button>
@@ -217,11 +216,11 @@ import { $, state } from '../core/state';
       const st=currentRadioStation;
       if(!st) return toast('Nothing playing on radio','circle-info');
       const rows=[];
-      rows.push(`<div class="track-sheet-row" onclick="closeRadioSheetThen(toggleRadioPlay)"><i class="fa-solid fa-${state.radioIsPlaying&&!radioAudio.paused?'pause':'play'}"></i>${state.radioIsPlaying&&!radioAudio.paused?'Pause':'Play'}</div>`);
-      rows.push(`<div class="track-sheet-row" onclick="closeRadioSheetThen(radioMenuShare)"><i class="fa-solid fa-share-nodes"></i>Share station</div>`);
-      rows.push(`<div class="track-sheet-row" onclick="closeRadioSheetThen(radioMenuCopy)"><i class="fa-solid fa-link"></i>Copy stream link</div>`);
-      if(st.homepage) rows.push(`<div class="track-sheet-row" onclick="closeRadioSheetThen(radioMenuSite)"><i class="fa-solid fa-arrow-up-right-from-square"></i>Open station website</div>`);
-      rows.push(`<div class="track-sheet-row danger" onclick="closeRadioSheetThen(stopRadio)"><i class="fa-solid fa-stop"></i>Stop radio</div>`);
+      rows.push(`<div role="button" tabindex="0" class="track-sheet-row" onclick="closeRadioSheetThen(toggleRadioPlay)"><i class="fa-solid fa-${state.radioIsPlaying&&!radioAudio.paused?'pause':'play'}"></i>${state.radioIsPlaying&&!radioAudio.paused?'Pause':'Play'}</div>`);
+      rows.push(`<div role="button" tabindex="0" class="track-sheet-row" onclick="closeRadioSheetThen(radioMenuShare)"><i class="fa-solid fa-share-nodes"></i>Share station</div>`);
+      rows.push(`<div role="button" tabindex="0" class="track-sheet-row" onclick="closeRadioSheetThen(radioMenuCopy)"><i class="fa-solid fa-link"></i>Copy stream link</div>`);
+      if(st.homepage) rows.push(`<div role="button" tabindex="0" class="track-sheet-row" onclick="closeRadioSheetThen(radioMenuSite)"><i class="fa-solid fa-arrow-up-right-from-square"></i>Open station website</div>`);
+      rows.push(`<div role="button" tabindex="0" class="track-sheet-row danger" onclick="closeRadioSheetThen(stopRadio)"><i class="fa-solid fa-stop"></i>Stop radio</div>`);
       showTrackSheet({img:st.favicon||'', title:st.name||'Live station', artist:st.country||'Live radio', rowsHtml:rows.join('')});
     }
     export async function radioMenuShare(){

@@ -28,6 +28,23 @@
       --slider-fill: #4a628f;
       --slider-track: #dde4fa;
       --slider-dot: #8fa0d8;
+      /* Shared design tokens: one radius scale, one motion curve, one ring.
+         New UI reads these; legacy rules keep their own values so nothing
+         shifts underneath the existing layout. */
+      --radius-xs: 8px;
+      --radius-sm: 12px;
+      --radius-md: 16px;
+      --radius-lg: 24px;
+      --radius-pill: 999px;
+      --ease-out: cubic-bezier(.22,.61,.36,1);
+      --dur-fast: .15s;
+      --dur: .2s;
+      --focus-ring: rgba(0,242,254,.55);
+      --skeleton: rgba(255,255,255,.07);
+      --skeleton-shine: rgba(255,255,255,.10);
+      --shadow-sm: 0 2px 8px rgba(0,0,0,.18);
+      --shadow-md: 0 10px 30px rgba(0,0,0,.28);
+      --overlay-scrim: rgba(3,6,12,.62);
     }
 
     body.light-theme {
@@ -47,6 +64,12 @@
       --profile-glass-highlight: rgba(255,255,255,.68);
       --menu-glass-bg: rgba(255,255,255,.42);
       --menu-glass-border: rgba(255,255,255,.62);
+      --focus-ring: rgba(2,132,199,.55);
+      --skeleton: rgba(15,23,42,.08);
+      --skeleton-shine: rgba(255,255,255,.55);
+      --shadow-sm: 0 2px 8px rgba(15,23,42,.10);
+      --shadow-md: 0 10px 30px rgba(15,23,42,.16);
+      --overlay-scrim: rgba(15,23,42,.34);
     }
 
     *{box-sizing:border-box;margin:0;padding:0;font-family:system-ui,-apple-system,sans-serif}
@@ -55,3 +78,74 @@
 
     .glass-btn{background:var(--glass-btn-bg);backdrop-filter:blur(16px);border:1px solid var(--glass-btn-border);transition:.2s;display:inline-flex;align-items:center;justify-content:center;cursor:pointer;color:var(--text)}
     .glass-btn:active{transform:scale(.95)}
+
+    /* ---- Interaction baseline -------------------------------------------------
+       One visible keyboard ring for every control, sensible disabled styling,
+       and pointer feedback that does not fight the glass aesthetic. */
+    :where(button,a,input,select,textarea,[role="button"],[tabindex]):focus-visible{
+      outline:2px solid var(--focus-ring);
+      outline-offset:2px;
+      border-radius:var(--radius-xs);
+    }
+    :where(button,[role="button"],a){-webkit-tap-highlight-color:transparent}
+    :where(button:disabled,[aria-disabled="true"]){opacity:.55;cursor:not-allowed;filter:saturate(.75)}
+    :where(button:disabled:active,[aria-disabled="true"]:active){transform:none!important}
+    .glass-btn,.full-ctrl-btn,.song-item-like,.song-item-menu-btn,.mini-ctrl,.nav-btn,.desktop-nav-btn,.lib-seg-btn,.browse-tile{
+      transition:background-color var(--dur) var(--ease-out),border-color var(--dur) var(--ease-out),color var(--dur) var(--ease-out),opacity var(--dur) var(--ease-out),transform var(--dur) var(--ease-out);
+    }
+
+    /* ---- Loading skeleton --------------------------------------------------
+       Used while the remote catalogue paints for the first time. */
+    .song-skeleton{display:flex;align-items:center;gap:12px;padding:10px 12px;border-radius:var(--radius-md);pointer-events:none}
+    .skeleton-block{position:relative;overflow:hidden;background:var(--skeleton);border-radius:var(--radius-sm)}
+    .skeleton-block::after{content:"";position:absolute;inset:0;background:linear-gradient(90deg,transparent,var(--skeleton-shine),transparent);transform:translateX(-100%);animation:skeleton-shimmer 1.4s var(--ease-out) infinite}
+    .skeleton-cover{width:46px;height:46px;flex:0 0 46px}
+    .skeleton-lines{flex:1;min-width:0;display:flex;flex-direction:column;gap:8px}
+    .skeleton-line{height:11px;border-radius:var(--radius-pill)}
+    .skeleton-line.short{width:38%}
+    @keyframes skeleton-shimmer{to{transform:translateX(100%)}}
+
+    /* ---- Reduced motion ----------------------------------------------------
+       The in-app "Reduce motion" setting already adds .aura-reduce-motion;
+       honour the OS preference even when the user never opens Settings. */
+    @media (prefers-reduced-motion:reduce){
+      *,*::before,*::after{animation-duration:.001ms!important;animation-iteration-count:1!important;transition-duration:.001ms!important;scroll-behavior:auto!important}
+    }
+
+    /* Touch ergonomics: keep the smallest controls comfortably tappable on
+       phones without changing the desktop density. */
+    :where(button,[role="button"],a){touch-action:manipulation}
+    @media (max-width:899px){
+      .song-item-like,.song-item-menu-btn{width:40px;height:40px;min-width:40px;min-height:40px}
+      .up-next-action{min-width:40px;min-height:40px}
+      .radio-play-btn{width:44px;height:44px}
+      .mini-icon-btn{width:44px;height:44px}
+      .song-item{padding-top:8px;padding-bottom:8px}
+    }
+
+    /* Designed empty state used by the home "Aura Picks" rail. */
+    .aura-empty{display:flex;align-items:center;gap:14px;padding:16px;border:1px dashed var(--card-border);border-radius:var(--radius-md);background:var(--card-bg);color:var(--text-sub)}
+    .aura-empty>i{font-size:22px;color:var(--accent)}
+    .aura-empty b{display:block;color:var(--text);font-size:13px}
+    .aura-empty span{font-size:11.5px}
+    .aura-empty-btn{margin-left:auto;border:1px solid var(--glass-btn-border);background:var(--glass-btn-bg);color:var(--text);border-radius:var(--radius-pill);padding:8px 14px;font-size:11.5px;font-weight:700;cursor:pointer;white-space:nowrap}
+    @media (max-width:560px){.aura-empty{flex-wrap:wrap}.aura-empty-btn{margin-left:0;width:100%}}
+
+    /* Cover placeholders: while a remote cover decodes (or when the URL is
+       missing) the tile shows a warm vinyl-toned plate instead of a black gap. */
+    :where(.song-info img,.recent-card img,.spotlight-card img,.spotlight-avatar,.aura-pick,.lib-group-art,.up-next-cover,.radio-station-art,.song-row img,.full-player-art img){
+      background:radial-gradient(circle at 50% 42%,#2a2018 0%,#120d09 72%);
+    }
+    body.light-theme :where(.song-info img,.recent-card img,.spotlight-card img,.spotlight-avatar,.aura-pick,.lib-group-art,.up-next-cover,.radio-station-art,.song-row img,.full-player-art img){
+      background:linear-gradient(135deg,#efe9df,#faf6ef);
+    }
+
+    @media (max-width:480px){
+      .quick-tile-text .qt-title{font-size:12px}
+      .quick-tile-text .qt-sub{font-size:10px}
+    }
+
+    /* Keep the two-column mobile quick tiles readable without shrinking every
+       label: only the longest one gets a compact form. */
+    .qt-short{display:none}
+    @media (max-width:480px){.qt-long{display:none}.qt-short{display:inline}}

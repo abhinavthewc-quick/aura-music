@@ -88,13 +88,13 @@ import { $, state } from '../core/state';
       return new Promise<any>((resolve,reject)=>{
         const cbName='auraJsonp_'+(jsonpCounter++)+'_'+Date.now();
         const script=document.createElement('script');
-        let done=false;
-        function cleanup(){ delete window[cbName]; script.remove(); }
-        window[cbName]=(data)=>{ done=true; cleanup(); resolve(data); };
-        script.onerror=()=>{ if(!done){ done=true; cleanup(); reject(new Error('request failed')); } };
+        let done=false, timer:any;
+        function cleanup(){ clearTimeout(timer); delete window[cbName]; script.remove(); }
+        window[cbName]=(data)=>{ if(done) return; done=true; cleanup(); resolve(data); };
+        script.onerror=()=>{ if(done) return; done=true; cleanup(); reject(new Error('request failed')); };
         script.src=url+(url.includes('?')?'&':'?')+'callback='+cbName;
         document.head.appendChild(script);
-        setTimeout(()=>{ if(!done){ done=true; cleanup(); reject(new Error('request timed out')); } },8000);
+        timer=setTimeout(()=>{ if(done) return; done=true; cleanup(); reject(new Error('request timed out')); },8000);
       });
     }
 
@@ -254,14 +254,14 @@ import { $, state } from '../core/state';
         : t.source==='audius' ? 'Audius · Full song' : t.source==='jamendo' ? 'Jamendo · Full song'
         : t.source==='archive' ? 'Internet Archive · Full track' : t.source==='openverse' ? 'Openverse · Full track'
         : t.source==='ccmixter' ? 'ccMixter · Full track' : 'YouTube · Official player';
-      return `<div class="song-row youtube-result-row" onclick="playOutsideResult(${i})" style="cursor:pointer">
-        <img src="${escapeHtml(t.img)}" alt="" class="srch-cover">
+      return `<div class="song-row youtube-result-row" role="button" tabindex="0" aria-label="Play ${escapeHtml(t.title)}" onclick="playOutsideResult(${i})" style="cursor:pointer">
+        <img src="${escapeHtml(t.img)}" alt="" class="srch-cover" loading="lazy" decoding="async">
         <div style="flex:1;min-width:0">
           <div class="song-title" style="white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${escapeHtml(t.title)}</div>
           <div class="song-artist" style="white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${escapeHtml(t.artist)}</div>
           <span class="src-pill ${/30s/.test(badge)?'preview':'full'}">${badge}</span>
         </div>
-        <button class="song-item-icon-btn" style="flex-shrink:0"><i class="fa-solid fa-play"></i></button>
+        <button type="button" class="song-item-icon-btn" style="flex-shrink:0" aria-label="Play ${escapeHtml(t.title)}"><i class="fa-solid fa-play" aria-hidden="true"></i></button>
       </div>`;
     }
 
@@ -296,7 +296,13 @@ import { $, state } from '../core/state';
     export function retryOnlineSearch(){ if(lastOnlineQuery) searchYouTubePro(lastOnlineQuery); }
     export async function searchYouTubePro(query){
       const section=$('youtubeSearchSection'), list=$('youtubeSearchResults'), note=$('multiSourceSearchNote');
-      if(!query){section.style.display='none'; if(list)list.innerHTML=''; return []}
+      /* One character fans out to nine providers and almost never produces a
+         useful result; wait for a real query. */
+      if(!query || query.length < 2){
+        section.style.display='none';
+        if(list)list.innerHTML='';
+        return [];
+      }
       section.style.display='block'; renderMultiSourceButtons(query);
       const localWarning = (location.protocol==='file:')
         ? 'You are opening AURA as a local .html file. YouTube playback/search is most reliable when this page is hosted on HTTPS (for example GitHub Pages).'
@@ -421,7 +427,8 @@ import { $, state } from '../core/state';
       $('searchResultsLabel').textContent = q ? 'Results' : categoryLabels[searchCategory];
       renderSearchResults(q ? base.filter(s=>s.title.toLowerCase().includes(q)||s.artist.toLowerCase().includes(q)||(s.album||'').toLowerCase().includes(q)) : base);
       clearTimeout(window.__auraYoutubeSearchTimer);
-      window.__auraYoutubeSearchTimer=setTimeout(()=>searchYouTubePro(q), q ? 350 : 0);
+      if(q.length >= 2) window.__auraYoutubeSearchTimer=setTimeout(()=>searchYouTubePro(q), 350);
+      else{ const ys=$('youtubeSearchSection'); if(ys) ys.style.display='none'; const yl=$('youtubeSearchResults'); if(yl) yl.innerHTML=''; }
     }
     $('searchTabInput').oninput=filterSearchTab;
 

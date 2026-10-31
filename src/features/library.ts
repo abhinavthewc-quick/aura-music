@@ -1,14 +1,24 @@
-import { fetchYouTubeMeta, artistMergeKey, stateHTML, toast } from '../core/dom';
+import { fetchYouTubeMeta, artistMergeKey, escapeHtml, stateHTML, toast } from '../core/dom';
+import { DEFAULT_COVER, fetchHfCatalog } from '../core/catalog';
 import { renderArtistSpotlight, renderAuraPicks, renderQuickAccess } from './home';
 import { filterSongs, loadSong, playSong, resetFullPlayerArtToImage, stopAuraYouTube, updatePlayState } from './player';
 import { filterSearchTab, getYouTubeIdFromUrl } from './search';
-import { $, persistLikedHistory, rebuildSongs, savedLikeMap, state } from '../core/state';
+import { $, persistLikedHistory, rebuildSongs, savedLikeMap, setHfTracks, state } from '../core/state';
 /* ===== 3006-3012 ===== */
     /* Library Count */
+    /* Home sections rebuild a lot of markup; coalesce the many callers
+       (add/remove/favourite/catalog refresh) into one paint per frame. */
+    let homeSectionsRaf = 0;
+    function scheduleHomeSections(){
+      if(homeSectionsRaf) return;
+      homeSectionsRaf = requestAnimationFrame(() => {
+        homeSectionsRaf = 0;
+        try{ renderArtistSpotlight(); renderQuickAccess(); }catch(e){}
+      });
+    }
     export function updateLibCount(){
       const _lc = $('libCount'); if(_lc) _lc.textContent = `${state.songs.length} track${state.songs.length!==1?'s':''} in your library`;
-      renderArtistSpotlight();
-      renderQuickAccess();
+      scheduleHomeSections();
     }
 
 /* ===== 3016-3037 ===== */
@@ -25,13 +35,14 @@ import { $, persistLikedHistory, rebuildSongs, savedLikeMap, state } from '../co
       const sec = $('recentSection'), c = $('recentScroll');
       if(!state.recentlyPlayed.length){ sec.style.display='none'; return; }
       sec.style.display='block';
-      c.innerHTML='';
+      const cards:string[] = [];
       state.recentlyPlayed.forEach(s=>{
         let idx = state.songs.findIndex(item=>item.id===s.id);
         if(idx===-1 && s.title) idx = state.songs.findIndex(item=>item.title===s.title && item.artist===s.artist);
         if(idx===-1) return;
-        c.innerHTML+=`<div class="recent-card" onclick="playSong(${idx})"><img src="${s.img}"><p>${s.title}</p></div>`;
+        cards.push(`<div class="recent-card" role="button" tabindex="0" aria-label="Play ${escapeHtml(s.title||'track')}" onclick="playSong(${idx})"><img src="${escapeHtml(s.img||DEFAULT_COVER)}" alt="" loading="lazy" decoding="async"><p>${escapeHtml(s.title)}</p></div>`);
       });
+      c.innerHTML=cards.join('');
       renderQuickAccess();
     }
 
@@ -117,12 +128,12 @@ import { $, persistLikedHistory, rebuildSongs, savedLikeMap, state } from '../co
       for(const file of files){
         const row = document.createElement('div');
         row.className = 'upload-file-row';
-        row.innerHTML = `<i class="fa-solid fa-spinner fa-spin"></i><span>${file.name}</span>`;
+        row.innerHTML = `<i class="fa-solid fa-spinner fa-spin"></i><span>${escapeHtml(file.name)}</span>`;
         listEl.appendChild(row);
 
         let title = file.name.replace(/\.[^/.]+$/, '');
         let artist = 'Unknown Artist';
-        let img = 'https://picsum.photos/200';
+        let img = DEFAULT_COVER;
 
         try{
           const tags = await readAudioTags(file);
@@ -142,7 +153,7 @@ import { $, persistLikedHistory, rebuildSongs, savedLikeMap, state } from '../co
             await saveLocalBlob(id, file);
           }catch(err){
             row.className = 'upload-file-row failed';
-            row.innerHTML = `<i class="fa-solid fa-triangle-exclamation"></i><span>${file.name} — couldn't be saved</span>`;
+            row.innerHTML = `<i class="fa-solid fa-triangle-exclamation"></i><span>${escapeHtml(file.name)} — couldn't be saved</span>`;
             continue;
           }
         }
@@ -152,7 +163,7 @@ import { $, persistLikedHistory, rebuildSongs, savedLikeMap, state } from '../co
         addedCount++;
 
         row.className = 'upload-file-row done';
-        row.innerHTML = `<i class="fa-solid fa-circle-check"></i><span>${title}</span>`;
+        row.innerHTML = `<i class="fa-solid fa-circle-check"></i><span>${escapeHtml(title)}</span>`;
       }
 
       persistAddedSongs();
@@ -292,13 +303,19 @@ import { $, persistLikedHistory, rebuildSongs, savedLikeMap, state } from '../co
         const img = $('newImg').value.trim();
 
         if(!title || !url) return toast("Title and Link are required!", "triangle-exclamation");
+        try{
+          const parsed = new URL(url);
+          if(parsed.protocol !== 'http:' && parsed.protocol !== 'https:') throw new Error('protocol');
+        }catch(e){
+          return toast('Enter a valid audio URL starting with http:// or https://', 'triangle-exclamation');
+        }
 
         const newTrack = {
             id: Date.now(), // Unique ID
             title: title,
             artist: artist || "Unknown Artist",
             url: url,
-            img: img || "https://picsum.photos/200",
+            img: img || DEFAULT_COVER,
             favorite: false
         };
 
@@ -310,6 +327,7 @@ import { $, persistLikedHistory, rebuildSongs, savedLikeMap, state } from '../co
         $('newTitle').value = ''; $('newArtist').value = ''; $('newUrl').value = ''; $('newImg').value = '';
         
         renderSongs(state.songs);
+        if($('tabLibrary').classList.contains('active')) renderLibrary();
         updateLibCount();
         toast("Track added to library!", "circle-check");
     }
@@ -319,33 +337,47 @@ import { $, persistLikedHistory, rebuildSongs, savedLikeMap, state } from '../co
        downloaded, extracted, or converted; we only fetch public oEmbed
        metadata (title/author/thumbnail) so the track looks right in the
        library. */
+    let addingYouTubeTrack = false;
     export async function addYouTubeTrack(){
+      if(addingYouTubeTrack) return;
       const raw = $('ytAddInput').value.trim();
       if(!raw) return toast('Paste a YouTube link first', 'link');
       const videoId = getYouTubeIdFromUrl(raw);
       if(!videoId) return toast('Could not read a video ID from that link', 'triangle-exclamation');
       if(state.addedSongs.some(s => s.videoId === videoId)) return toast('That video is already in your library', 'circle-info');
 
-      const { title, artist } = await fetchYouTubeMeta(videoId);
+      const btn = $('ytAddBtn') as HTMLButtonElement;
+      const label = btn ? btn.innerHTML : '';
+      addingYouTubeTrack = true;
+      if(btn){ btn.disabled = true; btn.setAttribute('aria-busy','true'); btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin" aria-hidden="true"></i> Adding…'; }
+      try{
+        const { title, artist } = await fetchYouTubeMeta(videoId);
 
-      const newTrack = {
-        id: Date.now(),
-        title: title,
-        artist: artist,
-        url: '',
-        img: `https://img.youtube.com/vi/${videoId}/hqdefault.jpg`,
-        favorite: false,
-        isYouTube: true,
-        videoId: videoId
-      };
+        const newTrack = {
+          id: Date.now(),
+          title: title,
+          artist: artist,
+          url: '',
+          img: `https://img.youtube.com/vi/${videoId}/hqdefault.jpg`,
+          favorite: false,
+          isYouTube: true,
+          videoId: videoId
+        };
 
-      state.addedSongs.push(newTrack);
-      persistAddedSongs();
-      rebuildSongs();
-      $('ytAddInput').value = '';
-      renderSongs(state.songs);
-      updateLibCount();
-      toast('YouTube track added to library!', 'circle-check');
+        state.addedSongs.push(newTrack);
+        persistAddedSongs();
+        rebuildSongs();
+        $('ytAddInput').value = '';
+        renderSongs(state.songs);
+        if($('tabLibrary').classList.contains('active')) renderLibrary();
+        updateLibCount();
+        toast('YouTube track added to library!', 'circle-check');
+      }catch(e){
+        toast('Could not add that YouTube track — check the link and try again.', 'triangle-exclamation');
+      }finally{
+        addingYouTubeTrack = false;
+        if(btn){ btn.disabled = false; btn.removeAttribute('aria-busy'); btn.innerHTML = label; }
+      }
     }
 
 /* ===== 4925-4991 ===== */
@@ -359,6 +391,7 @@ import { $, persistLikedHistory, rebuildSongs, savedLikeMap, state } from '../co
       // Keep the full-player heart in sync immediately.
       if(state.currentIndex >= 0 && state.songs[state.currentIndex] && String(state.songs[state.currentIndex].id)===String(song.id)){
         $('fullLikeBtn').className=`like-btn ${song.favorite?'active':''}`;
+        $('fullLikeBtn').setAttribute('aria-pressed', song.favorite ? 'true' : 'false');
         $('fullLikeBtn').innerHTML=`<i class="fa-${song.favorite?'solid':'regular'} fa-heart"></i>`;
       }
       toast(song.favorite ? 'Saved to Liked Songs' : 'Removed from Liked Songs', song.favorite ? 'heart' : 'heart-crack');
@@ -368,20 +401,50 @@ import { $, persistLikedHistory, rebuildSongs, savedLikeMap, state } from '../co
       if($('tabSearch').classList.contains('active')) filterSearchTab();
     }
 
-    export function songItemHTML(s){
-      const songIdx = state.songs.findIndex(item => item.id === s.id);
-      return `<div class="song-item ${songIdx===state.currentIndex?'active':''}" onclick="playSong(${songIdx})">
-          <div class="song-info"><img src="${s.img}"><div><div class="song-title">${s.title}</div><div class="song-artist">${s.artist}</div></div></div>
+    function songIndexById(){
+      const map = new Map<string, number>();
+      state.songs.forEach((s, i) => map.set(String(s.id), i));
+      return map;
+    }
+    function skeletonRows(count = 6){
+      return Array.from({length: count}, () =>
+        `<div class="song-skeleton" aria-hidden="true">
+          <div class="skeleton-block skeleton-cover"></div>
+          <div class="skeleton-lines"><div class="skeleton-block skeleton-line"></div><div class="skeleton-block skeleton-line short"></div></div>
+        </div>`).join('');
+    }
+
+    export function songItemHTML(s, songIdx?){
+      const index = songIdx === undefined ? state.songs.findIndex(item => item.id === s.id) : songIdx;
+      const title = escapeHtml(s.title || 'Untitled');
+      const artist = escapeHtml(s.artist || 'Unknown Artist');
+      const cover = escapeHtml(s.img || DEFAULT_COVER);
+      return `<div class="song-item ${index===state.currentIndex?'active':''}" role="button" tabindex="0" aria-label="Play ${title} by ${artist}" onclick="playSong(${index})">
+          <div class="song-info"><img src="${cover}" alt="" loading="lazy" decoding="async"><div><div class="song-title">${title}</div><div class="song-artist">${artist}</div></div></div>
           <div class="song-item-actions">
-            <button class="song-item-like ${s.favorite?'active':''}" onclick="toggleFavorite(event, ${songIdx})"><i class="fa-${s.favorite?'solid':'regular'} fa-heart"></i></button>
-            <button class="song-item-menu-btn" onclick="openTrackMenu(event, ${s.id})"><i class="fa-solid fa-ellipsis"></i></button>
+            <button type="button" class="song-item-like ${s.favorite?'active':''}" aria-label="${s.favorite?'Unlike':'Like'} ${title}" aria-pressed="${s.favorite?'true':'false'}" onclick="toggleFavorite(event, ${index})"><i class="fa-${s.favorite?'solid':'regular'} fa-heart" aria-hidden="true"></i></button>
+            <button type="button" class="song-item-menu-btn" data-song-menu="${escapeHtml(String(s.id))}" aria-label="More options for ${title}"><i class="fa-solid fa-ellipsis" aria-hidden="true"></i></button>
           </div>
         </div>`;
     }
 
     export function renderSongs(list){
-      const c=$('songList');
-      c.innerHTML=list.length?list.map(songItemHTML).join('') : stateHTML('noresults','No tracks found','Try a different spelling or another filter.');
+      const c=$('songList'); if(!c) return;
+      if(!list.length){
+        if(state.catalogLoading){ c.innerHTML = skeletonRows(6); return; }
+        if(state.catalogError){
+          c.innerHTML = stateHTML('error','Couldn\'t load your library','The remote catalogue is unreachable. Check your connection and try again.','Try again','retryCatalog()');
+          return;
+        }
+        if(!state.songs.length){
+          c.innerHTML = stateHTML('empty','Your library is empty','Add a track or search online to get started.','Search music',"goTab('tabSearch')");
+          return;
+        }
+        c.innerHTML = stateHTML('noresults','No tracks found','Try a different spelling or another filter.');
+        return;
+      }
+      const indexById = songIndexById();
+      c.innerHTML = list.map(s => songItemHTML(s, indexById.get(String(s.id)))).join('');
     }
 
 /* ===== Library tab view switcher: Tracks / Artists / Albums / Films ===== */
@@ -458,17 +521,19 @@ import { $, persistLikedHistory, rebuildSongs, savedLikeMap, state } from '../co
         return;
       }
       let gi = 0;
+      const indexById = songIndexById();
       c.innerHTML = groups.map(([ , g]) => {
         const gkey = 'g' + (gi++);
-        libGroupIndex.set(gkey, g.songs.map(s => state.songs.findIndex(x => x.id === s.id)).filter(i => i >= 0));
+        const groupName = escapeHtml(g.name);
+        libGroupIndex.set(gkey, g.songs.map(s => indexById.get(String(s.id)) ?? -1).filter(i => i >= 0));
         const n = g.songs.length;
         return `<div class="lib-group">
           <div class="lib-group-head">
-            <img class="lib-group-art" src="${g.songs[0]?.img || ''}" alt="">
-            <div class="lib-group-meta"><div class="lib-group-name">${g.name}</div><div class="lib-group-sub">${n} track${n!==1?'s':''}</div></div>
-            <button class="lib-group-play" data-gplay="${gkey}" title="Play"><i class="fa-solid fa-play"></i></button>
+            <img class="lib-group-art" src="${escapeHtml(g.songs[0]?.img || DEFAULT_COVER)}" alt="" loading="lazy" decoding="async">
+            <div class="lib-group-meta"><div class="lib-group-name">${groupName}</div><div class="lib-group-sub">${n} track${n!==1?'s':''}</div></div>
+            <button type="button" class="lib-group-play" data-gplay="${gkey}" title="Play ${groupName}" aria-label="Play ${groupName}"><i class="fa-solid fa-play" aria-hidden="true"></i></button>
           </div>
-          <div class="song-list lib-group-list">${g.songs.map(songItemHTML).join('')}</div>
+          <div class="song-list lib-group-list">${g.songs.map(s => songItemHTML(s, indexById.get(String(s.id)))).join('')}</div>
         </div>`;
       }).join('');
       c.querySelectorAll('[data-gplay]').forEach(btn => {
@@ -481,9 +546,12 @@ import { $, persistLikedHistory, rebuildSongs, savedLikeMap, state } from '../co
       const heading=$('allTracksSection');
       if(heading) heading.textContent = libView==='artists'?'Artists':libView==='albums'?'Albums':libView==='films'?'Films':'All Tracks';
       if(!state.songs.length){
-        c.innerHTML=stateHTML('empty','Your library is empty','Add your own songs or search online to get started.','Search music',"goTab('tabSearch')");
+        if(state.catalogLoading) c.innerHTML = skeletonRows(8);
+        else if(state.catalogError) c.innerHTML = stateHTML('error','Couldn\'t load your library','The remote catalogue is unreachable. Check your connection and try again.','Try again','retryCatalog()');
+        else c.innerHTML=stateHTML('empty','Your library is empty','Add your own songs or search online to get started.','Search music',"goTab('tabSearch')");
       }else if(libView==='tracks'){
-        c.innerHTML=state.songs.map(songItemHTML).join('');
+        const indexById = songIndexById();
+        c.innerHTML=state.songs.map(s => songItemHTML(s, indexById.get(String(s.id)))).join('');
       }else{
         renderGroups(libView);
       }
@@ -494,7 +562,8 @@ import { $, persistLikedHistory, rebuildSongs, savedLikeMap, state } from '../co
     export function updateLibNowPlaying(){
       const el=$('libNowPlayingSub');
       if(!el) return;
-      el.textContent = state.songs.length ? `${state.songs[state.currentIndex].title} — ${state.songs[state.currentIndex].artist}` : 'Nothing playing';
+      const song = state.songs[state.currentIndex];
+      el.textContent = song ? `${song.title} — ${song.artist}` : 'Nothing playing';
     }
 
     export function toggleStatsPanel(){
@@ -516,3 +585,24 @@ import { $, persistLikedHistory, rebuildSongs, savedLikeMap, state } from '../co
         <div class="stats-cell"><div class="stat-num">${artistCount}</div><div class="stat-label">Artists</div></div>`;
     }
 
+    /* Retry the remote catalogue from the error state's button. */
+    export async function retryCatalog(){
+      if(state.catalogLoading) return;
+      state.catalogLoading = true;
+      state.catalogError = false;
+      renderSongs(state.songs);
+      if($('tabLibrary').classList.contains('active')) renderLibrary();
+      try{
+        const tracks = await fetchHfCatalog();
+        setHfTracks(tracks);
+        renderRecent();
+        updateLibCount();
+      }catch(e){
+        state.catalogError = true;
+        toast('Could not load the Hugging Face catalog — showing local files only.','triangle-exclamation');
+      }finally{
+        state.catalogLoading = false;
+        renderSongs(state.songs);
+        if($('tabLibrary').classList.contains('active')) renderLibrary();
+      }
+    }

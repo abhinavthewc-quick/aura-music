@@ -35,24 +35,24 @@ import { $, state } from '../core/state';
       const localCount = state.songs.filter(s=>s.isLocal).length;
 
       const tiles = [
-        `<div class="quick-tile" onclick="goToSearchCategory('favorites')">
+        `<div class="quick-tile" role="button" tabindex="0" onclick="goToSearchCategory('favorites')">
           <div class="quick-tile-art cat-favorites"><i class="fa-solid fa-heart"></i></div>
           <div class="quick-tile-text"><div class="qt-title">Liked Songs</div><div class="qt-sub">${favCount} track${favCount!==1?'s':''}</div></div>
         </div>`,
-        last ? `<div class="quick-tile" onclick="resumeLastPlayed()">
-          <div class="quick-tile-art"><img src="${escapeHtml(last.img||DEFAULT_COVER)}"></div>
-          <div class="quick-tile-text"><div class="qt-title">Jump Back In</div><div class="qt-sub">${last.title}</div></div>
-        </div>` : `<div class="quick-tile" onclick="shuffleAll()">
+        last ? `<div class="quick-tile" role="button" tabindex="0" onclick="resumeLastPlayed()">
+          <div class="quick-tile-art"><img src="${escapeHtml(last.img||DEFAULT_COVER)}" alt="" loading="lazy" decoding="async"></div>
+          <div class="quick-tile-text"><div class="qt-title">Jump Back In</div><div class="qt-sub">${escapeHtml(last.title)}</div></div>
+        </div>` : `<div class="quick-tile" role="button" tabindex="0" onclick="shuffleAll()">
           <div class="quick-tile-art cat-shuffle"><i class="fa-solid fa-shuffle"></i></div>
           <div class="quick-tile-text"><div class="qt-title">Shuffle All</div><div class="qt-sub">Random pick</div></div>
         </div>`,
-        `<div class="quick-tile" onclick="goToSearchCategory('local')">
+        `<div class="quick-tile" role="button" tabindex="0" onclick="goToSearchCategory('local')">
           <div class="quick-tile-art cat-local"><i class="fa-solid fa-file-audio"></i></div>
           <div class="quick-tile-text"><div class="qt-title">Local Files</div><div class="qt-sub">${localCount} added</div></div>
         </div>`,
-        `<div class="quick-tile" onclick="goToSearchCategory('recent')">
+        `<div class="quick-tile" role="button" tabindex="0" onclick="goToSearchCategory('recent')">
           <div class="quick-tile-art cat-recent"><i class="fa-solid fa-clock-rotate-left"></i></div>
-          <div class="quick-tile-text"><div class="qt-title">Recently Played</div><div class="qt-sub">${state.recentlyPlayed.length} track${state.recentlyPlayed.length!==1?'s':''}</div></div>
+          <div class="quick-tile-text"><div class="qt-title"><span class="qt-long">Recently Played</span><span class="qt-short">Recent</span></div><div class="qt-sub">${state.recentlyPlayed.length} track${state.recentlyPlayed.length!==1?'s':''}</div></div>
         </div>`
       ];
       $('quickGrid').innerHTML = tiles.join('');
@@ -81,15 +81,18 @@ import { $, state } from '../core/state';
 
       if(!artists.length){ container.innerHTML=''; return; }
 
+      const indexById = new Map<string, number>();
+      state.songs.forEach((song, i) => indexById.set(String(song.id), i));
       container.innerHTML = artists.map((g:any)=>{
         const cards = g.songs.map(s=>{
-          const idx = state.songs.findIndex(item=>item.id===s.id);
-          return `<div class="spotlight-card" onclick="playSong(${idx})"><img src="${escapeHtml(s.img||DEFAULT_COVER)}"><p class="sc-title">${s.title}</p><p class="sc-sub">${s.artist}</p></div>`;
+          const idx = indexById.get(String(s.id)) ?? -1;
+          if(idx < 0) return '';
+          return `<div class="spotlight-card" role="button" tabindex="0" aria-label="Play ${escapeHtml(s.title||'')}" onclick="playSong(${idx})"><img src="${escapeHtml(s.img||DEFAULT_COVER)}" alt="" loading="lazy" decoding="async"><p class="sc-title">${escapeHtml(s.title)}</p><p class="sc-sub">${escapeHtml(s.artist)}</p></div>`;
         }).join('');
         return `<div class="artist-spotlight-block" style="margin-bottom:24px">
           <div class="spotlight-header">
-            <img class="spotlight-avatar" src="${escapeHtml(g.songs[0].img||DEFAULT_COVER)}" alt="">
-            <div><p style="font-size:11px;color:var(--text-sub)">More from</p><p style="font-size:16px;font-weight:800">${g.name}</p></div>
+            <img class="spotlight-avatar" src="${escapeHtml(g.songs[0].img||DEFAULT_COVER)}" alt="" loading="lazy" decoding="async">
+            <div><p style="font-size:11px;color:var(--text-sub)">More from</p><p style="font-size:16px;font-weight:800">${escapeHtml(g.name)}</p></div>
           </div>
           <div class="recent-scroll">${cards}</div>
         </div>`;
@@ -100,14 +103,25 @@ import { $, state } from '../core/state';
     export let auraPickIds=[];
     export function renderAuraPicks(force?){
       const c=$('auraPicksScroll'); if(!c||typeof state.songs==='undefined') return;
+      if(!state.songs.length){
+        c.innerHTML = `<div class="aura-empty">
+          <i class="fa-solid fa-compact-disc" aria-hidden="true"></i>
+          <div><b>No picks yet</b><span>Add or search for music and this space fills itself.</span></div>
+          <button type="button" class="aura-empty-btn" onclick="goTab('tabSearch')">Find music</button>
+        </div>`;
+        return;
+      }
       const valid=auraPickIds.filter(id=>state.songs.some(s=>s.id===id));
-      if(force||!valid.length||valid.length!==auraPickIds.length){
+      /* Re-roll when the library grew (the rail is first painted with the
+         cached/local tracks, before the remote catalogue arrives) or shrank. */
+      const target = Math.min(8, state.songs.length);
+      if(force || !valid.length || valid.length!==auraPickIds.length || auraPickIds.length < target){
         const pool=[...state.songs].sort(()=>Math.random()-.5).slice(0,8);
         auraPickIds=pool.map(s=>s.id);
       }
       c.innerHTML=auraPickIds.map(id=>{
         const i=state.songs.findIndex(s=>s.id===id), s=state.songs[i]; if(!s) return '';
-        return `<div class="aura-pick" onclick="playSong(${i})"><img src="${escapeHtml(s.img||DEFAULT_COVER)}" alt="" loading="lazy"><span class="aura-pick-play"><i class="fa-solid fa-play"></i></span><div class="aura-pick-info"><b>${escapeHtml(s.title||'')}</b><span>${escapeHtml(s.artist||'')}</span></div></div>`;
+        return `<div class="aura-pick" role="button" tabindex="0" aria-label="Play ${escapeHtml(s.title||'')}" onclick="playSong(${i})"><img src="${escapeHtml(s.img||DEFAULT_COVER)}" alt="" loading="lazy" decoding="async"><span class="aura-pick-play"><i class="fa-solid fa-play"></i></span><div class="aura-pick-info"><b>${escapeHtml(s.title||'')}</b><span>${escapeHtml(s.artist||'')}</span></div></div>`;
       }).join('');
     }
     setTimeout(()=>renderAuraPicks(),0);
@@ -119,12 +133,3 @@ import { $, state } from '../core/state';
       set('desktopHeroFavCount', Array.isArray(state.songs)?state.songs.filter(s=>s.favorite).length:0);
       set('desktopHeroRecentCount', Array.isArray(state.recentlyPlayed)?state.recentlyPlayed.length:0);
     }
-
-
-    document.addEventListener('DOMContentLoaded',()=>{
-      updateDesktopHeroStats();
-      document.querySelectorAll('.desktop-nav-btn[data-tab]').forEach(btn=>btn.addEventListener('click',()=>{
-        document.querySelectorAll('.desktop-nav-btn[data-tab]').forEach(b=>b.classList.remove('active'));
-        btn.classList.add('active');
-      }));
-    });

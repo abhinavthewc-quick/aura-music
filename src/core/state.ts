@@ -17,6 +17,10 @@ export const state = {
   audio: document.getElementById('audioPlayer') as HTMLAudioElement,
   auraYTQueueIndex: -1,
   radioIsPlaying: false,
+  /* Catalogue fetch state, used to paint skeletons / retry UI instead of a
+     misleading "no tracks" empty state during the first network round-trip. */
+  catalogLoading: false,
+  catalogError: false,
 };
 
 export const savedLikeMap = Object.fromEntries(state.auraLikedHistory.map((x: any) => [String(x.id), true]));

@@ -237,7 +237,7 @@ import { $, state } from '../core/state';
     export function renderEffectsGrid(){
       $('effectsGrid').innerHTML = ambientEffectConfig.map(e => `
         <div class="effect-row" data-effect="${e.key}">
-          <div class="effect-row-top" onclick="toggleAmbientLayer('${e.key}')">
+          <div class="effect-row-top" role="button" tabindex="0" onclick="toggleAmbientLayer('${e.key}')">
             <i class="fa-solid ${e.icon}"></i>
             <b>${e.name}</b>
             <span class="effect-row-pct">50%</span>
