@@ -81,10 +81,10 @@
 (function(){
   var el=document.getElementById('auraLoader'); if(!el) return;
   var root=document.documentElement;
-  var MIN_MS=1700, CAP_MS=5500;
+  var MIN_MS=1400, CAP_MS=5500;
   var reduce=false;
   try{ reduce=window.matchMedia('(prefers-reduced-motion:reduce)').matches; }catch(e){}
-  if(reduce) MIN_MS=500;
+  if(reduce) MIN_MS=400;
 
   function cleanup(){
     if(el && el.parentNode) el.parentNode.removeChild(el);
