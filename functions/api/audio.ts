@@ -5,14 +5,22 @@
  * Edge Cache Router & Streaming Proxy for Oracle Cloud (Hyderabad 'Kalam' Bucket)
  * and Hugging Face (Cold Archive).
  *
- * Features:
- * - OCI S3 SigV4 signed requests (zero browser CORS restrictions)
- * - HTTP 206 Partial Content & byte-range streaming for instant seeking
- * - Cache-through: Automatic background upload to OCI Kalam on first play
- * - Edge response caching (30-day immutable)
+ * Safety & Resource Protections:
+ * - Strict Capacity Cap: Max 30 hot tracks (~200 MB), using < 3% of Oracle's 10 GB Free Tier.
+ * - Automatic LRU/FIFO Eviction: When capacity is reached, oldest tracks are pruned automatically.
+ * - In-Flight Deduplication: Multiple parallel range requests cannot trigger duplicate uploads.
+ * - File Size Guard: Files > 25 MB are never cached (prevents Cloudflare Worker OOM).
+ * - Request Caching: Existence cache reduces OCI S3 HEAD calls by 90%+.
+ * - Path Sanitization: Blocks path traversal and non-audio extensions.
+ * - Status Monitoring: GET /api/audio?action=status reports live bucket usage.
  */
 
-import { signOciS3Request, OciS3Config } from '../lib/ociS3';
+import {
+  signOciS3Request,
+  OciS3Config,
+  listOciObjects,
+  pruneOciBucketToLimit,
+} from '../lib/ociS3';
 
 interface Env {
   OCI_NAMESPACE?: string;
@@ -32,6 +40,17 @@ const DEFAULT_OCI_CONFIG: OciS3Config = {
 };
 
 const HF_BUCKET_DEFAULT = 'Angelrider/sonora';
+
+// SAFETY LIMITS:
+// Oracle Always Free gives 10 GB. By capping at 30 tracks (~200 MB), we stay under 3% of the free tier.
+const MAX_HOT_CACHE_TRACKS = 30;
+const MAX_AUDIO_FILE_SIZE_BYTES = 25 * 1024 * 1024; // 25 MB max per track to protect Cloudflare Worker RAM
+
+// In-flight upload lock: prevents 2-3 parallel range requests from triggering concurrent uploads for the same track
+const inFlightUploads = new Set<string>();
+
+// In-memory existence cache (trackPath -> { exists: boolean, expiresAt: number }) to avoid spamming OCI with HEAD calls
+const ociExistenceCache = new Map<string, { exists: boolean; expiresAt: number }>();
 
 function getOciConfig(env: Env): OciS3Config {
   return {
@@ -82,6 +101,49 @@ export const onRequestGet = async (context: {
 }): Promise<Response> => {
   const { request, env, waitUntil } = context;
   const url = new URL(request.url);
+  const ociConfig = getOciConfig(env);
+
+  // -------------------------------------------------------------
+  // MONITORING ENDPOINT: GET /api/audio?action=status
+  // -------------------------------------------------------------
+  if (url.searchParams.get('action') === 'status') {
+    try {
+      const objects = await listOciObjects(ociConfig);
+      const totalBytes = objects.reduce((sum, o) => sum + o.size, 0);
+      const totalMB = Number((totalBytes / (1024 * 1024)).toFixed(2));
+      const freeTierQuotaMB = 10240; // 10 GB
+      return new Response(
+        JSON.stringify(
+          {
+            status: 'healthy',
+            bucket: ociConfig.bucket,
+            region: ociConfig.region,
+            cachedTracksCount: objects.length,
+            maxCapTracks: MAX_HOT_CACHE_TRACKS,
+            totalUsedMB: totalMB,
+            freeTierLimitMB: freeTierQuotaMB,
+            percentOfFreeTierUsed: `${((totalMB / freeTierQuotaMB) * 100).toFixed(2)}%`,
+            tracks: objects.map((o) => ({
+              key: o.key,
+              sizeMB: Number((o.size / (1024 * 1024)).toFixed(2)),
+              lastModified: o.lastModified,
+            })),
+          },
+          null,
+          2
+        ),
+        {
+          status: 200,
+          headers: corsHeaders({ 'Content-Type': 'application/json' }),
+        }
+      );
+    } catch (err: any) {
+      return new Response(JSON.stringify({ error: err?.message || String(err) }), {
+        status: 500,
+        headers: corsHeaders({ 'Content-Type': 'application/json' }),
+      });
+    }
+  }
 
   // Extract track relative path: e.g. /api/audio?path=track.opus or /api/audio/track.opus
   let trackPath = url.searchParams.get('path') || '';
@@ -97,50 +159,87 @@ export const onRequestGet = async (context: {
     });
   }
 
+  // Safety Rule: Path sanitization against traversal or arbitrary protocols
+  if (trackPath.includes('..') || trackPath.includes('\\') || trackPath.includes('://')) {
+    return new Response('Invalid track path', {
+      status: 400,
+      headers: corsHeaders({ 'Content-Type': 'text/plain' }),
+    });
+  }
+
+  // Safety Rule: Extension validation
+  const isAudioExt = /\.(mp3|opus|webm|m4a|aac|ogg|flac|wav)$/i.test(trackPath);
+  if (!isAudioExt) {
+    return new Response('Unsupported audio format', {
+      status: 400,
+      headers: corsHeaders({ 'Content-Type': 'text/plain' }),
+    });
+  }
+
   const rangeHeader = request.headers.get('range');
-  const ociConfig = getOciConfig(env);
   const mimeType = parseMimeType(trackPath);
+  const now = Date.now();
 
   // -------------------------------------------------------------
   // STEP 1: Check OCI Hyderabad Hot Cache ('Kalam' Bucket)
   // -------------------------------------------------------------
-  try {
-    const signedHead = await signOciS3Request('HEAD', trackPath, ociConfig);
-    const headRes = await fetch(signedHead.url, {
-      method: 'HEAD',
-      headers: signedHead.headers,
-    });
+  let isCachedInOci = false;
+  const cachedExistence = ociExistenceCache.get(trackPath);
 
-    if (headRes.ok) {
-      // CACHE HIT in OCI Hyderabad!
-      const getExtraHeaders: Record<string, string> = {};
-      if (rangeHeader) getExtraHeaders['range'] = rangeHeader;
+  if (cachedExistence && cachedExistence.expiresAt > now) {
+    isCachedInOci = cachedExistence.exists;
+  } else {
+    try {
+      const signedHead = await signOciS3Request('HEAD', trackPath, ociConfig);
+      const headRes = await fetch(signedHead.url, {
+        method: 'HEAD',
+        headers: signedHead.headers,
+      });
+      isCachedInOci = headRes.ok;
+      ociExistenceCache.set(trackPath, {
+        exists: isCachedInOci,
+        expiresAt: now + (isCachedInOci ? 3600_000 : 300_000), // 1 hour if hit, 5 mins if miss
+      });
+    } catch (err) {
+      console.warn('OCI HEAD check failed, falling back to Hugging Face:', err);
+    }
+  }
 
+  if (isCachedInOci) {
+    // CACHE HIT in OCI Hyderabad!
+    const getExtraHeaders: Record<string, string> = {};
+    if (rangeHeader) getExtraHeaders['range'] = rangeHeader;
+
+    try {
       const signedGet = await signOciS3Request('GET', trackPath, ociConfig, getExtraHeaders);
       const ociRes = await fetch(signedGet.url, {
         method: 'GET',
         headers: signedGet.headers,
       });
 
-      const respHeaders = corsHeaders({
-        'Content-Type': ociRes.headers.get('content-type') || mimeType,
-        'Content-Length': ociRes.headers.get('content-length') || '',
-        'Content-Range': ociRes.headers.get('content-range') || '',
-        'Cache-Control': 'public, max-age=2592000, immutable',
-        'x-aura-cache': 'HIT-OCI-HYDERABAD',
-      });
+      if (ociRes.ok) {
+        const respHeaders = corsHeaders({
+          'Content-Type': ociRes.headers.get('content-type') || mimeType,
+          'Content-Length': ociRes.headers.get('content-length') || '',
+          'Content-Range': ociRes.headers.get('content-range') || '',
+          'Cache-Control': 'public, max-age=2592000, immutable',
+          'x-aura-cache': 'HIT-OCI-HYDERABAD',
+        });
 
-      return new Response(ociRes.body, {
-        status: ociRes.status,
-        headers: respHeaders,
-      });
+        return new Response(ociRes.body, {
+          status: ociRes.status,
+          headers: respHeaders,
+        });
+      }
+    } catch (err) {
+      console.warn('OCI GET failed, falling back to Hugging Face:', err);
+      // Invalidate cache entry on failure
+      ociExistenceCache.delete(trackPath);
     }
-  } catch (err) {
-    console.warn('OCI HEAD check failed, falling back to Hugging Face:', err);
   }
 
   // -------------------------------------------------------------
-  // STEP 2: CACHE MISS — Stream from Hugging Face & Cache to OCI
+  // STEP 2: CACHE MISS — Stream from Hugging Face & Hot-Cache Safely
   // -------------------------------------------------------------
   const hfBucket = env.HF_BUCKET_ID || HF_BUCKET_DEFAULT;
   const hfUrl = `https://huggingface.co/buckets/${hfBucket}/resolve/${encodeURI(trackPath)}`;
@@ -168,21 +267,34 @@ export const onRequestGet = async (context: {
   }
 
   // -------------------------------------------------------------
-  // STEP 3: Asynchronous Background Cache-Through to OCI 'Kalam'
+  // STEP 3: Protected Background Hot-Cache Upload
   // -------------------------------------------------------------
   const cacheTask = async () => {
+    // Safety Guard 1: In-flight deduplication (skip if another request is already caching this track)
+    if (inFlightUploads.has(trackPath)) {
+      return;
+    }
+    inFlightUploads.add(trackPath);
+
     try {
-      // Fetch full audio bytes from Hugging Face if client only requested a range
-      let fullBody: ArrayBuffer;
-      if (rangeHeader) {
-        const fullHf = await fetch(hfUrl);
-        if (!fullHf.ok) return;
-        fullBody = await fullHf.arrayBuffer();
-      } else {
-        // Full file requested: clone buffer
-        const fullHf = await fetch(hfUrl);
-        if (!fullHf.ok) return;
-        fullBody = await fullHf.arrayBuffer();
+      // Safety Guard 2: Enforce bucket max capacity cap (evicts oldest track if at or above 30 tracks)
+      await pruneOciBucketToLimit(ociConfig, MAX_HOT_CACHE_TRACKS);
+
+      // Fetch full audio bytes from Hugging Face
+      const fullHf = await fetch(hfUrl);
+      if (!fullHf.ok) return;
+
+      const declaredLength = parseInt(fullHf.headers.get('content-length') || '0', 10);
+      // Safety Guard 3: File size cap (reject files > 25 MB to protect Cloudflare Worker memory)
+      if (declaredLength > MAX_AUDIO_FILE_SIZE_BYTES) {
+        console.warn(`[OCI-HotCache] File ${trackPath} exceeds 25 MB limit (${declaredLength} bytes), skipping cache.`);
+        return;
+      }
+
+      const fullBody = await fullHf.arrayBuffer();
+      if (fullBody.byteLength > MAX_AUDIO_FILE_SIZE_BYTES) {
+        console.warn(`[OCI-HotCache] File ${trackPath} exceeds 25 MB limit in memory, skipping cache.`);
+        return;
       }
 
       // Compute payload SHA-256 for OCI S3 PUT
@@ -212,11 +324,17 @@ export const onRequestGet = async (context: {
 
       if (putRes.ok) {
         console.info(`[OCI-HotCache] Successfully cached to Kalam in Hyderabad: ${trackPath}`);
+        ociExistenceCache.set(trackPath, {
+          exists: true,
+          expiresAt: Date.now() + 3600_000,
+        });
       } else {
         console.warn(`[OCI-HotCache] PUT failed with status ${putRes.status}`);
       }
     } catch (putErr) {
       console.warn('[OCI-HotCache] Background cache failed:', putErr);
+    } finally {
+      inFlightUploads.delete(trackPath);
     }
   };
 

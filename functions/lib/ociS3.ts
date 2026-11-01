@@ -70,7 +70,7 @@ export async function signOciS3Request(
 
   // Clean object key path
   const cleanPath = objectPath.replace(/^\/+/, '');
-  const canonicalUri = `/${bucket}/${encodeURI(cleanPath)}`;
+  const canonicalUri = cleanPath ? `/${bucket}/${encodeURI(cleanPath)}` : `/${bucket}/`;
   const url = `https://${host}${canonicalUri}`;
 
   const now = new Date();
@@ -137,4 +137,100 @@ export async function signOciS3Request(
   };
 
   return { url, headers: finalHeaders };
+}
+
+export interface OciStoredObject {
+  key: string;
+  size: number;
+  lastModified: string;
+}
+
+/**
+ * Pure zero-dependency XML parser for S3 ListBucketResult in V8 workers.
+ */
+export function parseS3ListObjectsXml(xmlText: string): OciStoredObject[] {
+  const objects: OciStoredObject[] = [];
+  const contentsRegex = /<Contents>([\s\S]*?)<\/Contents>/g;
+  let match: RegExpExecArray | null;
+
+  while ((match = contentsRegex.exec(xmlText)) !== null) {
+    const block = match[1];
+    const keyMatch = /<Key>([\s\S]*?)<\/Key>/.exec(block);
+    const sizeMatch = /<Size>(\d+)<\/Size>/.exec(block);
+    const dateMatch = /<LastModified>([\s\S]*?)<\/LastModified>/.exec(block);
+
+    if (keyMatch) {
+      objects.push({
+        key: decodeURIComponent(keyMatch[1].replace(/\+/g, ' ')),
+        size: sizeMatch ? parseInt(sizeMatch[1], 10) : 0,
+        lastModified: dateMatch ? dateMatch[1] : '',
+      });
+    }
+  }
+  return objects;
+}
+
+/**
+ * List all objects stored in the OCI bucket.
+ */
+export async function listOciObjects(config: OciS3Config): Promise<OciStoredObject[]> {
+  const signed = await signOciS3Request('GET', '', config);
+  const res = await fetch(signed.url, { headers: signed.headers });
+  if (!res.ok) {
+    throw new Error(`Failed to list OCI bucket: HTTP ${res.status}`);
+  }
+  const text = await res.text();
+  return parseS3ListObjectsXml(text);
+}
+
+/**
+ * Delete an object from the OCI bucket.
+ */
+export async function deleteOciObject(key: string, config: OciS3Config): Promise<boolean> {
+  const signed = await signOciS3Request('DELETE', key, config);
+  const res = await fetch(signed.url, { method: 'DELETE', headers: signed.headers });
+  return res.ok || res.status === 204 || res.status === 404;
+}
+
+/**
+ * Safety Pruning: Enforce a strict max track cap on the OCI hot-cache bucket.
+ * If the bucket is at or above capacity, evicts the oldest tracks (FIFO/LRU)
+ * before adding any new ones.
+ */
+export async function pruneOciBucketToLimit(
+  config: OciS3Config,
+  maxAllowedTracks: number = 30
+): Promise<{ prunedCount: number; remainingCount: number; totalBytes: number }> {
+  try {
+    const objects = await listOciObjects(config);
+    let totalBytes = objects.reduce((sum, o) => sum + o.size, 0);
+
+    if (objects.length < maxAllowedTracks) {
+      return { prunedCount: 0, remainingCount: objects.length, totalBytes };
+    }
+
+    // Sort by LastModified ascending (oldest first)
+    objects.sort((a, b) => {
+      const da = a.lastModified ? new Date(a.lastModified).getTime() : 0;
+      const db = b.lastModified ? new Date(b.lastModified).getTime() : 0;
+      return da - db;
+    });
+
+    const excessCount = objects.length - maxAllowedTracks + 1; // Prune so there's room for 1 new track
+    let pruned = 0;
+
+    for (let i = 0; i < excessCount && i < objects.length; i++) {
+      const toDelete = objects[i];
+      const ok = await deleteOciObject(toDelete.key, config);
+      if (ok) {
+        pruned++;
+        totalBytes -= toDelete.size;
+      }
+    }
+
+    return { prunedCount: pruned, remainingCount: objects.length - pruned, totalBytes };
+  } catch (err) {
+    console.warn('[OCI-HotCache] Pruning check failed:', err);
+    return { prunedCount: 0, remainingCount: 0, totalBytes: 0 };
+  }
 }
