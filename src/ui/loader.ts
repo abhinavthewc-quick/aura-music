@@ -77,14 +77,14 @@
   window.AuraOrb={create:create,mountAll:mountAll,reduce:reduce};
 })();
 
-/* Full-screen intro loader: plays the holographic turntable startup animation and smoothly dissolves into Aura Music. */
+/* Full-screen intro loader: plays the iridescent turntable startup animation and smoothly dissolves into Aura Music. */
 (function(){
   var el=document.getElementById('auraLoader'); if(!el) return;
   var root=document.documentElement;
-  var vid=document.getElementById('auraStartupVideo') as HTMLVideoElement | null;
-  var MIN_MS=1700, CAP_MS=6000;
+  var MIN_MS=1700, CAP_MS=5500;
   var reduce=false;
   try{ reduce=window.matchMedia('(prefers-reduced-motion:reduce)').matches; }catch(e){}
+  if(reduce) MIN_MS=500;
 
   function cleanup(){
     if(el && el.parentNode) el.parentNode.removeChild(el);
@@ -95,34 +95,7 @@
     var t0=performance.now(), done=false;
     var loaded=document.readyState==='complete';
     var fontsOk=!document.fonts;
-    var videoEnded=false;
     var timer: any;
-
-    if(vid){
-      // Ensure smooth autoplay
-      var p=vid.play();
-      if(p && typeof p.catch==='function'){
-        p.catch(function(){
-          // Autoplay blocked by browser policy: allow app to continue gracefully
-          videoEnded=true;
-          check();
-        });
-      }
-      vid.addEventListener('ended', function(){
-        videoEnded=true;
-        check();
-      });
-      // When reaching near the final frame, pause on the settled turntable
-      vid.addEventListener('timeupdate', function(){
-        if(vid && vid.duration && vid.currentTime >= vid.duration - 0.08){
-          vid.pause();
-          videoEnded=true;
-          check();
-        }
-      });
-    }else{
-      videoEnded=true;
-    }
 
     window.addEventListener('load', function(){ loaded=true; check(); });
     if(document.fonts && document.fonts.ready){
@@ -134,7 +107,7 @@
       var spent=performance.now()-t0;
       var sheets=window.__aura && window.__aura.sheets>=2;
       var appReady=loaded && fontsOk && sheets;
-      if((spent>=MIN_MS && appReady) || (videoEnded && appReady) || spent>=CAP_MS){
+      if((spent>=MIN_MS && appReady) || spent>=CAP_MS){
         leave();
       }
     }
