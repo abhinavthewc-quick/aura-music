@@ -77,39 +77,83 @@
   window.AuraOrb={create:create,mountAll:mountAll,reduce:reduce};
 })();
 
-/* Full-screen intro loader: shows on every visit (new or returning), then the orb rushes toward the viewer and fills the screen as the app appears. */
+/* Full-screen intro loader: plays the holographic turntable startup animation and smoothly dissolves into Aura Music. */
 (function(){
   var el=document.getElementById('auraLoader'); if(!el) return;
   var root=document.documentElement;
-  var MIN_MS=600, CAP_MS=6000;                 /* shortest time the orb is shown / longest we ever wait */
-  function cleanup(){ if(el.parentNode) el.parentNode.removeChild(el); root.classList.remove('aura-loading'); }
+  var vid=document.getElementById('auraStartupVideo') as HTMLVideoElement | null;
+  var MIN_MS=1700, CAP_MS=6000;
+  var reduce=false;
+  try{ reduce=window.matchMedia('(prefers-reduced-motion:reduce)').matches; }catch(e){}
+
+  function cleanup(){
+    if(el && el.parentNode) el.parentNode.removeChild(el);
+    root.classList.remove('aura-loading');
+  }
+
   try{
-    var small=Math.min(window.screen.width||1000,window.screen.height||1000)<700;
-    var orb=window.AuraOrb.create(el.querySelector('canvas'),{count:small?420:720,radius:.36,cy:.46,dot:1,speed:.9});
-    if(!orb){ cleanup(); return; }
-    var t0=performance.now(), done=false, loaded=document.readyState==='complete', fontsOk=!document.fonts, timer;
-    window.addEventListener('load',function(){ loaded=true; check(); });
-    if(document.fonts && document.fonts.ready){ document.fonts.ready.then(function(){ fontsOk=true; },function(){ fontsOk=true; }); }
+    var t0=performance.now(), done=false;
+    var loaded=document.readyState==='complete';
+    var fontsOk=!document.fonts;
+    var videoEnded=false;
+    var timer: any;
+
+    if(vid){
+      // Ensure smooth autoplay
+      var p=vid.play();
+      if(p && typeof p.catch==='function'){
+        p.catch(function(){
+          // Autoplay blocked by browser policy: allow app to continue gracefully
+          videoEnded=true;
+          check();
+        });
+      }
+      vid.addEventListener('ended', function(){
+        videoEnded=true;
+        check();
+      });
+      // When reaching near the final frame, pause on the settled turntable
+      vid.addEventListener('timeupdate', function(){
+        if(vid && vid.duration && vid.currentTime >= vid.duration - 0.08){
+          vid.pause();
+          videoEnded=true;
+          check();
+        }
+      });
+    }else{
+      videoEnded=true;
+    }
+
+    window.addEventListener('load', function(){ loaded=true; check(); });
+    if(document.fonts && document.fonts.ready){
+      document.fonts.ready.then(function(){ fontsOk=true; check(); }, function(){ fontsOk=true; check(); });
+    }
+
     function check(){
       if(done) return;
       var spent=performance.now()-t0;
       var sheets=window.__aura && window.__aura.sheets>=2;
-      if((spent>=MIN_MS && loaded && fontsOk && sheets) || spent>=CAP_MS) leave();
+      var appReady=loaded && fontsOk && sheets;
+      if((spent>=MIN_MS && appReady) || (videoEnded && appReady) || spent>=CAP_MS){
+        leave();
+      }
     }
+
     function leave(){
-      done=true; clearInterval(timer);
-      var tx=document.getElementById('auraLoaderText'); if(tx) tx.classList.add('leaving');
-      el.style.pointerEvents='none';
+      if(done) return;
+      done=true;
+      clearInterval(timer);
+      var tx=document.getElementById('auraLoaderText');
+      if(tx) tx.classList.add('leaving');
+      el.classList.add('leaving');
       el.setAttribute('aria-hidden','true');
-      var dur=window.AuraOrb.reduce?350:550, s=performance.now();
-      setTimeout(function(){ el.style.transition='opacity .35s ease'; el.style.opacity='0'; }, window.AuraOrb.reduce?0:150);
-      (function tick(now){
-        var p=Math.min(1,(now-s)/dur);
-        orb.setZoom(window.AuraOrb.reduce?0:p);
-        if(p<1) requestAnimationFrame(tick);
-        else { orb.stop(); cleanup(); }
-      })(s);
+      var fadeDur=reduce?200:450;
+      setTimeout(cleanup, fadeDur + 50);
     }
-    timer=setInterval(check,100);
-  }catch(err){ cleanup(); }
+
+    timer=setInterval(check, 80);
+    check();
+  }catch(err){
+    cleanup();
+  }
 })();
