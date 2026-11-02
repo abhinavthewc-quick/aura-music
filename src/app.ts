@@ -1,7 +1,7 @@
 import { toast } from './core/dom';
 import { fetchHfCatalog } from './core/catalog';
 import { getProfileUsername, getSession, setProfileUsername } from './core/session';
-import { setGreeting } from './features/home';
+import { renderQuickPicks, setGreeting, setupHeaderSearch, setupMoodChips } from './features/home';
 import { applyPlayDeepLink } from './features/deeplink';
 import { hydrateLocalTracks, renderLibrary, renderRecent, renderSongs, updateLibCount } from './features/library';
 import { auraYTPlayer, auraYTVideoId, lastPlayRequestAt, loadSong } from './features/player';
@@ -38,12 +38,14 @@ import { $, setHfTracks, state } from './core/state';
         if(!localStorage.getItem('auraUserName')) localStorage.setItem('auraUserName', name);
       }
       setGreeting();
+      setupMoodChips();
+      setupHeaderSearch();
       /* Paint skeletons (instead of "no tracks") while the first remote
          catalogue request is in flight and there is no cache to show. */
       state.catalogLoading = !state.hfSongs.length;
       state.catalogError = false;
       await hydrateLocalTracks();
-      renderSongs(state.songs); if(state.songs.length) loadSong(0); updateLibCount(); renderRecent();
+      renderSongs(state.songs); if(state.songs.length) loadSong(0); updateLibCount(); renderRecent(); renderQuickPicks();
       updateProfilePopup();
 
       /* A PreMiD "Listen in Aura Music" button lands here. Cached/local tracks
@@ -59,6 +61,7 @@ import { $, setHfTracks, state } from './core/state';
         setHfTracks(tracks);
         renderSongs(state.songs);
         renderRecent();
+        renderQuickPicks();
         updateLibCount();
         if(!hadSongs && state.songs.length) loadSong(state.currentIndex);
         if($('tabLibrary').classList.contains('active')) renderLibrary();

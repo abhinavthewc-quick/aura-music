@@ -30,6 +30,7 @@ import { $, state } from '../core/state';
     /* Home: quick-access tiles built from real library data */
     export function renderQuickAccess(){
       if(typeof updateDesktopHeroStats==='function') updateDesktopHeroStats();
+      renderQuickPicks();
       const favCount = state.songs.filter(s=>s.favorite).length;
       const last = state.recentlyPlayed[0] ? state.songs.find(s=>s.id===state.recentlyPlayed[0].id) : null;
       const localCount = state.songs.filter(s=>s.isLocal).length;
@@ -56,6 +57,110 @@ import { $, state } from '../core/state';
         </div>`
       ];
       $('quickGrid').innerHTML = tiles.join('');
+    }
+
+    /* Better YouTube Music: 3-Column Quick Picks Grid */
+    let currentMood = 'all';
+    let currentQuickPage = 0;
+
+    const MOOD_KEYWORDS: Record<string, string[]> = {
+      'romance': ['love', 'romance', 'dil', 'ishq', 'heart', 'kadhal', 'prema', 'romantic', 'priye'],
+      'feel good': ['feel', 'good', 'happy', 'smile', 'joy', 'vibe', 'celebrate', 'fun'],
+      'relax': ['relax', 'chill', 'calm', 'peace', 'sleep', 'acoustic', 'lo-fi', 'lofi'],
+      'energise': ['dance', 'beat', 'remix', 'fast', 'rock', 'energy', 'edm', 'fire'],
+      'party': ['party', 'punjab', 'dj', 'bass', 'club', 'celebration', 'dheem'],
+      'commute': ['journey', 'drive', 'travel', 'way', 'road'],
+      'workout': ['power', 'gym', 'run', 'fire', 'strong', 'beast'],
+      'focus': ['instrumental', 'piano', 'ambient', 'focus', 'study', 'violin']
+    };
+
+    export function renderQuickPicks(page?: number){
+      const container = $('ytmQuickGrid');
+      if(!container) return;
+      if(!state.songs || !state.songs.length){
+        container.innerHTML = '<div style="color:var(--text-sub);padding:14px;font-size:13px">Loading library tracks…</div>';
+        return;
+      }
+
+      let pool = state.songs;
+      if(currentMood !== 'all' && MOOD_KEYWORDS[currentMood]){
+        const kw = MOOD_KEYWORDS[currentMood];
+        const filtered = state.songs.filter(s => {
+          const t = ((s.title || '') + ' ' + (s.artist || '')).toLowerCase();
+          return kw.some(k => t.includes(k));
+        });
+        if(filtered.length >= 4) {
+          pool = filtered;
+        }
+      }
+
+      const pageSize = 12; // 3 columns x 4 rows
+      const totalPages = Math.max(1, Math.ceil(pool.length / pageSize));
+      if(typeof page === 'number') currentQuickPage = ((page % totalPages) + totalPages) % totalPages;
+      if(currentQuickPage >= totalPages) currentQuickPage = 0;
+
+      const start = currentQuickPage * pageSize;
+      const slice = pool.slice(start, start + pageSize);
+
+      const html = slice.map(s => {
+        const globalIdx = state.songs.findIndex(x => x.id === s.id);
+        const isPlaying = state.currentIndex === globalIdx && state.isPlaying;
+        return `
+          <div class="ytm-track-card ${isPlaying ? 'is-playing' : ''}" role="button" tabindex="0" onclick="playSong(${globalIdx >= 0 ? globalIdx : 0})" title="${escapeHtml(s.title || '')}">
+            <div class="ytm-track-art">
+              <img src="${escapeHtml(s.img || DEFAULT_COVER)}" alt="" loading="lazy" decoding="async">
+              <div class="ytm-play-hover">
+                <i class="fa-solid ${isPlaying ? 'fa-pause' : 'fa-play'}"></i>
+              </div>
+            </div>
+            <div class="ytm-track-info">
+              <div class="ytm-track-title">${escapeHtml(s.title || 'Untitled Track')}</div>
+              <div class="ytm-track-artist">${escapeHtml(s.artist || 'Unknown Artist')}</div>
+            </div>
+          </div>
+        `;
+      }).join('');
+
+      container.innerHTML = html;
+    }
+
+    export function setupMoodChips(){
+      const chips = document.querySelectorAll('#ytmMoodChips .ytm-chip');
+      chips.forEach(chip => {
+        chip.addEventListener('click', (e) => {
+          chips.forEach(c => c.classList.remove('active'));
+          const target = e.currentTarget as HTMLElement;
+          target.classList.add('active');
+          currentMood = target.dataset.mood || 'all';
+          currentQuickPage = 0;
+          renderQuickPicks();
+        });
+      });
+
+      $('quickPrevBtn')?.addEventListener('click', () => {
+        renderQuickPicks(currentQuickPage - 1);
+      });
+      $('quickNextBtn')?.addEventListener('click', () => {
+        renderQuickPicks(currentQuickPage + 1);
+      });
+    }
+
+    export function setupHeaderSearch(){
+      const input = $('headerSearchInput') as HTMLInputElement | null;
+      if(!input) return;
+      input.addEventListener('keydown', (e) => {
+        if(e.key === 'Enter'){
+          const q = input.value.trim();
+          if(!q) return;
+          const searchNav = document.querySelector('[data-tab="tabSearch"]') as HTMLElement | null;
+          if(searchNav) searchNav.click();
+          const tabInput = $('searchTabInput') as HTMLInputElement | null;
+          if(tabInput){
+            tabInput.value = q;
+            tabInput.dispatchEvent(new Event('input', { bubbles: true }));
+          }
+        }
+      });
     }
 
     /* Home: spotlight EVERY artist who has 2+ tracks in the library,

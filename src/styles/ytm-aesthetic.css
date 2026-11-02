@@ -1,0 +1,948 @@
+/* Aura Music — YouTube Music & Better YouTube Music / BetterLyrics Aesthetic
+   Recreates the exact visual atmosphere, pitch-black background, ambient backglow,
+   sidebar pills, 3-column Quick Picks, and multi-tier synced lyrics. */
+
+:root {
+  --bg: #000000 !important;
+  --text: #ffffff !important;
+  --text-sub: #aaaaaa !important;
+  --card-bg: rgba(255, 255, 255, 0.04) !important;
+  --card-border: rgba(255, 255, 255, 0.08) !important;
+  --card-hover: rgba(255, 255, 255, 0.08) !important;
+  --player-bg: #000000 !important;
+  --sidebar-bg: #000000 !important;
+  --sb-line: rgba(255, 255, 255, 0.08) !important;
+}
+
+html, body {
+  background: #000000 !important;
+  color: #ffffff !important;
+}
+
+body:not(.light-theme) {
+  background: #000000 !important;
+}
+
+/* ==========================================================================
+   1. Left Sidebar — Better YouTube Music Look
+   ========================================================================== */
+
+.desktop-sidebar {
+  background: #000000 !important;
+  border-right: 1px solid rgba(255, 255, 255, 0.08) !important;
+  padding: 16px 12px !important;
+}
+
+/* The active tab: Solid white rounded rectangle pill with black icon & text */
+.desktop-nav-btn.active {
+  background: #ffffff !important;
+  color: #000000 !important;
+  border-radius: 8px !important;
+  font-weight: 600 !important;
+  border-left: none !important;
+}
+
+.desktop-nav-btn.active i,
+.desktop-nav-btn.active span {
+  color: #000000 !important;
+  font-weight: 600 !important;
+}
+
+.desktop-nav-btn {
+  border-radius: 8px !important;
+  color: #ffffff !important;
+  padding: 10px 14px !important;
+  font-size: 14px !important;
+  font-weight: 500 !important;
+  margin-bottom: 4px !important;
+  transition: background 0.15s ease !important;
+}
+
+.desktop-nav-btn:hover:not(.active) {
+  background: rgba(255, 255, 255, 0.08) !important;
+}
+
+.desktop-nav-btn i {
+  color: #ffffff !important;
+  font-size: 17px !important;
+  width: 24px !important;
+}
+
+/* + New playlist pill button */
+body.sb-collapsed .ytm-new-playlist-btn,
+body.sb-collapsed .ytm-playlist-sep,
+body.sb-collapsed .ytm-playlist-item {
+  display: none !important;
+}
+
+body:not(.sb-collapsed) .ytm-new-playlist-btn {
+  display: flex !important;
+}
+body:not(.sb-collapsed) .ytm-playlist-sep {
+  display: block !important;
+}
+body:not(.sb-collapsed) .ytm-playlist-item {
+  display: flex !important;
+}
+
+.ytm-new-playlist-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  width: calc(100% - 8px);
+  margin: 14px 4px 18px;
+  padding: 8px 16px;
+  border-radius: 20px;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  background: rgba(255, 255, 255, 0.06);
+  color: #ffffff;
+  font-size: 13.5px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: background 0.15s ease, border-color 0.15s ease;
+}
+
+.ytm-new-playlist-btn:hover {
+  background: rgba(255, 255, 255, 0.12);
+  border-color: rgba(255, 255, 255, 0.22);
+}
+
+/* Playlist sidebar items */
+.ytm-playlist-sep {
+  border-top: 1px solid rgba(255, 255, 255, 0.08);
+  margin: 12px 6px 14px;
+}
+
+.ytm-playlist-item {
+  display: flex;
+  flex-direction: column;
+  padding: 8px 10px;
+  border-radius: 6px;
+  cursor: pointer;
+  transition: background 0.12s ease;
+  margin-bottom: 2px;
+}
+
+.ytm-playlist-item:hover {
+  background: rgba(255, 255, 255, 0.08);
+}
+
+.ytm-pl-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+}
+
+.ytm-pl-name {
+  font-size: 13.5px;
+  font-weight: 500;
+  color: #ffffff;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.ytm-pl-pin {
+  font-size: 11px;
+  color: #888888;
+  transform: rotate(45deg);
+}
+
+.ytm-pl-sub {
+  font-size: 11.5px;
+  color: #888888;
+  margin-top: 2px;
+}
+
+/* ==========================================================================
+   2. Top Header & Search Bar
+   ========================================================================== */
+
+.top-header {
+  height: 64px !important;
+  margin-bottom: 12px !important;
+  background: #000000 !important;
+}
+
+.ytm-top-search-wrap {
+  flex: 1;
+  max-width: 580px;
+  margin: 0 auto 0 20px;
+  display: flex;
+  align-items: center;
+  position: relative;
+}
+
+.ytm-top-search {
+  width: 100%;
+  height: 40px;
+  border-radius: 8px;
+  background: #212121;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  display: flex;
+  align-items: center;
+  padding: 0 14px;
+  gap: 12px;
+  transition: background 0.2s, border-color 0.2s;
+}
+
+.ytm-top-search:focus-within {
+  background: #121212;
+  border-color: rgba(255, 255, 255, 0.32);
+}
+
+.ytm-top-search i {
+  color: #aaaaaa;
+  font-size: 14px;
+}
+
+.ytm-top-search input {
+  width: 100%;
+  background: transparent;
+  border: none;
+  outline: none;
+  color: #ffffff;
+  font-size: 14px;
+  font-weight: 400;
+}
+
+.ytm-top-search input::placeholder {
+  color: #888888;
+}
+
+.ytm-header-actions {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  margin-left: auto;
+}
+
+.ytm-cast-btn {
+  background: transparent;
+  border: none;
+  color: #ffffff;
+  font-size: 17px;
+  cursor: pointer;
+  padding: 6px;
+  border-radius: 50%;
+  transition: opacity 0.15s;
+}
+
+.ytm-cast-btn:hover {
+  opacity: 0.8;
+}
+
+/* ==========================================================================
+   3. Mood / Activity Chips Bar
+   ========================================================================== */
+
+.ytm-chips-bar {
+  display: flex;
+  gap: 10px;
+  overflow-x: auto;
+  padding: 4px 0 18px;
+  scrollbar-width: none;
+  margin-bottom: 16px;
+  -webkit-overflow-scrolling: touch;
+}
+
+.ytm-chips-bar::-webkit-scrollbar {
+  display: none;
+}
+
+.ytm-chip {
+  background: rgba(255, 255, 255, 0.08);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 8px;
+  padding: 7px 15px;
+  font-size: 13.5px;
+  font-weight: 500;
+  color: #ffffff;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: background 0.15s ease, border-color 0.15s ease;
+  user-select: none;
+}
+
+.ytm-chip:hover {
+  background: rgba(255, 255, 255, 0.14);
+}
+
+.ytm-chip.active {
+  background: #ffffff;
+  color: #000000;
+  font-weight: 600;
+  border-color: #ffffff;
+}
+
+/* ==========================================================================
+   4. Quick Picks 3-Column Grid (Better YouTube Music Feed)
+   ========================================================================== */
+
+.ytm-section-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin-bottom: 14px;
+}
+
+.ytm-section-title {
+  font-size: 24px !important;
+  font-weight: 700 !important;
+  color: #ffffff !important;
+  letter-spacing: -0.015em !important;
+  margin: 0 !important;
+}
+
+.ytm-head-actions {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.ytm-play-all-btn {
+  background: rgba(255, 255, 255, 0.08);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 20px;
+  padding: 6px 16px;
+  font-size: 13px;
+  font-weight: 600;
+  color: #ffffff;
+  cursor: pointer;
+  transition: background 0.15s;
+}
+
+.ytm-play-all-btn:hover {
+  background: rgba(255, 255, 255, 0.16);
+}
+
+.ytm-nav-chevron {
+  width: 32px;
+  height: 32px;
+  border-radius: 50%;
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  background: transparent;
+  color: #ffffff;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  font-size: 13px;
+  transition: background 0.15s;
+}
+
+.ytm-nav-chevron:hover {
+  background: rgba(255, 255, 255, 0.12);
+}
+
+.ytm-quick-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 6px 16px;
+  margin-bottom: 34px;
+}
+
+@media (max-width: 1100px) {
+  .ytm-quick-grid {
+    grid-template-columns: repeat(2, 1fr);
+  }
+}
+
+@media (max-width: 680px) {
+  .ytm-quick-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+.ytm-track-card {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 6px 8px;
+  border-radius: 6px;
+  cursor: pointer;
+  transition: background 0.12s ease;
+  min-width: 0;
+}
+
+.ytm-track-card:hover {
+  background: rgba(255, 255, 255, 0.08);
+}
+
+.ytm-track-art {
+  width: 48px;
+  height: 48px;
+  flex: 0 0 48px;
+  border-radius: 4px;
+  overflow: hidden;
+  position: relative;
+  background: #181818;
+}
+
+.ytm-track-art img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
+
+.ytm-track-art .ytm-play-hover {
+  position: absolute;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.45);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #ffffff;
+  font-size: 16px;
+  opacity: 0;
+  transition: opacity 0.15s ease;
+}
+
+.ytm-track-card:hover .ytm-play-hover {
+  opacity: 1;
+}
+
+.ytm-track-info {
+  min-width: 0;
+  flex: 1;
+}
+
+.ytm-track-title {
+  font-size: 14px;
+  font-weight: 600;
+  color: #ffffff;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  line-height: 1.3;
+}
+
+.ytm-track-artist {
+  font-size: 12.5px;
+  color: #aaaaaa;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  margin-top: 2px;
+}
+
+/* ==========================================================================
+   5. "Listen Again" Section
+   ========================================================================== */
+
+.ytm-listen-section {
+  margin-bottom: 34px;
+}
+
+.ytm-listen-header {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  margin-bottom: 16px;
+}
+
+.ytm-listen-avatar {
+  width: 42px;
+  height: 42px;
+  border-radius: 50%;
+  overflow: hidden;
+  flex: 0 0 42px;
+  background: #222;
+}
+
+.ytm-listen-avatar img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.ytm-listen-kicker {
+  font-size: 11px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+  color: #aaaaaa;
+}
+
+.ytm-listen-title {
+  font-size: 22px;
+  font-weight: 700;
+  color: #ffffff;
+  line-height: 1.15;
+}
+
+/* ==========================================================================
+   6. Full Player Split View & BetterLyrics Integration
+   ========================================================================== */
+
+/* Full Player Page with Dynamic Ambient Backglow */
+body .full-player-overlay {
+  background: #000000 !important;
+  overflow: hidden !important;
+}
+
+/* Massive, diffuse ambient glow keyed to current track palette */
+body .full-player-overlay::before {
+  content: "";
+  position: absolute;
+  left: 20%;
+  top: 25%;
+  width: 60vw;
+  height: 60vh;
+  border-radius: 50%;
+  background: radial-gradient(circle, rgba(var(--dyn-rgb), 0.38) 0%, rgba(var(--dyn-rgb), 0.12) 50%, transparent 75%);
+  filter: blur(80px);
+  pointer-events: none;
+  z-index: 0;
+  opacity: 0.85;
+  transition: background 0.6s ease;
+}
+
+@media (min-width: 900px) {
+  /* Left column: Album Cover */
+  body.np-track-open .full-player-overlay {
+    padding-right: calc(var(--np-queue-w) + 40px) !important;
+    display: flex !important;
+    flex-direction: column !important;
+    justify-content: center !important;
+    align-items: center !important;
+  }
+
+  body .full-player-art {
+    width: min(54vh, 480px) !important;
+    max-width: 480px !important;
+    aspect-ratio: 1 !important;
+    border-radius: 10px !important;
+    box-shadow: 0 24px 60px rgba(0, 0, 0, 0.7) !important;
+    position: relative !important;
+    margin: 0 auto 20px !important;
+  }
+
+  /* Overlay icons on top right of the album cover */
+  .ytm-art-overlay-tools {
+    position: absolute;
+    top: 14px;
+    right: 14px;
+    display: flex;
+    gap: 8px;
+    z-index: 5;
+  }
+
+  .ytm-art-tool-btn {
+    width: 34px;
+    height: 34px;
+    border-radius: 50%;
+    background: rgba(0, 0, 0, 0.6);
+    backdrop-filter: blur(8px);
+    border: none;
+    color: #ffffff;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    font-size: 13px;
+    transition: background 0.15s;
+  }
+
+  .ytm-art-tool-btn:hover {
+    background: rgba(0, 0, 0, 0.85);
+  }
+
+  /* Under-artwork metadata & actions */
+  body .full-player-body {
+    width: min(54vh, 480px) !important;
+    max-width: 480px !important;
+    margin: 0 auto !important;
+  }
+
+  body .full-player-meta {
+    display: flex !important;
+    align-items: center !important;
+    justify-content: space-between !important;
+    text-align: left !important;
+  }
+
+  body #fullTitle {
+    font-size: 20px !important;
+    font-weight: 700 !important;
+    color: #ffffff !important;
+    line-height: 1.25 !important;
+  }
+
+  body #fullArtist {
+    font-size: 14px !important;
+    color: #aaaaaa !important;
+    margin-top: 3px !important;
+  }
+}
+
+/* Right-hand Panel: Up Next & Synced Lyrics (BetterLyrics) */
+body .up-next-sheet {
+  background: rgba(0, 0, 0, 0.45) !important;
+  backdrop-filter: blur(30px) !important;
+  -webkit-backdrop-filter: blur(30px) !important;
+  border-left: 1px solid rgba(255, 255, 255, 0.08) !important;
+}
+
+/* Tab Header Switcher at top of the right panel */
+.ytm-right-tab-bar {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 16px;
+  padding: 16px 20px 10px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+}
+
+.ytm-tab-toggle {
+  background: transparent;
+  border: none;
+  color: #888888;
+  font-size: 16px;
+  cursor: pointer;
+  padding: 6px 4px;
+  position: relative;
+  transition: color 0.15s;
+}
+
+.ytm-tab-toggle:hover {
+  color: #ffffff;
+}
+
+.ytm-tab-toggle.active {
+  color: #ffffff;
+}
+
+.ytm-tab-toggle.active::after {
+  content: "";
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: -11px;
+  height: 2px;
+  background: #ffffff;
+  border-radius: 2px;
+}
+
+/* Queue Sub-header */
+.ytm-queue-subhead {
+  padding: 12px 20px 8px;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.ytm-queue-mix-info {
+  font-size: 12px;
+  color: #888888;
+}
+
+.ytm-queue-mix-name {
+  font-size: 14px;
+  font-weight: 600;
+  color: #ffffff;
+  margin-top: 2px;
+}
+
+.ytm-queue-save-btn {
+  background: rgba(255, 255, 255, 0.08);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  border-radius: 16px;
+  padding: 5px 14px;
+  font-size: 12px;
+  font-weight: 600;
+  color: #ffffff;
+  cursor: pointer;
+}
+
+/* Queue Filter Chips */
+.ytm-queue-chips {
+  display: flex;
+  gap: 6px;
+  padding: 4px 20px 12px;
+  overflow-x: auto;
+  scrollbar-width: none;
+}
+
+.ytm-queue-chips::-webkit-scrollbar {
+  display: none;
+}
+
+.ytm-q-chip {
+  background: rgba(255, 255, 255, 0.06);
+  border: 1px solid rgba(255, 255, 255, 0.06);
+  border-radius: 6px;
+  padding: 4px 10px;
+  font-size: 12px;
+  color: #ffffff;
+  white-space: nowrap;
+  cursor: pointer;
+}
+
+.ytm-q-chip.active {
+  background: #ffffff;
+  color: #000000;
+  font-weight: 600;
+}
+
+/* Currently Playing Track Highlight in Queue */
+.up-next-row.is-current {
+  background: rgba(255, 255, 255, 0.1) !important;
+  border-radius: 8px !important;
+}
+
+/* ==========================================================================
+   7. BetterLyrics Multi-Tier Synced Lyrics Display
+   ========================================================================== */
+
+.bl-lyrics-wrapper {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  overflow: hidden;
+}
+
+.bl-lyrics-toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 10px 20px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+}
+
+.bl-status-badge {
+  display: flex;
+  align-items: center;
+  gap: 7px;
+  font-size: 11.5px;
+  color: #888888;
+}
+
+.bl-status-dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: #22c55e;
+  box-shadow: 0 0 8px rgba(34, 197, 94, 0.8);
+}
+
+.bl-tools-group {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.bl-tool-pill {
+  background: rgba(255, 255, 255, 0.08);
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 6px;
+  padding: 3px 8px;
+  font-size: 11.5px;
+  font-weight: 500;
+  color: #ffffff;
+  cursor: pointer;
+  transition: background 0.15s;
+}
+
+.bl-tool-pill:hover {
+  background: rgba(255, 255, 255, 0.16);
+}
+
+.bl-lyrics-scroll {
+  flex: 1;
+  overflow-y: auto;
+  padding: 24px 24px 80px;
+  scrollbar-width: thin;
+  scroll-behavior: smooth;
+}
+
+.bl-lyrics-scroll::-webkit-scrollbar {
+  width: 4px;
+}
+
+.bl-lyrics-scroll::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, 0.15);
+  border-radius: 4px;
+}
+
+.bl-lyric-line {
+  margin-bottom: 24px;
+  cursor: pointer;
+  opacity: 0.35;
+  transition: opacity 0.25s ease, transform 0.25s ease;
+  user-select: none;
+}
+
+.bl-lyric-line:hover {
+  opacity: 0.75;
+}
+
+.bl-lyric-line.active {
+  opacity: 1;
+  transform: scale(1.02);
+  transform-origin: left center;
+}
+
+.bl-lyric-line.passed {
+  opacity: 0.5;
+}
+
+.bl-lyric-main {
+  font-size: 22px;
+  font-weight: 700;
+  color: #ffffff;
+  line-height: 1.35;
+}
+
+.bl-lyric-line.active .bl-lyric-main {
+  color: #ffffff;
+  text-shadow: 0 2px 14px rgba(255, 255, 255, 0.28);
+}
+
+.bl-lyric-translit {
+  display: inline-block;
+  margin-top: 6px;
+  background: rgba(255, 255, 255, 0.08);
+  border-radius: 6px;
+  padding: 2px 8px;
+  font-size: 12.5px;
+  color: rgba(255, 255, 255, 0.72);
+  font-weight: 500;
+}
+
+.bl-lyric-trans {
+  margin-top: 4px;
+  font-size: 13.5px;
+  color: rgba(255, 255, 255, 0.85);
+  line-height: 1.4;
+  font-weight: 400;
+}
+
+.bl-lyrics-empty {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  height: 100%;
+  padding: 40px;
+  text-align: center;
+  color: #888888;
+}
+
+.bl-lyrics-empty i {
+  font-size: 32px;
+  margin-bottom: 14px;
+  opacity: 0.5;
+}
+
+.bl-empty-title {
+  font-size: 16px;
+  font-weight: 600;
+  color: #ffffff;
+}
+
+.bl-empty-sub {
+  font-size: 12.5px;
+  margin-top: 4px;
+}
+
+/* ==========================================================================
+   8. Bottom Player Bar (Pitch Black, YouTube Music Buttons)
+   ========================================================================== */
+
+body .player-bar {
+  background: #000000 !important;
+  border-top: 1px solid rgba(255, 255, 255, 0.08) !important;
+  box-shadow: 0 -10px 30px rgba(0, 0, 0, 0.8) !important;
+}
+
+/* Circular Play/Pause button */
+.player-bar .ctrl-glass-btn.play-primary {
+  width: 44px !important;
+  height: 44px !important;
+  border-radius: 50% !important;
+  background: #ffffff !important;
+  color: #000000 !important;
+  display: flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  border: none !important;
+  box-shadow: none !important;
+  margin: 0 4px !important;
+}
+
+.player-bar .ctrl-glass-btn.play-primary i {
+  color: #000000 !important;
+  font-size: 16px !important;
+}
+
+/* Clean progress slider */
+.player-bar > .mini-seek::-webkit-slider-runnable-track {
+  height: 3px !important;
+  background: linear-gradient(to right, #ff0000 0, #ff0000 var(--seek-pct,0%), rgba(255,255,255,0.2) var(--seek-pct,0%), rgba(255,255,255,0.2) 100%) !important;
+}
+
+.player-bar > .mini-seek::-webkit-slider-thumb {
+  background: #ff0000 !important;
+}
+
+.player-bar .song-title {
+  font-weight: 600 !important;
+}
+
+/* Related tab songs list */
+#ytmRelatedList {
+  display: flex !important;
+  flex-direction: column !important;
+  gap: 8px !important;
+}
+
+#ytmRelatedList .song-item {
+  display: flex !important;
+  align-items: center !important;
+  gap: 12px !important;
+  padding: 8px 12px !important;
+  border-radius: 8px !important;
+  background: rgba(255, 255, 255, 0.04) !important;
+  cursor: pointer !important;
+  transition: background 0.15s ease !important;
+  width: 100% !important;
+}
+
+#ytmRelatedList .song-item:hover {
+  background: rgba(255, 255, 255, 0.1) !important;
+}
+
+#ytmRelatedList .song-img {
+  width: 48px !important;
+  height: 48px !important;
+  border-radius: 6px !important;
+  object-fit: cover !important;
+  flex: 0 0 48px !important;
+}
+
+#ytmRelatedList .song-details {
+  min-width: 0 !important;
+  flex: 1 !important;
+}
+
+#ytmRelatedList .song-title {
+  font-size: 14px !important;
+  font-weight: 600 !important;
+  color: #ffffff !important;
+  white-space: nowrap !important;
+  overflow: hidden !important;
+  text-overflow: ellipsis !important;
+}
+
+#ytmRelatedList .song-artist {
+  font-size: 12.5px !important;
+  color: #aaaaaa !important;
+  margin-top: 2px !important;
+  white-space: nowrap !important;
+  overflow: hidden !important;
+  text-overflow: ellipsis !important;
+}

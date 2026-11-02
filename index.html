@@ -310,6 +310,36 @@ body.light-theme #auraLoaderText{color:rgba(25,26,30,.78)}
       <button type="button" class="desktop-nav-btn" data-tab="tabRadio" onclick="navClick(this,'tabRadio')"><i class="fa-solid fa-radio"></i><span>Radio</span></button>
       <button type="button" class="desktop-nav-btn" data-tab="tabProfile" onclick="navClick(this,'tabProfile')"><i class="fa-solid fa-plus"></i><span>Add music</span></button>
       <a class="desktop-nav-btn desktop-nav-link" href="/rooms"><i class="fa-solid fa-headphones"></i><span>Rooms</span></a>
+
+      <button type="button" class="ytm-new-playlist-btn" onclick="navClick(document.querySelector('[data-tab=tabProfile]'),'tabProfile')">
+        <i class="fa-solid fa-plus"></i>
+        <span>New playlist</span>
+      </button>
+
+      <div class="ytm-playlist-sep"></div>
+
+      <div class="ytm-playlist-item" role="button" tabindex="0" onclick="goToSearchCategory('favorites')">
+        <div class="ytm-pl-row">
+          <span class="ytm-pl-name">Liked Music</span>
+          <i class="fa-solid fa-thumbtack ytm-pl-pin" title="Pinned"></i>
+        </div>
+        <span class="ytm-pl-sub">Auto playlist</span>
+      </div>
+      <div class="ytm-playlist-item" role="button" tabindex="0" onclick="goToSearchCategory('recent')">
+        <div class="ytm-pl-row">
+          <span class="ytm-pl-name">Recently Played</span>
+          <i class="fa-solid fa-thumbtack ytm-pl-pin" title="Pinned"></i>
+        </div>
+        <span class="ytm-pl-sub">Auto playlist</span>
+      </div>
+      <div class="ytm-playlist-item" role="button" tabindex="0" onclick="goToSearchCategory('local')">
+        <div class="ytm-pl-row">
+          <span class="ytm-pl-name">Local Files</span>
+          <i class="fa-solid fa-thumbtack ytm-pl-pin" title="Pinned"></i>
+        </div>
+        <span class="ytm-pl-sub">Device storage</span>
+      </div>
+
       <div class="desktop-nav-label desktop-nav-label-lower">Preferences</div>
       <div class="desktop-settings-group" aria-label="App menu">
         <button class="desktop-nav-btn" type="button" onclick="document.getElementById('themeToggleBtn').click()"><i class="fa-solid fa-sun" id="desktopThemeIcon"></i><span id="desktopThemeLabel">Light mode</span></button>
@@ -333,32 +363,67 @@ body.light-theme #auraLoaderText{color:rgba(25,26,30,.78)}
           <path d="M7 15H13" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
         </svg>
       </button> 
-      <span style="font-weight:800;letter-spacing:1px">AURA MUSIC</span>
-      <div class="header-profile-wrap" id="profileWrap">
-        <button class="profile-btn" id="profileBtn" type="button" aria-label="Open profile" aria-expanded="false"><img class="profile-photo" id="profilePhoto" alt="" hidden><span class="profile-initial" id="profileInitial" aria-hidden="true">U</span></button>
-        <div class="profile-popover" id="profilePopover">
-          <div class="profile-popover-head">
-            <img class="profile-popover-avatar" id="popupPhoto" alt="" hidden>
-            <span class="profile-popover-avatar profile-initial" id="popupInitial" aria-hidden="true">U</span>
-            <div style="min-width:0">
-              <div class="profile-popover-name" id="popupProfileName">User</div>
-              <div class="profile-popover-email">Aura Music profile</div>
+      <span style="font-weight:800;letter-spacing:1px;margin-right:12px">AURA MUSIC</span>
+
+      <div class="ytm-top-search-wrap">
+        <div class="ytm-top-search">
+          <i class="fa-solid fa-magnifying-glass"></i>
+          <input type="text" id="headerSearchInput" placeholder="Search songs, albums, artists, podcasts" autocomplete="off" aria-label="Search">
+        </div>
+      </div>
+
+      <div class="ytm-header-actions">
+        <button class="ytm-cast-btn" type="button" title="Connect to a device" aria-label="Connect to a device"><i class="fa-solid fa-tv"></i></button>
+        <div class="header-profile-wrap" id="profileWrap">
+          <button class="profile-btn" id="profileBtn" type="button" aria-label="Open profile" aria-expanded="false"><img class="profile-photo" id="profilePhoto" alt="" hidden><span class="profile-initial" id="profileInitial" aria-hidden="true">U</span></button>
+          <div class="profile-popover" id="profilePopover">
+            <div class="profile-popover-head">
+              <img class="profile-popover-avatar" id="popupPhoto" alt="" hidden>
+              <span class="profile-popover-avatar profile-initial" id="popupInitial" aria-hidden="true">U</span>
+              <div style="min-width:0">
+                <div class="profile-popover-name" id="popupProfileName">User</div>
+                <div class="profile-popover-email">Aura Music profile</div>
+              </div>
             </div>
+            <div class="profile-info-row"><span class="profile-info-label">First login</span><span class="profile-info-value" id="profileFirstLogin">Not available</span></div>
+            <div class="profile-info-row"><span class="profile-info-label">Last login</span><span class="profile-info-value" id="profileLastLogin">Not available</span></div>
+            <div class="profile-info-row"><span class="profile-info-label">Library</span><span class="profile-info-value" id="profileTrackCount">0 tracks</span></div>
+            <div class="profile-info-row"><span class="profile-info-label">Favorites</span><span class="profile-info-value" id="profileFavoriteCount">0 songs</span></div>
+            <button class="profile-popover-action" type="button" onclick="changeProfileName()">Change name</button>
           </div>
-          <div class="profile-info-row"><span class="profile-info-label">First login</span><span class="profile-info-value" id="profileFirstLogin">Not available</span></div>
-          <div class="profile-info-row"><span class="profile-info-label">Last login</span><span class="profile-info-value" id="profileLastLogin">Not available</span></div>
-          <div class="profile-info-row"><span class="profile-info-label">Library</span><span class="profile-info-value" id="profileTrackCount">0 tracks</span></div>
-          <div class="profile-info-row"><span class="profile-info-label">Favorites</span><span class="profile-info-value" id="profileFavoriteCount">0 songs</span></div>
-          <button class="profile-popover-action" type="button" onclick="changeProfileName()">Change name</button>
         </div>
       </div>
     </div>
 
     <div class="tab-content active" id="tabHome">
-      <!-- The hero went away. The greeting ids stay: four modules write the
-           signed-in name and the time of day into them. This is the same <h2>,
-           just small enough to read as a page header instead of a banner. -->
-      <h2 class="home-greeting"><em id="greetingLabel">Good evening</em><span id="displayUserName">User</span></h2>
+      <div class="ytm-chips-bar" id="ytmMoodChips">
+        <button type="button" class="ytm-chip active" data-mood="all">All</button>
+        <button type="button" class="ytm-chip" data-mood="romance">Romance</button>
+        <button type="button" class="ytm-chip" data-mood="feel good">Feel good</button>
+        <button type="button" class="ytm-chip" data-mood="relax">Relax</button>
+        <button type="button" class="ytm-chip" data-mood="energise">Energise</button>
+        <button type="button" class="ytm-chip" data-mood="party">Party</button>
+        <button type="button" class="ytm-chip" data-mood="commute">Commute</button>
+        <button type="button" class="ytm-chip" data-mood="workout">Work out</button>
+        <button type="button" class="ytm-chip" data-mood="focus">Focus</button>
+      </div>
+
+      <!-- The greeting ids stay: four modules write the signed-in name and the time of day into them. -->
+      <h2 class="home-greeting" style="margin-bottom:18px"><em id="greetingLabel">Good evening</em><span id="displayUserName">User</span></h2>
+
+      <div class="ytm-section-head">
+        <div>
+          <div class="ytm-listen-kicker" style="color:var(--text-sub);margin-bottom:4px">START RADIO FROM A SONG</div>
+          <h2 class="ytm-section-title">Quick picks</h2>
+        </div>
+        <div class="ytm-head-actions">
+          <button type="button" class="ytm-play-all-btn" id="quickPicksPlayAllBtn" onclick="shuffleAll()"><i class="fa-solid fa-play" style="font-size:11px;margin-right:6px"></i>Play all</button>
+          <button type="button" class="ytm-nav-chevron" id="quickPrevBtn" title="Previous page" aria-label="Previous"><i class="fa-solid fa-chevron-left"></i></button>
+          <button type="button" class="ytm-nav-chevron" id="quickNextBtn" title="Next page" aria-label="Next"><i class="fa-solid fa-chevron-right"></i></button>
+        </div>
+      </div>
+
+      <div class="ytm-quick-grid" id="ytmQuickGrid"></div>
 
       <div class="quick-grid" id="quickGrid"></div>
 
@@ -656,7 +721,14 @@ body.light-theme #auraLoaderText{color:rgba(25,26,30,.78)}
       <span id="fullHeaderTitle" style="font-weight:600;max-width:200px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">Track</span>
       <i class="fa-solid fa-ellipsis" id="fullHeaderMenuBtn" role="button" tabindex="0" aria-label="More options"></i>
     </div>
-    <div class="full-player-art" id="fullPlayerArt"><img id="fullImg" src="" alt="" decoding="async"></div>
+    <div class="full-player-art" id="fullPlayerArt">
+      <img id="fullImg" src="" alt="" decoding="async">
+      <div class="ytm-art-overlay-tools">
+        <button type="button" class="ytm-art-tool-btn" id="artInfoBtn" title="Song info" onclick="openTrackSheet ? openTrackSheet(state.currentIndex) : null"><i class="fa-solid fa-circle-info"></i></button>
+        <button type="button" class="ytm-art-tool-btn" id="artLikeBtn" title="Like song" onclick="document.getElementById('fullLikeBtn').click()"><i class="fa-regular fa-heart" id="artLikeIcon"></i></button>
+        <button type="button" class="ytm-art-tool-btn" id="artShareBtn" title="Share" onclick="copyShareLink ? copyShareLink() : null"><i class="fa-solid fa-share-nodes"></i></button>
+      </div>
+    </div>
     <div class="youtube-mode-badge" id="youtubeModeBadge">Official YouTube player • playing inside AURA</div>
     <div class="full-player-body">
       <div class="full-player-meta">
@@ -674,20 +746,68 @@ body.light-theme #auraLoaderText{color:rgba(25,26,30,.78)}
         <button class="full-ctrl-btn" id="fullNextBtn" type="button" aria-label="Next track"><i class="fa-solid fa-forward-step"></i></button>
         <button class="full-ctrl-btn" id="repeatBtn" type="button" aria-label="Repeat"><i class="fa-solid fa-repeat"></i></button>
       </div>
-      <button class="up-next-trigger" id="upNextOpenBtn" type="button" aria-label="Open Up Next">
-        <span>Up Next</span>
-      </button>
+      <div style="display:flex;gap:10px;justify-content:center;margin-top:14px">
+        <button class="up-next-trigger" id="upNextOpenBtn" type="button" aria-label="Open Up Next">
+          <span>Up Next</span>
+        </button>
+        <button class="up-next-trigger" id="lyricsOpenBtn" type="button" aria-label="Open Lyrics" onclick="switchRightPanelTab('lyrics');document.getElementById('upNextSheet').classList.add('active')">
+          <span>Lyrics</span>
+        </button>
+      </div>
 
     </div>
   </div>
 
 
-  <div class="up-next-sheet" id="upNextSheet" role="dialog" aria-modal="true" aria-label="Up next" aria-hidden="true">
-    <div class="up-next-sheet-header">
-      <div class="up-next-sheet-title">Up Next</div>
-      <button class="up-next-sheet-close" id="upNextCloseBtn" type="button" aria-label="Close Up Next"><i class="fa-solid fa-xmark"></i></button>
+  <div class="up-next-sheet" id="upNextSheet" role="dialog" aria-modal="true" aria-label="Up next and lyrics" aria-hidden="true">
+    <div class="ytm-right-tab-bar">
+      <button type="button" class="ytm-tab-toggle active" id="ytmTabQueueBtn" onclick="switchRightPanelTab('queue')">UP NEXT</button>
+      <button type="button" class="ytm-tab-toggle" id="ytmTabLyricsBtn" onclick="switchRightPanelTab('lyrics')">LYRICS</button>
+      <button type="button" class="ytm-tab-toggle" id="ytmTabRelatedBtn" onclick="switchRightPanelTab('related')">RELATED</button>
+      <button class="up-next-sheet-close" id="upNextCloseBtn" type="button" aria-label="Close Up Next" style="margin-left:auto"><i class="fa-solid fa-xmark"></i></button>
     </div>
-    <div class="up-next-list" id="upNextList"></div>
+
+    <!-- Panel 1: Up Next Queue -->
+    <div id="ytmQueuePanel" style="display:flex;flex-direction:column;flex:1;min-height:0;height:calc(100% - 55px)">
+      <div class="ytm-queue-subhead">
+        <div>
+          <div class="ytm-queue-mix-info">Playing from</div>
+          <div class="ytm-queue-mix-name" id="ytmQueueSourceLabel">Your Library</div>
+        </div>
+        <button type="button" class="ytm-queue-save-btn" onclick="toast('Queue saved to library','bookmark')">Save</button>
+      </div>
+      <div class="ytm-queue-chips">
+        <button type="button" class="ytm-q-chip active">All</button>
+        <button type="button" class="ytm-q-chip">Familiar</button>
+        <button type="button" class="ytm-q-chip">Discover</button>
+        <button type="button" class="ytm-q-chip">Popular</button>
+      </div>
+      <div class="up-next-list" id="upNextList"></div>
+    </div>
+
+    <!-- Panel 2: BetterLyrics Synced Lyrics -->
+    <div id="ytmLyricsPanel" style="display:none;flex-direction:column;flex:1;min-height:0;height:calc(100% - 55px)">
+      <div class="bl-lyrics-toolbar">
+        <div class="bl-status-badge">
+          <span class="bl-status-dot"></span>
+          <span id="blStatusText">Synced with lrclib.net</span>
+        </div>
+        <div class="bl-tools-group">
+          <button type="button" class="bl-tool-pill" onclick="toggleLyricsTranslit()" title="Toggle Romanized Transliteration">Rom</button>
+          <button type="button" class="bl-tool-pill" onclick="toggleLyricsTranslation()" title="Toggle Translation">EN</button>
+          <button type="button" class="bl-tool-pill" onclick="setSyncOffset(-0.5)" title="Offset -0.5s">-0.5s</button>
+          <span id="blSyncOffsetLabel" style="font-size:11px;color:#888;min-width:28px;text-align:center">0.0s</span>
+          <button type="button" class="bl-tool-pill" onclick="setSyncOffset(0.5)" title="Offset +0.5s">+0.5s</button>
+        </div>
+      </div>
+      <div id="fullPlayerLyricsContainer" style="flex:1;min-height:0;overflow:hidden"></div>
+    </div>
+
+    <!-- Panel 3: Related -->
+    <div id="ytmRelatedPanel" style="display:none;flex-direction:column;flex:1;min-height:0;height:calc(100% - 55px);padding:20px;overflow-y:auto">
+      <div style="font-size:16px;font-weight:700;margin-bottom:12px;color:#fff">You might also like</div>
+      <div id="ytmRelatedList" class="song-list"></div>
+    </div>
   </div>
 
   <div class="radio-full-overlay" id="radioFullPlayerOverlay" role="dialog" aria-modal="true" aria-label="Radio player" aria-hidden="true">

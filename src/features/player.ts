@@ -7,6 +7,7 @@ import { auraYTQueue, extractYouTubeId } from './search';
 import { auraSettings } from './settings';
 import { roomModeActive } from '../rooms/roomFlag';
 import { $, persistLikedHistory, savedLikeMap, state } from '../core/state';
+import { fetchLyricsForTrack, renderLyrics, updateLyricsProgress } from './lyrics';
 /* ===== 2955-2994 ===== */
     export const dynamicColorCache = {};
 
@@ -280,6 +281,7 @@ import { $, persistLikedHistory, savedLikeMap, state } from '../core/state';
       art.classList.add('youtube-mode');
       art.innerHTML=`<div id="auraYTFrameHost" style="width:100%;height:100%;background:#000"></div>`;
       updatePlayState();
+      fetchLyricsForTrack(title, 'YouTube Music').then(l => renderLyrics(l));
 
       try{
         // IMPORTANT: finish loading the API and create the player before the
@@ -461,6 +463,7 @@ import { $, persistLikedHistory, savedLikeMap, state } from '../core/state';
       applyDynamicPlayerColor(s.img);
       updateMainMediaSession();
       state.audio.load();
+      fetchLyricsForTrack(s.title, s.artist, s.duration).then(l => renderLyrics(l));
     }
 
     /* Some direct/streamed MP3 links don't report a usable duration right
@@ -584,6 +587,7 @@ import { $, persistLikedHistory, savedLikeMap, state } from '../core/state';
         const tuApi = (window as any).__auraMiniProgress;
         if(tuApi && tuApi.apply) tuApi.apply(pct);
       }
+      updateLyricsProgress(state.audio.currentTime);
     });
     state.audio.addEventListener('play',()=>{state.isPlaying=true;updatePlayState();updateMainMediaSession();});
     state.audio.addEventListener('pause',()=>{state.isPlaying=false;updatePlayState();updateMainMediaSession();});
@@ -600,6 +604,7 @@ import { $, persistLikedHistory, savedLikeMap, state } from '../core/state';
       try{
         const d=auraYTPlayer.getDuration()||0, c=auraYTPlayer.getCurrentTime()||0;
         if(d){ $('fullSeekSlider').value=(c/d)*100; $('fullCurrentTime').textContent=fmt(c); $('fullDurationTime').textContent=fmt(d); }
+        updateLyricsProgress(c);
       }catch(e){}
     },500);
     $('fullSeekSlider').oninput=()=>{
@@ -648,5 +653,51 @@ import { $, persistLikedHistory, savedLikeMap, state } from '../core/state';
 
     export function filterSongs(){
       renderSongs(state.songs);
+    }
+
+    export function switchRightPanelTab(tab: 'queue' | 'lyrics' | 'related') {
+      const qBtn = $('ytmTabQueueBtn');
+      const lBtn = $('ytmTabLyricsBtn');
+      const rBtn = $('ytmTabRelatedBtn');
+      const qPan = $('ytmQueuePanel');
+      const lPan = $('ytmLyricsPanel');
+      const rPan = $('ytmRelatedPanel');
+
+      qBtn?.classList.toggle('active', tab === 'queue');
+      lBtn?.classList.toggle('active', tab === 'lyrics');
+      rBtn?.classList.toggle('active', tab === 'related');
+
+      if (qPan) qPan.style.display = tab === 'queue' ? 'flex' : 'none';
+      if (lPan) lPan.style.display = tab === 'lyrics' ? 'flex' : 'none';
+      if (rPan) rPan.style.display = tab === 'related' ? 'flex' : 'none';
+
+      if (tab === 'lyrics') {
+        const s = state.songs[state.currentIndex];
+        if (s) fetchLyricsForTrack(s.title, s.artist, s.duration).then(l => renderLyrics(l));
+      } else if (tab === 'related') {
+        renderRelated();
+      }
+    }
+
+    export function renderRelated() {
+      const container = $('ytmRelatedList');
+      if (!container) return;
+      const related = state.songs.filter((_, i) => i !== state.currentIndex).slice(0, 10);
+      container.innerHTML = related.map(s => {
+        const idx = state.songs.findIndex(x => x.id === s.id);
+        return `
+          <div class="song-item" onclick="playSong(${idx >= 0 ? idx : 0})">
+            <img class="song-img" src="${escapeHtml(s.img || '')}" alt="">
+            <div class="song-details">
+              <div class="song-title">${escapeHtml(s.title || '')}</div>
+              <div class="song-artist">${escapeHtml(s.artist || '')}</div>
+            </div>
+          </div>
+        `;
+      }).join('');
+    }
+
+    if (typeof window !== 'undefined') {
+      (window as any).switchRightPanelTab = switchRightPanelTab;
     }
 
