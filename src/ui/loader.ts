@@ -77,16 +77,29 @@
   window.AuraOrb={create:create,mountAll:mountAll,reduce:reduce};
 })();
 
-/* Full-screen intro loader: plays the iridescent turntable startup animation and smoothly dissolves into Aura Music. */
+import {
+  createLiquidGlassLogoRenderer,
+  liquidGlassLogoDefaults,
+  normalizeLiquidGlassLogo,
+} from '../components/liquid-glass-logo-renderer';
+
+/* Full-screen intro loader: plays the ReactDrops Liquid Glass Logo startup animation and smoothly dissolves into Aura Music. */
 (function(){
   var el=document.getElementById('auraLoader'); if(!el) return;
   var root=document.documentElement;
-  var MIN_MS=1400, CAP_MS=5500;
+  var MIN_MS=3800, CAP_MS=6000;
   var reduce=false;
   try{ reduce=window.matchMedia('(prefers-reduced-motion:reduce)').matches; }catch(e){}
-  if(reduce) MIN_MS=400;
+  if(reduce) MIN_MS=300;
+
+  var canvas = document.getElementById('auraLiquidCanvas') as HTMLCanvasElement | null;
+  var liquidRenderer: ReturnType<typeof createLiquidGlassLogoRenderer> | null = null;
 
   function cleanup(){
+    if(liquidRenderer){
+      try { liquidRenderer.dispose(); } catch(e){}
+      liquidRenderer = null;
+    }
     if(el && el.parentNode) el.parentNode.removeChild(el);
     root.classList.remove('aura-loading');
   }
@@ -97,7 +110,36 @@
     var fontsOk=!document.fonts;
     var timer: any;
 
+    if(canvas){
+      try {
+        var isLight = document.body && document.body.classList.contains('light-theme');
+        var tuning = normalizeLiquidGlassLogo({
+          ...liquidGlassLogoDefaults,
+          logo: '/aura-vinyl-logo.png',
+          ending: 'logo',
+          depth: 2.4,
+          dispersion: 1.45,
+          relief: 1.2,
+          caustics: 1.35,
+          highlights: 1.5,
+          bloom: 0.7,
+          dropStrength: 2.1,
+          decay: 3,
+          innerWallFocus: 0.15,
+          speed: 0.45,
+          loopDelay: 2.4,
+          background: isLight ? '#e2e2e5' : '#000000',
+        });
+        liquidRenderer = createLiquidGlassLogoRenderer(canvas, tuning, function(){
+          if(el) el.setAttribute('data-ready', '1');
+        });
+      } catch(err) {
+        if(el) el.setAttribute('data-ready', '1');
+      }
+    }
+
     window.addEventListener('load', function(){ loaded=true; check(); });
+    el.addEventListener('click', leave);
     if(document.fonts && document.fonts.ready){
       document.fonts.ready.then(function(){ fontsOk=true; check(); }, function(){ fontsOk=true; check(); });
     }
