@@ -1651,10 +1651,21 @@ body .up-next-sheet-close {
     box-shadow: 0 -4px 24px rgba(0, 0, 0, 0.5) !important;
     z-index: 600 !important;
     box-sizing: border-box !important;
-    display: flex !important;
     justify-content: space-between !important;
     align-items: center !important;
     transition: none !important;
+  }
+
+  body .player-bar:not(.active),
+  body .radio-player-bar:not(.active) {
+    display: none !important;
+    pointer-events: none !important;
+  }
+
+  body .player-bar.active,
+  body .radio-player-bar.active {
+    display: flex !important;
+    pointer-events: auto !important;
   }
 
   /* Seek bar extends edge-to-edge across the screen */
@@ -1679,6 +1690,9 @@ body .up-next-sheet-close {
     display: flex !important;
     align-items: center !important;
     gap: 8px !important;
+    position: relative !important;
+    z-index: 20 !important;
+    pointer-events: auto !important;
   }
 
   /* Center track info */
@@ -1691,6 +1705,9 @@ body .up-next-sheet-close {
     gap: 16px !important;
     margin: 0 28px !important;
     cursor: pointer !important;
+    position: relative !important;
+    z-index: 20 !important;
+    pointer-events: auto !important;
   }
 
   /* Right secondary controls extend toward the right screen edge */
@@ -1700,6 +1717,9 @@ body .up-next-sheet-close {
     display: flex !important;
     align-items: center !important;
     gap: 10px !important;
+    position: relative !important;
+    z-index: 20 !important;
+    pointer-events: auto !important;
   }
 }
 
