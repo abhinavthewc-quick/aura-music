@@ -303,16 +303,16 @@ body.light-theme #auraLoaderText{color:rgba(25,26,30,.78)}
   <div class="app-container">
     <aside class="desktop-sidebar" id="desktopSidebar" aria-label="Desktop navigation">
       <div class="desktop-brand"><button class="sidebar-toggle" id="sidebarToggle" type="button" aria-label="Toggle menu" title="Menu"><i class="fa-solid fa-bars"></i></button><div class="desktop-brand-mark"><img src="./src/assets/brand-logo.webp" alt="Aura Music vinyl logo" width="512" height="512" loading="eager" decoding="async" fetchpriority="high"></div><div><strong>AURA</strong><span>MUSIC</span></div></div>
-      <div class="desktop-nav-label">MAIN MENU</div>
+      <div class="desktop-nav-label">Menu</div>
       <button type="button" class="desktop-nav-btn active" data-tab="tabHome" onclick="navClick(this,'tabHome')"><i class="fa-solid fa-house"></i><span>Home</span></button>
       <button type="button" class="desktop-nav-btn" data-tab="tabSearch" onclick="navClick(this,'tabSearch')"><i class="fa-solid fa-magnifying-glass"></i><span>Search</span></button>
       <button type="button" class="desktop-nav-btn" data-tab="tabLibrary" onclick="navClick(this,'tabLibrary')"><i class="fa-solid fa-layer-group"></i><span>Library</span></button>
       <button type="button" class="desktop-nav-btn" data-tab="tabRadio" onclick="navClick(this,'tabRadio')"><i class="fa-solid fa-radio"></i><span>Radio</span></button>
-      <button type="button" class="desktop-nav-btn" data-tab="tabProfile" onclick="navClick(this,'tabProfile')"><i class="fa-solid fa-plus"></i><span>Add Music</span></button>
-      <a class="desktop-nav-btn desktop-nav-link" href="/rooms"><i class="fa-solid fa-headphones"></i><span>Listen together</span></a>
-      <div class="desktop-nav-label desktop-nav-label-lower">ADVANCE OPTION</div>
+      <button type="button" class="desktop-nav-btn" data-tab="tabProfile" onclick="navClick(this,'tabProfile')"><i class="fa-solid fa-plus"></i><span>Add music</span></button>
+      <a class="desktop-nav-btn desktop-nav-link" href="/rooms"><i class="fa-solid fa-headphones"></i><span>Rooms</span></a>
+      <div class="desktop-nav-label desktop-nav-label-lower">Preferences</div>
       <div class="desktop-settings-group" aria-label="App menu">
-        <button class="desktop-nav-btn" type="button" onclick="document.getElementById('themeToggleBtn').click()"><i class="fa-solid fa-sun" id="desktopThemeIcon"></i><span id="desktopThemeLabel">Light Mode</span></button>
+        <button class="desktop-nav-btn" type="button" onclick="document.getElementById('themeToggleBtn').click()"><i class="fa-solid fa-sun" id="desktopThemeIcon"></i><span id="desktopThemeLabel">Light mode</span></button>
         <button class="desktop-nav-btn" type="button" onclick="openSettings()"><i class="fa-solid fa-sliders"></i><span>Settings</span></button>
         <button class="desktop-nav-btn" type="button" onclick="openEffects()"><i class="fa-solid fa-wand-magic-sparkles"></i><span>Effects</span></button>
         <button class="desktop-nav-btn" type="button" onclick="openAbout()"><i class="fa-solid fa-circle-info"></i><span>About</span></button>
@@ -365,25 +365,25 @@ body.light-theme #auraLoaderText{color:rgba(25,26,30,.78)}
       <div class="soundscape-card" onclick="openRadioEffectsTab()">
         <div class="soundscape-icon"><i class="fa-solid fa-wand-magic-sparkles"></i></div>
         <div class="soundscape-text"><b>Soundscape</b><span>Rain, fire, birds, cafe ambience, spatial &amp; muffle controls</span></div>
-        <button type="button" class="soundscape-btn" onclick="event.stopPropagation();openRadioEffectsTab()">Open Effects</button>
+        <button type="button" class="soundscape-btn" onclick="event.stopPropagation();openRadioEffectsTab()">Tune ambience</button>
       </div>
 
       <div class="aura-picks">
         <div class="aura-picks-head">
-          <div><p class="aura-picks-kicker">AURA PICKS</p><h3>For this moment</h3></div>
-          <button type="button" class="aura-picks-refresh" onclick="renderAuraPicks(true)"><i class="fa-solid fa-shuffle"></i> Refresh mix</button>
+          <h3>Picked for you</h3>
+          <button type="button" class="aura-picks-refresh" onclick="renderAuraPicks(true)"><i class="fa-solid fa-shuffle"></i> New mix</button>
         </div>
         <div class="aura-picks-scroll" id="auraPicksScroll"></div>
       </div>
 
       <div id="recentSection" style="display:none;margin-bottom:20px">
-        <p style="font-size:15px;font-weight:700;margin-bottom:12px">Recently Played</p>
+        <p style="font-size:15px;font-weight:600;margin-bottom:12px;color:var(--text)">Recently played</p>
         <div class="recent-scroll" id="recentScroll"></div>
       </div>
 
       <div id="artistSpotlightContainer"></div>
 
-      <p style="font-size:15px;font-weight:700;margin-bottom:12px">Your Library</p>
+      <p style="font-size:15px;font-weight:600;margin-bottom:12px;color:var(--text)">From your library</p>
       <div class="song-list" id="songList"></div>
       <div class="more-songs-note">
         <i class="fa-solid fa-magnifying-glass"></i>
@@ -393,9 +393,8 @@ body.light-theme #auraLoaderText{color:rgba(25,26,30,.78)}
 
     <div class="tab-content" id="tabSearch">
       <div class="srch-head">
-        <p class="srch-kicker">DISCOVER</p>
         <h3 class="srch-title">Search</h3>
-        <p class="srch-sub">Songs, artists and albums from every source.</p>
+        <p class="srch-sub">Find tracks, artists, and stations.</p>
       </div>
       <div class="srch-bar-row">
         <div class="search-bar srch-bar" id="searchBarWrap">
@@ -406,7 +405,7 @@ body.light-theme #auraLoaderText{color:rgba(25,26,30,.78)}
         <button type="button" class="glass-btn ctrl-glass-btn srch-mic" id="voiceSearchBtn" title="Search by voice" aria-label="Search by voice"><i class="fa-solid fa-microphone"></i></button>
       </div>
       <div class="srch-trending" id="searchTrending">
-        <span class="srch-trend-label"><i class="fa-solid fa-fire"></i> Trending</span>
+        <span class="srch-trend-label">Trending</span>
         <button type="button" onclick="runSearchChip(this)">Anirudh</button>
         <button type="button" onclick="runSearchChip(this)">Arijit Singh</button>
         <button type="button" onclick="runSearchChip(this)">Malayalam hits</button>
@@ -417,13 +416,13 @@ body.light-theme #auraLoaderText{color:rgba(25,26,30,.78)}
       </div>
 
       <div class="browse-grid" id="browseGrid">
-        <button type="button" class="browse-tile cat-all active" data-filter="all"><i class="fa-solid fa-music"></i>All Tracks</button>
+        <button type="button" class="browse-tile cat-all active" data-filter="all"><i class="fa-solid fa-music"></i>All tracks</button>
         <button type="button" class="browse-tile cat-favorites" data-filter="favorites"><i class="fa-solid fa-heart"></i>Favorites</button>
-        <button type="button" class="browse-tile cat-recent" data-filter="recent"><i class="fa-solid fa-clock-rotate-left"></i>Recently Played</button>
-        <button type="button" class="browse-tile cat-local" data-filter="local"><i class="fa-solid fa-file-audio"></i>Local Files</button>
+        <button type="button" class="browse-tile cat-recent" data-filter="recent"><i class="fa-solid fa-clock-rotate-left"></i>Recently played</button>
+        <button type="button" class="browse-tile cat-local" data-filter="local"><i class="fa-solid fa-file-audio"></i>Local files</button>
       </div>
 
-      <p class="srch-section" id="searchResultsLabel">All Tracks</p>
+      <p class="srch-section" id="searchResultsLabel">All tracks</p>
       <div class="song-list" id="searchResultsList"></div>
 
       <div id="youtubeSearchSection" style="margin-top:24px;display:none">
@@ -451,13 +450,11 @@ body.light-theme #auraLoaderText{color:rgba(25,26,30,.78)}
       <div class="lib-menu-group">
         <div class="lib-menu-row" onclick="if(songs.length && !songs[currentIndex].missing){$('fullPlayerOverlay').classList.add('active')}else{toast('Nothing playing right now','circle-info')}">
           <div class="lib-menu-icon"><i class="fa-solid fa-music"></i></div>
-          <div class="lib-menu-label">Now Playing<div class="lib-menu-sub" id="libNowPlayingSub">Nothing playing</div></div>
-          <i class="fa-solid fa-chevron-right chevron"></i>
+          <div class="lib-menu-label">Now playing<div class="lib-menu-sub" id="libNowPlayingSub">Nothing playing</div></div>
         </div>
         <div class="lib-menu-row" onclick="goToSearchCategory('recent')">
           <div class="lib-menu-icon"><i class="fa-solid fa-clock-rotate-left"></i></div>
-          <div class="lib-menu-label">Recently Played</div>
-          <i class="fa-solid fa-chevron-right chevron"></i>
+          <div class="lib-menu-label">Recently played</div>
         </div>
       </div>
 
@@ -465,25 +462,21 @@ body.light-theme #auraLoaderText{color:rgba(25,26,30,.78)}
         <div class="lib-menu-row" onclick="goToSearchCategory('favorites')">
           <div class="lib-menu-icon"><i class="fa-solid fa-heart"></i></div>
           <div class="lib-menu-label">Favorites</div>
-          <i class="fa-solid fa-chevron-right chevron"></i>
         </div>
         <div class="lib-menu-row" onclick="goToSearchCategory('local')">
           <div class="lib-menu-icon"><i class="fa-solid fa-folder"></i></div>
-          <div class="lib-menu-label">My Music</div>
-          <i class="fa-solid fa-chevron-right chevron"></i>
+          <div class="lib-menu-label">Local music</div>
         </div>
         <div class="lib-menu-row" onclick="document.getElementById('allTracksSection').scrollIntoView({behavior:'smooth'})">
           <div class="lib-menu-icon"><i class="fa-solid fa-bars-staggered"></i></div>
-          <div class="lib-menu-label">All Tracks</div>
-          <i class="fa-solid fa-chevron-right chevron"></i>
+          <div class="lib-menu-label">All tracks</div>
         </div>
       </div>
 
       <div class="lib-menu-group">
         <div class="lib-menu-row" onclick="toggleStatsPanel()">
           <div class="lib-menu-icon"><i class="fa-solid fa-chart-line"></i></div>
-          <div class="lib-menu-label">Stats</div>
-          <i class="fa-solid fa-chevron-right chevron" id="statsChevron"></i>
+          <div class="lib-menu-label">Listening stats</div>
         </div>
         <div class="stats-grid" id="statsPanel" style="display:none"></div>
       </div>
@@ -494,7 +487,7 @@ body.light-theme #auraLoaderText{color:rgba(25,26,30,.78)}
         <button type="button" class="lib-seg-btn" data-view="albums" onclick="setLibView('albums')">Albums</button>
         <button type="button" class="lib-seg-btn" data-view="films" onclick="setLibView('films')">Films</button>
       </div>
-      <p style="font-size:15px;font-weight:700;margin-bottom:12px" id="allTracksSection">All Tracks</p>
+      <p style="font-size:15px;font-weight:600;margin-bottom:12px;color:var(--text)" id="allTracksSection">All tracks</p>
       <div class="song-list" id="librarySongList"></div>
     </div>
 
@@ -502,7 +495,7 @@ body.light-theme #auraLoaderText{color:rgba(25,26,30,.78)}
       <div class="radio-tea-hero" id="radioTeaHero">
         <img class="radio-tea-hero-img" id="radioTeaHeroImg" alt="" width="800" height="450" loading="lazy" decoding="async" src="./src/assets/radio-hero.jpg">
         <div class="radio-tea-hero-fade"></div>
-        <div class="radio-live-badge"><span class="radio-live-dot"></span><span id="radioLiveText">LIVE</span></div>
+        <div class="radio-live-badge"><span class="radio-live-dot"></span><span id="radioLiveText">Live</span></div>
         <div class="radio-tea-hero-content">
           <h3>Radio</h3>
           <p class="radio-tea-sub">Warm cups, Kerala evenings and a gentle stream from somewhere just around the corner. Find a station, then shape the room around it.</p>

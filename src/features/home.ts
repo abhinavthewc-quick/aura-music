@@ -37,22 +37,22 @@ import { $, state } from '../core/state';
       const tiles = [
         `<div class="quick-tile" role="button" tabindex="0" onclick="goToSearchCategory('favorites')">
           <div class="quick-tile-art cat-favorites"><i class="fa-solid fa-heart"></i></div>
-          <div class="quick-tile-text"><div class="qt-title">Liked Songs</div><div class="qt-sub">${favCount} track${favCount!==1?'s':''}</div></div>
+          <div class="quick-tile-text"><div class="qt-title">Liked songs</div><div class="qt-sub">${favCount} track${favCount!==1?'s':''}</div></div>
         </div>`,
         last ? `<div class="quick-tile" role="button" tabindex="0" onclick="resumeLastPlayed()">
           <div class="quick-tile-art"><img src="${escapeHtml(last.img||DEFAULT_COVER)}" alt="" loading="lazy" decoding="async"></div>
-          <div class="quick-tile-text"><div class="qt-title">Jump Back In</div><div class="qt-sub">${escapeHtml(last.title)}</div></div>
+          <div class="quick-tile-text"><div class="qt-title">Jump back in</div><div class="qt-sub">${escapeHtml(last.title)}</div></div>
         </div>` : `<div class="quick-tile" role="button" tabindex="0" onclick="shuffleAll()">
           <div class="quick-tile-art cat-shuffle"><i class="fa-solid fa-shuffle"></i></div>
-          <div class="quick-tile-text"><div class="qt-title">Shuffle All</div><div class="qt-sub">Random pick</div></div>
+          <div class="quick-tile-text"><div class="qt-title">Shuffle all</div><div class="qt-sub">Random pick</div></div>
         </div>`,
         `<div class="quick-tile" role="button" tabindex="0" onclick="goToSearchCategory('local')">
           <div class="quick-tile-art cat-local"><i class="fa-solid fa-file-audio"></i></div>
-          <div class="quick-tile-text"><div class="qt-title">Local Files</div><div class="qt-sub">${localCount} added</div></div>
+          <div class="quick-tile-text"><div class="qt-title">Local files</div><div class="qt-sub">${localCount} added</div></div>
         </div>`,
         `<div class="quick-tile" role="button" tabindex="0" onclick="goToSearchCategory('recent')">
           <div class="quick-tile-art cat-recent"><i class="fa-solid fa-clock-rotate-left"></i></div>
-          <div class="quick-tile-text"><div class="qt-title"><span class="qt-long">Recently Played</span><span class="qt-short">Recent</span></div><div class="qt-sub">${state.recentlyPlayed.length} track${state.recentlyPlayed.length!==1?'s':''}</div></div>
+          <div class="quick-tile-text"><div class="qt-title"><span class="qt-long">Recently played</span><span class="qt-short">Recent</span></div><div class="qt-sub">${state.recentlyPlayed.length} track${state.recentlyPlayed.length!==1?'s':''}</div></div>
         </div>`
       ];
       $('quickGrid').innerHTML = tiles.join('');

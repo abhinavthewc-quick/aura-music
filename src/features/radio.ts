@@ -63,7 +63,7 @@ import { $, state } from '../core/state';
 
     export function updateRadioPlayerUI(){
       const st=currentRadioStation;
-      { const lt=$('radioLiveText'); if(lt) lt.textContent = st ? 'LIVE · '+(st.name||'On air') : 'LIVE'; }
+      { const lt=$('radioLiveText'); if(lt) lt.textContent = st ? 'Live · '+(st.name||'On air') : 'Live'; }
       const playing=state.radioIsPlaying && !radioAudio.paused;
       $('radioMiniPlayer').classList.toggle('active',!!st);
       $('radioNowPlaying').classList.toggle('active',!!st);

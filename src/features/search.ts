@@ -34,7 +34,7 @@ import { $, state } from '../core/state';
     }
 
     export let searchCategory='all';
-    export const categoryLabels={all:'All Tracks', favorites:'Favorites', recent:'Recently Played', local:'Local Files'};
+    export const categoryLabels={all:'All tracks', favorites:'Favorites', recent:'Recently played', local:'Local files'};
 
     export function songsForCategory(){
       if(searchCategory==='favorites') return state.songs.filter(s=>s.favorite);
