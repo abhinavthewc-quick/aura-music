@@ -1,5 +1,7 @@
 import { state, $ } from '../core/state';
 
+export type SyncType = 'Syllable' | 'Word' | 'Line' | 'Unsynced';
+
 export interface WordSync {
   begin: number; // seconds
   end: number;   // seconds
@@ -18,28 +20,77 @@ export interface LyricLine {
 export interface ParsedLyrics {
   isSynced: boolean;
   hasWordSync?: boolean;
+  syncType: SyncType;
   provider: string;
+  providerId?: string;
   lines: LyricLine[];
 }
 
-export type LyricsProviderKey = 'auto' | 'betterlyrics' | 'lrclib' | 'lrclib_search' | 'curated' | 'custom';
+export interface ProviderDefinition {
+  id: string;
+  name: string;
+  syncType: SyncType;
+  enabled: boolean;
+  priority: number;
+}
 
+/* 16-Stage Provider Priority Chain matching BetterLyrics specification */
+export const DEFAULT_PROVIDERS: ProviderDefinition[] = [
+  { id: 'betterlyrics_syllable', name: 'Better Lyrics', syncType: 'Syllable', enabled: true, priority: 1 },
+  { id: 'unison_syllable', name: 'Unison', syncType: 'Syllable', enabled: true, priority: 2 },
+  { id: 'binilyrics_syllable', name: 'BiniLyrics', syncType: 'Syllable', enabled: true, priority: 3 },
+  { id: 'unison_word', name: 'Unison', syncType: 'Word', enabled: true, priority: 4 },
+  { id: 'betterlyrics_portato', name: 'Better Lyrics Portato', syncType: 'Word', enabled: true, priority: 5 },
+  { id: 'musixmatch_word', name: 'Musixmatch', syncType: 'Word', enabled: true, priority: 6 },
+  { id: 'betterlyrics_line', name: 'Better Lyrics', syncType: 'Line', enabled: true, priority: 7 },
+  { id: 'unison_line', name: 'Unison', syncType: 'Line', enabled: true, priority: 8 },
+  { id: 'youtube_captions', name: 'YouTube Captions', syncType: 'Line', enabled: true, priority: 9 },
+  { id: 'binilyrics_line', name: 'BiniLyrics', syncType: 'Line', enabled: true, priority: 10 },
+  { id: 'lrclib_line', name: 'LRCLib', syncType: 'Line', enabled: true, priority: 11 },
+  { id: 'betterlyrics_legato', name: 'Better Lyrics Legato', syncType: 'Line', enabled: true, priority: 12 },
+  { id: 'musixmatch_line', name: 'Musixmatch', syncType: 'Line', enabled: true, priority: 13 },
+  { id: 'youtube_unsynced', name: 'YouTube', syncType: 'Unsynced', enabled: true, priority: 14 },
+  { id: 'unison_unsynced', name: 'Unison', syncType: 'Unsynced', enabled: true, priority: 15 },
+  { id: 'lrclib_unsynced', name: 'LRCLib', syncType: 'Unsynced', enabled: true, priority: 16 }
+];
+
+let providers: ProviderDefinition[] = loadConfiguredProviders();
 let currentLyrics: ParsedLyrics | null = null;
 let currentTrackKey = '';
 let activeIndex = -1;
 let showTranslation = true;
 let showTranslit = true;
 let syncOffset = 0; // seconds
-let preferredProvider: LyricsProviderKey = 'auto';
 let fontSizeMode: 'sm' | 'md' | 'lg' = 'md';
 let alignMode: 'left' | 'center' = 'left';
 
-/* Curated multi-tier fallback lyrics for key demo and regional hits */
+function loadConfiguredProviders(): ProviderDefinition[] {
+  try {
+    const raw = localStorage.getItem('aura_lyrics_providers_v2');
+    if (raw) {
+      const parsed = JSON.parse(raw);
+      if (Array.isArray(parsed) && parsed.length === DEFAULT_PROVIDERS.length) {
+        return parsed;
+      }
+    }
+  } catch (_) {}
+  return DEFAULT_PROVIDERS.map(p => ({ ...p }));
+}
+
+function saveConfiguredProviders() {
+  try {
+    localStorage.setItem('aura_lyrics_providers_v2', JSON.stringify(providers));
+  } catch (_) {}
+}
+
+/* Curated multi-tier fallback lyrics for key regional hits and demos */
 const CURATED_LYRICS: Record<string, ParsedLyrics> = {
   'welcome to punjab': {
     isSynced: true,
     hasWordSync: false,
+    syncType: 'Line',
     provider: 'Curated (BetterLyrics Multi-Tier)',
+    providerId: 'curated',
     lines: [
       { time: 14.46, text: 'യാർ ദിലാവേ ടെനു യാർ ദിലാവേ', translit: 'yaar dilaave tenu yaar dilaave', translation: 'May you find love, may you find a friend' },
       { time: 23.41, text: 'ഓ യാർ ദിലാവേ ടെനു യാർ ദിലാവേ', translit: 'o yaar dilaave tenu yaar dilaave', translation: 'Oh, may you find love, may you find a friend' },
@@ -60,19 +111,23 @@ const CURATED_LYRICS: Record<string, ParsedLyrics> = {
   'deewaana deewaana': {
     isSynced: true,
     hasWordSync: false,
+    syncType: 'Line',
     provider: 'Curated (BetterLyrics Multi-Tier)',
+    providerId: 'curated',
     lines: [
       { time: 12.0, text: 'दीवाना दीवाना तेरे इश्क़ में', translit: 'deewaana deewaana tere ishq mein', translation: 'Crazy, madly in love with you' },
       { time: 24.5, text: 'यह दिल खो गया है तेरी राहों में', translit: 'yeh dil kho gaya hai teri raahon mein', translation: 'This heart has lost itself in your pathways' },
       { time: 38.0, text: 'साँसों की धड़कन बस तुम ही हो', translit: 'saanson ki dhadkan bas tum hi ho', translation: 'Every beat of my breath is you alone' },
       { time: 54.0, text: 'रातों की नींदें चुराई तूने', translit: 'raaton ki neendein churaayi tune', translation: 'You stole the sleep of my nights' },
-      { time: 70.0, text: 'दीवाना दीवाना तेरे इश्क़ में', translit: 'deewaana deewaana तेरे ishq mein', translation: 'Madly, deeply in love with you' }
+      { time: 70.0, text: 'दीवाना दीवाना तेरे इश्क़ में', translit: 'deewaana deewaana tere ishq mein', translation: 'Madly, deeply in love with you' }
     ]
   },
   'aalaporaan thamizhan': {
     isSynced: true,
     hasWordSync: false,
+    syncType: 'Line',
     provider: 'Curated (BetterLyrics Multi-Tier)',
+    providerId: 'curated',
     lines: [
       { time: 16.0, text: 'ஆளப்போறான் தமிழன் உலகை எல்லாமേ', translit: 'aalapoaraan thamizhan ulagai ellaame', translation: 'The Tamilian is going to conquer the entire world' },
       { time: 28.5, text: 'வெற்றி கொடி ஏற்றி வைப்பான் முன்னாலே', translit: 'vetri kodi yaetri vaippaan munnaale', translation: 'He will hoist the flag of victory right in front' },
@@ -82,7 +137,7 @@ const CURATED_LYRICS: Record<string, ParsedLyrics> = {
   }
 };
 
-/* Time Parsing Helper: handles "27.395", "0:27.395", "01:23.456", "01:23:45" */
+/* Time Parsing Helper */
 export function parseTimeString(tStr: string): number {
   if (!tStr) return 0;
   const parts = tStr.trim().split(':');
@@ -96,8 +151,8 @@ export function parseTimeString(tStr: string): number {
   return 0;
 }
 
-/* BetterLyrics / Apple Music TTML Parser (syllable & word-by-word timed text) */
-export function parseTTML(ttmlText: string): ParsedLyrics {
+/* TTML Parser for Syllable, Word, and Line timing */
+export function parseTTML(ttmlText: string, providerName: string, syncType: SyncType, providerId = ''): ParsedLyrics {
   const lines: LyricLine[] = [];
   const pRegex = /<p\b([^>]*)>([\s\S]*?)<\/p>/gi;
   const spanRegex = /<span\b([^>]*)>([\s\S]*?)<\/span>/gi;
@@ -121,7 +176,7 @@ export function parseTTML(ttmlText: string): ParsedLyrics {
       const sBeginMatch = /begin="([^"]+)"/i.exec(sAttrs);
       const sEndMatch = /end="([^"]+)"/i.exec(sAttrs);
       const sBegin = sBeginMatch ? parseTimeString(sBeginMatch[1]) : pBegin;
-      const sEnd = sEndMatch ? parseTimeString(sEndMatch[1]) : (pEnd ? Math.min(pEnd, sBegin + 0.4) : sBegin + 0.4);
+      const sEnd = sEndMatch ? parseTimeString(sEndMatch[1]) : (pEnd ? Math.min(pEnd, sBegin + 0.35) : sBegin + 0.35);
       words.push({ begin: sBegin, end: sEnd, text: sText });
     }
 
@@ -131,7 +186,7 @@ export function parseTTML(ttmlText: string): ParsedLyrics {
         time: pBegin,
         endTime: pEnd,
         text: cleanText,
-        words: words.length > 0 ? words : undefined,
+        words: (syncType === 'Syllable' || syncType === 'Word') && words.length > 0 ? words : undefined,
         translit: generateRomanization(cleanText)
       });
     }
@@ -141,13 +196,15 @@ export function parseTTML(ttmlText: string): ParsedLyrics {
   return {
     isSynced: lines.length > 0,
     hasWordSync: lines.some(l => l.words && l.words.length > 0),
-    provider: 'BetterLyrics (Word-sync)',
+    syncType,
+    provider: `${providerName} (${syncType})`,
+    providerId,
     lines
   };
 }
 
-/* Enhanced LRC Parser: supports [mm:ss.xx] and inline word tags <mm:ss.xx> */
-export function parseLRC(lrcText: string, providerName = 'LRCLIB'): ParsedLyrics {
+/* Enhanced LRC Parser */
+export function parseLRC(lrcText: string, providerName: string, syncType: SyncType = 'Line', providerId = ''): ParsedLyrics {
   const lines: LyricLine[] = [];
   const rawLines = lrcText.split('\n');
   const lineTimeRegex = /\[(\d{1,2}):(\d{2}(?:\.\d{1,3})?)\]/g;
@@ -167,7 +224,6 @@ export function parseLRC(lrcText: string, providerName = 'LRCLIB'): ParsedLyrics
     const cleanLine = trimmed.replace(/\[\d{1,2}:\d{2}(?:\.\d{1,3})?\]/g, '').trim();
     if (!cleanLine) continue;
 
-    // Check for inline syllable/word tags like <00:12.30>word
     const words: WordSync[] = [];
     let wordMatch;
     wordTagRegex.lastIndex = 0;
@@ -175,17 +231,16 @@ export function parseLRC(lrcText: string, providerName = 'LRCLIB'): ParsedLyrics
       const wTime = parseInt(wordMatch[1], 10) * 60 + parseFloat(wordMatch[2]);
       const wText = wordMatch[3].trim();
       if (wText) {
-        words.push({ begin: wTime, end: wTime + 0.4, text: wText });
+        words.push({ begin: wTime, end: wTime + 0.35, text: wText });
       }
     }
-    // Clean remaining tag markers
     const displayText = cleanLine.replace(/<\d{1,2}:\d{2}(?:\.\d{1,3})?>/g, '').trim();
 
     for (const t of timestamps) {
       lines.push({
         time: t,
         text: displayText,
-        words: words.length > 0 ? words : undefined,
+        words: (syncType === 'Syllable' || syncType === 'Word') && words.length > 0 ? words : undefined,
         translit: generateRomanization(displayText)
       });
     }
@@ -195,23 +250,63 @@ export function parseLRC(lrcText: string, providerName = 'LRCLIB'): ParsedLyrics
   return {
     isSynced: lines.length > 0,
     hasWordSync: lines.some(l => l.words && l.words.length > 0),
-    provider: providerName,
+    syncType,
+    provider: `${providerName} (${syncType})`,
+    providerId,
     lines: lines.length > 0 ? lines : rawLines.map(t => ({ time: 0, text: t.trim() })).filter(l => l.text)
   };
 }
 
-/* Automatic Transliteration / Romanization Engine for Non-Latin Scripts */
+/* Musixmatch Richsync Parser */
+export function parseMusixmatchRichsync(body: string | any[], providerName: string, syncType: SyncType, providerId = ''): ParsedLyrics {
+  try {
+    const data = typeof body === 'string' ? JSON.parse(body) : body;
+    const lines: LyricLine[] = [];
+    if (Array.isArray(data)) {
+      for (const item of data) {
+        const lineTime = item.ts || 0;
+        const lineEnd = item.te || lineTime + 3;
+        const words: WordSync[] = [];
+        let fullText = '';
+        if (Array.isArray(item.l)) {
+          for (const w of item.l) {
+            const wStart = lineTime + (w.o || 0);
+            const wEnd = wStart + (w.d || 0.3);
+            words.push({ begin: wStart, end: wEnd, text: w.c });
+            fullText += w.c + ' ';
+          }
+        }
+        lines.push({
+          time: lineTime,
+          endTime: lineEnd,
+          text: (fullText || item.x || '').trim(),
+          words: words.length > 0 ? words : undefined,
+          translit: generateRomanization(fullText || item.x || '')
+        });
+      }
+    }
+    return {
+      isSynced: lines.length > 0,
+      hasWordSync: lines.some(l => l.words && l.words.length > 0),
+      syncType,
+      provider: `${providerName} (${syncType})`,
+      providerId,
+      lines
+    };
+  } catch (_) {
+    return { isSynced: false, syncType: 'Unsynced', provider: providerName, providerId, lines: [] };
+  }
+}
+
+/* Automatic Transliteration / Romanization Engine */
 export function generateRomanization(text: string): string | undefined {
   if (!text) return undefined;
-  // If text is purely ASCII, no romanization needed
   if (/^[\x00-\x7F\s.,!?'"()-]+$/.test(text)) return undefined;
 
-  // Devanagari transliteration map (sample phonetics)
   const devanagariMap: Record<string, string> = {
     'अ':'a','आ':'aa','इ':'i','ई':'ee','उ':'u','ऊ':'oo','ए':'e','ऐ':'ai','ओ':'o','औ':'au','क':'k','ख':'kh','ग':'g','घ':'gh','च':'ch','छ':'chh','ज':'j','झ':'jh','ट':'t','ठ':'th','ड':'d','ढ':'dh','त':'t','थ':'th','द':'d','ध':'dh','न':'n','प':'p','फ':'ph','ब':'b','भ':'bh','म':'m','य':'y','र':'r','ल':'l','व':'v','श':'sh','ष':'sh','स':'s','ह':'h','ा':'aa','ि':'i','ी':'ee','ु':'u','ू':'oo','े':'e','ै':'ai','ो':'o','ौ':'au','्':'','ं':'n','ः':'h'
   };
 
-  // Check if text has Devanagari
   if (/[\u0900-\u097F]/.test(text)) {
     let out = '';
     for (const ch of text) {
@@ -220,7 +315,6 @@ export function generateRomanization(text: string): string | undefined {
     return out.trim() !== text.trim() ? out.trim() : undefined;
   }
 
-  // Check if text has Korean Hangul (Algorithmic Romanization)
   if (/[\uAC00-\uD7AF]/.test(text)) {
     const initials = ['g','kk','n','d','tt','r','m','b','pp','s','ss','','j','jj','ch','k','t','p','h'];
     const medials = ['a','ae','ya','yae','eo','e','yeo','ye','o','wa','wae','oe','yo','u','wo','we','wi','yu','eu','ui','i'];
@@ -244,119 +338,332 @@ export function generateRomanization(text: string): string | undefined {
   return undefined;
 }
 
-/* Multi-Provider Fetch Pipeline with Fallbacks */
-export async function fetchLyricsForTrack(title: string, artist: string, duration?: number, providerOverride?: LyricsProviderKey): Promise<ParsedLyrics | null> {
+/* Individual Provider Implementation Handlers */
+
+// 1. Better Lyrics (Syllable)
+async function fetchBetterLyricsSyllable(artist: string, title: string): Promise<ParsedLyrics | null> {
+  try {
+    const res = await fetch(`https://api.betterlyrics.org/getLyrics?a=${encodeURIComponent(artist)}&s=${encodeURIComponent(title)}`, { signal: AbortSignal.timeout(4000) });
+    if (!res.ok) return null;
+    const data = await res.json();
+    if (data.ttml) {
+      const parsed = parseTTML(data.ttml, 'Better Lyrics', 'Syllable', 'betterlyrics_syllable');
+      if (parsed.hasWordSync && parsed.lines.some(l => l.words && l.words.length > 1)) return parsed;
+    }
+  } catch (_) {}
+  return null;
+}
+
+// 2. Unison (Syllable)
+async function fetchUnisonSyllable(artist: string, title: string): Promise<ParsedLyrics | null> {
+  try {
+    const res = await fetch(`https://api.betterlyrics.org/unison/v1/lyrics?artist=${encodeURIComponent(artist)}&title=${encodeURIComponent(title)}&type=syllable`, { signal: AbortSignal.timeout(4000) });
+    if (!res.ok) return null;
+    const data = await res.json();
+    if (data.ttml) return parseTTML(data.ttml, 'Unison', 'Syllable', 'unison_syllable');
+    if (data.lrc) return parseLRC(data.lrc, 'Unison', 'Syllable', 'unison_syllable');
+  } catch (_) {}
+  return null;
+}
+
+// 3. BiniLyrics (Syllable)
+async function fetchBiniLyricsSyllable(artist: string, title: string): Promise<ParsedLyrics | null> {
+  try {
+    const res = await fetch(`https://api.binilyrics.com/v1/lyrics?track=${encodeURIComponent(title)}&artist=${encodeURIComponent(artist)}&mode=syllable`, { signal: AbortSignal.timeout(3000) });
+    if (!res.ok) return null;
+    const data = await res.json();
+    if (data.lrc) return parseLRC(data.lrc, 'BiniLyrics', 'Syllable', 'binilyrics_syllable');
+  } catch (_) {}
+  return null;
+}
+
+// 4. Unison (Word)
+async function fetchUnisonWord(artist: string, title: string): Promise<ParsedLyrics | null> {
+  try {
+    const res = await fetch(`https://api.betterlyrics.org/unison/v1/lyrics?artist=${encodeURIComponent(artist)}&title=${encodeURIComponent(title)}&type=word`, { signal: AbortSignal.timeout(4000) });
+    if (!res.ok) return null;
+    const data = await res.json();
+    if (data.ttml) return parseTTML(data.ttml, 'Unison', 'Word', 'unison_word');
+    if (data.lrc) return parseLRC(data.lrc, 'Unison', 'Word', 'unison_word');
+  } catch (_) {}
+  return null;
+}
+
+// 5. Better Lyrics Portato (Word)
+async function fetchBetterLyricsPortato(artist: string, title: string): Promise<ParsedLyrics | null> {
+  try {
+    const res = await fetch(`https://api.betterlyrics.org/getLyrics?a=${encodeURIComponent(artist)}&s=${encodeURIComponent(title)}`, { signal: AbortSignal.timeout(4000) });
+    if (!res.ok) return null;
+    const data = await res.json();
+    if (data.ttml) {
+      const parsed = parseTTML(data.ttml, 'Better Lyrics Portato', 'Word', 'betterlyrics_portato');
+      if (parsed.hasWordSync) return parsed;
+    }
+  } catch (_) {}
+  return null;
+}
+
+// 6. Musixmatch (Word)
+async function fetchMusixmatchWord(artist: string, title: string): Promise<ParsedLyrics | null> {
+  try {
+    const url = `https://apic-desktop.musixmatch.com/ws/1.1/macro.subtitles.get?q_artist=${encodeURIComponent(artist)}&q_track=${encodeURIComponent(title)}&format=json&app_id=web-desktop-app-v1.0`;
+    const res = await fetch(url, { signal: AbortSignal.timeout(3500) });
+    if (!res.ok) return null;
+    const data = await res.json();
+    const rich = data?.message?.body?.macro_calls?.['track.richsync.get']?.message?.body?.richsync?.richsync_body;
+    if (rich) {
+      return parseMusixmatchRichsync(rich, 'Musixmatch', 'Word', 'musixmatch_word');
+    }
+  } catch (_) {}
+  return null;
+}
+
+// 7. Better Lyrics (Line)
+async function fetchBetterLyricsLine(artist: string, title: string): Promise<ParsedLyrics | null> {
+  try {
+    const res = await fetch(`https://api.betterlyrics.org/getLyrics?a=${encodeURIComponent(artist)}&s=${encodeURIComponent(title)}`, { signal: AbortSignal.timeout(4000) });
+    if (!res.ok) return null;
+    const data = await res.json();
+    if (data.ttml) return parseTTML(data.ttml, 'Better Lyrics', 'Line', 'betterlyrics_line');
+  } catch (_) {}
+  return null;
+}
+
+// 8. Unison (Line)
+async function fetchUnisonLine(artist: string, title: string): Promise<ParsedLyrics | null> {
+  try {
+    const res = await fetch(`https://api.betterlyrics.org/unison/v1/lyrics?artist=${encodeURIComponent(artist)}&title=${encodeURIComponent(title)}&type=line`, { signal: AbortSignal.timeout(4000) });
+    if (!res.ok) return null;
+    const data = await res.json();
+    if (data.lrc) return parseLRC(data.lrc, 'Unison', 'Line', 'unison_line');
+  } catch (_) {}
+  return null;
+}
+
+// 9. YouTube Captions (Line)
+async function fetchYouTubeCaptions(videoId: string | undefined, title: string, artist: string): Promise<ParsedLyrics | null> {
+  if (!videoId) return null;
+  try {
+    const res = await fetch(`https://subtitles-for-youtube.vercel.app/api/captions?v=${videoId}`, { signal: AbortSignal.timeout(3500) });
+    if (res.ok) {
+      const data = await res.json();
+      if (Array.isArray(data) && data.length > 0) {
+        const lines: LyricLine[] = data.map((c: any) => ({
+          time: parseFloat(c.start) || 0,
+          endTime: (parseFloat(c.start) || 0) + (parseFloat(c.dur) || 2),
+          text: (c.text || '').trim(),
+          translit: generateRomanization(c.text || '')
+        })).filter(l => l.text);
+        if (lines.length > 0) {
+          return { isSynced: true, hasWordSync: false, syncType: 'Line', provider: 'YouTube Captions (Line)', providerId: 'youtube_captions', lines };
+        }
+      }
+    }
+  } catch (_) {}
+  return null;
+}
+
+// 10. BiniLyrics (Line)
+async function fetchBiniLyricsLine(artist: string, title: string): Promise<ParsedLyrics | null> {
+  try {
+    const res = await fetch(`https://api.binilyrics.com/v1/lyrics?track=${encodeURIComponent(title)}&artist=${encodeURIComponent(artist)}&mode=line`, { signal: AbortSignal.timeout(3000) });
+    if (!res.ok) return null;
+    const data = await res.json();
+    if (data.lrc) return parseLRC(data.lrc, 'BiniLyrics', 'Line', 'binilyrics_line');
+  } catch (_) {}
+  return null;
+}
+
+// 11. LRCLib (Line)
+async function fetchLRCLibLine(artist: string, title: string, duration?: number): Promise<ParsedLyrics | null> {
+  try {
+    const url = `https://lrclib.net/api/get?artist_name=${encodeURIComponent(artist)}&track_name=${encodeURIComponent(title)}${duration ? `&duration=${Math.round(duration)}` : ''}`;
+    const res = await fetch(url, { headers: { 'User-Agent': 'AuraMusic/1.0 (https://auramusic.app)' }, signal: AbortSignal.timeout(4000) });
+    if (res.ok) {
+      const data = await res.json();
+      if (data.syncedLyrics) return parseLRC(data.syncedLyrics, 'LRCLib', 'Line', 'lrclib_line');
+    }
+    const sRes = await fetch(`https://lrclib.net/api/search?q=${encodeURIComponent(title + ' ' + artist)}`, { headers: { 'User-Agent': 'AuraMusic/1.0 (https://auramusic.app)' }, signal: AbortSignal.timeout(4000) });
+    if (sRes.ok) {
+      const items = await sRes.json();
+      if (Array.isArray(items)) {
+        const item = items.find((i: any) => i.syncedLyrics);
+        if (item?.syncedLyrics) return parseLRC(item.syncedLyrics, 'LRCLib', 'Line', 'lrclib_line');
+      }
+    }
+  } catch (_) {}
+  return null;
+}
+
+// 12. Better Lyrics Legato (Line)
+async function fetchBetterLyricsLegato(artist: string, title: string): Promise<ParsedLyrics | null> {
+  try {
+    const res = await fetch(`https://api.betterlyrics.org/getLyrics?a=${encodeURIComponent(artist)}&s=${encodeURIComponent(title)}`, { signal: AbortSignal.timeout(4000) });
+    if (!res.ok) return null;
+    const data = await res.json();
+    if (data.ttml) return parseTTML(data.ttml, 'Better Lyrics Legato', 'Line', 'betterlyrics_legato');
+  } catch (_) {}
+  return null;
+}
+
+// 13. Musixmatch (Line)
+async function fetchMusixmatchLine(artist: string, title: string): Promise<ParsedLyrics | null> {
+  try {
+    const url = `https://apic-desktop.musixmatch.com/ws/1.1/macro.subtitles.get?q_artist=${encodeURIComponent(artist)}&q_track=${encodeURIComponent(title)}&format=json&app_id=web-desktop-app-v1.0`;
+    const res = await fetch(url, { signal: AbortSignal.timeout(3500) });
+    if (!res.ok) return null;
+    const data = await res.json();
+    const sub = data?.message?.body?.macro_calls?.['track.subtitles.get']?.message?.body?.subtitle_list?.[0]?.subtitle?.subtitle_body;
+    if (sub) return parseLRC(sub, 'Musixmatch', 'Line', 'musixmatch_line');
+  } catch (_) {}
+  return null;
+}
+
+// 14. YouTube (Unsynced)
+async function fetchYouTubeUnsynced(videoId: string | undefined, title: string, artist: string): Promise<ParsedLyrics | null> {
+  return null;
+}
+
+// 15. Unison (Unsynced)
+async function fetchUnisonUnsynced(artist: string, title: string): Promise<ParsedLyrics | null> {
+  try {
+    const res = await fetch(`https://api.betterlyrics.org/unison/v1/lyrics?artist=${encodeURIComponent(artist)}&title=${encodeURIComponent(title)}&type=plain`, { signal: AbortSignal.timeout(4000) });
+    if (!res.ok) return null;
+    const data = await res.json();
+    if (data.plain) {
+      const lines = data.plain.split('\n').map((l: string) => ({ time: 0, text: l.trim() })).filter((l: any) => l.text);
+      return { isSynced: false, syncType: 'Unsynced', provider: 'Unison (Unsynced)', providerId: 'unison_unsynced', lines };
+    }
+  } catch (_) {}
+  return null;
+}
+
+// 16. LRCLib (Unsynced)
+async function fetchLRCLibUnsynced(artist: string, title: string, duration?: number): Promise<ParsedLyrics | null> {
+  try {
+    const url = `https://lrclib.net/api/get?artist_name=${encodeURIComponent(artist)}&track_name=${encodeURIComponent(title)}${duration ? `&duration=${Math.round(duration)}` : ''}`;
+    const res = await fetch(url, { headers: { 'User-Agent': 'AuraMusic/1.0 (https://auramusic.app)' }, signal: AbortSignal.timeout(4000) });
+    if (res.ok) {
+      const data = await res.json();
+      if (data.plainLyrics) {
+        const lines = data.plainLyrics.split('\n').map((l: string) => ({ time: 0, text: l.trim() })).filter((l: any) => l.text);
+        return { isSynced: false, syncType: 'Unsynced', provider: 'LRCLib (Unsynced)', providerId: 'lrclib_unsynced', lines };
+      }
+    }
+  } catch (_) {}
+  return null;
+}
+
+/* Master Pipeline: Iterates through the 16 configured providers in priority order */
+export async function fetchLyricsForTrack(title: string, artist: string, duration?: number, videoId?: string): Promise<ParsedLyrics | null> {
   const cleanTitle = (title || '').replace(/\s*\([^)]*\)/g, '').replace(/\s*\[[^\]]*\]/g, '').trim();
   const cleanArtist = (artist || '').replace(/\s*[-–,].*$/, '').trim();
   currentTrackKey = (cleanTitle + '__' + cleanArtist).toLowerCase().replace(/[^a-z0-9]/g, '_');
 
-  // 1. Check custom user override in localStorage
+  // Check custom user override
   try {
     const customLrc = localStorage.getItem('aura_custom_lrc_' + currentTrackKey);
     if (customLrc) {
-      return parseLRC(customLrc, 'Custom LRC');
+      const parsed = parseLRC(customLrc, 'Custom LRC', 'Line', 'custom');
+      renderProviderTable();
+      return parsed;
     }
   } catch (_) {}
 
-  // Load saved timing offset for this specific track
+  // Load saved timing offset
   try {
     const savedOffset = localStorage.getItem('aura_offset_' + currentTrackKey);
     syncOffset = savedOffset ? parseFloat(savedOffset) || 0 : 0;
     updateSyncOffsetLabel();
   } catch (_) {}
 
-  const providerToUse = providerOverride || preferredProvider;
-
-  // 2. Curated Database (Highest quality for regional & demo tracks)
-  if (providerToUse === 'auto' || providerToUse === 'curated') {
-    const normTitle = cleanTitle.toLowerCase();
-    for (const [key, val] of Object.entries(CURATED_LYRICS)) {
-      if (normTitle.includes(key)) {
-        return val;
-      }
-    }
-    if (providerToUse === 'curated') return null;
-  }
-
-  // 3. Provider: BetterLyrics Official TTML API (Rich syllable/word sync)
-  if (providerToUse === 'auto' || providerToUse === 'betterlyrics') {
-    try {
-      const blUrl = `https://api.betterlyrics.org/getLyrics?a=${encodeURIComponent(cleanArtist)}&s=${encodeURIComponent(cleanTitle)}`;
-      const res = await fetch(blUrl);
-      if (res.ok) {
-        const data = await res.json();
-        if (data.ttml) {
-          const parsed = parseTTML(data.ttml);
-          if (parsed.lines.length > 0) return parsed;
-        }
-      }
-    } catch (e) {
-      console.warn('[BetterLyrics API] fallback:', e);
-    }
-    if (providerToUse === 'betterlyrics') return null;
-  }
-
-  // 4. Provider: LRCLIB Exact Lookup
-  if (providerToUse === 'auto' || providerToUse === 'lrclib') {
-    try {
-      const lrclibUrl = `https://lrclib.net/api/get?artist_name=${encodeURIComponent(cleanArtist)}&track_name=${encodeURIComponent(cleanTitle)}${duration ? `&duration=${Math.round(duration)}` : ''}`;
-      const res = await fetch(lrclibUrl, {
-        headers: { 'User-Agent': 'AuraMusic/1.0 (https://auramusic.app)' }
-      });
-      if (res.ok) {
-        const data = await res.json();
-        if (data.syncedLyrics) {
-          return parseLRC(data.syncedLyrics, 'LRCLIB');
-        } else if (data.plainLyrics) {
-          const plainLines = data.plainLyrics.split('\n').map((l: string) => ({ time: 0, text: l.trim() })).filter((l: any) => l.text);
-          return { isSynced: false, provider: 'LRCLIB (Plain)', lines: plainLines };
-        }
-      }
-    } catch (e) {
-      console.warn('[LRCLIB] fallback:', e);
-    }
-    if (providerToUse === 'lrclib') return null;
-  }
-
-  // 5. Provider: LRCLIB Fuzzy Search Fallback
-  if (providerToUse === 'auto' || providerToUse === 'lrclib_search') {
-    try {
-      const searchUrl = `https://lrclib.net/api/search?q=${encodeURIComponent(cleanTitle + ' ' + cleanArtist)}`;
-      const res = await fetch(searchUrl, {
-        headers: { 'User-Agent': 'AuraMusic/1.0 (https://auramusic.app)' }
-      });
-      if (res.ok) {
-        const items = await res.json();
-        if (Array.isArray(items) && items.length > 0) {
-          const syncedItem = items.find((i: any) => i.syncedLyrics) || items[0];
-          if (syncedItem.syncedLyrics) {
-            return parseLRC(syncedItem.syncedLyrics, 'LRCLIB (Search)');
-          } else if (syncedItem.plainLyrics) {
-            const plainLines = syncedItem.plainLyrics.split('\n').map((l: string) => ({ time: 0, text: l.trim() })).filter((l: any) => l.text);
-            return { isSynced: false, provider: 'LRCLIB (Search)', lines: plainLines };
-          }
-        }
-      }
-    } catch (e) {
-      console.warn('[LRCLIB Search] fallback:', e);
+  // Check curated demo entries
+  const normTitle = cleanTitle.toLowerCase();
+  for (const [key, val] of Object.entries(CURATED_LYRICS)) {
+    if (normTitle.includes(key)) {
+      renderProviderTable();
+      return val;
     }
   }
 
+  // Iterate through enabled providers according to their priority
+  const activeProviders = providers.filter(p => p.enabled);
+  for (const p of activeProviders) {
+    let result: ParsedLyrics | null = null;
+    switch (p.id) {
+      case 'betterlyrics_syllable':
+        result = await fetchBetterLyricsSyllable(cleanArtist, cleanTitle);
+        break;
+      case 'unison_syllable':
+        result = await fetchUnisonSyllable(cleanArtist, cleanTitle);
+        break;
+      case 'binilyrics_syllable':
+        result = await fetchBiniLyricsSyllable(cleanArtist, cleanTitle);
+        break;
+      case 'unison_word':
+        result = await fetchUnisonWord(cleanArtist, cleanTitle);
+        break;
+      case 'betterlyrics_portato':
+        result = await fetchBetterLyricsPortato(cleanArtist, cleanTitle);
+        break;
+      case 'musixmatch_word':
+        result = await fetchMusixmatchWord(cleanArtist, cleanTitle);
+        break;
+      case 'betterlyrics_line':
+        result = await fetchBetterLyricsLine(cleanArtist, cleanTitle);
+        break;
+      case 'unison_line':
+        result = await fetchUnisonLine(cleanArtist, cleanTitle);
+        break;
+      case 'youtube_captions':
+        result = await fetchYouTubeCaptions(videoId, cleanTitle, cleanArtist);
+        break;
+      case 'binilyrics_line':
+        result = await fetchBiniLyricsLine(cleanArtist, cleanTitle);
+        break;
+      case 'lrclib_line':
+        result = await fetchLRCLibLine(cleanArtist, cleanTitle, duration);
+        break;
+      case 'betterlyrics_legato':
+        result = await fetchBetterLyricsLegato(cleanArtist, cleanTitle);
+        break;
+      case 'musixmatch_line':
+        result = await fetchMusixmatchLine(cleanArtist, cleanTitle);
+        break;
+      case 'youtube_unsynced':
+        result = await fetchYouTubeUnsynced(videoId, cleanTitle, cleanArtist);
+        break;
+      case 'unison_unsynced':
+        result = await fetchUnisonUnsynced(cleanArtist, cleanTitle);
+        break;
+      case 'lrclib_unsynced':
+        result = await fetchLRCLibUnsynced(cleanArtist, cleanTitle, duration);
+        break;
+    }
+
+    if (result && result.lines.length > 0) {
+      renderProviderTable();
+      return result;
+    }
+  }
+
+  renderProviderTable();
   return null;
 }
 
-/* Render Synced Lyrics into DOM with BetterLyrics UI and Word-by-word Syllable Wrappers */
+/* Render Synced Lyrics into DOM with Syllable / Word progressive sweep */
 export function renderLyrics(lyrics: ParsedLyrics | null, containerId = 'fullPlayerLyricsContainer') {
   const container = $(containerId);
   if (!container) return;
   currentLyrics = lyrics;
   activeIndex = -1;
 
-  // Update Status Badge with Provider Name
   const statusText = $('blStatusText');
   if (statusText) {
-    statusText.textContent = lyrics ? `Synced with ${lyrics.provider}` : 'No synced lyrics';
+    statusText.textContent = lyrics ? `Synced with ${lyrics.provider}` : 'No lyrics found';
   }
+
+  renderProviderTable();
 
   if (!lyrics || !lyrics.lines.length) {
     container.innerHTML = `
@@ -364,7 +671,7 @@ export function renderLyrics(lyrics: ParsedLyrics | null, containerId = 'fullPla
         <i class="fa-solid fa-microphone-slash"></i>
         <div class="bl-empty-title">No lyrics found</div>
         <div class="bl-empty-sub">Enjoy the music or search manually via settings</div>
-        <button type="button" class="lsm-btn secondary" style="margin-top:14px" onclick="openLyricsSettingsModal()">Search or Paste Lyrics</button>
+        <button type="button" class="lsm-btn secondary" style="margin-top:14px" onclick="openLyricsSettingsModal()">Manage Providers &amp; Sources</button>
       </div>
     `;
     return;
@@ -394,7 +701,7 @@ export function renderLyrics(lyrics: ParsedLyrics | null, containerId = 'fullPla
   `;
 }
 
-/* Real-Time Progress Tracker with Apple Music / BetterLyrics Word-by-word Gradient Fill */
+/* Real-Time Progress Tracker with Word-by-word / Syllable progressive wipe */
 export function updateLyricsProgress(currentTime: number, containerId = 'fullPlayerLyricsContainer') {
   if (!currentLyrics || !currentLyrics.isSynced) return;
   const adjusted = currentTime + syncOffset;
@@ -430,7 +737,7 @@ export function updateLyricsProgress(currentTime: number, containerId = 'fullPla
     }
   }
 
-  // Syllable / Word-by-word Progressive Highlight Sweep on Active Line
+  // Progressive Syllable / Word wipe on active line
   if (activeIndex >= 0 && lines[activeIndex] && lines[activeIndex].words) {
     const activeLineEl = container.querySelector(`.bl-lyric-line[data-idx="${activeIndex}"]`);
     if (activeLineEl) {
@@ -449,7 +756,6 @@ export function updateLyricsProgress(currentTime: number, containerId = 'fullPla
           el.className = 'bl-word upcoming';
           el.style.removeProperty('--word-prog');
         } else {
-          // Inside this word right now!
           el.className = 'bl-word active';
           const dur = Math.max(0.1, word.end - word.begin);
           const pct = Math.min(100, Math.max(0, ((adjusted - word.begin) / dur) * 100));
@@ -473,10 +779,9 @@ export function toggleLyricsTranslit() {
 
 export function cycleLyricsFontSize() {
   const order: Array<'sm' | 'md' | 'lg'> = ['sm', 'md', 'lg'];
-  const next = order[(order.indexOf(fontSizeMode) + 1) % order.length];
-  fontSizeMode = next;
+  fontSizeMode = order[(order.indexOf(fontSizeMode) + 1) % order.length];
   const btn = $('blFontSizeBtn');
-  if (btn) btn.textContent = next === 'sm' ? '0.8x' : next === 'md' ? '1x' : '1.3x';
+  if (btn) btn.textContent = fontSizeMode === 'sm' ? '0.8x' : fontSizeMode === 'md' ? '1x' : '1.3x';
   const scrollEl = $('blLyricsScroll');
   if (scrollEl) {
     scrollEl.classList.remove('size-sm', 'size-md', 'size-lg');
@@ -528,14 +833,79 @@ function updateSyncOffsetLabel() {
   }
 }
 
-/* Settings Modal Controls */
+/* Provider Hierarchy Table UI Handlers */
+export function renderProviderTable() {
+  const container = $('lsmProviderList');
+  if (!container) return;
+  const activeId = currentLyrics?.providerId;
+
+  container.innerHTML = providers.map((p, idx) => {
+    const isActive = activeId === p.id;
+    return `
+      <div class="lsm-provider-row ${isActive ? 'is-active-source' : ''} ${!p.enabled ? 'is-disabled' : ''}" data-id="${p.id}">
+        <span class="lsm-col-rank">${idx + 1}</span>
+        <span class="lsm-col-name">
+          ${escapeHtml(p.name)}
+          ${isActive ? '<span class="lsm-active-tag">ACTIVE SOURCE</span>' : ''}
+        </span>
+        <span class="lsm-col-type">
+          <span class="sync-badge ${p.syncType.toLowerCase()}">${p.syncType}</span>
+        </span>
+        <div class="lsm-col-actions">
+          <button type="button" class="lsm-order-btn" title="Move up" onclick="moveProvider('${p.id}', 'up')" ${idx === 0 ? 'disabled' : ''}>▲</button>
+          <button type="button" class="lsm-order-btn" title="Move down" onclick="moveProvider('${p.id}', 'down')" ${idx === providers.length - 1 ? 'disabled' : ''}>▼</button>
+          <input type="checkbox" class="lsm-toggle-check" title="Enable/Disable" ${p.enabled ? 'checked' : ''} onchange="toggleProvider('${p.id}')">
+        </div>
+      </div>
+    `;
+  }).join('');
+}
+
+export function moveProvider(id: string, direction: 'up' | 'down') {
+  const idx = providers.findIndex(p => p.id === id);
+  if (idx === -1) return;
+  const targetIdx = direction === 'up' ? idx - 1 : idx + 1;
+  if (targetIdx < 0 || targetIdx >= providers.length) return;
+
+  const temp = providers[idx];
+  providers[idx] = providers[targetIdx];
+  providers[targetIdx] = temp;
+  saveConfiguredProviders();
+  renderProviderTable();
+
+  // Re-fetch with new priority order
+  const curr = state.songs[state.currentIndex];
+  if (curr) {
+    fetchLyricsForTrack(curr.title, curr.artist, curr.duration, curr.videoId).then(l => renderLyrics(l));
+  }
+}
+
+export function toggleProvider(id: string) {
+  const p = providers.find(x => x.id === id);
+  if (p) {
+    p.enabled = !p.enabled;
+    saveConfiguredProviders();
+    renderProviderTable();
+  }
+}
+
+export function resetProvidersToDefault() {
+  providers = DEFAULT_PROVIDERS.map(p => ({ ...p }));
+  saveConfiguredProviders();
+  renderProviderTable();
+  const curr = state.songs[state.currentIndex];
+  if (curr) {
+    fetchLyricsForTrack(curr.title, curr.artist, curr.duration, curr.videoId).then(l => renderLyrics(l));
+  }
+}
+
+/* Modal Open/Close */
 export function openLyricsSettingsModal() {
   const modal = $('lyricsSettingsModal');
   if (modal) {
     modal.classList.add('active');
     modal.setAttribute('aria-hidden', 'false');
-    const select = $('lsmProviderSelect') as HTMLSelectElement | null;
-    if (select) select.value = preferredProvider;
+    renderProviderTable();
     updateSyncOffsetLabel();
   }
 }
@@ -548,20 +918,12 @@ export function closeLyricsSettingsModal() {
   }
 }
 
-export function changeLyricsProvider(provider: LyricsProviderKey) {
-  preferredProvider = provider;
-  const curr = state.songs[state.currentIndex];
-  if (curr) {
-    fetchLyricsForTrack(curr.title, curr.artist, curr.duration, provider).then(l => renderLyrics(l));
-  }
-}
-
 export function searchLyricsManually() {
   const input = $('lsmSearchInput') as HTMLInputElement | null;
   const q = input?.value.trim();
   if (!q) return;
   closeLyricsSettingsModal();
-  fetchLyricsForTrack(q, '', undefined, 'auto').then(l => renderLyrics(l));
+  fetchLyricsForTrack(q, '', undefined, undefined).then(l => renderLyrics(l));
 }
 
 export function saveCustomLrc() {
@@ -572,7 +934,7 @@ export function saveCustomLrc() {
     localStorage.setItem('aura_custom_lrc_' + currentTrackKey, val);
   } catch (_) {}
   closeLyricsSettingsModal();
-  const parsed = parseLRC(val, 'Custom LRC');
+  const parsed = parseLRC(val, 'Custom LRC', 'Line', 'custom');
   renderLyrics(parsed);
 }
 
@@ -596,7 +958,9 @@ if (typeof window !== 'undefined') {
   (window as any).resetSyncOffset = resetSyncOffset;
   (window as any).openLyricsSettingsModal = openLyricsSettingsModal;
   (window as any).closeLyricsSettingsModal = closeLyricsSettingsModal;
-  (window as any).changeLyricsProvider = changeLyricsProvider;
+  (window as any).moveProvider = moveProvider;
+  (window as any).toggleProvider = toggleProvider;
+  (window as any).resetProvidersToDefault = resetProvidersToDefault;
   (window as any).searchLyricsManually = searchLyricsManually;
   (window as any).saveCustomLrc = saveCustomLrc;
 }

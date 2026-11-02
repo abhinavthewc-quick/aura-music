@@ -821,41 +821,48 @@ body.light-theme #auraLoaderText{color:rgba(25,26,30,.78)}
         <button type="button" class="lsm-close-btn" onclick="closeLyricsSettingsModal()" aria-label="Close"><i class="fa-solid fa-xmark"></i></button>
       </div>
 
-      <div>
-        <div class="lsm-section-label">Preferred Lyrics Provider</div>
-        <select class="lsm-provider-select" id="lsmProviderSelect" onchange="changeLyricsProvider(this.value)">
-          <option value="auto">Auto (Word-Sync TTML &gt; LRCLIB &gt; Fallback)</option>
-          <option value="betterlyrics">BetterLyrics API (Word-by-word TTML)</option>
-          <option value="lrclib">LRCLIB (Exact Match)</option>
-          <option value="lrclib_search">LRCLIB (Fuzzy Search)</option>
-          <option value="curated">Curated Multi-Tier (Native + Translit + English)</option>
-        </select>
-      </div>
-
-      <div>
-        <div class="lsm-section-label">Manual Song Search</div>
-        <div class="lsm-input-row">
-          <input type="text" id="lsmSearchInput" class="lsm-input" placeholder="Title or Artist override…" aria-label="Title or Artist override">
-          <button type="button" class="lsm-btn" onclick="searchLyricsManually()">Search</button>
-        </div>
-      </div>
-
-      <div>
-        <div class="lsm-section-label">Timing Calibration</div>
-        <div style="display:flex;align-items:center;justify-content:space-between;background:#212121;padding:8px 12px;border-radius:8px">
-          <span style="font-size:13px;color:#aaa">Offset: <b id="lsmCurrentOffsetLabel" style="color:#fff">0.0s</b></span>
-          <div style="display:flex;gap:6px">
-            <button type="button" class="lsm-btn secondary" onclick="setSyncOffset(-0.5)" style="padding:4px 10px;font-size:12px">-0.5s</button>
-            <button type="button" class="lsm-btn secondary" onclick="resetSyncOffset()" style="padding:4px 10px;font-size:12px">Reset (0s)</button>
-            <button type="button" class="lsm-btn secondary" onclick="setSyncOffset(0.5)" style="padding:4px 10px;font-size:12px">+0.5s</button>
+      <div class="lsm-body">
+        <div>
+          <div class="lsm-section-label" style="display:flex;align-items:center;justify-content:space-between">
+            <span>Lyrics Providers Hierarchy (16-Stage Chain)</span>
+            <button type="button" class="lsm-btn secondary" style="font-size:11px;padding:3px 8px" onclick="resetProvidersToDefault()">Reset Order</button>
+          </div>
+          <div class="lsm-provider-table-wrap">
+            <div class="lsm-provider-table-head">
+              <span class="lsm-col-rank">#</span>
+              <span class="lsm-col-name">Provider</span>
+              <span class="lsm-col-type">Sync Type</span>
+              <span style="width:68px;text-align:right">Action</span>
+            </div>
+            <div id="lsmProviderList"></div>
           </div>
         </div>
-      </div>
 
-      <div>
-        <div class="lsm-section-label">Custom LRC Paste (Override)</div>
-        <textarea id="lsmCustomLrcInput" class="lsm-textarea" placeholder="Paste [00:12.30] lyrics here…" aria-label="Custom LRC"></textarea>
-        <button type="button" class="lsm-btn secondary" style="width:100%;margin-top:6px" onclick="saveCustomLrc()">Save Custom Lyrics for this Track</button>
+        <div>
+          <div class="lsm-section-label">Manual Song Search</div>
+          <div class="lsm-input-row">
+            <input type="text" id="lsmSearchInput" class="lsm-input" placeholder="Title or Artist override…" aria-label="Title or Artist override">
+            <button type="button" class="lsm-btn" onclick="searchLyricsManually()">Search</button>
+          </div>
+        </div>
+
+        <div>
+          <div class="lsm-section-label">Timing Calibration</div>
+          <div style="display:flex;align-items:center;justify-content:space-between;background:#212121;padding:8px 12px;border-radius:8px">
+            <span style="font-size:13px;color:#aaa">Offset: <b id="lsmCurrentOffsetLabel" style="color:#fff">0.0s</b></span>
+            <div style="display:flex;gap:6px">
+              <button type="button" class="lsm-btn secondary" onclick="setSyncOffset(-0.5)" style="padding:4px 10px;font-size:12px">-0.5s</button>
+              <button type="button" class="lsm-btn secondary" onclick="resetSyncOffset()" style="padding:4px 10px;font-size:12px">Reset (0s)</button>
+              <button type="button" class="lsm-btn secondary" onclick="setSyncOffset(0.5)" style="padding:4px 10px;font-size:12px">+0.5s</button>
+            </div>
+          </div>
+        </div>
+
+        <div>
+          <div class="lsm-section-label">Custom LRC Paste (Override)</div>
+          <textarea id="lsmCustomLrcInput" class="lsm-textarea" placeholder="Paste [00:12.30] lyrics here…" aria-label="Custom LRC"></textarea>
+          <button type="button" class="lsm-btn secondary" style="width:100%;margin-top:6px" onclick="saveCustomLrc()">Save Custom Lyrics for this Track</button>
+        </div>
       </div>
     </div>
   </div>

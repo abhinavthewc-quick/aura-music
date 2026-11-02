@@ -281,7 +281,7 @@ import { fetchLyricsForTrack, renderLyrics, updateLyricsProgress } from './lyric
       art.classList.add('youtube-mode');
       art.innerHTML=`<div id="auraYTFrameHost" style="width:100%;height:100%;background:#000"></div>`;
       updatePlayState();
-      fetchLyricsForTrack(title, 'YouTube Music').then(l => renderLyrics(l));
+      fetchLyricsForTrack(title, 'YouTube Music', undefined, videoId).then(l => renderLyrics(l));
 
       try{
         // IMPORTANT: finish loading the API and create the player before the
@@ -463,7 +463,7 @@ import { fetchLyricsForTrack, renderLyrics, updateLyricsProgress } from './lyric
       applyDynamicPlayerColor(s.img);
       updateMainMediaSession();
       state.audio.load();
-      fetchLyricsForTrack(s.title, s.artist, s.duration).then(l => renderLyrics(l));
+      fetchLyricsForTrack(s.title, s.artist, s.duration, s.videoId).then(l => renderLyrics(l));
     }
 
     /* Some direct/streamed MP3 links don't report a usable duration right
@@ -673,7 +673,7 @@ import { fetchLyricsForTrack, renderLyrics, updateLyricsProgress } from './lyric
 
       if (tab === 'lyrics') {
         const s = state.songs[state.currentIndex];
-        if (s) fetchLyricsForTrack(s.title, s.artist, s.duration).then(l => renderLyrics(l));
+        if (s) fetchLyricsForTrack(s.title, s.artist, s.duration, s.videoId).then(l => renderLyrics(l));
       } else if (tab === 'related') {
         renderRelated();
       }
