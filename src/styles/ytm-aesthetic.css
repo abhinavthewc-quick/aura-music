@@ -496,49 +496,58 @@ body .full-player-overlay::before {
 
 @media (min-width: 900px) {
   /* Left column: Centered Album Art & Metadata */
-  body.np-track-open .full-player-overlay {
-    padding-left: 0 !important;
-    padding-right: var(--np-queue-w) !important;
-    padding-top: 0 !important;
-    padding-bottom: 0 !important;
+  body.np-track-open .full-player-overlay,
+  body .full-player-overlay {
+    position: fixed !important;
+    top: 0 !important;
+    left: 0 !important;
+    right: var(--np-queue-w) !important;
+    bottom: var(--np-bar-h) !important;
+    width: calc(100vw - var(--np-queue-w)) !important;
+    height: calc(100vh - var(--np-bar-h)) !important;
+    padding: 0 !important;
+    margin: 0 !important;
     display: flex !important;
     flex-direction: column !important;
     justify-content: center !important;
     align-items: center !important;
+    overflow: hidden !important;
+    box-sizing: border-box !important;
   }
 
   body .full-player-header {
     position: absolute !important;
     top: 24px !important;
     left: 28px !important;
-    right: calc(var(--np-queue-w) + 28px) !important;
     width: auto !important;
     display: flex !important;
-    justify-content: space-between !important;
     align-items: center !important;
     pointer-events: none !important;
-    z-index: 15 !important;
+    z-index: 20 !important;
   }
 
   body .full-player-header #closeFullPlayerBtn {
     pointer-events: auto !important;
-    width: 40px !important;
-    height: 40px !important;
+    width: 42px !important;
+    height: 42px !important;
     border-radius: 50% !important;
-    background: rgba(255, 255, 255, 0.08) !important;
-    border: 1px solid rgba(255, 255, 255, 0.12) !important;
+    background: rgba(255, 255, 255, 0.1) !important;
+    backdrop-filter: blur(12px) !important;
+    -webkit-backdrop-filter: blur(12px) !important;
+    border: 1px solid rgba(255, 255, 255, 0.14) !important;
     display: flex !important;
     align-items: center !important;
     justify-content: center !important;
     font-size: 16px !important;
     color: #ffffff !important;
     cursor: pointer !important;
-    transition: background 0.2s ease, transform 0.2s ease !important;
+    box-shadow: 0 4px 16px rgba(0, 0, 0, 0.3) !important;
+    transition: all 0.2s cubic-bezier(0.34, 1.56, 0.64, 1) !important;
   }
 
   body .full-player-header #closeFullPlayerBtn:hover {
-    background: rgba(255, 255, 255, 0.18) !important;
-    transform: scale(1.06) !important;
+    background: rgba(255, 255, 255, 0.2) !important;
+    transform: scale(1.08) !important;
   }
 
   body .full-player-header #fullHeaderTitle,
@@ -547,13 +556,16 @@ body .full-player-overlay::before {
   }
 
   body .full-player-art {
-    width: min(52vh, 460px) !important;
-    max-width: 460px !important;
+    width: min(50vh, 440px) !important;
+    height: min(50vh, 440px) !important;
+    max-width: 440px !important;
+    max-height: 440px !important;
     aspect-ratio: 1 !important;
+    margin: 0 0 24px 0 !important;
+    flex: 0 0 auto !important;
     border-radius: 14px !important;
-    box-shadow: 0 24px 60px rgba(0, 0, 0, 0.7) !important;
+    box-shadow: 0 24px 70px rgba(0, 0, 0, 0.75) !important;
     position: relative !important;
-    margin: 0 auto !important;
   }
 
   /* Overlay icons on top right of the album cover */
@@ -588,43 +600,65 @@ body .full-player-overlay::before {
 
   /* Under-artwork metadata & actions */
   body .full-player-body {
-    width: min(52vh, 460px) !important;
-    max-width: 460px !important;
-    margin: 22px auto 0 !important;
+    width: min(50vh, 440px) !important;
+    max-width: 440px !important;
+    margin: 0 !important;
+    padding: 0 !important;
+    flex: 0 0 auto !important;
+    display: flex !important;
+    flex-direction: column !important;
+    align-items: center !important;
+    text-align: center !important;
     position: relative !important;
   }
 
   body .full-player-meta {
+    width: 100% !important;
     display: flex !important;
     flex-direction: column !important;
     align-items: center !important;
     justify-content: center !important;
     text-align: center !important;
+    gap: 6px !important;
     position: relative !important;
+  }
+
+  body .full-player-meta > div {
     width: 100% !important;
+    display: flex !important;
+    flex-direction: column !important;
+    align-items: center !important;
+    text-align: center !important;
   }
 
   body #fullTitle {
-    font-size: 24px !important;
+    font-size: 26px !important;
     font-weight: 750 !important;
     color: #ffffff !important;
     text-align: center !important;
     line-height: 1.25 !important;
-    max-width: 85% !important;
+    white-space: nowrap !important;
+    overflow: hidden !important;
+    text-overflow: ellipsis !important;
+    max-width: 100% !important;
+    width: 100% !important;
   }
 
   body #fullArtist {
-    font-size: 15px !important;
-    color: rgba(255, 255, 255, 0.7) !important;
+    font-size: 15.5px !important;
+    font-weight: 500 !important;
+    color: rgba(255, 255, 255, 0.72) !important;
     text-align: center !important;
-    margin-top: 5px !important;
+    margin-top: 4px !important;
+    white-space: nowrap !important;
+    overflow: hidden !important;
+    text-overflow: ellipsis !important;
+    max-width: 100% !important;
+    width: 100% !important;
   }
 
   body .full-player-meta .like-btn {
-    position: absolute !important;
-    right: 8px !important;
-    top: 50% !important;
-    transform: translateY(-50%) !important;
+    display: none !important;
   }
 }
 
@@ -862,13 +896,14 @@ body .up-next-sheet-close {
 
 .bl-lyrics-backdrop {
   position: absolute;
-  inset: -40px;
+  inset: 0;
   background-size: cover;
   background-position: center;
-  filter: blur(85px) brightness(0.26) saturate(180%);
+  filter: blur(75px) brightness(0.26) saturate(180%);
   opacity: 0.85;
   pointer-events: none;
   z-index: 0;
+  overflow: hidden;
   transition: background-image 0.8s cubic-bezier(0.2, 0, 0, 1), opacity 0.4s ease;
   will-change: background-image;
 }
@@ -959,11 +994,11 @@ body .up-next-sheet-close {
   min-height: 0 !important;
   overflow-y: auto !important;
   -webkit-overflow-scrolling: touch !important;
-  padding: 32px 24px 60vh !important;
+  padding: 16px 24px 60vh !important;
   scrollbar-width: thin;
   scroll-behavior: smooth;
-  -webkit-mask-image: linear-gradient(to bottom, transparent 0%, black 5%, black 90%, transparent 100%);
-  mask-image: linear-gradient(to bottom, transparent 0%, black 5%, black 90%, transparent 100%);
+  -webkit-mask-image: linear-gradient(to bottom, transparent 0%, black 4%, black 90%, transparent 100%);
+  mask-image: linear-gradient(to bottom, transparent 0%, black 4%, black 90%, transparent 100%);
 }
 
 .bl-lyrics-scroll::-webkit-scrollbar {
@@ -1010,15 +1045,21 @@ body .up-next-sheet-close {
 }
 
 .bl-lyric-line {
-  margin-bottom: 26px;
+  margin-bottom: 22px;
   cursor: pointer;
-  opacity: 0.28;
-  filter: blur(0.6px);
+  opacity: 0.35;
+  filter: blur(0.5px);
   transform: scale(0.97);
   transition: opacity 0.25s cubic-bezier(0.2, 0, 0, 1), transform 0.3s cubic-bezier(0.34, 1.56, 0.64, 1), filter 0.25s ease;
   user-select: none;
   transform-origin: left center;
   will-change: transform, opacity, filter;
+}
+
+.bl-lyric-line.first-upcoming {
+  opacity: 0.85 !important;
+  filter: none !important;
+  transform: none !important;
 }
 
 .bl-lyric-line:hover {

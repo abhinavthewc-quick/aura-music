@@ -965,13 +965,22 @@ export function centerActiveLyricLine(lineEl?: HTMLElement, smooth = true) {
   const scrollParent = $('blLyricsScroll');
   if (!scrollParent) return;
   const target = lineEl || (scrollParent.querySelector('.bl-lyric-line.active') as HTMLElement | null);
-  if (!target) return;
+  if (!target) {
+    scrollParent.scrollTo({ top: 0, behavior: smooth ? 'smooth' : 'instant' });
+    return;
+  }
+
+  const activeIdx = parseInt(target.getAttribute('data-idx') || '0', 10);
+  if (activeIdx <= 1) {
+    scrollParent.scrollTo({ top: 0, behavior: smooth ? 'smooth' : 'instant' });
+    return;
+  }
 
   const parentRect = scrollParent.getBoundingClientRect();
   const lineRect = target.getBoundingClientRect();
   if (parentRect.height === 0 || lineRect.height === 0) return;
 
-  const targetScroll = scrollParent.scrollTop + (lineRect.top - parentRect.top) - (parentRect.height / 2) + (lineRect.height / 2);
+  const targetScroll = scrollParent.scrollTop + (lineRect.top - parentRect.top) - (parentRect.height * 0.38) + (lineRect.height / 2);
 
   isProgrammaticScroll = true;
   if (programmaticScrollTimeout) clearTimeout(programmaticScrollTimeout);
@@ -1045,6 +1054,7 @@ export function updateLyricsProgress(currentTime: number, containerId = 'fullPla
     allLines.forEach((el, idx) => {
       el.classList.toggle('active', idx === activeIndex);
       el.classList.toggle('passed', idx < activeIndex);
+      el.classList.toggle('first-upcoming', activeIndex === -1 && idx === 0);
     });
 
     if (activeIndex >= 0 && allLines[activeIndex] && !userIsScrolling) {
