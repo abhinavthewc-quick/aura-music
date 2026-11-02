@@ -788,16 +788,20 @@ body.light-theme #auraLoaderText{color:rgba(25,26,30,.78)}
     <!-- Panel 2: BetterLyrics Synced Lyrics -->
     <div id="ytmLyricsPanel" style="display:none;flex-direction:column;flex:1;min-height:0;height:calc(100% - 55px)">
       <div class="bl-lyrics-toolbar">
-        <div class="bl-status-badge">
+        <div class="bl-status-badge" id="blProviderBadge" onclick="openLyricsSettingsModal()" role="button" tabindex="0" title="Click to change lyrics source">
           <span class="bl-status-dot"></span>
           <span id="blStatusText">Synced with lrclib.net</span>
+          <i class="fa-solid fa-chevron-down" style="font-size:9px;margin-left:4px;opacity:0.7"></i>
         </div>
         <div class="bl-tools-group">
           <button type="button" class="bl-tool-pill" onclick="toggleLyricsTranslit()" title="Toggle Romanized Transliteration">Rom</button>
           <button type="button" class="bl-tool-pill" onclick="toggleLyricsTranslation()" title="Toggle Translation">EN</button>
+          <button type="button" class="bl-tool-pill" id="blFontSizeBtn" onclick="cycleLyricsFontSize()" title="Cycle font size">1x</button>
+          <button type="button" class="bl-tool-pill" id="blAlignBtn" onclick="toggleLyricsAlign()" title="Toggle text alignment"><i class="fa-solid fa-align-left"></i></button>
           <button type="button" class="bl-tool-pill" onclick="setSyncOffset(-0.5)" title="Offset -0.5s">-0.5s</button>
           <span id="blSyncOffsetLabel" style="font-size:11px;color:#888;min-width:28px;text-align:center">0.0s</span>
           <button type="button" class="bl-tool-pill" onclick="setSyncOffset(0.5)" title="Offset +0.5s">+0.5s</button>
+          <button type="button" class="bl-tool-pill" onclick="openLyricsSettingsModal()" title="BetterLyrics settings and sources"><i class="fa-solid fa-gear"></i></button>
         </div>
       </div>
       <div id="fullPlayerLyricsContainer" style="flex:1;min-height:0;overflow:hidden"></div>
@@ -807,6 +811,52 @@ body.light-theme #auraLoaderText{color:rgba(25,26,30,.78)}
     <div id="ytmRelatedPanel" style="display:none;flex-direction:column;flex:1;min-height:0;height:calc(100% - 55px);padding:20px;overflow-y:auto">
       <div style="font-size:16px;font-weight:700;margin-bottom:12px;color:#fff">You might also like</div>
       <div id="ytmRelatedList" class="song-list"></div>
+    </div>
+  </div>
+
+  <div class="lyrics-settings-modal" id="lyricsSettingsModal" role="dialog" aria-modal="true" aria-label="Lyrics sources and settings" onclick="if(event.target.id==='lyricsSettingsModal')closeLyricsSettingsModal()">
+    <div class="lsm-card">
+      <div class="lsm-head">
+        <div class="lsm-title"><i class="fa-solid fa-microphone-lines"></i> BetterLyrics Sources &amp; Timing</div>
+        <button type="button" class="lsm-close-btn" onclick="closeLyricsSettingsModal()" aria-label="Close"><i class="fa-solid fa-xmark"></i></button>
+      </div>
+
+      <div>
+        <div class="lsm-section-label">Preferred Lyrics Provider</div>
+        <select class="lsm-provider-select" id="lsmProviderSelect" onchange="changeLyricsProvider(this.value)">
+          <option value="auto">Auto (Word-Sync TTML &gt; LRCLIB &gt; Fallback)</option>
+          <option value="betterlyrics">BetterLyrics API (Word-by-word TTML)</option>
+          <option value="lrclib">LRCLIB (Exact Match)</option>
+          <option value="lrclib_search">LRCLIB (Fuzzy Search)</option>
+          <option value="curated">Curated Multi-Tier (Native + Translit + English)</option>
+        </select>
+      </div>
+
+      <div>
+        <div class="lsm-section-label">Manual Song Search</div>
+        <div class="lsm-input-row">
+          <input type="text" id="lsmSearchInput" class="lsm-input" placeholder="Title or Artist override…" aria-label="Title or Artist override">
+          <button type="button" class="lsm-btn" onclick="searchLyricsManually()">Search</button>
+        </div>
+      </div>
+
+      <div>
+        <div class="lsm-section-label">Timing Calibration</div>
+        <div style="display:flex;align-items:center;justify-content:space-between;background:#212121;padding:8px 12px;border-radius:8px">
+          <span style="font-size:13px;color:#aaa">Offset: <b id="lsmCurrentOffsetLabel" style="color:#fff">0.0s</b></span>
+          <div style="display:flex;gap:6px">
+            <button type="button" class="lsm-btn secondary" onclick="setSyncOffset(-0.5)" style="padding:4px 10px;font-size:12px">-0.5s</button>
+            <button type="button" class="lsm-btn secondary" onclick="resetSyncOffset()" style="padding:4px 10px;font-size:12px">Reset (0s)</button>
+            <button type="button" class="lsm-btn secondary" onclick="setSyncOffset(0.5)" style="padding:4px 10px;font-size:12px">+0.5s</button>
+          </div>
+        </div>
+      </div>
+
+      <div>
+        <div class="lsm-section-label">Custom LRC Paste (Override)</div>
+        <textarea id="lsmCustomLrcInput" class="lsm-textarea" placeholder="Paste [00:12.30] lyrics here…" aria-label="Custom LRC"></textarea>
+        <button type="button" class="lsm-btn secondary" style="width:100%;margin-top:6px" onclick="saveCustomLrc()">Save Custom Lyrics for this Track</button>
+      </div>
     </div>
   </div>
 
