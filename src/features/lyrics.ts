@@ -202,7 +202,7 @@ const CURATED_LYRICS: Record<string, ParsedLyrics> = {
     isSynced: true,
     hasWordSync: false,
     syncType: 'Line',
-    provider: 'Curated (BetterLyrics Multi-Tier)',
+    provider: 'BetterLyrics',
     providerId: 'curated',
     lines: [
       { time: 14.46, text: 'യാർ ദിലാവേ ടെനു യാർ ദിലാവേ', translit: 'yaar dilaave tenu yaar dilaave', translation: 'May you find love, may you find a friend' },
@@ -225,7 +225,7 @@ const CURATED_LYRICS: Record<string, ParsedLyrics> = {
     isSynced: true,
     hasWordSync: false,
     syncType: 'Line',
-    provider: 'Curated (BetterLyrics Multi-Tier)',
+    provider: 'BetterLyrics',
     providerId: 'curated',
     lines: [
       { time: 12.0, text: 'दीवाना दीवाना तेरे इश्क़ में', translit: 'deewaana deewaana tere ishq mein', translation: 'Crazy, madly in love with you' },
@@ -239,7 +239,7 @@ const CURATED_LYRICS: Record<string, ParsedLyrics> = {
     isSynced: true,
     hasWordSync: false,
     syncType: 'Line',
-    provider: 'Curated (BetterLyrics Multi-Tier)',
+    provider: 'BetterLyrics',
     providerId: 'curated',
     lines: [
       { time: 16.0, text: 'ஆளப்போறான் தமிழன் உலகை எல்லாமേ', translit: 'aalapoaraan thamizhan ulagai ellaame', translation: 'The Tamilian is going to conquer the entire world' },
@@ -869,7 +869,14 @@ export function renderLyrics(lyrics: ParsedLyrics | null, containerId = 'fullPla
 
   const statusText = $('blStatusText');
   if (statusText) {
-    statusText.textContent = lyrics ? `Synced with ${lyrics.provider}` : 'Lyrics not available';
+    if (lyrics) {
+      const cleanProvider = lyrics.provider.replace(/\s*\(.*\)/, '').trim() || 'Synced';
+      statusText.textContent = `Synced • ${cleanProvider}`;
+      statusText.title = `Lyrics source: ${lyrics.provider} (${lyrics.syncType || 'Synced'})`;
+    } else {
+      statusText.textContent = 'Lyrics not available';
+      statusText.title = '';
+    }
   }
 
   if (!lyrics || !lyrics.lines.length) {
