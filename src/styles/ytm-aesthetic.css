@@ -518,6 +518,9 @@ body:has(#fullPlayerOverlay.active) {
     height: calc(100vh - var(--np-bar-h)) !important;
     padding: 0 !important;
     margin: 0 !important;
+    border: none !important;
+    border-radius: 0 !important;
+    box-shadow: none !important;
     display: flex !important;
     flex-direction: column !important;
     justify-content: center !important;
@@ -895,13 +898,23 @@ body .up-next-sheet-close {
 }
 
 #ytmLyricsPanel {
-  display: flex !important;
-  flex-direction: column !important;
-  height: calc(100% - 48px) !important;
-  position: relative !important;
-  overflow: hidden !important;
-  width: 100% !important;
-  flex: 1 1 0 !important;
+  display: flex;
+  flex-direction: column;
+  height: calc(100% - 48px);
+  position: relative;
+  overflow: hidden;
+  width: 100%;
+  flex: 1 1 0;
+}
+
+.up-next-sheet[data-tab="related"] #ytmLyricsPanel,
+#ytmLyricsPanel[style*="display: none"] {
+  display: none !important;
+}
+
+.up-next-sheet[data-tab="lyrics"] #ytmRelatedPanel,
+#ytmRelatedPanel[style*="display: none"] {
+  display: none !important;
 }
 
 .bl-lyrics-backdrop {
@@ -1090,6 +1103,94 @@ body .up-next-sheet-close {
   opacity: 0.35;
   filter: blur(0.4px);
   transform: scale(0.97);
+}
+
+/* BetterLyrics Signature Instrumental Break */
+.bl-lyric-line.bl-instrumental {
+  margin: 8px 0 24px;
+  cursor: pointer;
+  opacity: 0.55;
+  filter: none;
+  transform: none;
+  display: flex;
+  align-items: center;
+}
+
+.bl-lyric-line.bl-instrumental.active {
+  opacity: 1;
+  filter: none;
+  transform: scale(1.02);
+}
+
+.bl-lyric-line.bl-instrumental.passed {
+  opacity: 0.28;
+  transform: none;
+}
+
+.bl-instrumental-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 12px;
+  padding: 8px 18px 8px 14px;
+  border-radius: 9999px;
+  background: rgba(255, 255, 255, 0.08);
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  transition: all 0.25s ease;
+}
+
+.bl-lyric-line.bl-instrumental.active .bl-instrumental-pill {
+  background: rgba(255, 255, 255, 0.18);
+  border-color: rgba(255, 255, 255, 0.35);
+  box-shadow: 0 0 24px rgba(255, 255, 255, 0.2), inset 0 1px 0 rgba(255, 255, 255, 0.3);
+}
+
+.bl-instrumental-dots {
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+}
+
+.bl-dot {
+  width: 7px;
+  height: 7px;
+  border-radius: 50%;
+  background: #ffffff;
+  display: inline-block;
+  opacity: 0.35;
+}
+
+.bl-lyric-line.bl-instrumental.active .bl-dot {
+  animation: blDotPulse 1.4s ease-in-out infinite;
+}
+
+.bl-lyric-line.bl-instrumental.active .bl-dot:nth-child(2) {
+  animation-delay: 0.2s;
+}
+
+.bl-lyric-line.bl-instrumental.active .bl-dot:nth-child(3) {
+  animation-delay: 0.4s;
+}
+
+@keyframes blDotPulse {
+  0%, 100% {
+    transform: scale(0.8);
+    opacity: 0.35;
+  }
+  50% {
+    transform: scale(1.4);
+    opacity: 1;
+    filter: drop-shadow(0 0 6px #ffffff);
+  }
+}
+
+.bl-instrumental-label {
+  font-size: 13px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  color: #ffffff;
 }
 
 .bl-lyric-main {

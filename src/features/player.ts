@@ -693,6 +693,9 @@ import { fetchLyricsForTrack, renderLyrics, updateLyricsProgress, prepareLyricsF
     }
 
     export function switchRightPanelTab(tab: 'lyrics' | 'related') {
+      const sheet = $('upNextSheet');
+      if (sheet) sheet.setAttribute('data-tab', tab);
+
       const lBtn = $('ytmTabLyricsBtn');
       const rBtn = $('ytmTabRelatedBtn');
       const lPan = $('ytmLyricsPanel');
@@ -706,8 +709,8 @@ import { fetchLyricsForTrack, renderLyrics, updateLyricsProgress, prepareLyricsF
       lBtn?.classList.toggle('active', tab === 'lyrics');
       rBtn?.classList.toggle('active', tab === 'related');
 
-      if (lPan) lPan.style.display = tab === 'lyrics' ? 'flex' : 'none';
-      if (rPan) rPan.style.display = tab === 'related' ? 'flex' : 'none';
+      if (lPan) lPan.style.setProperty('display', tab === 'lyrics' ? 'flex' : 'none', 'important');
+      if (rPan) rPan.style.setProperty('display', tab === 'related' ? 'flex' : 'none', 'important');
 
       if (tab === 'lyrics') {
         const cur = getCurrentActiveTrack();
@@ -722,6 +725,9 @@ import { fetchLyricsForTrack, renderLyrics, updateLyricsProgress, prepareLyricsF
             });
           }
         }
+        setTimeout(() => {
+          (window as any).centerActiveLyricLine?.(undefined, false);
+        }, 50);
       } else if (tab === 'related') {
         renderRelated();
       }

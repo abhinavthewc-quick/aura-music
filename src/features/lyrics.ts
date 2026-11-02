@@ -890,6 +890,27 @@ export function renderLyrics(lyrics: ParsedLyrics | null, containerId = 'fullPla
     return;
   }
 
+  const curTime = state.isPlaying
+    ? (state.audio?.currentTime || (window as any).auraYTPlayer?.getCurrentTime?.() || 0)
+    : ((window as any).auraYTPlayer?.getCurrentTime?.() || 0);
+
+  let introHtml = '';
+  if (lyrics.lines.length > 0 && lyrics.lines[0].time > 1.8) {
+    const isIntroActive = curTime < lyrics.lines[0].time;
+    introHtml = `
+      <div class="bl-lyric-line bl-instrumental ${isIntroActive ? 'active' : 'passed'}" data-idx="-1" data-time="0" onclick="seekToLyric(0)">
+        <div class="bl-lyric-main">
+          <div class="bl-instrumental-pill">
+            <span class="bl-instrumental-dots">
+              <span class="bl-dot"></span><span class="bl-dot"></span><span class="bl-dot"></span>
+            </span>
+            <span class="bl-instrumental-label">Intro</span>
+          </div>
+        </div>
+      </div>
+    `;
+  }
+
   const html = lyrics.lines.map((line, idx) => {
     let mainHtml = '';
     if (line.words && line.words.length > 0) {
@@ -909,6 +930,7 @@ export function renderLyrics(lyrics: ParsedLyrics | null, containerId = 'fullPla
 
   container.innerHTML = `
     <div class="bl-lyrics-scroll size-${fontSizeMode} align-${alignMode}" id="blLyricsScroll">
+      ${introHtml}
       ${html}
     </div>
   `;
@@ -954,7 +976,6 @@ export function renderLyrics(lyrics: ParsedLyrics | null, containerId = 'fullPla
   }
 
   // Sync to current audio position immediately
-  const curTime = state.audio?.currentTime || (window as any).auraYTPlayer?.getCurrentTime?.() || 0;
   updateLyricsProgress(curTime, containerId);
   setTimeout(() => centerActiveLyricLine(undefined, false), 50);
 
@@ -971,7 +992,7 @@ export function centerActiveLyricLine(lineEl?: HTMLElement, smooth = true) {
   }
 
   const activeIdx = parseInt(target.getAttribute('data-idx') || '0', 10);
-  if (activeIdx <= 1) {
+  if (activeIdx <= 0 || target.classList.contains('bl-instrumental')) {
     scrollParent.scrollTo({ top: 0, behavior: smooth ? 'smooth' : 'instant' });
     return;
   }
@@ -1050,16 +1071,26 @@ export function updateLyricsProgress(currentTime: number, containerId = 'fullPla
 
   if (newIdx !== activeIndex) {
     activeIndex = newIdx;
-    const allLines = container.querySelectorAll('.bl-lyric-line');
-    allLines.forEach((el, idx) => {
+
+    const introEl = container.querySelector('.bl-lyric-line.bl-instrumental') as HTMLElement | null;
+    if (introEl) {
+      const isIntro = activeIndex === -1;
+      introEl.classList.toggle('active', isIntro);
+      introEl.classList.toggle('passed', !isIntro);
+    }
+
+    const vocalLines = container.querySelectorAll('.bl-lyric-line:not(.bl-instrumental)');
+    vocalLines.forEach((el, idx) => {
       el.classList.toggle('active', idx === activeIndex);
       el.classList.toggle('passed', idx < activeIndex);
       el.classList.toggle('first-upcoming', activeIndex === -1 && idx === 0);
     });
 
     if (!userIsScrolling) {
-      if (activeIndex >= 0 && allLines[activeIndex]) {
-        centerActiveLyricLine(allLines[activeIndex] as HTMLElement, true);
+      if (activeIndex === -1 && introEl) {
+        centerActiveLyricLine(introEl, true);
+      } else if (activeIndex >= 0 && vocalLines[activeIndex]) {
+        centerActiveLyricLine(vocalLines[activeIndex] as HTMLElement, true);
       } else {
         centerActiveLyricLine(undefined, true);
       }

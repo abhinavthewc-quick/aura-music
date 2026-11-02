@@ -212,9 +212,7 @@
 
     /* Short laptop screens: overlays must fit without clipping. */
     @media (min-width:900px) and (max-height:720px){
-      .full-player-overlay{height:min(88dvh,620px);max-height:calc(100dvh - 24px);padding:18px 22px 24px}
       .radio-full-overlay{height:min(88dvh,620px);max-height:calc(100dvh - 24px);padding:18px 22px 24px}
-      .full-player-art{margin-top:8px;margin-bottom:10px}
       .radio-vinyl-stage{width:min(54dvh,340px);height:min(54dvh,340px);margin:4px auto}
     }
 
