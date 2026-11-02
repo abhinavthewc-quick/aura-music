@@ -51,9 +51,6 @@
 @media (min-width: 900px) {
   .app-container{padding-bottom:120px}
   .song-list{grid-template-columns:repeat(3, 1fr);}
-
-  .player-bar{bottom:20px;max-width:1000px;padding:12px 24px}
-  .radio-player-bar{bottom:20px;max-width:1000px;padding:12px 24px}
   .radio-full-overlay{inset:auto;top:50%;left:50%;transform:translate(-50%,-50%) scale(.9);width:420px;height:620px;border-radius:24px;border:1px solid var(--card-border);box-shadow:0 25px 50px rgba(0,0,0,.4);opacity:0}
   .radio-full-overlay.active{transform:translate(-50%,-50%) scale(1);opacity:1}
   .nav-bar{bottom:20px;right:30px;left:auto;transform:none;width:auto;gap:10px;background:none;border:none;backdrop-filter:none}

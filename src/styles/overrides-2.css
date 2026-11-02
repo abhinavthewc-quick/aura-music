@@ -58,7 +58,6 @@ body:not(.light-theme){background:radial-gradient(900px 520px at 12% -6%,rgba(17
   body.sb-collapsed .desktop-nav-btn i{font-size:19px;width:auto}
   body.sb-collapsed .desktop-nav-btn span{font-size:9.5px;line-height:1.15;font-weight:600}
   body.sb-collapsed .desktop-nav-btn.active{box-shadow:none;border-color:transparent;background:rgba(255,236,210,.10)}
-  .player-bar,.radio-player-bar{left:calc(50% + var(--sb-w) / 2)!important;width:min(calc(100vw - var(--sb-w) - 80px),960px)!important;transition:left .25s ease,width .25s ease}
 }
 @media(max-width:899px){.sidebar-toggle{display:none}}
 
