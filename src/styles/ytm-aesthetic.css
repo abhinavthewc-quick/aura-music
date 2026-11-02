@@ -494,10 +494,21 @@ body .full-player-overlay::before {
   transition: background 0.6s ease;
 }
 
+/* Eliminate background page scrollbar and white halo bleed on right edge */
+html:has(body.np-track-open),
+html:has(body.np-open),
+html:has(#fullPlayerOverlay.active),
+body.np-track-open,
+body.np-open,
+body:has(#fullPlayerOverlay.active) {
+  overflow: hidden !important;
+}
+
 @media (min-width: 900px) {
   /* Left column: Centered Album Art & Metadata */
   body.np-track-open .full-player-overlay,
-  body .full-player-overlay {
+  body .full-player-overlay,
+  body .full-player-overlay.active {
     position: fixed !important;
     top: 0 !important;
     left: 0 !important;
@@ -513,6 +524,7 @@ body .full-player-overlay::before {
     align-items: center !important;
     overflow: hidden !important;
     box-sizing: border-box !important;
+    transform: none !important;
   }
 
   body .full-player-header {
@@ -520,6 +532,9 @@ body .full-player-overlay::before {
     top: 24px !important;
     left: 28px !important;
     width: auto !important;
+    height: auto !important;
+    margin: 0 !important;
+    padding: 0 !important;
     display: flex !important;
     align-items: center !important;
     pointer-events: none !important;
@@ -555,17 +570,19 @@ body .full-player-overlay::before {
     display: none !important;
   }
 
-  body .full-player-art {
-    width: min(50vh, 440px) !important;
-    height: min(50vh, 440px) !important;
-    max-width: 440px !important;
-    max-height: 440px !important;
+  body .full-player-art,
+  body .full-player-overlay.art-paused .full-player-art {
+    width: min(48vh, 420px) !important;
+    height: min(48vh, 420px) !important;
+    max-width: 420px !important;
+    max-height: 420px !important;
     aspect-ratio: 1 !important;
-    margin: 0 0 24px 0 !important;
+    margin: 0 0 20px 0 !important;
     flex: 0 0 auto !important;
     border-radius: 14px !important;
-    box-shadow: 0 24px 70px rgba(0, 0, 0, 0.75) !important;
+    box-shadow: 0 20px 60px rgba(0, 0, 0, 0.7) !important;
     position: relative !important;
+    transform: none !important;
   }
 
   /* Overlay icons on top right of the album cover */
@@ -600,8 +617,8 @@ body .full-player-overlay::before {
 
   /* Under-artwork metadata & actions */
   body .full-player-body {
-    width: min(50vh, 440px) !important;
-    max-width: 440px !important;
+    width: min(48vh, 420px) !important;
+    max-width: 420px !important;
     margin: 0 !important;
     padding: 0 !important;
     flex: 0 0 auto !important;
@@ -614,17 +631,21 @@ body .full-player-overlay::before {
 
   body .full-player-meta {
     width: 100% !important;
+    max-width: 100% !important;
     display: flex !important;
     flex-direction: column !important;
     align-items: center !important;
     justify-content: center !important;
     text-align: center !important;
     gap: 6px !important;
+    margin: 0 !important;
+    padding: 0 !important;
     position: relative !important;
   }
 
   body .full-player-meta > div {
     width: 100% !important;
+    max-width: 100% !important;
     display: flex !important;
     flex-direction: column !important;
     align-items: center !important;
@@ -642,6 +663,7 @@ body .full-player-overlay::before {
     text-overflow: ellipsis !important;
     max-width: 100% !important;
     width: 100% !important;
+    margin: 0 !important;
   }
 
   body #fullArtist {
@@ -649,7 +671,7 @@ body .full-player-overlay::before {
     font-weight: 500 !important;
     color: rgba(255, 255, 255, 0.72) !important;
     text-align: center !important;
-    margin-top: 4px !important;
+    margin: 4px 0 0 0 !important;
     white-space: nowrap !important;
     overflow: hidden !important;
     text-overflow: ellipsis !important;
@@ -657,79 +679,66 @@ body .full-player-overlay::before {
     width: 100% !important;
   }
 
-  body .full-player-meta .like-btn {
+  body .full-player-meta .like-btn,
+  body #fullLikeBtn,
+  body .youtube-mode-badge,
+  body .player-tab-pills,
+  body .full-seek-slider-wrap,
+  body .full-seek-times,
+  body .full-controls,
+  body .up-next-trigger {
     display: none !important;
   }
-}
 
-/* Right-hand Panel: Synced Lyrics (BetterLyrics) & Related Tracks */
-body .up-next-sheet {
-  background: rgba(8, 8, 8, 0.75) !important;
-  backdrop-filter: blur(32px) saturate(150%) !important;
-  -webkit-backdrop-filter: blur(32px) saturate(150%) !important;
-  border-left: 1px solid rgba(255, 255, 255, 0.08) !important;
-}
+  /* Right-hand Panel: Docked next to the centered artwork */
+  body .up-next-sheet {
+    position: fixed !important;
+    left: auto !important;
+    right: 0 !important;
+    top: 0 !important;
+    bottom: var(--np-bar-h) !important;
+    width: var(--np-queue-w) !important;
+    height: calc(100vh - var(--np-bar-h)) !important;
+    max-height: none !important;
+    border-radius: 0 !important;
+    border: none !important;
+    border-left: 1px solid rgba(255, 255, 255, 0.08) !important;
+    background: rgba(10, 10, 10, 0.85) !important;
+    backdrop-filter: blur(32px) saturate(150%) !important;
+    -webkit-backdrop-filter: blur(32px) saturate(150%) !important;
+    box-shadow: none !important;
+    transform: translateX(100%) !important;
+    opacity: 0 !important;
+    pointer-events: none !important;
+    overflow: hidden !important;
+    display: flex !important;
+    flex-direction: column !important;
+    z-index: 501 !important;
+    transition: transform 0.35s cubic-bezier(0.22, 1, 0.36, 1), opacity 0.2s ease !important;
+  }
 
-body.np-track-open .up-next-sheet,
-body .up-next-sheet.active {
-  transform: none !important;
-  visibility: visible !important;
-  pointer-events: auto !important;
-  opacity: 1 !important;
-}
-
-/* Mobile full player pills (Lyrics / Related) */
-.player-tab-pills {
-  display: flex;
-  gap: 12px;
-  justify-content: center;
-  align-items: center;
-  margin-top: 18px;
-}
-
-.player-tab-pill {
-  display: inline-flex;
-  align-items: center;
-  gap: 8px;
-  padding: 8px 22px;
-  border-radius: 24px;
-  background: rgba(255, 255, 255, 0.08);
-  border: 1px solid rgba(255, 255, 255, 0.12);
-  color: rgba(255, 255, 255, 0.7);
-  font-size: 13.5px;
-  font-weight: 600;
-  cursor: pointer;
-  transition: transform 0.25s var(--ease-spring), background-color 0.2s ease, color 0.2s ease, border-color 0.2s ease;
-}
-
-.player-tab-pill:hover {
-  background: rgba(255, 255, 255, 0.15);
-  color: #ffffff;
-  transform: translateY(-2px);
-}
-
-.player-tab-pill.active {
-  background: rgba(255, 255, 255, 0.22);
-  border-color: rgba(255, 255, 255, 0.35);
-  color: #ffffff;
-  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.35);
-}
-
-@media (min-width: 900px) {
-  .player-tab-pills {
-    display: none !important;
+  body.np-track-open .up-next-sheet,
+  body .up-next-sheet.active {
+    transform: none !important;
+    visibility: visible !important;
+    pointer-events: auto !important;
+    opacity: 1 !important;
   }
 }
 
 /* Tab Header Switcher at top of the right panel */
 .ytm-right-tab-bar {
+  height: 48px !important;
+  min-height: 48px !important;
+  flex: 0 0 48px !important;
   display: flex;
   align-items: center;
   justify-content: space-between;
-  padding: 14px 20px 10px;
+  padding: 0 20px;
   border-bottom: 1px solid rgba(255, 255, 255, 0.06);
   position: relative;
   z-index: 10;
+  box-sizing: border-box;
 }
 
 .ytm-tab-toggle-group {
@@ -888,10 +897,11 @@ body .up-next-sheet-close {
 #ytmLyricsPanel {
   display: flex !important;
   flex-direction: column !important;
-  height: calc(100% - 55px) !important;
+  height: calc(100% - 48px) !important;
   position: relative !important;
   overflow: hidden !important;
   width: 100% !important;
+  flex: 1 1 0 !important;
 }
 
 .bl-lyrics-backdrop {
@@ -914,8 +924,9 @@ body .up-next-sheet-close {
   background: rgba(0, 0, 0, 0.28);
   backdrop-filter: blur(16px);
   -webkit-backdrop-filter: blur(16px);
-  height: 48px;
-  min-height: 48px;
+  height: 38px;
+  min-height: 38px;
+  flex: 0 0 38px;
   padding: 0 16px;
   display: flex;
   align-items: center;
@@ -994,11 +1005,11 @@ body .up-next-sheet-close {
   min-height: 0 !important;
   overflow-y: auto !important;
   -webkit-overflow-scrolling: touch !important;
-  padding: 16px 24px 60vh !important;
+  padding: 8px 24px 60vh !important;
   scrollbar-width: thin;
   scroll-behavior: smooth;
-  -webkit-mask-image: linear-gradient(to bottom, transparent 0%, black 4%, black 90%, transparent 100%);
-  mask-image: linear-gradient(to bottom, transparent 0%, black 4%, black 90%, transparent 100%);
+  -webkit-mask-image: linear-gradient(to bottom, transparent 0%, black 2%, black 92%, transparent 100%);
+  mask-image: linear-gradient(to bottom, transparent 0%, black 2%, black 92%, transparent 100%);
 }
 
 .bl-lyrics-scroll::-webkit-scrollbar {

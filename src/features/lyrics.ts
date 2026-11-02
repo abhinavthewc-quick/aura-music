@@ -899,7 +899,7 @@ export function renderLyrics(lyrics: ParsedLyrics | null, containerId = 'fullPla
     }
 
     return `
-      <div class="bl-lyric-line ${line.words ? 'has-word-sync' : ''}" data-idx="${idx}" data-time="${line.time}" onclick="seekToLyric(${line.time})">
+      <div class="bl-lyric-line ${line.words ? 'has-word-sync' : ''} ${idx === 0 ? 'first-upcoming' : ''}" data-idx="${idx}" data-time="${line.time}" onclick="seekToLyric(${line.time})">
         <div class="bl-lyric-main">${mainHtml}</div>
         ${line.translit && showTranslit ? `<div class="bl-lyric-translit">${escapeHtml(line.translit)}</div>` : ''}
         ${line.translation && showTranslation ? `<div class="bl-lyric-trans">${escapeHtml(line.translation)}</div>` : ''}
@@ -939,6 +939,8 @@ export function renderLyrics(lyrics: ParsedLyrics | null, containerId = 'fullPla
         handleUserInteraction();
       }
     }, { passive: true });
+    // Ensure initial scroll position starts cleanly at 0
+    scrollEl.scrollTop = 0;
   }
 
   // Update dynamic album art backdrop
@@ -953,10 +955,8 @@ export function renderLyrics(lyrics: ParsedLyrics | null, containerId = 'fullPla
 
   // Sync to current audio position immediately
   const curTime = state.audio?.currentTime || (window as any).auraYTPlayer?.getCurrentTime?.() || 0;
-  if (curTime > 0) {
-    updateLyricsProgress(curTime, containerId);
-    setTimeout(() => centerActiveLyricLine(undefined, false), 80);
-  }
+  updateLyricsProgress(curTime, containerId);
+  setTimeout(() => centerActiveLyricLine(undefined, false), 50);
 
   startLyricsSyncLoop();
 }
@@ -980,13 +980,13 @@ export function centerActiveLyricLine(lineEl?: HTMLElement, smooth = true) {
   const lineRect = target.getBoundingClientRect();
   if (parentRect.height === 0 || lineRect.height === 0) return;
 
-  const targetScroll = scrollParent.scrollTop + (lineRect.top - parentRect.top) - (parentRect.height * 0.38) + (lineRect.height / 2);
+  const targetScroll = scrollParent.scrollTop + (lineRect.top - parentRect.top) - (parentRect.height * 0.35) + (lineRect.height / 2);
 
   isProgrammaticScroll = true;
   if (programmaticScrollTimeout) clearTimeout(programmaticScrollTimeout);
   programmaticScrollTimeout = setTimeout(() => {
     isProgrammaticScroll = false;
-  }, smooth ? 600 : 60);
+  }, smooth ? 500 : 50);
 
   scrollParent.scrollTo({
     top: Math.max(0, targetScroll),
@@ -1057,8 +1057,12 @@ export function updateLyricsProgress(currentTime: number, containerId = 'fullPla
       el.classList.toggle('first-upcoming', activeIndex === -1 && idx === 0);
     });
 
-    if (activeIndex >= 0 && allLines[activeIndex] && !userIsScrolling) {
-      centerActiveLyricLine(allLines[activeIndex] as HTMLElement, true);
+    if (!userIsScrolling) {
+      if (activeIndex >= 0 && allLines[activeIndex]) {
+        centerActiveLyricLine(allLines[activeIndex] as HTMLElement, true);
+      } else {
+        centerActiveLyricLine(undefined, true);
+      }
     }
   }
 
