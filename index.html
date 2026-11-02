@@ -373,7 +373,6 @@ body.light-theme #auraLoaderText{color:rgba(25,26,30,.78)}
       </div>
 
       <div class="ytm-header-actions">
-        <button class="ytm-cast-btn" type="button" title="Connect to a device" aria-label="Connect to a device"><i class="fa-solid fa-tv"></i></button>
         <div class="header-profile-wrap" id="profileWrap">
           <button class="profile-btn" id="profileBtn" type="button" aria-label="Open profile" aria-expanded="false"><img class="profile-photo" id="profilePhoto" alt="" hidden><span class="profile-initial" id="profileInitial" aria-hidden="true">U</span></button>
           <div class="profile-popover" id="profilePopover">
@@ -746,12 +745,12 @@ body.light-theme #auraLoaderText{color:rgba(25,26,30,.78)}
         <button class="full-ctrl-btn" id="fullNextBtn" type="button" aria-label="Next track"><i class="fa-solid fa-forward-step"></i></button>
         <button class="full-ctrl-btn" id="repeatBtn" type="button" aria-label="Repeat"><i class="fa-solid fa-repeat"></i></button>
       </div>
-      <div style="display:flex;gap:10px;justify-content:center;margin-top:14px">
-        <button class="up-next-trigger" id="upNextOpenBtn" type="button" aria-label="Open Up Next">
-          <span>Up Next</span>
+      <div class="player-tab-pills" id="playerTabPills">
+        <button class="player-tab-pill active" id="playerTabLyricsBtn" type="button" aria-label="Lyrics" onclick="openPlayerSheet('lyrics')">
+          <i class="fa-solid fa-align-left"></i> <span>Lyrics</span>
         </button>
-        <button class="up-next-trigger" id="lyricsOpenBtn" type="button" aria-label="Open Lyrics" onclick="switchRightPanelTab('lyrics');document.getElementById('upNextSheet').classList.add('active')">
-          <span>Lyrics</span>
+        <button class="player-tab-pill" id="playerTabRelatedBtn" type="button" aria-label="Related" onclick="openPlayerSheet('related')">
+          <i class="fa-solid fa-wand-magic-sparkles"></i> <span>Related</span>
         </button>
       </div>
 
@@ -759,34 +758,18 @@ body.light-theme #auraLoaderText{color:rgba(25,26,30,.78)}
   </div>
 
 
-  <div class="up-next-sheet" id="upNextSheet" role="dialog" aria-modal="true" aria-label="Up next and lyrics" aria-hidden="true">
+  <div class="up-next-sheet" id="upNextSheet" role="dialog" aria-modal="true" aria-label="Lyrics and Related" aria-hidden="true">
+    <div class="sheet-drag-handle" aria-hidden="true"></div>
     <div class="ytm-right-tab-bar">
-      <button type="button" class="ytm-tab-toggle active" id="ytmTabQueueBtn" onclick="switchRightPanelTab('queue')">UP NEXT</button>
-      <button type="button" class="ytm-tab-toggle" id="ytmTabLyricsBtn" onclick="switchRightPanelTab('lyrics')">LYRICS</button>
-      <button type="button" class="ytm-tab-toggle" id="ytmTabRelatedBtn" onclick="switchRightPanelTab('related')">RELATED</button>
-      <button class="up-next-sheet-close" id="upNextCloseBtn" type="button" aria-label="Close Up Next" style="margin-left:auto"><i class="fa-solid fa-xmark"></i></button>
+      <div class="ytm-tab-toggle-group">
+        <button type="button" class="ytm-tab-toggle active" id="ytmTabLyricsBtn" onclick="switchRightPanelTab('lyrics')">LYRICS</button>
+        <button type="button" class="ytm-tab-toggle" id="ytmTabRelatedBtn" onclick="switchRightPanelTab('related')">RELATED</button>
+      </div>
+      <button class="up-next-sheet-close" id="upNextCloseBtn" type="button" aria-label="Close" onclick="closePlayerSheet()"><i class="fa-solid fa-xmark"></i></button>
     </div>
 
-    <!-- Panel 1: Up Next Queue -->
-    <div id="ytmQueuePanel" style="display:flex;flex-direction:column;flex:1;min-height:0;height:calc(100% - 55px)">
-      <div class="ytm-queue-subhead">
-        <div>
-          <div class="ytm-queue-mix-info">Playing from</div>
-          <div class="ytm-queue-mix-name" id="ytmQueueSourceLabel">Your Library</div>
-        </div>
-        <button type="button" class="ytm-queue-save-btn" onclick="toast('Queue saved to library','bookmark')">Save</button>
-      </div>
-      <div class="ytm-queue-chips">
-        <button type="button" class="ytm-q-chip active">All</button>
-        <button type="button" class="ytm-q-chip">Familiar</button>
-        <button type="button" class="ytm-q-chip">Discover</button>
-        <button type="button" class="ytm-q-chip">Popular</button>
-      </div>
-      <div class="up-next-list" id="upNextList"></div>
-    </div>
-
-    <!-- Panel 2: BetterLyrics Synced Lyrics -->
-    <div id="ytmLyricsPanel" style="display:none;flex-direction:column;flex:1;min-height:0;height:calc(100% - 55px)">
+    <!-- Panel 1: BetterLyrics Synced Lyrics -->
+    <div id="ytmLyricsPanel" style="display:flex;flex-direction:column;flex:1;min-height:0;height:calc(100% - 55px)">
       <div class="bl-lyrics-toolbar">
         <div class="bl-status-badge" id="blProviderBadge">
           <span class="bl-status-dot"></span>
@@ -797,15 +780,15 @@ body.light-theme #auraLoaderText{color:rgba(25,26,30,.78)}
           <button type="button" class="bl-tool-pill" id="blTranslateBtn" onclick="toggleLyricsTranslation()" title="Toggle Translation">EN</button>
           <button type="button" class="bl-tool-pill" id="blFontSizeBtn" onclick="cycleLyricsFontSize()" title="Cycle font size">1x</button>
           <button type="button" class="bl-tool-pill" id="blAlignBtn" onclick="toggleLyricsAlign()" title="Toggle text alignment"><i class="fa-solid fa-align-left"></i></button>
-          <button type="button" class="bl-tool-pill" onclick="setSyncOffset(-0.5)" title="Offset -0.5s">-0.5s</button>
-          <span id="blSyncOffsetLabel" style="font-size:11px;color:#888;min-width:28px;text-align:center">0.0s</span>
-          <button type="button" class="bl-tool-pill" onclick="setSyncOffset(0.5)" title="Offset +0.5s">+0.5s</button>
+          <button type="button" class="bl-tool-pill sync-adj" onclick="setSyncOffset(-0.5)" title="Offset -0.5s">-0.5s</button>
+          <span id="blSyncOffsetLabel" class="sync-adj" style="font-size:11px;color:#888;min-width:28px;text-align:center">0.0s</span>
+          <button type="button" class="bl-tool-pill sync-adj" onclick="setSyncOffset(0.5)" title="Offset +0.5s">+0.5s</button>
         </div>
       </div>
       <div id="fullPlayerLyricsContainer" style="flex:1;min-height:0;overflow:hidden"></div>
     </div>
 
-    <!-- Panel 3: Related -->
+    <!-- Panel 2: Related -->
     <div id="ytmRelatedPanel" style="display:none;flex-direction:column;flex:1;min-height:0;height:calc(100% - 55px);padding:20px;overflow-y:auto">
       <div id="ytmRelatedList"></div>
     </div>

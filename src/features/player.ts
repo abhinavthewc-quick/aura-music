@@ -246,15 +246,24 @@ import { fetchLyricsForTrack, renderLyrics, updateLyricsProgress, prepareLyricsF
       auraYTDesiredPlaying=false;
       auraYTPlayerReady=false;
       auraYTVideoId=String(videoId);
-      auraYTTitle=title||'YouTube Music';
       auraYTPoster=poster||'';
+
+      let ytArtist = 'YouTube Music';
+      let ytTitle = title || 'YouTube Music';
+      if (ytTitle.includes(' - ')) {
+        const parts = ytTitle.split(' - ');
+        ytArtist = parts[0].trim();
+        ytTitle = parts.slice(1).join(' - ').trim();
+      }
+      auraYTTitle = ytTitle;
 
       let idx=state.songs.findIndex(x=>String(x.id)===`youtube-${auraYTVideoId}`);
       if(idx===-1){
-        state.songs.push({id:`youtube-${auraYTVideoId}`,title:auraYTTitle,artist:'YouTube Music',img:auraYTPoster,url:'',favorite:!!liked,isLocal:false,missing:false,isYouTube:true,videoId:auraYTVideoId});
+        state.songs.push({id:`youtube-${auraYTVideoId}`,title:ytTitle,artist:ytArtist,img:auraYTPoster,url:'',favorite:!!liked,isLocal:false,missing:false,isYouTube:true,videoId:auraYTVideoId});
         idx=state.songs.length-1;
       }else{
-        state.songs[idx].title=auraYTTitle;
+        state.songs[idx].title=ytTitle;
+        state.songs[idx].artist=ytArtist;
         state.songs[idx].img=auraYTPoster||state.songs[idx].img;
         state.songs[idx].isYouTube=true;
         state.songs[idx].videoId=auraYTVideoId;
@@ -262,11 +271,11 @@ import { fetchLyricsForTrack, renderLyrics, updateLyricsProgress, prepareLyricsF
       state.currentIndex=idx;
       state.songs[idx].favorite = !!savedLikeMap[String(state.songs[idx].id)];
       $('currentImg').src=auraYTPoster;
-      $('currentTitle').textContent=auraYTTitle;
-      $('currentArtist').textContent='YouTube Music';
-      $('fullTitle').textContent=auraYTTitle;
-      $('fullArtist').textContent='YouTube Music';
-      $('fullHeaderTitle').textContent=auraYTTitle;
+      $('currentTitle').textContent=ytTitle;
+      $('currentArtist').textContent=ytArtist;
+      $('fullTitle').textContent=ytTitle;
+      $('fullArtist').textContent=ytArtist;
+      $('fullHeaderTitle').textContent=ytTitle;
       $('fullLikeBtn').className=`like-btn ${state.songs[idx].favorite?'active':''}`;
       $('fullLikeBtn').innerHTML=`<i class="fa-${state.songs[idx].favorite?'solid':'regular'} fa-heart"></i>`;
       applyDynamicPlayerColor(auraYTPoster);
@@ -281,13 +290,6 @@ import { fetchLyricsForTrack, renderLyrics, updateLyricsProgress, prepareLyricsF
       art.classList.add('youtube-mode');
       art.innerHTML=`<div id="auraYTFrameHost" style="width:100%;height:100%;background:#000"></div>`;
       updatePlayState();
-      let ytArtist = 'YouTube Music';
-      let ytTitle = title;
-      if (title.includes(' - ')) {
-        const parts = title.split(' - ');
-        ytArtist = parts[0].trim();
-        ytTitle = parts.slice(1).join(' - ').trim();
-      }
       prepareLyricsForNewSong(ytTitle, ytArtist, videoId);
       fetchLyricsForTrack(ytTitle, ytArtist, undefined, videoId).then(l => renderLyrics(l));
 
@@ -667,35 +669,78 @@ import { fetchLyricsForTrack, renderLyrics, updateLyricsProgress, prepareLyricsF
       renderSongs(state.songs);
     }
 
-    export function switchRightPanelTab(tab: 'queue' | 'lyrics' | 'related') {
-      const qBtn = $('ytmTabQueueBtn');
+    export function getCurrentActiveTrack(): { title: string; artist: string; videoId?: string; duration?: number } | null {
+      if (auraYTVideoId) {
+        let ytArtist = 'YouTube Music';
+        let ytTitle = auraYTTitle;
+        if (auraYTTitle.includes(' - ')) {
+          const parts = auraYTTitle.split(' - ');
+          ytArtist = parts[0].trim();
+          ytTitle = parts.slice(1).join(' - ').trim();
+        }
+        return { title: ytTitle, artist: ytArtist, videoId: auraYTVideoId };
+      }
+      const s = state.songs[state.currentIndex];
+      if (!s) return null;
+      let title = s.title || '';
+      let artist = s.artist || '';
+      if ((!artist || artist === 'YouTube Music' || artist === 'Unknown Artist') && title.includes(' - ')) {
+        const parts = title.split(' - ');
+        artist = parts[0].trim();
+        title = parts.slice(1).join(' - ').trim();
+      }
+      return { title, artist, videoId: s.videoId, duration: s.duration };
+    }
+
+    export function switchRightPanelTab(tab: 'lyrics' | 'related') {
       const lBtn = $('ytmTabLyricsBtn');
       const rBtn = $('ytmTabRelatedBtn');
-      const qPan = $('ytmQueuePanel');
       const lPan = $('ytmLyricsPanel');
       const rPan = $('ytmRelatedPanel');
 
-      qBtn?.classList.toggle('active', tab === 'queue');
+      const fullLyricsBtn = $('playerTabLyricsBtn');
+      const fullRelatedBtn = $('playerTabRelatedBtn');
+      fullLyricsBtn?.classList.toggle('active', tab === 'lyrics');
+      fullRelatedBtn?.classList.toggle('active', tab === 'related');
+
       lBtn?.classList.toggle('active', tab === 'lyrics');
       rBtn?.classList.toggle('active', tab === 'related');
 
-      if (qPan) qPan.style.display = tab === 'queue' ? 'flex' : 'none';
       if (lPan) lPan.style.display = tab === 'lyrics' ? 'flex' : 'none';
       if (rPan) rPan.style.display = tab === 'related' ? 'flex' : 'none';
 
       if (tab === 'lyrics') {
-        const s = state.songs[state.currentIndex];
-        if (s) {
-          const key = getTrackKey(s.title, s.artist);
+        const cur = getCurrentActiveTrack();
+        if (cur) {
+          const key = getTrackKey(cur.title, cur.artist);
           if (lyricsCache.has(key)) {
             renderLyrics(lyricsCache.get(key) || null);
           } else {
-            prepareLyricsForNewSong(s.title, s.artist, s.videoId);
-            fetchLyricsForTrack(s.title, s.artist, s.duration, s.videoId).then(l => renderLyrics(l));
+            prepareLyricsForNewSong(cur.title, cur.artist, cur.videoId);
+            fetchLyricsForTrack(cur.title, cur.artist, cur.duration, cur.videoId).then(l => {
+              renderLyrics(l);
+            });
           }
         }
       } else if (tab === 'related') {
         renderRelated();
+      }
+    }
+
+    export function openPlayerSheet(tab: 'lyrics' | 'related' = 'lyrics') {
+      switchRightPanelTab(tab);
+      const sheet = $('upNextSheet');
+      if (sheet) {
+        sheet.classList.add('active');
+        sheet.setAttribute('aria-hidden', 'false');
+      }
+    }
+
+    export function closePlayerSheet() {
+      const sheet = $('upNextSheet');
+      if (sheet) {
+        sheet.classList.remove('active');
+        sheet.setAttribute('aria-hidden', 'true');
       }
     }
 
@@ -802,5 +847,7 @@ import { fetchLyricsForTrack, renderLyrics, updateLyricsProgress, prepareLyricsF
 
     if (typeof window !== 'undefined') {
       (window as any).switchRightPanelTab = switchRightPanelTab;
+      (window as any).openPlayerSheet = openPlayerSheet;
+      (window as any).closePlayerSheet = closePlayerSheet;
     }
 

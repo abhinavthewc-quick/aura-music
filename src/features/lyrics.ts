@@ -69,14 +69,32 @@ let activeLyricsRequestId = 0;
 let userIsScrolling = false;
 let userScrollTimeout: any = null;
 
+export function parseArtistAndTitle(rawTitle: string, rawArtist?: string): { title: string; artist: string } {
+  let a = (rawArtist || '').trim();
+  let t = (rawTitle || '').trim();
+
+  // Strip obvious YouTube junk in parenthesis/brackets like "(Official Music Video)", "[4K 60FPS]"
+  t = t.replace(/\s*[\(\[](?:official\s*(?:music\s*)?(?:video|audio|lyric\s*video|visualizer)|lyrics?|hq|hd|4k|remastered?|audio)[\)\]]/gi, '').trim();
+
+  // If artist is generic or empty, check for "Artist - Title" or "Artist — Title"
+  const isGeneric = !a || a.toLowerCase() === 'youtube music' || a.toLowerCase() === 'unknown artist';
+  if (isGeneric && (t.includes(' - ') || t.includes(' — ') || t.includes(' – '))) {
+    const parts = t.split(/\s*[-—–]\s*/);
+    if (parts.length >= 2) {
+      a = parts[0].trim();
+      t = parts.slice(1).join(' - ').trim();
+    }
+  }
+
+  return { title: t, artist: a };
+}
+
 export function normalizeString(str: string): string {
   return (str || '')
     .toLowerCase()
     .normalize('NFD')
     .replace(/[\u0300-\u036f]/g, '')
-    .replace(/\s*\([^)]*(?:official|video|audio|remaster|lyrics?|feat|ft\.|from|version|bonus|deluxe|edit|mix)[^)]*\)/gi, '')
-    .replace(/\s*\[[^\]]*(?:official|video|audio|remaster|lyrics?|feat|ft\.|from|version|bonus|deluxe|edit|mix)[^\]]*\]/gi, '')
-    .replace(/[-–—|/\\].*$/, '')
+    .replace(/\s*[\(\[](?:official|video|audio|remaster|lyrics?|feat|ft\.|from|version|bonus|deluxe|edit|mix)[^\)\]]*[\)\]]/gi, '')
     .replace(/[^\w\s]/gi, ' ')
     .replace(/\s+/g, ' ')
     .trim();
@@ -150,7 +168,8 @@ export function scoreLyricsCandidate(
   return (titleSim * 0.55) + (artistSim * 0.25) + (durationScore * 0.20);
 }
 
-export function getTrackKey(title: string, artist: string): string {
+export function getTrackKey(rawTitle: string, rawArtist: string): string {
+  const { title, artist } = parseArtistAndTitle(rawTitle, rawArtist);
   const cleanTitle = normalizeString(title);
   const cleanArtist = normalizeString(artist);
   return `${cleanTitle}__${cleanArtist}`.toLowerCase();
@@ -686,11 +705,12 @@ async function fetchLRCLibUnsynced(artist: string, title: string, duration?: num
 }
 
 /* Immediately clear previous song lyrics and display sleek YouTube Music searching indicator */
-export function prepareLyricsForNewSong(title: string, artist: string, videoId?: string) {
+export function prepareLyricsForNewSong(rawTitle: string, rawArtist: string, videoId?: string) {
   activeLyricsRequestId++;
   currentLyrics = null;
   activeIndex = -1;
 
+  const { title, artist } = parseArtistAndTitle(rawTitle, rawArtist);
   const key = getTrackKey(title, artist);
   currentTrackKey = key;
 
@@ -725,8 +745,9 @@ export function prepareLyricsForNewSong(title: string, artist: string, videoId?:
 }
 
 /* Master Pipeline: Iterates through the 16 configured providers in priority order with similarity matching */
-export async function fetchLyricsForTrack(title: string, artist: string, duration?: number, videoId?: string): Promise<ParsedLyrics | null> {
+export async function fetchLyricsForTrack(rawTitle: string, rawArtist: string, duration?: number, videoId?: string): Promise<ParsedLyrics | null> {
   const reqId = activeLyricsRequestId;
+  const { title, artist } = parseArtistAndTitle(rawTitle, rawArtist);
   const key = getTrackKey(title, artist);
   currentTrackKey = key;
 

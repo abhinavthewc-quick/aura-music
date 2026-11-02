@@ -236,9 +236,12 @@ import { $, persistLikedHistory, savedLikeMap, state } from '../core/state';
       sheet.setAttribute('aria-hidden','true');
     }
 
-    $('upNextOpenBtn').onclick=e=>{e.stopPropagation();openUpNext();};
-    $('upNextCloseBtn').onclick=closeUpNext;
-    $('upNextSheet').onclick=e=>{if(e.target===$('upNextSheet')) closeUpNext();};
+    const openBtn = $('upNextOpenBtn');
+    if (openBtn) openBtn.onclick=e=>{e.stopPropagation();openUpNext();};
+    const closeBtn = $('upNextCloseBtn');
+    if (closeBtn) closeBtn.onclick=closeUpNext;
+    const sheetEl = $('upNextSheet');
+    if (sheetEl) sheetEl.onclick=e=>{if(e.target===sheetEl) closeUpNext();};
     document.addEventListener('keydown',e=>{if(e.key==='Escape') closeUpNext();});
 
 

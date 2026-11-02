@@ -12,6 +12,14 @@
   --player-bg: #000000 !important;
   --sidebar-bg: #000000 !important;
   --sb-line: rgba(255, 255, 255, 0.08) !important;
+
+  /* Better YTM signature easing curves & physics */
+  --ease-in: cubic-bezier(.4, 0, 1, 1);
+  --ease-out: cubic-bezier(0, 0, .2, 1);
+  --ease-in-out: cubic-bezier(.4, 0, .2, 1);
+  --ease-out-back: cubic-bezier(.34, 1.56, .64, 1);
+  --ease-elastic: cubic-bezier(.68, -.55, .265, 1.55);
+  --ease-spring: cubic-bezier(.175, .885, .32, 1.275);
 }
 
 html, body {
@@ -217,21 +225,6 @@ body:not(.sb-collapsed) .ytm-playlist-item {
   align-items: center;
   gap: 14px;
   margin-left: auto;
-}
-
-.ytm-cast-btn {
-  background: transparent;
-  border: none;
-  color: #ffffff;
-  font-size: 17px;
-  cursor: pointer;
-  padding: 6px;
-  border-radius: 50%;
-  transition: opacity 0.15s;
-}
-
-.ytm-cast-btn:hover {
-  opacity: 0.8;
 }
 
 /* ==========================================================================
@@ -579,36 +572,92 @@ body .full-player-overlay::before {
   }
 }
 
-/* Right-hand Panel: Up Next & Synced Lyrics (BetterLyrics) */
+/* Right-hand Panel: Synced Lyrics (BetterLyrics) & Related Tracks */
 body .up-next-sheet {
-  background: rgba(0, 0, 0, 0.45) !important;
-  backdrop-filter: blur(30px) !important;
-  -webkit-backdrop-filter: blur(30px) !important;
+  background: rgba(8, 8, 8, 0.75) !important;
+  backdrop-filter: blur(32px) saturate(150%) !important;
+  -webkit-backdrop-filter: blur(32px) saturate(150%) !important;
   border-left: 1px solid rgba(255, 255, 255, 0.08) !important;
+}
+
+/* Mobile full player pills (Lyrics / Related) */
+.player-tab-pills {
+  display: flex;
+  gap: 12px;
+  justify-content: center;
+  align-items: center;
+  margin-top: 18px;
+}
+
+.player-tab-pill {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 22px;
+  border-radius: 24px;
+  background: rgba(255, 255, 255, 0.08);
+  border: 1px solid rgba(255, 255, 255, 0.12);
+  color: rgba(255, 255, 255, 0.7);
+  font-size: 13.5px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: transform 0.25s var(--ease-spring), background-color 0.2s ease, color 0.2s ease, border-color 0.2s ease;
+}
+
+.player-tab-pill:hover {
+  background: rgba(255, 255, 255, 0.15);
+  color: #ffffff;
+  transform: translateY(-2px);
+}
+
+.player-tab-pill.active {
+  background: rgba(255, 255, 255, 0.22);
+  border-color: rgba(255, 255, 255, 0.35);
+  color: #ffffff;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.35);
+}
+
+@media (min-width: 900px) {
+  .player-tab-pills {
+    display: none !important;
+  }
 }
 
 /* Tab Header Switcher at top of the right panel */
 .ytm-right-tab-bar {
   display: flex;
   align-items: center;
-  justify-content: flex-end;
-  gap: 20px;
-  padding: 16px 24px 10px;
+  justify-content: space-between;
+  padding: 14px 20px 10px;
   border-bottom: 1px solid rgba(255, 255, 255, 0.06);
+  position: relative;
+  z-index: 10;
+}
+
+.ytm-tab-toggle-group {
+  display: flex;
+  align-items: center;
+  gap: 18px;
 }
 
 .ytm-tab-toggle {
   background: transparent;
   border: none;
-  color: rgba(255, 255, 255, 0.55);
-  font-size: 13.5px;
+  outline: none !important;
+  color: rgba(255, 255, 255, 0.5);
+  font-size: 13px;
   font-weight: 700;
-  letter-spacing: 0.06em;
+  letter-spacing: 0.08em;
   text-transform: uppercase;
   cursor: pointer;
   padding: 8px 6px;
   position: relative;
-  transition: color 0.18s ease;
+  transition: color 0.2s ease;
+}
+
+.ytm-tab-toggle:focus,
+.ytm-tab-toggle:focus-visible {
+  outline: none !important;
 }
 
 .ytm-tab-toggle:hover {
@@ -630,77 +679,97 @@ body .up-next-sheet {
   border-radius: 2px;
 }
 
+.sheet-drag-handle {
+  width: 44px;
+  height: 4px;
+  background: rgba(255, 255, 255, 0.22);
+  border-radius: 4px;
+  margin: 10px auto 2px;
+  display: block;
+}
+
+@media (min-width: 900px) {
+  .sheet-drag-handle {
+    display: none !important;
+  }
+}
+
+/* Sheet close button: NEVER position absolute at bottom 11px! */
+.up-next-sheet-close,
+body .up-next-sheet-close {
+  position: static !important;
+  width: 34px !important;
+  height: 34px !important;
+  border-radius: 50% !important;
+  background: rgba(255, 255, 255, 0.08) !important;
+  color: #ffffff !important;
+  font-size: 15px !important;
+  display: flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  border: none !important;
+  cursor: pointer !important;
+  margin-left: auto !important;
+  transition: background 0.2s ease, transform 0.25s var(--ease-spring) !important;
+}
+
+.up-next-sheet-close:hover {
+  background: rgba(255, 255, 255, 0.18) !important;
+  transform: scale(1.08) !important;
+}
+
+.up-next-sheet-close:active {
+  transform: scale(0.92) !important;
+}
+
 @media (min-width: 900px) {
   body .up-next-sheet-close {
     display: none !important;
   }
 }
 
-/* Queue Sub-header */
-.ytm-queue-subhead {
-  padding: 12px 20px 8px;
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-}
+@media (max-width: 899px) {
+  body .up-next-sheet {
+    position: fixed !important;
+    left: 0 !important;
+    right: 0 !important;
+    bottom: 0 !important;
+    width: 100% !important;
+    height: 85dvh !important;
+    max-height: 85dvh !important;
+    border-radius: 24px 24px 0 0 !important;
+    border: 1px solid rgba(255, 255, 255, 0.1) !important;
+    border-bottom: none !important;
+    background: rgba(12, 12, 12, 0.92) !important;
+    backdrop-filter: blur(32px) saturate(160%) !important;
+    -webkit-backdrop-filter: blur(32px) saturate(160%) !important;
+    box-shadow: 0 -16px 40px rgba(0, 0, 0, 0.7) !important;
+    z-index: 700 !important;
+    transform: translateY(105%) !important;
+    visibility: visible !important;
+    transition: transform 0.38s var(--ease-spring) !important;
+  }
 
-.ytm-queue-mix-info {
-  font-size: 12px;
-  color: #888888;
-}
+  body .up-next-sheet.active {
+    transform: translateY(0) !important;
+  }
 
-.ytm-queue-mix-name {
-  font-size: 14px;
-  font-weight: 600;
-  color: #ffffff;
-  margin-top: 2px;
-}
+  body:has(#upNextSheet.active)::after {
+    content: "";
+    position: fixed;
+    inset: 0;
+    background: rgba(0, 0, 0, 0.65);
+    backdrop-filter: blur(10px);
+    -webkit-backdrop-filter: blur(10px);
+    z-index: 690;
+    pointer-events: auto;
+    animation: sheetBackdropFadeIn 0.25s ease forwards;
+  }
 
-.ytm-queue-save-btn {
-  background: rgba(255, 255, 255, 0.08);
-  border: 1px solid rgba(255, 255, 255, 0.12);
-  border-radius: 16px;
-  padding: 5px 14px;
-  font-size: 12px;
-  font-weight: 600;
-  color: #ffffff;
-  cursor: pointer;
-}
-
-/* Queue Filter Chips */
-.ytm-queue-chips {
-  display: flex;
-  gap: 6px;
-  padding: 4px 20px 12px;
-  overflow-x: auto;
-  scrollbar-width: none;
-}
-
-.ytm-queue-chips::-webkit-scrollbar {
-  display: none;
-}
-
-.ytm-q-chip {
-  background: rgba(255, 255, 255, 0.06);
-  border: 1px solid rgba(255, 255, 255, 0.06);
-  border-radius: 6px;
-  padding: 4px 10px;
-  font-size: 12px;
-  color: #ffffff;
-  white-space: nowrap;
-  cursor: pointer;
-}
-
-.ytm-q-chip.active {
-  background: #ffffff;
-  color: #000000;
-  font-weight: 600;
-}
-
-/* Currently Playing Track Highlight in Queue */
-.up-next-row.is-current {
-  background: rgba(255, 255, 255, 0.1) !important;
-  border-radius: 8px !important;
+  @keyframes sheetBackdropFadeIn {
+    from { opacity: 0; }
+    to { opacity: 1; }
+  }
 }
 
 /* ==========================================================================
@@ -763,9 +832,11 @@ body .up-next-sheet {
 .bl-lyrics-scroll {
   flex: 1;
   overflow-y: auto;
-  padding: 24px 24px 80px;
+  padding: 28px 24px 80px;
   scrollbar-width: thin;
   scroll-behavior: smooth;
+  -webkit-mask-image: linear-gradient(to bottom, transparent 0%, black 10%, black 90%, transparent 100%);
+  mask-image: linear-gradient(to bottom, transparent 0%, black 10%, black 90%, transparent 100%);
 }
 
 .bl-lyrics-scroll::-webkit-scrollbar {
@@ -781,8 +852,9 @@ body .up-next-sheet {
   margin-bottom: 24px;
   cursor: pointer;
   opacity: 0.35;
-  transition: opacity 0.25s ease, transform 0.25s ease;
+  transition: opacity 0.28s var(--ease-out), transform 0.32s var(--ease-spring), filter 0.28s ease;
   user-select: none;
+  transform-origin: left center;
 }
 
 .bl-lyric-line:hover {
@@ -791,8 +863,8 @@ body .up-next-sheet {
 
 .bl-lyric-line.active {
   opacity: 1;
-  transform: scale(1.02);
-  transform-origin: left center;
+  transform: scale(1.035) translateY(-2px);
+  filter: drop-shadow(0 0 16px rgba(255, 255, 255, 0.42));
 }
 
 .bl-lyric-line.passed {
@@ -808,7 +880,7 @@ body .up-next-sheet {
 
 .bl-lyric-line.active .bl-lyric-main {
   color: #ffffff;
-  text-shadow: 0 2px 14px rgba(255, 255, 255, 0.28);
+  text-shadow: 0 0 22px rgba(255, 255, 255, 0.6), 0 2px 8px rgba(0, 0, 0, 0.9);
 }
 
 .bl-lyric-translit {
@@ -830,11 +902,11 @@ body .up-next-sheet {
   font-weight: 400;
 }
 
-/* Word-by-word (Karaoke / Rich-Synced) Animation */
+/* Word-by-word (Karaoke / Rich-Synced) Animation with Better YTM Spring physics */
 .bl-word {
   display: inline-block;
   margin-right: 0.28em;
-  transition: opacity 0.12s ease, transform 0.15s ease, filter 0.15s ease;
+  transition: opacity 0.15s var(--ease-out), transform 0.2s var(--ease-spring), filter 0.18s ease;
 }
 
 .bl-word.done {
@@ -850,9 +922,33 @@ body .up-next-sheet {
   background: linear-gradient(to right, #ffffff 0%, #ffffff var(--word-prog, 100%), rgba(255, 255, 255, 0.4) var(--word-prog, 100%), rgba(255, 255, 255, 0.4) 100%);
   -webkit-background-clip: text;
   -webkit-text-fill-color: transparent;
-  transform: scale(1.03);
+  transform: scale(1.06);
   transform-origin: left bottom;
-  text-shadow: 0 0 16px rgba(255, 255, 255, 0.35);
+  filter: drop-shadow(0 0 8px rgba(255, 255, 255, 0.7));
+}
+
+@media (max-width: 600px) {
+  .bl-lyrics-toolbar {
+    padding: 8px 14px;
+    gap: 6px;
+  }
+  .bl-tools-group .sync-adj,
+  .bl-tools-group #blAlignBtn {
+    display: none !important;
+  }
+  .bl-status-badge {
+    font-size: 11px;
+    max-width: 60%;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+  .bl-lyrics-scroll {
+    padding: 16px 16px 60px;
+  }
+  .bl-lyric-main {
+    font-size: 19px;
+  }
 }
 
 /* Font Size Customization */
@@ -1201,16 +1297,31 @@ body .up-next-sheet {
 
 
 /* ==========================================================================
-   8. Bottom Player Bar (Pitch Black, YouTube Music Buttons)
+   8. Bottom Player Bar (Better YTM Acrylic Floating Look)
    ========================================================================== */
 
-body .player-bar {
-  background: #000000 !important;
-  border-top: 1px solid rgba(255, 255, 255, 0.08) !important;
-  box-shadow: 0 -10px 30px rgba(0, 0, 0, 0.8) !important;
+@media (min-width: 900px) {
+  body .player-bar {
+    position: fixed !important;
+    bottom: 12px !important;
+    left: calc(var(--sidebar-width, 240px) + 16px) !important;
+    right: 16px !important;
+    height: 76px !important;
+    border-radius: 14px !important;
+    background: rgba(14, 14, 14, 0.82) !important;
+    backdrop-filter: blur(24px) saturate(140%) !important;
+    -webkit-backdrop-filter: blur(24px) saturate(140%) !important;
+    border: 1px solid rgba(255, 255, 255, 0.09) !important;
+    box-shadow: 0 16px 40px rgba(0, 0, 0, 0.65) !important;
+    transition: left 0.3s var(--ease-out), right 0.3s var(--ease-out), bottom 0.3s var(--ease-out) !important;
+  }
+
+  body.sb-collapsed .player-bar {
+    left: calc(72px + 16px) !important;
+  }
 }
 
-/* Circular Play/Pause button */
+/* Play/Pause button with Better YTM spring hover scale */
 .player-bar .ctrl-glass-btn.play-primary {
   width: 44px !important;
   height: 44px !important;
@@ -1221,8 +1332,18 @@ body .player-bar {
   align-items: center !important;
   justify-content: center !important;
   border: none !important;
-  box-shadow: none !important;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3) !important;
   margin: 0 4px !important;
+  transition: transform 0.22s var(--ease-spring), filter 0.2s ease !important;
+}
+
+.player-bar .ctrl-glass-btn.play-primary:hover {
+  transform: scale(1.08) !important;
+  filter: brightness(1.05) !important;
+}
+
+.player-bar .ctrl-glass-btn.play-primary:active {
+  transform: scale(0.94) !important;
 }
 
 .player-bar .ctrl-glass-btn.play-primary i {
@@ -1230,7 +1351,7 @@ body .player-bar {
   font-size: 16px !important;
 }
 
-/* Clean progress slider */
+/* Red accent progress slider */
 .player-bar > .mini-seek::-webkit-slider-runnable-track {
   height: 3px !important;
   background: linear-gradient(to right, #ff0000 0, #ff0000 var(--seek-pct,0%), rgba(255,255,255,0.2) var(--seek-pct,0%), rgba(255,255,255,0.2) 100%) !important;
@@ -1242,6 +1363,16 @@ body .player-bar {
 
 .player-bar .song-title {
   font-weight: 600 !important;
+}
+
+/* Safe Area Inset Padding on mobile so dock and player never obscure songs */
+@media (max-width: 899px) {
+  .tab-content {
+    padding-bottom: calc(180px + env(safe-area-inset-bottom, 20px)) !important;
+  }
+  .app-container {
+    padding-bottom: calc(180px + env(safe-area-inset-bottom, 20px)) !important;
+  }
 }
 
 /* Related tab songs list */
