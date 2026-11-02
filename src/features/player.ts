@@ -7,7 +7,7 @@ import { auraYTQueue, extractYouTubeId } from './search';
 import { auraSettings } from './settings';
 import { roomModeActive } from '../rooms/roomFlag';
 import { $, persistLikedHistory, savedLikeMap, state } from '../core/state';
-import { fetchLyricsForTrack, renderLyrics, updateLyricsProgress } from './lyrics';
+import { fetchLyricsForTrack, renderLyrics, updateLyricsProgress, prepareLyricsForNewSong, getTrackKey, lyricsCache } from './lyrics';
 /* ===== 2955-2994 ===== */
     export const dynamicColorCache = {};
 
@@ -281,7 +281,15 @@ import { fetchLyricsForTrack, renderLyrics, updateLyricsProgress } from './lyric
       art.classList.add('youtube-mode');
       art.innerHTML=`<div id="auraYTFrameHost" style="width:100%;height:100%;background:#000"></div>`;
       updatePlayState();
-      fetchLyricsForTrack(title, 'YouTube Music', undefined, videoId).then(l => renderLyrics(l));
+      let ytArtist = 'YouTube Music';
+      let ytTitle = title;
+      if (title.includes(' - ')) {
+        const parts = title.split(' - ');
+        ytArtist = parts[0].trim();
+        ytTitle = parts.slice(1).join(' - ').trim();
+      }
+      prepareLyricsForNewSong(ytTitle, ytArtist, videoId);
+      fetchLyricsForTrack(ytTitle, ytArtist, undefined, videoId).then(l => renderLyrics(l));
 
       try{
         // IMPORTANT: finish loading the API and create the player before the
@@ -463,6 +471,7 @@ import { fetchLyricsForTrack, renderLyrics, updateLyricsProgress } from './lyric
       applyDynamicPlayerColor(s.img);
       updateMainMediaSession();
       state.audio.load();
+      prepareLyricsForNewSong(s.title, s.artist, s.videoId);
       fetchLyricsForTrack(s.title, s.artist, s.duration, s.videoId).then(l => renderLyrics(l));
     }
 
@@ -616,12 +625,15 @@ import { fetchLyricsForTrack, renderLyrics, updateLyricsProgress } from './lyric
             const t=(pct/100)*d;
             auraYTPlayer.seekTo(t,true);
             $('fullCurrentTime').textContent=fmt(t);
+            updateLyricsProgress(t);
           }
         }catch(e){} return;
       }
       if(state.audio.duration && isFinite(state.audio.duration) && state.audio.duration > 0){
-        state.audio.currentTime=(pct/100)*state.audio.duration;
-        $('fullCurrentTime').textContent=fmt((pct/100)*state.audio.duration);
+        const targetTime = (pct/100)*state.audio.duration;
+        state.audio.currentTime=targetTime;
+        $('fullCurrentTime').textContent=fmt(targetTime);
+        updateLyricsProgress(targetTime);
       }
     };
 
@@ -673,7 +685,15 @@ import { fetchLyricsForTrack, renderLyrics, updateLyricsProgress } from './lyric
 
       if (tab === 'lyrics') {
         const s = state.songs[state.currentIndex];
-        if (s) fetchLyricsForTrack(s.title, s.artist, s.duration, s.videoId).then(l => renderLyrics(l));
+        if (s) {
+          const key = getTrackKey(s.title, s.artist);
+          if (lyricsCache.has(key)) {
+            renderLyrics(lyricsCache.get(key) || null);
+          } else {
+            prepareLyricsForNewSong(s.title, s.artist, s.videoId);
+            fetchLyricsForTrack(s.title, s.artist, s.duration, s.videoId).then(l => renderLyrics(l));
+          }
+        }
       } else if (tab === 'related') {
         renderRelated();
       }
@@ -682,19 +702,102 @@ import { fetchLyricsForTrack, renderLyrics, updateLyricsProgress } from './lyric
     export function renderRelated() {
       const container = $('ytmRelatedList');
       if (!container) return;
-      const related = state.songs.filter((_, i) => i !== state.currentIndex).slice(0, 10);
-      container.innerHTML = related.map(s => {
-        const idx = state.songs.findIndex(x => x.id === s.id);
-        return `
-          <div class="song-item" onclick="playSong(${idx >= 0 ? idx : 0})">
-            <img class="song-img" src="${escapeHtml(s.img || '')}" alt="">
-            <div class="song-details">
-              <div class="song-title">${escapeHtml(s.title || '')}</div>
-              <div class="song-artist">${escapeHtml(s.artist || '')}</div>
+      const currentSong = state.songs[state.currentIndex];
+      if (!currentSong) return;
+
+      const currentArtist = (currentSong.artist || '').toLowerCase().trim();
+
+      // Tracks by same artist
+      const sameArtistSongs = state.songs.filter((s, idx) => {
+        if (idx === state.currentIndex) return false;
+        const a = (s.artist || '').toLowerCase().trim();
+        return a && (a === currentArtist || a.includes(currentArtist) || currentArtist.includes(a));
+      });
+
+      // Other recommended tracks
+      const otherSongs = state.songs.filter((s, idx) => {
+        if (idx === state.currentIndex) return false;
+        return !sameArtistSongs.some(same => same.id === s.id);
+      });
+
+      const youMightLike = otherSongs.slice(0, 5);
+
+      let html = '';
+
+      // Section 1: You might also like
+      if (youMightLike.length > 0) {
+        html += `
+          <div class="ytm-rel-section">
+            <div class="ytm-rel-section-title">You might also like</div>
+            <div class="ytm-rel-grid">
+              ${youMightLike.map(s => {
+                const originalIdx = state.songs.findIndex(x => x.id === s.id);
+                return `
+                  <div class="ytm-rel-card" onclick="playSong(${originalIdx >= 0 ? originalIdx : 0})" role="button" tabindex="0">
+                    <div class="ytm-rel-art-wrap">
+                      <img src="${escapeHtml(s.img || '')}" alt="" loading="lazy">
+                      <div class="ytm-rel-play-overlay"><i class="fa-solid fa-play"></i></div>
+                    </div>
+                    <div class="ytm-rel-info">
+                      <div class="ytm-rel-title">${escapeHtml(s.title || '')}</div>
+                      <div class="ytm-rel-artist">${escapeHtml(s.artist || '')}</div>
+                    </div>
+                  </div>
+                `;
+              }).join('')}
             </div>
           </div>
         `;
-      }).join('');
+      }
+
+      // Section 2: About the artist spotlight card
+      html += `
+        <div class="ytm-rel-section">
+          <div class="ytm-rel-section-title">About the artist</div>
+          <div class="ytm-rel-artist-card">
+            <div class="ytm-rel-artist-header">
+              <div class="ytm-rel-artist-avatar">
+                <i class="fa-solid fa-user-astronaut"></i>
+              </div>
+              <div>
+                <div class="ytm-rel-artist-name">${escapeHtml(currentSong.artist || 'Artist')}</div>
+                <div class="ytm-rel-artist-desc">Featured on AURA Music</div>
+              </div>
+            </div>
+            <div class="ytm-rel-artist-tags">
+              <span class="ytm-rel-tag"><i class="fa-solid fa-compact-disc"></i> Studio Track</span>
+              <span class="ytm-rel-tag"><i class="fa-solid fa-sparkles"></i> High Fidelity</span>
+              <span class="ytm-rel-tag"><i class="fa-solid fa-headphones"></i> Immersive</span>
+            </div>
+          </div>
+        </div>
+      `;
+
+      // Section 3: More from this artist
+      if (sameArtistSongs.length > 0) {
+        html += `
+          <div class="ytm-rel-section">
+            <div class="ytm-rel-section-title">More by ${escapeHtml(currentSong.artist || '')}</div>
+            <div class="ytm-rel-list">
+              ${sameArtistSongs.map(s => {
+                const originalIdx = state.songs.findIndex(x => x.id === s.id);
+                return `
+                  <div class="ytm-rel-row" onclick="playSong(${originalIdx >= 0 ? originalIdx : 0})" role="button" tabindex="0">
+                    <img class="ytm-rel-row-img" src="${escapeHtml(s.img || '')}" alt="" loading="lazy">
+                    <div class="ytm-rel-row-meta">
+                      <div class="ytm-rel-row-title">${escapeHtml(s.title || '')}</div>
+                      <div class="ytm-rel-row-sub">${escapeHtml(s.artist || '')}</div>
+                    </div>
+                    <button type="button" class="ytm-rel-row-play"><i class="fa-solid fa-play"></i></button>
+                  </div>
+                `;
+              }).join('')}
+            </div>
+          </div>
+        `;
+      }
+
+      container.innerHTML = html;
     }
 
     if (typeof window !== 'undefined') {

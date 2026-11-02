@@ -592,20 +592,23 @@ body .up-next-sheet {
   display: flex;
   align-items: center;
   justify-content: flex-end;
-  gap: 16px;
-  padding: 16px 20px 10px;
+  gap: 20px;
+  padding: 16px 24px 10px;
   border-bottom: 1px solid rgba(255, 255, 255, 0.06);
 }
 
 .ytm-tab-toggle {
   background: transparent;
   border: none;
-  color: #888888;
-  font-size: 16px;
+  color: rgba(255, 255, 255, 0.55);
+  font-size: 13.5px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
   cursor: pointer;
-  padding: 6px 4px;
+  padding: 8px 6px;
   position: relative;
-  transition: color 0.15s;
+  transition: color 0.18s ease;
 }
 
 .ytm-tab-toggle:hover {
@@ -625,6 +628,12 @@ body .up-next-sheet {
   height: 2px;
   background: #ffffff;
   border-radius: 2px;
+}
+
+@media (min-width: 900px) {
+  body .up-next-sheet-close {
+    display: none !important;
+  }
 }
 
 /* Queue Sub-header */
@@ -876,354 +885,320 @@ body .up-next-sheet {
   background: rgba(255, 255, 255, 0.08);
 }
 
-/* BetterLyrics Settings & Provider Override Modal */
-.lyrics-settings-modal {
-  position: fixed;
-  inset: 0;
-  background: rgba(0, 0, 0, 0.75);
-  backdrop-filter: blur(16px);
-  -webkit-backdrop-filter: blur(16px);
-  z-index: 1000;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  padding: 20px;
-  opacity: 0;
-  pointer-events: none;
-  transition: opacity 0.2s ease;
-}
-
-.lyrics-settings-modal.active {
-  opacity: 1;
-  pointer-events: auto;
-}
-
-.lsm-card {
-  width: 100%;
-  max-width: 580px;
-  background: #141414;
-  border: 1px solid rgba(255, 255, 255, 0.12);
-  border-radius: 16px;
-  padding: 0;
-  box-shadow: 0 24px 60px rgba(0, 0, 0, 0.9);
+/* ==========================================================================
+   YouTube Music Lyrics Loading & Shimmer State
+   ========================================================================== */
+.bl-lyrics-loading {
+  padding: 36px 24px;
   display: flex;
   flex-direction: column;
-  max-height: min(88vh, 760px);
-  overflow: hidden;
-  box-sizing: border-box;
+  gap: 28px;
 }
 
-.lsm-body {
-  padding: 18px 22px 22px 22px;
-  overflow-y: auto;
-  display: flex;
-  flex-direction: column;
-  gap: 16px;
-  scrollbar-width: thin;
-}
-
-.lsm-body::-webkit-scrollbar {
-  width: 5px;
-}
-
-.lsm-body::-webkit-scrollbar-thumb {
-  background: rgba(255, 255, 255, 0.2);
-  border-radius: 4px;
-}
-
-/* 16-Stage Providers Hierarchy Table */
-.lsm-provider-table-wrap {
-  border: 1px solid rgba(255, 255, 255, 0.1);
-  border-radius: 10px;
-  background: #181818;
-  overflow: hidden;
-  max-height: 290px;
-  overflow-y: auto;
-  scrollbar-width: thin;
-}
-
-.lsm-provider-table-wrap::-webkit-scrollbar {
-  width: 4px;
-}
-
-.lsm-provider-table-wrap::-webkit-scrollbar-thumb {
-  background: rgba(255, 255, 255, 0.2);
-  border-radius: 4px;
-}
-
-.lsm-provider-table-head {
-  display: flex;
+.bl-search-indicator {
+  display: inline-flex;
   align-items: center;
-  padding: 8px 12px;
-  background: rgba(255, 255, 255, 0.05);
-  font-size: 11px;
-  font-weight: 700;
-  color: #888888;
-  text-transform: uppercase;
-  letter-spacing: 0.05em;
-  border-bottom: 1px solid rgba(255, 255, 255, 0.06);
-}
-
-.lsm-provider-row {
-  display: flex;
-  align-items: center;
-  padding: 7px 12px;
-  border-bottom: 1px solid rgba(255, 255, 255, 0.04);
-  font-size: 13px;
-  color: #ffffff;
-  transition: background 0.12s ease;
-}
-
-.lsm-provider-row:hover {
-  background: rgba(255, 255, 255, 0.05);
-}
-
-.lsm-provider-row.is-active-source {
-  background: rgba(34, 197, 94, 0.12) !important;
-  border-left: 3px solid #22c55e;
-}
-
-.lsm-provider-row.is-disabled {
-  opacity: 0.45;
-}
-
-.lsm-col-rank {
-  width: 26px;
-  font-size: 12px;
-  color: #888888;
-  font-variant-numeric: tabular-nums;
-}
-
-.lsm-col-name {
-  flex: 1;
-  font-weight: 500;
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  min-width: 0;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
-
-.lsm-active-tag {
-  background: rgba(34, 197, 94, 0.2);
-  color: #22c55e;
-  border: 1px solid rgba(34, 197, 94, 0.4);
-  font-size: 9.5px;
-  font-weight: 700;
-  padding: 1px 5px;
-  border-radius: 4px;
-}
-
-.lsm-col-type {
-  width: 86px;
-  text-align: center;
-}
-
-.sync-badge {
-  display: inline-block;
-  font-size: 10px;
-  font-weight: 600;
-  padding: 2px 7px;
-  border-radius: 12px;
-  text-transform: uppercase;
-  letter-spacing: 0.04em;
-}
-
-.sync-badge.syllable {
-  background: rgba(168, 85, 247, 0.2);
-  color: #c084fc;
-  border: 1px solid rgba(168, 85, 247, 0.4);
-}
-
-.sync-badge.word {
-  background: rgba(34, 197, 94, 0.2);
-  color: #4ade80;
-  border: 1px solid rgba(34, 197, 94, 0.4);
-}
-
-.sync-badge.line {
-  background: rgba(245, 158, 11, 0.2);
-  color: #fbbf24;
-  border: 1px solid rgba(245, 158, 11, 0.4);
-}
-
-.sync-badge.unsynced {
-  background: rgba(255, 255, 255, 0.08);
-  color: #aaaaaa;
-  border: 1px solid rgba(255, 255, 255, 0.12);
-}
-
-.lsm-col-actions {
-  display: flex;
-  align-items: center;
-  gap: 4px;
-  margin-left: 8px;
-}
-
-.lsm-order-btn {
-  background: transparent;
-  border: none;
-  color: #777777;
-  padding: 3px 6px;
-  cursor: pointer;
-  border-radius: 4px;
-  font-size: 11px;
-  transition: color 0.12s, background 0.12s;
-}
-
-.lsm-order-btn:hover {
-  color: #ffffff;
-  background: rgba(255, 255, 255, 0.1);
-}
-
-.lsm-toggle-check {
-  cursor: pointer;
-  accent-color: #22c55e;
-  margin-left: 4px;
-}
-
-.lsm-head {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  padding: 18px 22px 14px 22px;
-  border-bottom: 1px solid rgba(255, 255, 255, 0.08);
-  background: #181818;
-  flex-shrink: 0;
-}
-
-.lsm-title {
-  font-size: 18px;
-  font-weight: 700;
-  color: #ffffff;
-  display: flex;
-  align-items: center;
-  gap: 8px;
-}
-
-.lsm-close-btn {
-  background: transparent;
-  border: none;
-  color: #888888;
-  font-size: 18px;
-  cursor: pointer;
-  padding: 4px;
-}
-
-.lsm-close-btn:hover {
-  color: #ffffff;
-}
-
-.lsm-section-label {
-  font-size: 11.5px;
-  font-weight: 600;
-  text-transform: uppercase;
-  letter-spacing: 0.06em;
-  color: #888888;
-  margin-bottom: 6px;
-}
-
-.lsm-provider-select {
-  width: 100%;
-  background: #212121;
-  border: 1px solid rgba(255, 255, 255, 0.1);
-  color: #ffffff;
-  padding: 10px 12px;
-  border-radius: 8px;
+  gap: 10px;
   font-size: 13.5px;
-  outline: none;
-}
-
-.lsm-provider-select:focus {
-  border-color: rgba(255, 255, 255, 0.35);
-}
-
-.lsm-input-row {
-  display: flex;
-  gap: 8px;
-}
-
-.lsm-input {
-  flex: 1;
-  background: #212121;
-  border: 1px solid rgba(255, 255, 255, 0.1);
-  color: #ffffff;
-  padding: 8px 12px;
-  border-radius: 8px;
-  font-size: 13px;
-  outline: none;
-}
-
-.lsm-btn {
-  background: #ffffff;
-  color: #000000;
-  border: none;
-  border-radius: 8px;
-  padding: 8px 16px;
-  font-size: 13px;
   font-weight: 600;
-  cursor: pointer;
-  white-space: nowrap;
-  transition: opacity 0.15s;
+  color: rgba(255, 255, 255, 0.75);
 }
 
-.lsm-btn:hover {
-  opacity: 0.88;
+.bl-search-pulse {
+  width: 9px;
+  height: 9px;
+  border-radius: 50%;
+  background: #ff0033;
+  box-shadow: 0 0 10px rgba(255, 0, 51, 0.85);
+  animation: blPulse 1.4s ease-in-out infinite;
 }
 
-.lsm-btn.secondary {
-  background: rgba(255, 255, 255, 0.08);
-  color: #ffffff;
-  border: 1px solid rgba(255, 255, 255, 0.12);
+@keyframes blPulse {
+  0% { transform: scale(0.85); opacity: 0.5; }
+  50% { transform: scale(1.3); opacity: 1; }
+  100% { transform: scale(0.85); opacity: 0.5; }
 }
 
-.lsm-btn.secondary:hover {
-  background: rgba(255, 255, 255, 0.14);
+.bl-skeleton-wrap {
+  display: flex;
+  flex-direction: column;
+  gap: 22px;
 }
 
-.lsm-textarea {
-  width: 100%;
-  height: 90px;
-  background: #212121;
-  border: 1px solid rgba(255, 255, 255, 0.1);
-  color: #ffffff;
-  padding: 8px 12px;
+.bl-skeleton-line {
+  height: 22px;
   border-radius: 8px;
-  font-size: 12px;
-  font-family: monospace;
-  outline: none;
-  resize: vertical;
+  background: linear-gradient(90deg, rgba(255, 255, 255, 0.04) 25%, rgba(255, 255, 255, 0.09) 50%, rgba(255, 255, 255, 0.04) 75%);
+  background-size: 200% 100%;
+  animation: blSkeletonShimmer 1.8s infinite ease-in-out;
 }
 
+.bl-skeleton-line.short { width: 45%; }
+.bl-skeleton-line.medium { width: 70%; }
+.bl-skeleton-line.long { width: 88%; }
+
+@keyframes blSkeletonShimmer {
+  0% { background-position: 200% 0; }
+  100% { background-position: -200% 0; }
+}
+
+/* Empty Lyrics State */
 .bl-lyrics-empty {
   display: flex;
   flex-direction: column;
   align-items: center;
   justify-content: center;
   height: 100%;
-  padding: 40px;
+  min-height: 280px;
   text-align: center;
+  padding: 40px 20px;
   color: #888888;
 }
 
-.bl-lyrics-empty i {
-  font-size: 32px;
+.bl-empty-icon {
+  font-size: 36px;
+  color: rgba(255, 255, 255, 0.25);
   margin-bottom: 14px;
-  opacity: 0.5;
 }
 
 .bl-empty-title {
   font-size: 16px;
-  font-weight: 600;
+  font-weight: 700;
   color: #ffffff;
+  margin-bottom: 6px;
 }
 
 .bl-empty-sub {
-  font-size: 12.5px;
-  margin-top: 4px;
+  font-size: 13px;
+  color: #888888;
+  max-width: 280px;
+  line-height: 1.4;
 }
+
+/* ==========================================================================
+   YouTube Music Related Tab Design
+   ========================================================================== */
+.ytm-rel-section {
+  margin-bottom: 28px;
+}
+
+.ytm-rel-section-title {
+  font-size: 16px;
+  font-weight: 700;
+  color: #ffffff;
+  margin-bottom: 14px;
+  letter-spacing: -0.01em;
+}
+
+.ytm-rel-grid {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.ytm-rel-card {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  padding: 8px 10px;
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.03);
+  border: 1px solid rgba(255, 255, 255, 0.04);
+  cursor: pointer;
+  transition: background 0.15s ease, transform 0.15s ease;
+}
+
+.ytm-rel-card:hover {
+  background: rgba(255, 255, 255, 0.08);
+  transform: translateX(3px);
+}
+
+.ytm-rel-art-wrap {
+  position: relative;
+  width: 48px;
+  height: 48px;
+  border-radius: 6px;
+  overflow: hidden;
+  flex-shrink: 0;
+  background: #1e1e1e;
+}
+
+.ytm-rel-art-wrap img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
+
+.ytm-rel-play-overlay {
+  position: absolute;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.45);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #ffffff;
+  font-size: 14px;
+  opacity: 0;
+  transition: opacity 0.15s ease;
+}
+
+.ytm-rel-card:hover .ytm-rel-play-overlay {
+  opacity: 1;
+}
+
+.ytm-rel-info {
+  flex: 1;
+  min-width: 0;
+}
+
+.ytm-rel-title {
+  font-size: 14px;
+  font-weight: 600;
+  color: #ffffff;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.ytm-rel-artist {
+  font-size: 12.5px;
+  color: #888888;
+  margin-top: 2px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* Artist Spotlight Card */
+.ytm-rel-artist-card {
+  background: linear-gradient(135deg, rgba(255, 255, 255, 0.06), rgba(255, 255, 255, 0.02));
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 12px;
+  padding: 18px;
+}
+
+.ytm-rel-artist-header {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  margin-bottom: 12px;
+}
+
+.ytm-rel-artist-avatar {
+  width: 44px;
+  height: 44px;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.1);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #ffffff;
+  font-size: 18px;
+}
+
+.ytm-rel-artist-name {
+  font-size: 16px;
+  font-weight: 700;
+  color: #ffffff;
+}
+
+.ytm-rel-artist-desc {
+  font-size: 12px;
+  color: #888888;
+  margin-top: 2px;
+}
+
+.ytm-rel-artist-tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.ytm-rel-tag {
+  font-size: 11px;
+  font-weight: 500;
+  color: rgba(255, 255, 255, 0.7);
+  background: rgba(255, 255, 255, 0.06);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  border-radius: 12px;
+  padding: 3px 10px;
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+}
+
+.ytm-rel-tag i {
+  font-size: 10px;
+  color: #e5a95e;
+}
+
+/* More by artist rows */
+.ytm-rel-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.ytm-rel-row {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 8px 10px;
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.02);
+  cursor: pointer;
+  transition: background 0.15s ease;
+}
+
+.ytm-rel-row:hover {
+  background: rgba(255, 255, 255, 0.07);
+}
+
+.ytm-rel-row-img {
+  width: 40px;
+  height: 40px;
+  border-radius: 4px;
+  object-fit: cover;
+  flex-shrink: 0;
+}
+
+.ytm-rel-row-meta {
+  flex: 1;
+  min-width: 0;
+}
+
+.ytm-rel-row-title {
+  font-size: 13.5px;
+  font-weight: 600;
+  color: #ffffff;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.ytm-rel-row-sub {
+  font-size: 12px;
+  color: #888888;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.ytm-rel-row-play {
+  background: transparent;
+  border: none;
+  color: rgba(255, 255, 255, 0.6);
+  font-size: 12px;
+  cursor: pointer;
+  padding: 6px;
+  transition: color 0.15s;
+}
+
+.ytm-rel-row:hover .ytm-rel-row-play {
+  color: #ffffff;
+}
+
 
 /* ==========================================================================
    8. Bottom Player Bar (Pitch Black, YouTube Music Buttons)
