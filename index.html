@@ -397,6 +397,7 @@ body.light-theme #auraLoaderText{color:rgba(25,26,30,.78)}
     <div class="tab-content active" id="tabHome">
       <div class="ytm-chips-bar" id="ytmMoodChips">
         <button type="button" class="ytm-chip active" data-mood="all">All</button>
+        <button type="button" class="ytm-chip" data-mood="artists" id="homeArtistsChip">Artists</button>
         <button type="button" class="ytm-chip" data-mood="romance">Romance</button>
         <button type="button" class="ytm-chip" data-mood="feel good">Feel good</button>
         <button type="button" class="ytm-chip" data-mood="relax">Relax</button>
@@ -407,51 +408,91 @@ body.light-theme #auraLoaderText{color:rgba(25,26,30,.78)}
         <button type="button" class="ytm-chip" data-mood="focus">Focus</button>
       </div>
 
-      <!-- The greeting ids stay: four modules write the signed-in name and the time of day into them. -->
-      <h2 class="home-greeting" style="margin-bottom:18px"><em id="greetingLabel">Good evening</em><span id="displayUserName">User</span></h2>
+      <!-- View 1: Main Home Content -->
+      <div id="homeMainView">
+        <!-- The greeting ids stay: four modules write the signed-in name and the time of day into them. -->
+        <h2 class="home-greeting" style="margin-bottom:18px"><em id="greetingLabel">Good evening</em><span id="displayUserName">User</span></h2>
 
-      <div class="ytm-section-head">
-        <div>
-          <div class="ytm-listen-kicker" style="color:var(--text-sub);margin-bottom:4px">START RADIO FROM A SONG</div>
-          <h2 class="ytm-section-title">Quick picks</h2>
+        <!-- Featured Artists Shelf (Always visible on home) -->
+        <div class="ytm-section-head" style="margin-top:4px">
+          <div>
+            <div class="ytm-listen-kicker" style="color:var(--text-sub);margin-bottom:4px">FEATURED IN YOUR MUSIC</div>
+            <h2 class="ytm-section-title">Artists</h2>
+          </div>
+          <button type="button" class="ytm-section-link" onclick="openHomeArtistsTab()" style="background:none;border:none;color:var(--text-sub);font-size:13px;font-weight:600;cursor:pointer">See all</button>
         </div>
-        <div class="ytm-head-actions">
-          <button type="button" class="ytm-play-all-btn" id="quickPicksPlayAllBtn" onclick="shuffleAll()"><i class="fa-solid fa-play" style="font-size:11px;margin-right:6px"></i>Play all</button>
-          <button type="button" class="ytm-nav-chevron" id="quickPrevBtn" title="Previous page" aria-label="Previous"><i class="fa-solid fa-chevron-left"></i></button>
-          <button type="button" class="ytm-nav-chevron" id="quickNextBtn" title="Next page" aria-label="Next"><i class="fa-solid fa-chevron-right"></i></button>
+        <div class="ytm-artists-shelf" id="homeFeaturedArtistsShelf"></div>
+
+        <div class="ytm-section-head" style="margin-top:20px">
+          <div>
+            <div class="ytm-listen-kicker" style="color:var(--text-sub);margin-bottom:4px">START RADIO FROM A SONG</div>
+            <h2 class="ytm-section-title">Quick picks</h2>
+          </div>
+          <div class="ytm-head-actions">
+            <button type="button" class="ytm-play-all-btn" id="quickPicksPlayAllBtn" onclick="shuffleAll()"><i class="fa-solid fa-play" style="font-size:11px;margin-right:6px"></i>Play all</button>
+            <button type="button" class="ytm-nav-chevron" id="quickPrevBtn" title="Previous page" aria-label="Previous"><i class="fa-solid fa-chevron-left"></i></button>
+            <button type="button" class="ytm-nav-chevron" id="quickNextBtn" title="Next page" aria-label="Next"><i class="fa-solid fa-chevron-right"></i></button>
+          </div>
+        </div>
+
+        <div class="ytm-quick-grid" id="ytmQuickGrid"></div>
+
+        <div class="quick-grid" id="quickGrid"></div>
+
+        <div class="soundscape-card" onclick="openRadioEffectsTab()">
+          <div class="soundscape-icon"><i class="fa-solid fa-wand-magic-sparkles"></i></div>
+          <div class="soundscape-text"><b>Soundscape</b><span>Rain, fire, birds, cafe ambience, spatial &amp; muffle controls</span></div>
+          <button type="button" class="soundscape-btn" onclick="event.stopPropagation();openRadioEffectsTab()">Tune ambience</button>
+        </div>
+
+        <div class="aura-picks">
+          <div class="aura-picks-head">
+            <h3>Picked for you</h3>
+            <button type="button" class="aura-picks-refresh" onclick="renderAuraPicks(true)"><i class="fa-solid fa-shuffle"></i> New mix</button>
+          </div>
+          <div class="aura-picks-scroll" id="auraPicksScroll"></div>
+        </div>
+
+        <div id="recentSection" style="display:none;margin-bottom:20px">
+          <p style="font-size:15px;font-weight:600;margin-bottom:12px;color:var(--text)">Recently played</p>
+          <div class="recent-scroll" id="recentScroll"></div>
+        </div>
+
+        <div id="artistSpotlightContainer"></div>
+
+        <p style="font-size:15px;font-weight:600;margin-bottom:12px;color:var(--text)">From your library</p>
+        <div class="song-list" id="songList"></div>
+        <div class="more-songs-note">
+          <i class="fa-solid fa-magnifying-glass"></i>
+          <span>Looking for more? Head to the <strong onclick="navClick(document.getElementById('navSearchBtn'),'tabSearch')">Search</strong> tab for way more songs.</span>
         </div>
       </div>
 
-      <div class="ytm-quick-grid" id="ytmQuickGrid"></div>
-
-      <div class="quick-grid" id="quickGrid"></div>
-
-      <div class="soundscape-card" onclick="openRadioEffectsTab()">
-        <div class="soundscape-icon"><i class="fa-solid fa-wand-magic-sparkles"></i></div>
-        <div class="soundscape-text"><b>Soundscape</b><span>Rain, fire, birds, cafe ambience, spatial &amp; muffle controls</span></div>
-        <button type="button" class="soundscape-btn" onclick="event.stopPropagation();openRadioEffectsTab()">Tune ambience</button>
-      </div>
-
-      <div class="aura-picks">
-        <div class="aura-picks-head">
-          <h3>Picked for you</h3>
-          <button type="button" class="aura-picks-refresh" onclick="renderAuraPicks(true)"><i class="fa-solid fa-shuffle"></i> New mix</button>
+      <!-- View 2: Full Artists Directory -->
+      <div id="homeArtistsView" style="display:none">
+        <div class="ytm-section-head" style="margin-bottom:18px">
+          <div>
+            <div class="ytm-listen-kicker" style="color:var(--text-sub);margin-bottom:4px">LIBRARY &amp; DISCOVERY</div>
+            <h2 class="ytm-section-title">Artists in your music</h2>
+          </div>
         </div>
-        <div class="aura-picks-scroll" id="auraPicksScroll"></div>
+        <div class="ytm-artists-grid" id="homeArtistsFullGrid"></div>
       </div>
 
-      <div id="recentSection" style="display:none;margin-bottom:20px">
-        <p style="font-size:15px;font-weight:600;margin-bottom:12px;color:var(--text)">Recently played</p>
-        <div class="recent-scroll" id="recentScroll"></div>
-      </div>
-
-      <div id="artistSpotlightContainer"></div>
-
-      <p style="font-size:15px;font-weight:600;margin-bottom:12px;color:var(--text)">From your library</p>
-      <div class="song-list" id="songList"></div>
-      <div class="more-songs-note">
-        <i class="fa-solid fa-magnifying-glass"></i>
-        <span>Looking for more? Head to the <strong onclick="navClick(document.getElementById('navSearchBtn'),'tabSearch')">Search</strong> tab for way more songs.</span>
+      <!-- View 3: Artist Songs Drill-Down View -->
+      <div id="homeArtistDetailView" style="display:none">
+        <button type="button" class="artist-detail-back-btn" onclick="closeArtistDetail()">
+          <i class="fa-solid fa-arrow-left"></i> <span>Back to Artists</span>
+        </button>
+        <div class="artist-hero-card" id="artistHeroCard"></div>
+        <div class="artist-songs-header">
+          <h3 class="artist-songs-title">Songs</h3>
+          <div class="artist-songs-actions">
+            <button type="button" class="artist-action-pill play-pill" id="artistPlayAllBtn"><i class="fa-solid fa-play"></i> Play all</button>
+            <button type="button" class="artist-action-pill shuffle-pill" id="artistShuffleBtn"><i class="fa-solid fa-shuffle"></i> Shuffle</button>
+          </div>
+        </div>
+        <div class="artist-songs-list" id="artistSongsList"></div>
       </div>
     </div>
 
@@ -769,7 +810,8 @@ body.light-theme #auraLoaderText{color:rgba(25,26,30,.78)}
     </div>
 
     <!-- Panel 1: BetterLyrics Synced Lyrics -->
-    <div id="ytmLyricsPanel" style="display:flex;flex-direction:column;flex:1;min-height:0;height:calc(100% - 55px)">
+    <div id="ytmLyricsPanel" style="display:flex;flex-direction:column;flex:1;min-height:0;height:calc(100% - 55px);position:relative;overflow:hidden">
+      <div class="bl-lyrics-backdrop" id="blLyricsBackdrop" aria-hidden="true"></div>
       <div class="bl-lyrics-toolbar">
         <div class="bl-status-badge" id="blProviderBadge">
           <span class="bl-status-dot"></span>
@@ -785,7 +827,10 @@ body.light-theme #auraLoaderText{color:rgba(25,26,30,.78)}
           <button type="button" class="bl-tool-pill sync-adj" onclick="setSyncOffset(0.5)" title="Offset +0.5s">+0.5s</button>
         </div>
       </div>
-      <div id="fullPlayerLyricsContainer" style="flex:1;min-height:0;overflow:hidden"></div>
+      <div id="fullPlayerLyricsContainer" style="display:flex;flex-direction:column;flex:1;min-height:0;height:100%;overflow:hidden;position:relative"></div>
+      <button type="button" class="bl-auto-scroll-btn" id="blAutoScrollBtn" onclick="resumeLyricsAutoScroll()" style="display:none">
+        <i class="fa-solid fa-arrow-down"></i> Sync to audio
+      </button>
     </div>
 
     <!-- Panel 2: Related -->

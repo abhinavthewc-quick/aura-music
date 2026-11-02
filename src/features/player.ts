@@ -733,6 +733,11 @@ import { fetchLyricsForTrack, renderLyrics, updateLyricsProgress, prepareLyricsF
       if (sheet) {
         sheet.classList.add('active');
         sheet.setAttribute('aria-hidden', 'false');
+        if (tab === 'lyrics') {
+          setTimeout(() => {
+            (window as any).centerActiveLyricLine?.(undefined, false);
+          }, 180);
+        }
       }
     }
 

@@ -68,6 +68,8 @@ export const lyricsCache = new Map<string, ParsedLyrics | null>();
 let activeLyricsRequestId = 0;
 let userIsScrolling = false;
 let userScrollTimeout: any = null;
+let isProgrammaticScroll = false;
+let programmaticScrollTimeout: any = null;
 
 export function parseArtistAndTitle(rawTitle: string, rawArtist?: string): { title: string; artist: string } {
   let a = (rawArtist || '').trim();
@@ -904,22 +906,111 @@ export function renderLyrics(lyrics: ParsedLyrics | null, containerId = 'fullPla
     </div>
   `;
 
-  // Pause auto-scroll when user is manually scrolling
+  // Pause auto-scroll when user is manually scrolling, show floating resume button
   const scrollEl = $('blLyricsScroll');
   if (scrollEl) {
-    scrollEl.addEventListener('scroll', () => {
+    const handleUserInteraction = () => {
+      if (isProgrammaticScroll) return;
       userIsScrolling = true;
+      const autoBtn = $('blAutoScrollBtn');
+      if (autoBtn && activeIndex >= 0) {
+        autoBtn.style.display = 'inline-flex';
+      }
       if (userScrollTimeout) clearTimeout(userScrollTimeout);
       userScrollTimeout = setTimeout(() => {
         userIsScrolling = false;
-      }, 4000);
+        if (autoBtn) autoBtn.style.display = 'none';
+        centerActiveLyricLine(undefined, true);
+      }, 4500);
+    };
+
+    scrollEl.addEventListener('wheel', handleUserInteraction, { passive: true });
+    scrollEl.addEventListener('touchmove', handleUserInteraction, { passive: true });
+    scrollEl.addEventListener('pointerdown', handleUserInteraction, { passive: true });
+    scrollEl.addEventListener('scroll', () => {
+      if (!isProgrammaticScroll) {
+        handleUserInteraction();
+      }
     }, { passive: true });
+  }
+
+  // Update dynamic album art backdrop
+  const backdrop = $('blLyricsBackdrop');
+  if (backdrop) {
+    const curSong = state.songs[state.currentIndex];
+    const poster = curSong?.img || (window as any).auraYTPoster || '';
+    if (poster) {
+      backdrop.style.backgroundImage = `url("${poster}")`;
+    }
   }
 
   // Sync to current audio position immediately
   const curTime = state.audio?.currentTime || (window as any).auraYTPlayer?.getCurrentTime?.() || 0;
   if (curTime > 0) {
     updateLyricsProgress(curTime, containerId);
+    setTimeout(() => centerActiveLyricLine(undefined, false), 80);
+  }
+
+  startLyricsSyncLoop();
+}
+
+export function centerActiveLyricLine(lineEl?: HTMLElement, smooth = true) {
+  const scrollParent = $('blLyricsScroll');
+  if (!scrollParent) return;
+  const target = lineEl || (scrollParent.querySelector('.bl-lyric-line.active') as HTMLElement | null);
+  if (!target) return;
+
+  const parentRect = scrollParent.getBoundingClientRect();
+  const lineRect = target.getBoundingClientRect();
+  if (parentRect.height === 0 || lineRect.height === 0) return;
+
+  const targetScroll = scrollParent.scrollTop + (lineRect.top - parentRect.top) - (parentRect.height / 2) + (lineRect.height / 2);
+
+  isProgrammaticScroll = true;
+  if (programmaticScrollTimeout) clearTimeout(programmaticScrollTimeout);
+  programmaticScrollTimeout = setTimeout(() => {
+    isProgrammaticScroll = false;
+  }, smooth ? 600 : 60);
+
+  scrollParent.scrollTo({
+    top: Math.max(0, targetScroll),
+    behavior: smooth ? 'smooth' : 'instant'
+  });
+}
+
+export function resumeLyricsAutoScroll() {
+  userIsScrolling = false;
+  isProgrammaticScroll = true;
+  if (userScrollTimeout) clearTimeout(userScrollTimeout);
+  const autoBtn = $('blAutoScrollBtn');
+  if (autoBtn) autoBtn.style.display = 'none';
+  centerActiveLyricLine(undefined, true);
+}
+
+let lyricsRafId = 0;
+export function startLyricsSyncLoop() {
+  if (lyricsRafId) cancelAnimationFrame(lyricsRafId);
+  function tick() {
+    if (!currentLyrics || !currentLyrics.isSynced) {
+      lyricsRafId = requestAnimationFrame(tick);
+      return;
+    }
+    const curTime = state.isPlaying
+      ? (state.audio?.currentTime || (window as any).auraYTPlayer?.getCurrentTime?.() || 0)
+      : ((window as any).auraYTPlayer?.getCurrentTime?.() || 0);
+
+    if (curTime > 0) {
+      updateLyricsProgress(curTime);
+    }
+    lyricsRafId = requestAnimationFrame(tick);
+  }
+  lyricsRafId = requestAnimationFrame(tick);
+}
+
+export function stopLyricsSyncLoop() {
+  if (lyricsRafId) {
+    cancelAnimationFrame(lyricsRafId);
+    lyricsRafId = 0;
   }
 }
 
@@ -950,12 +1041,7 @@ export function updateLyricsProgress(currentTime: number, containerId = 'fullPla
     });
 
     if (activeIndex >= 0 && allLines[activeIndex] && !userIsScrolling) {
-      const scrollParent = $('blLyricsScroll');
-      if (scrollParent) {
-        const lineEl = allLines[activeIndex] as HTMLElement;
-        const targetScroll = lineEl.offsetTop - (scrollParent.clientHeight / 2) + (lineEl.clientHeight / 2);
-        scrollParent.scrollTo({ top: Math.max(0, targetScroll), behavior: 'smooth' });
-      }
+      centerActiveLyricLine(allLines[activeIndex] as HTMLElement, true);
     }
   }
 
@@ -1060,11 +1146,17 @@ function escapeHtml(str: string): string {
 /* Expose Global Handlers for HTML Onclick Binding */
 if (typeof window !== 'undefined') {
   (window as any).seekToLyric = function(time: number) {
+    userIsScrolling = false;
+    if (userScrollTimeout) clearTimeout(userScrollTimeout);
+    const autoBtn = $('blAutoScrollBtn');
+    if (autoBtn) autoBtn.style.display = 'none';
+
     const yt = (window as any).auraYTPlayer;
     if (yt && typeof yt.seekTo === 'function') {
       try {
         yt.seekTo(time, true);
         updateLyricsProgress(time);
+        setTimeout(() => centerActiveLyricLine(undefined, true), 40);
         return;
       } catch (_) {}
     }
@@ -1072,8 +1164,11 @@ if (typeof window !== 'undefined') {
       state.audio.currentTime = time;
       if (state.audio.paused) state.audio.play();
       updateLyricsProgress(time);
+      setTimeout(() => centerActiveLyricLine(undefined, true), 40);
     }
   };
+  (window as any).resumeLyricsAutoScroll = resumeLyricsAutoScroll;
+  (window as any).centerActiveLyricLine = centerActiveLyricLine;
   (window as any).toggleLyricsTranslation = toggleLyricsTranslation;
   (window as any).toggleLyricsTranslit = toggleLyricsTranslit;
   (window as any).cycleLyricsFontSize = cycleLyricsFontSize;

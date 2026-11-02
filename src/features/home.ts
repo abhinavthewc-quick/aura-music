@@ -31,6 +31,7 @@ import { $, state } from '../core/state';
     export function renderQuickAccess(){
       if(typeof updateDesktopHeroStats==='function') updateDesktopHeroStats();
       renderQuickPicks();
+      renderFeaturedArtistsShelf();
       const favCount = state.songs.filter(s=>s.favorite).length;
       const last = state.recentlyPlayed[0] ? state.songs.find(s=>s.id===state.recentlyPlayed[0].id) : null;
       const localCount = state.songs.filter(s=>s.isLocal).length;
@@ -133,7 +134,12 @@ import { $, state } from '../core/state';
           target.classList.add('active');
           currentMood = target.dataset.mood || 'all';
           currentQuickPage = 0;
-          renderQuickPicks();
+          if (currentMood === 'artists') {
+            showArtistsView();
+          } else {
+            showDefaultHomeView();
+            renderQuickPicks();
+          }
         });
       });
 
@@ -143,6 +149,221 @@ import { $, state } from '../core/state';
       $('quickNextBtn')?.addEventListener('click', () => {
         renderQuickPicks(currentQuickPage + 1);
       });
+    }
+
+    export interface ArtistDirectoryEntry {
+      name: string;
+      img: string;
+      count: number;
+      songs: any[];
+    }
+
+    export function getAllArtists(): ArtistDirectoryEntry[] {
+      const groups: Record<string, { name: string; names: Record<string, number>; songs: any[] }> = {};
+      const keys: string[] = [];
+
+      state.songs.forEach(s => {
+        const artist = (s.artist || '').trim();
+        if (!artist || artist.toLowerCase() === 'unknown artist') return;
+        const k = artistMergeKey(keys, artist);
+        if (!groups[k]) {
+          groups[k] = { name: artist, names: {}, songs: [] };
+          keys.push(k);
+        }
+        groups[k].names[artist] = (groups[k].names[artist] || 0) + 1;
+        groups[k].songs.push(s);
+      });
+
+      const result: ArtistDirectoryEntry[] = Object.values(groups).map(g => {
+        const bestName = Object.entries(g.names).sort((a, b) => b[1] - a[1] || b[0].length - a[0].length)[0][0];
+        const sample = g.songs.find(s => s.img && !s.img.includes('default') && !s.img.includes('data:image')) || g.songs[0];
+        return {
+          name: bestName,
+          img: sample?.img || DEFAULT_COVER,
+          count: g.songs.length,
+          songs: g.songs
+        };
+      });
+
+      return result.sort((a, b) => b.count - a.count);
+    }
+
+    export function renderFeaturedArtistsShelf() {
+      const shelf = $('homeFeaturedArtistsShelf');
+      if (!shelf) return;
+      const artists = getAllArtists();
+      if (!artists.length) {
+        shelf.innerHTML = '<div style="color:var(--text-sub);padding:10px 0;font-size:13px">Loading artists…</div>';
+        return;
+      }
+
+      const topArtists = artists.slice(0, 16);
+      shelf.innerHTML = topArtists.map(a => `
+        <div class="ytm-artist-card" role="button" tabindex="0" onclick="openArtistDetail('${escapeHtml(a.name)}')" title="${escapeHtml(a.name)}">
+          <div class="ytm-artist-art-wrap">
+            <img class="ytm-artist-avatar" src="${escapeHtml(a.img)}" alt="${escapeHtml(a.name)}" loading="lazy" decoding="async">
+            <div class="ytm-artist-play-overlay"><i class="fa-solid fa-play"></i></div>
+          </div>
+          <div class="ytm-artist-name">${escapeHtml(a.name)}</div>
+          <div class="ytm-artist-sub">${a.count} song${a.count !== 1 ? 's' : ''}</div>
+        </div>
+      `).join('');
+    }
+
+    export function renderArtistsFullGrid() {
+      const grid = $('homeArtistsFullGrid');
+      if (!grid) return;
+      const artists = getAllArtists();
+      if (!artists.length) {
+        grid.innerHTML = '<div style="color:var(--text-sub);padding:20px;font-size:14px">No artists found in library.</div>';
+        return;
+      }
+
+      grid.innerHTML = artists.map(a => `
+        <div class="ytm-artist-card grid-card" role="button" tabindex="0" onclick="openArtistDetail('${escapeHtml(a.name)}')" title="${escapeHtml(a.name)}">
+          <div class="ytm-artist-art-wrap">
+            <img class="ytm-artist-avatar" src="${escapeHtml(a.img)}" alt="${escapeHtml(a.name)}" loading="lazy" decoding="async">
+            <div class="ytm-artist-play-overlay"><i class="fa-solid fa-play"></i></div>
+          </div>
+          <div class="ytm-artist-name">${escapeHtml(a.name)}</div>
+          <div class="ytm-artist-sub">${a.count} song${a.count !== 1 ? 's' : ''}</div>
+        </div>
+      `).join('');
+    }
+
+    export function openHomeArtistsTab() {
+      const chips = document.querySelectorAll('#ytmMoodChips .ytm-chip');
+      chips.forEach(c => c.classList.remove('active'));
+      const artistChip = $('homeArtistsChip');
+      if (artistChip) artistChip.classList.add('active');
+      showArtistsView();
+    }
+
+    export function showArtistsView() {
+      const mainView = $('homeMainView');
+      const artistsView = $('homeArtistsView');
+      const detailView = $('homeArtistDetailView');
+      if (mainView) mainView.style.display = 'none';
+      if (detailView) detailView.style.display = 'none';
+      if (artistsView) {
+        artistsView.style.display = 'block';
+        renderArtistsFullGrid();
+      }
+    }
+
+    export function showDefaultHomeView() {
+      const mainView = $('homeMainView');
+      const artistsView = $('homeArtistsView');
+      const detailView = $('homeArtistDetailView');
+      if (artistsView) artistsView.style.display = 'none';
+      if (detailView) detailView.style.display = 'none';
+      if (mainView) mainView.style.display = 'block';
+    }
+
+    export function openArtistDetail(artistName: string) {
+      const artists = getAllArtists();
+      const artist = artists.find(a => a.name.toLowerCase() === artistName.toLowerCase()) || {
+        name: artistName,
+        img: DEFAULT_COVER,
+        count: 0,
+        songs: state.songs.filter(s => (s.artist || '').toLowerCase().includes(artistName.toLowerCase()))
+      };
+
+      const mainView = $('homeMainView');
+      const artistsView = $('homeArtistsView');
+      const detailView = $('homeArtistDetailView');
+      if (mainView) mainView.style.display = 'none';
+      if (artistsView) artistsView.style.display = 'none';
+      if (detailView) detailView.style.display = 'block';
+
+      // Render hero card
+      const heroCard = $('artistHeroCard');
+      if (heroCard) {
+        heroCard.innerHTML = `
+          <div class="artist-hero-backdrop" style="background-image:url('${escapeHtml(artist.img)}')"></div>
+          <div class="artist-hero-content">
+            <img class="artist-hero-img" src="${escapeHtml(artist.img)}" alt="${escapeHtml(artist.name)}" loading="lazy">
+            <div class="artist-hero-meta">
+              <span class="artist-hero-badge"><i class="fa-solid fa-circle-check"></i> Featured Artist</span>
+              <h1 class="artist-hero-name">${escapeHtml(artist.name)}</h1>
+              <p class="artist-hero-count">${artist.songs.length} song${artist.songs.length !== 1 ? 's' : ''} in your music</p>
+            </div>
+          </div>
+        `;
+      }
+
+      // Setup play all / shuffle buttons
+      const playAllBtn = $('artistPlayAllBtn');
+      if (playAllBtn) {
+        playAllBtn.onclick = () => playArtistSongs(artist.name, false);
+      }
+      const shuffleBtn = $('artistShuffleBtn');
+      if (shuffleBtn) {
+        shuffleBtn.onclick = () => playArtistSongs(artist.name, true);
+      }
+
+      // Render song rows
+      const songsList = $('artistSongsList');
+      if (songsList) {
+        if (!artist.songs.length) {
+          songsList.innerHTML = '<div style="color:var(--text-sub);padding:24px;font-size:14px">No tracks found for this artist.</div>';
+          return;
+        }
+
+        songsList.innerHTML = artist.songs.map((s, idx) => {
+          const globalIdx = state.songs.findIndex(x => x.id === s.id);
+          const isPlaying = state.currentIndex === globalIdx && state.isPlaying;
+          return `
+            <div class="artist-song-row ${isPlaying ? 'is-playing' : ''}" role="button" tabindex="0" onclick="playSong(${globalIdx >= 0 ? globalIdx : 0})">
+              <span class="artist-song-num">${isPlaying ? '<i class="fa-solid fa-volume-high"></i>' : (idx + 1)}</span>
+              <img class="artist-song-cover" src="${escapeHtml(s.img || DEFAULT_COVER)}" alt="" loading="lazy">
+              <div class="artist-song-info">
+                <div class="artist-song-title">${escapeHtml(s.title || 'Untitled')}</div>
+                <div class="artist-song-sub">${escapeHtml(s.artist || '')}</div>
+              </div>
+              <button type="button" class="artist-song-play-btn" title="Play"><i class="fa-solid fa-play"></i></button>
+            </div>
+          `;
+        }).join('');
+      }
+
+      window.scrollTo({ top: 0, behavior: 'smooth' });
+    }
+
+    export function closeArtistDetail() {
+      const activeChip = document.querySelector('#ytmMoodChips .ytm-chip.active') as HTMLElement | null;
+      const mood = activeChip?.dataset.mood || 'all';
+
+      if (mood === 'artists') {
+        showArtistsView();
+      } else {
+        showDefaultHomeView();
+      }
+    }
+
+    export function playArtistSongs(artistName: string, shuffle = false) {
+      const artists = getAllArtists();
+      const artist = artists.find(a => a.name.toLowerCase() === artistName.toLowerCase());
+      if (!artist || !artist.songs.length) return;
+
+      const songsToPlay = [...artist.songs];
+      if (shuffle) {
+        songsToPlay.sort(() => Math.random() - 0.5);
+      }
+
+      const firstSong = songsToPlay[0];
+      const idx = state.songs.findIndex(s => s.id === firstSong.id);
+      if (idx >= 0) {
+        playSong(idx);
+        toast(`Playing ${artist.name}`, 'play');
+      }
+    }
+
+    if (typeof window !== 'undefined') {
+      (window as any).openHomeArtistsTab = openHomeArtistsTab;
+      (window as any).openArtistDetail = openArtistDetail;
+      (window as any).closeArtistDetail = closeArtistDetail;
+      (window as any).playArtistSongs = playArtistSongs;
     }
 
     export function setupHeaderSearch(){
