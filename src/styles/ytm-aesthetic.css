@@ -729,6 +729,91 @@ body:has(#fullPlayerOverlay.active) {
   }
 }
 
+/* Mobile Full Player Tabs: Lyrics & Related Glassmorphic Pills */
+.player-tab-pills {
+  display: flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  gap: 12px !important;
+  margin: 22px auto 0 !important;
+  width: 100% !important;
+  max-width: 360px !important;
+  box-sizing: border-box !important;
+}
+
+.player-tab-pill {
+  display: inline-flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  gap: 8px !important;
+  padding: 10px 22px !important;
+  border-radius: 9999px !important;
+  background: rgba(255, 255, 255, 0.08) !important;
+  backdrop-filter: blur(16px) saturate(180%) !important;
+  -webkit-backdrop-filter: blur(16px) saturate(180%) !important;
+  border: 1px solid rgba(255, 255, 255, 0.14) !important;
+  color: rgba(255, 255, 255, 0.72) !important;
+  font-family: inherit !important;
+  font-size: 13.5px !important;
+  font-weight: 600 !important;
+  letter-spacing: 0.02em !important;
+  cursor: pointer !important;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.3) !important;
+  transition: all 0.22s cubic-bezier(0.34, 1.56, 0.64, 1) !important;
+  user-select: none !important;
+  -webkit-tap-highlight-color: transparent !important;
+  outline: none !important;
+}
+
+.player-tab-pill i {
+  font-size: 13px !important;
+  opacity: 0.85 !important;
+  transition: transform 0.2s ease !important;
+}
+
+.player-tab-pill:hover {
+  background: rgba(255, 255, 255, 0.16) !important;
+  color: #ffffff !important;
+  border-color: rgba(255, 255, 255, 0.28) !important;
+  transform: translateY(-1px) scale(1.02) !important;
+}
+
+.player-tab-pill:active {
+  transform: scale(0.96) !important;
+  background: rgba(255, 255, 255, 0.22) !important;
+}
+
+.player-tab-pill.active {
+  background: rgba(255, 255, 255, 0.2) !important;
+  border-color: rgba(255, 255, 255, 0.4) !important;
+  color: #ffffff !important;
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.45), 0 0 16px rgba(255, 255, 255, 0.15) !important;
+}
+
+.player-tab-pill.active i {
+  opacity: 1 !important;
+  color: #ffffff !important;
+}
+
+body.light-theme .player-tab-pill {
+  background: rgba(0, 0, 0, 0.06) !important;
+  border-color: rgba(0, 0, 0, 0.12) !important;
+  color: rgba(0, 0, 0, 0.72) !important;
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.08) !important;
+}
+
+body.light-theme .player-tab-pill:hover {
+  background: rgba(0, 0, 0, 0.1) !important;
+  color: #000000 !important;
+}
+
+body.light-theme .player-tab-pill.active {
+  background: rgba(0, 0, 0, 0.14) !important;
+  border-color: rgba(0, 0, 0, 0.24) !important;
+  color: #000000 !important;
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.12) !important;
+}
+
 /* Tab Header Switcher at top of the right panel */
 .ytm-right-tab-bar {
   height: 48px !important;
