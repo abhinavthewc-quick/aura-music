@@ -22,6 +22,7 @@ import { openArtist, shuffleArtist } from './features/library';
 import {
   addTrackToPlaylist, closePlaylistModal, drawerPlaylistTap, openPlaylistModal,
   playlistPageMore, playlistPageShare, submitPlaylistModal, updatePlaylistCta,
+  openPlaylistPage,
 } from './features/playlists';
 import {
   closeRadioSheetThen, loadRadioStations, radioMenuCopy, radioMenuShare,
@@ -32,7 +33,7 @@ import {
 // object, so everything they reference must be exposed here.
 Object.assign(globalThis, {
   $, state, toast,
-  navClick, goTab,
+  navClick, goTab, openPlaylistPage,
   openMobileSearch, closeMobileSearch, mobileSearchOnInput, mobileSearchClear,
   openPlaylistModal, closePlaylistModal, submitPlaylistModal, updatePlaylistCta,
   addTrackToPlaylist, playlistPageShare, playlistPageMore, drawerPlaylistTap,
