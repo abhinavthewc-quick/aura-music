@@ -1,6 +1,6 @@
 import './admin.css';
 import { ADMIN_EMAILS, GOOGLE_CLIENT_ID } from '../core/config';
-import { cleanArtist, cleanTitle } from '../core/catalog';
+import { cleanArtist, cleanTitle, ArtistMeta } from '../core/catalog';
 import { verifyGoogleCredential } from '../core/google-auth';
 import { clearSession, exchangeGoogleToken, getSession, setSession } from '../core/session';
 
@@ -152,6 +152,7 @@ function unlock() {
   refreshRuns();
   void refreshLibrary(); // populate "already uploaded" marks for search/queue/dispatch
   void loadLibraryManager(); // bucket file list + Library tab badge
+  void loadArtistsManager(); // artist list + Artists tab badge
   void loadDiscordOverview(true); // Discord tab badge + gateway status
   switchTab('panelAdd');
 }
@@ -159,7 +160,10 @@ function unlock() {
 function lock(msg?: string) {
   $('sessionBar').hidden = true;
   gatedSections.forEach((s) => { s.hidden = true; });
-  ['panelAdd', 'panelLibrary', 'panelDiscord', 'panelSettings'].forEach((id) => { $(id).hidden = true; });
+  ['panelAdd', 'panelLibrary', 'panelArtists', 'panelDiscord', 'panelSettings'].forEach((id) => {
+    const el = document.getElementById(id);
+    if (el) el.hidden = true;
+  });
   gBtnBox.innerHTML = '';
   gateCard.hidden = false;
   renderGisButton();
@@ -171,10 +175,17 @@ function switchTab(panelId: string): void {
   document.querySelectorAll<HTMLElement>('.adm-tab').forEach((b) => {
     b.classList.toggle('active', b.dataset.panel === panelId);
   });
-  for (const id of ['panelAdd', 'panelLibrary', 'panelDiscord', 'panelSettings']) $(id).hidden = id !== panelId;
+  for (const id of ['panelAdd', 'panelLibrary', 'panelArtists', 'panelDiscord', 'panelSettings']) {
+    const el = document.getElementById(id);
+    if (el) el.hidden = id !== panelId;
+  }
   if (panelId === 'panelLibrary') void loadLibraryManager();
+  if (panelId === 'panelArtists') void loadArtistsManager();
   if (panelId === 'panelDiscord') void initDiscord();
-  if (panelId === 'panelSettings') ($('configCard') as HTMLDetailsElement).open = true;
+  if (panelId === 'panelSettings') {
+    const cfg = document.getElementById('configCard') as HTMLDetailsElement | null;
+    if (cfg) cfg.open = true;
+  }
 }
 
 /* ---------- password fallback (server-issued token) ---------- */
@@ -718,23 +729,45 @@ const VID_SUFFIX_RE = / \[([A-Za-z0-9_-]{11})\]$/;
 const VID_RE = /^[A-Za-z0-9_-]{11}$/;
 
 interface LibFile { path: string; size: number; mtime?: string }
-interface LibMeta { t?: string; a?: string; al?: string; y?: string; d?: number }
+interface LibMeta { t?: string; a?: string; al?: string; y?: string; d?: number; g?: string }
 interface LibraryResponse {
   files?: LibFile[];
   videoIds?: string[];
   bucketId?: string;
   manifest?: Record<string, LibMeta>;
+  artists?: Record<string, ArtistMeta>;
 }
 interface LibEntry {
   path: string; stem: string; ext: string; vid: string;
   size: number; mtime: string;
-  title: string; artist: string; album: string; year: string; duration: number;
+  title: string; artist: string; album: string; year: string; duration: number; genre?: string;
   coverUrl: string;
 }
 
 let libFiles: LibFile[] = [];
 let libCovers = new Map<string, string>(); // audio stem -> cover path
 let libManifest: Record<string, LibMeta> = {};
+let libArtists: Record<string, ArtistMeta> = {};
+
+interface AdminArtist {
+  name: string;
+  normKey: string;
+  trackCount: number;
+  tracks: LibEntry[];
+  albums: string[];
+  img: string;
+  hasCustomImg: boolean;
+  bio: string;
+  genres: string[];
+  social: string;
+}
+
+let libArtistsCache: AdminArtist[] | null = null;
+let artistFilter = 'all';
+let artistSortMode = 'countDesc';
+let artistQuery = '';
+let artistSearchTimer: number | undefined;
+
 let libBucketId = '';
 let libLoadError = '';
 let libFilter = 'all';
@@ -765,14 +798,16 @@ function hfLibUrl(path: string): string {
 function ingestLibraryData(data: LibraryResponse): void {
   if (data.bucketId) libBucketId = data.bucketId;
   if (data.manifest) libManifest = data.manifest;
+  if (data.artists && typeof data.artists === 'object') libArtists = data.artists;
   const files = Array.isArray(data.files) ? data.files : [];
   libFiles = files.filter((f) => f && AUDIO_FILE_RE.test(f.path));
   libCovers = new Map();
   for (const f of files) {
     if (f && IMG_FILE_RE.test(f.path)) libCovers.set(f.path.replace(/\.[^.]+$/, ''), f.path);
   }
-  /* bucket data changed — drop the derived list so the next read rebuilds it */
+  /* bucket data changed — drop the derived lists so the next read rebuilds them */
   libEntriesCache = null;
+  libArtistsCache = null;
 }
 
 /* Parsing a filename into title/artist/album/ID costs a regex per file, and
@@ -792,7 +827,7 @@ function buildLibEntries(): LibEntry[] {
     const fm = /^(.+?)\s+-\s+(.+)$/.exec(base);
     let artist = fm ? fm[1].trim() : '';
     let title = fm ? fm[2].trim() : base;
-    let album = '', year = '', duration = 0;
+    let album = '', year = '', duration = 0, genre = '';
     const m = vid ? libManifest[vid] : undefined;
     if (m) {
       if (m.t) title = m.t;
@@ -800,12 +835,13 @@ function buildLibEntries(): LibEntry[] {
       if (m.al) album = m.al;
       if (m.y) year = String(m.y);
       if (typeof m.d === 'number') duration = m.d;
+      if (m.g) genre = m.g;
     }
     const coverPath = libCovers.get(stem);
     return {
       path: f.path, stem, ext, vid,
       size: Number(f.size) || 0, mtime: f.mtime || '',
-      title, artist, album, year, duration,
+      title, artist, album, year, duration, genre,
       coverUrl: coverPath ? hfLibUrl(coverPath) : '',
     };
   });
@@ -854,7 +890,8 @@ function libCardHTML(e: LibEntry): string {
       ${dur}
       ${check}
       <div class="adm-lcard-acts">
-        <button type="button" data-a="ren" title="Rename &amp; edit metadata" aria-label="Rename">✎</button>
+        <button type="button" data-a="play" title="Play audio preview" aria-label="Play">▶</button>
+        <button type="button" data-a="ren" title="Edit track &amp; metadata" aria-label="Edit">✎</button>
         <button type="button" data-a="cov" title="Replace cover art" aria-label="Cover">🖼</button>
         <button type="button" data-a="del" title="Delete track and cover" aria-label="Delete">🗑</button>
       </div>
@@ -941,12 +978,14 @@ function toggleLibSelect(path: string): void {
 const modalHost = $('modalHost');
 const modalCard = $('modalCard');
 
-function openModal(html: string): void {
+function openModal(html: string, wide = false): void {
+  modalCard.classList.toggle('wide', wide);
   modalCard.innerHTML = html;
   modalHost.hidden = false;
 }
 function closeModal(): void {
   modalHost.hidden = true;
+  modalCard.classList.remove('wide');
   modalCard.innerHTML = '';
 }
 modalHost.addEventListener('click', (e) => { if (e.target === modalHost) closeModal(); });
@@ -983,95 +1022,291 @@ function confirmRuns(tracks: number, runs: number): Promise<boolean> {
 const safeName = (s: string): string =>
   s.replace(/[\\/:*?"<>|\[\]]/g, ' ').replace(/\s{2,}/g, ' ').trim();
 
-/* ---------- rename / metadata edit ---------- */
-function openRenameModal(path: string): void {
+/* ---------- revamped track editor modal ---------- */
+async function openEditTrackModal(path: string): Promise<void> {
   const entry = buildLibEntries().find((e) => e.path === path);
   if (!entry) return;
-  const thumb = entry.coverUrl
-    ? `<img src="${escHtml(entry.coverUrl)}" alt="">`
-    : '<span class="adm-lcard-note">♪</span>';
-  const albumHint = entry.vid
-    ? 'shows on the site'
-    : 'needs a video ID — not available for this file';
-  openModal(`
+
+  const allArtists = Array.from(new Set(buildLibEntries().map((e) => e.artist).filter(Boolean))).sort();
+  const datalistOptions = allArtists.map((a) => `<option value="${escHtml(a)}">`).join('');
+
+  let pendingCoverData: string | null = null;
+  const currentCover = entry.coverUrl || '';
+
+  const modalHtml = `
     <div class="adm-modal-head">
-      <div class="adm-modal-thumb">${thumb}</div>
       <div>
-        <h3 class="adm-modal-title">Edit track</h3>
-        <p class="adm-modal-sub">Rename moves the audio + cover together; title/artist/album also sync to the site via manifest.json.</p>
+        <h3 class="adm-modal-title"><i class="fa-solid fa-sliders"></i> Edit Track</h3>
+        <p class="adm-modal-sub">Rename audio and cover, auto-clean titles, adjust metadata, and sync changes to Aura Music.</p>
       </div>
     </div>
-    <label class="adm-label" for="mfnTitle">Title</label>
-    <input class="adm-input" id="mfnTitle" type="text" spellcheck="false" maxlength="180">
-    <label class="adm-label" for="mfnArtist">Artist</label>
-    <input class="adm-input" id="mfnArtist" type="text" spellcheck="false" maxlength="180" placeholder="Unknown artist">
-    <label class="adm-label" for="mfnAlbum">Album <span class="adm-modal-hint">${albumHint}</span></label>
-    <input class="adm-input" id="mfnAlbum" type="text" spellcheck="false" maxlength="180" ${entry.vid ? '' : 'disabled'} placeholder="—">
-    <div class="adm-modal-file">file: <code id="mfnPreview"></code></div>
-    <div class="adm-status" id="mfnStatus"></div>
-    <div class="adm-modal-actions">
-      <button type="button" class="adm-btn ghost" id="mfnCancel">Cancel</button>
-      <button type="button" class="adm-btn primary" id="mfnSave">Save</button>
-    </div>`);
 
-  const titleInput = $<HTMLInputElement>('mfnTitle');
-  const artistInput = $<HTMLInputElement>('mfnArtist');
-  const albumInput = $<HTMLInputElement>('mfnAlbum');
-  const preview = $('mfnPreview');
-  titleInput.value = entry.title;
-  artistInput.value = entry.artist;
-  albumInput.value = entry.album;
+    <div class="adm-edit-track-grid">
+      <div class="adm-track-cover-col">
+        <div class="adm-track-cover-img" id="etmCoverBox">
+          ${currentCover ? `<img id="etmCoverImg" src="${escHtml(currentCover)}" alt="">` : '<i class="fa-solid fa-music" style="font-size:36px;color:var(--dim)"></i>'}
+        </div>
+        <button type="button" class="adm-btn small ghost" id="etmPlayPreviewBtn"><i class="fa-solid fa-play"></i> Play preview</button>
+        <button type="button" class="adm-btn small ghost" id="etmPickCoverBtn"><i class="fa-solid fa-image"></i> Replace cover</button>
+        <input type="file" id="etmCoverFileInput" accept="image/jpeg,image/png,image/webp" style="display:none">
+        <input type="text" class="adm-input" id="etmCoverUrlInput" placeholder="Or paste image URL" style="font-size:11.5px;padding:5px 8px;margin-top:4px;">
+      </div>
+
+      <div class="adm-fields-grid">
+        <div class="adm-field-full">
+          <label class="adm-label" for="etmTitle">Title</label>
+          <div class="adm-field-with-btn">
+            <input class="adm-input" id="etmTitle" type="text" spellcheck="false" maxlength="180" value="${escHtml(entry.title)}">
+            <button type="button" class="adm-btn ghost small" id="etmCleanTitleBtn" title="Clean Title (strips official audio, video, etc.)">✨ Clean</button>
+          </div>
+        </div>
+
+        <div class="adm-field-full">
+          <label class="adm-label" for="etmArtist">Artist</label>
+          <div class="adm-field-with-btn">
+            <input class="adm-input" id="etmArtist" list="etmArtistList" type="text" spellcheck="false" maxlength="180" placeholder="Unknown artist" value="${escHtml(entry.artist)}">
+            <datalist id="etmArtistList">${datalistOptions}</datalist>
+            <button type="button" class="adm-btn ghost small" id="etmCleanArtistBtn" title="Clean Artist name">✨ Clean</button>
+          </div>
+        </div>
+
+        <div>
+          <label class="adm-label" for="etmAlbum">Album</label>
+          <input class="adm-input" id="etmAlbum" type="text" spellcheck="false" maxlength="180" placeholder="Album name" value="${escHtml(entry.album)}">
+        </div>
+
+        <div>
+          <label class="adm-label" for="etmYear">Year</label>
+          <input class="adm-input" id="etmYear" type="text" maxlength="4" placeholder="e.g. 2024" value="${escHtml(entry.year)}">
+        </div>
+
+        <div>
+          <label class="adm-label" for="etmDuration">Duration <small style="color:var(--dim)">(MM:SS or sec)</small></label>
+          <input class="adm-input" id="etmDuration" type="text" placeholder="e.g. 3:45" value="${entry.duration ? fmtDur(entry.duration) : ''}">
+        </div>
+
+        <div>
+          <label class="adm-label" for="etmGenre">Genre</label>
+          <input class="adm-input" id="etmGenre" type="text" placeholder="e.g. Pop, Soundtrack" value="${escHtml(entry.genre || '')}">
+        </div>
+
+        <div class="adm-field-full">
+          ${entry.vid ? `
+            <div class="adm-modal-file" style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:6px;">
+              <span>YouTube ID: <a href="https://www.youtube.com/watch?v=${escHtml(entry.vid)}" target="_blank" rel="noopener noreferrer" style="color:var(--gold);text-decoration:underline;"><b>${escHtml(entry.vid)}</b> <i class="fa-solid fa-arrow-up-right-from-square" style="font-size:10px"></i></a></span>
+              <button type="button" class="adm-btn ghost small" id="etmFetchYtBtn" style="padding:2px 8px;font-size:11px;">Fetch YouTube Meta</button>
+            </div>
+          ` : `
+            <div class="adm-modal-file dim"><i class="fa-solid fa-file-audio"></i> Local track (no YouTube ID)</div>
+          `}
+        </div>
+
+        <div class="adm-field-full">
+          <div class="adm-modal-file">Bucket filename: <code id="etmFilePreview"></code></div>
+        </div>
+      </div>
+    </div>
+
+    <div class="adm-status" id="etmStatus"></div>
+
+    <div class="adm-modal-actions" style="justify-content:space-between;width:100%;">
+      <button type="button" class="adm-btn danger ghost" id="etmDeleteBtn"><i class="fa-solid fa-trash"></i> Delete</button>
+      <div style="display:flex;gap:8px;align-items:center;">
+        <button type="button" class="adm-btn ghost" id="etmCancelBtn">Cancel</button>
+        <button type="button" class="adm-btn ghost" id="etmSaveNextBtn"><i class="fa-solid fa-forward-step"></i> Save &amp; Next</button>
+        <button type="button" class="adm-btn primary" id="etmSaveBtn"><i class="fa-solid fa-check"></i> Save Changes</button>
+      </div>
+    </div>
+  `;
+
+  openModal(modalHtml, true);
+
+  const titleInput = $<HTMLInputElement>('etmTitle');
+  const artistInput = $<HTMLInputElement>('etmArtist');
+  const albumInput = $<HTMLInputElement>('etmAlbum');
+  const yearInput = $<HTMLInputElement>('etmYear');
+  const durInput = $<HTMLInputElement>('etmDuration');
+  const genreInput = $<HTMLInputElement>('etmGenre');
+  const filePreview = $('etmFilePreview');
+  const coverBox = $('etmCoverBox');
+  const coverFileInput = $<HTMLInputElement>('etmCoverFileInput');
+  const coverUrlInput = $<HTMLInputElement>('etmCoverUrlInput');
+  const statusEl = $('etmStatus');
 
   const newStem = (): string => {
     const t = safeName(titleInput.value) || 'Untitled';
     const a = safeName(artistInput.value);
     return (a ? a + ' - ' : '') + t + (entry.vid ? ' [' + entry.vid + ']' : '');
   };
-  const showPreview = () => { preview.textContent = newStem() + entry.ext; };
+  const showPreview = () => { filePreview.textContent = newStem() + entry.ext; };
   titleInput.addEventListener('input', showPreview);
   artistInput.addEventListener('input', showPreview);
   showPreview();
-  titleInput.focus();
-  titleInput.select();
 
-  $('mfnCancel').addEventListener('click', closeModal);
-  $('mfnSave').addEventListener('click', async () => {
-    const statusEl = $('mfnStatus');
+  $('etmCleanTitleBtn').addEventListener('click', () => {
+    titleInput.value = cleanTitle(titleInput.value);
+    showPreview();
+  });
+
+  $('etmCleanArtistBtn').addEventListener('click', () => {
+    artistInput.value = cleanArtist(artistInput.value);
+    showPreview();
+  });
+
+  $('etmPlayPreviewBtn').addEventListener('click', () => {
+    playTrackPreview(entry);
+  });
+
+  $('etmPickCoverBtn').addEventListener('click', () => {
+    coverFileInput.click();
+  });
+
+  coverFileInput.addEventListener('change', () => {
+    const file = coverFileInput.files?.[0];
+    if (!file) return;
+    if (file.size > MAX_COVER_BYTES) {
+      setStatus(statusEl, '✗ Cover image too large (max 1.5 MB)', 'err');
+      return;
+    }
+    const reader = new FileReader();
+    reader.onload = () => {
+      const dataUri = String(reader.result || '');
+      pendingCoverData = dataUri;
+      coverBox.innerHTML = `<img src="${escHtml(dataUri)}" alt="Cover preview">`;
+    };
+    reader.readAsDataURL(file);
+  });
+
+  coverUrlInput.addEventListener('change', () => {
+    const url = coverUrlInput.value.trim();
+    if (!url) return;
+    pendingCoverData = url;
+    coverBox.innerHTML = `<img src="${escHtml(url)}" alt="Cover preview">`;
+  });
+
+  if (entry.vid) {
+    $('etmFetchYtBtn')?.addEventListener('click', async () => {
+      setStatus(statusEl, 'Fetching YouTube info…');
+      try {
+        const res = await fetch('https://www.youtube.com/oembed?format=json&url=' + encodeURIComponent('https://www.youtube.com/watch?v=' + entry.vid));
+        if (!res.ok) throw new Error('Could not fetch oembed');
+        const d = await res.json();
+        if (d.title) titleInput.value = cleanTitle(d.title);
+        if (d.author_name) artistInput.value = cleanArtist(d.author_name);
+        showPreview();
+        setStatus(statusEl, '✓ Filled from YouTube', 'ok');
+      } catch {
+        setStatus(statusEl, '✗ Could not fetch YouTube metadata', 'err');
+      }
+    });
+  }
+
+  $('etmDeleteBtn').addEventListener('click', () => {
+    closeModal();
+    openDeleteModal([entry.path]);
+  });
+
+  $('etmCancelBtn').addEventListener('click', closeModal);
+
+  const performSave = async (andNext: boolean) => {
     const title = safeName(titleInput.value) || 'Untitled';
     const artist = safeName(artistInput.value);
-    const album = albumInput.disabled ? entry.album : safeName(albumInput.value);
-    const to = newStem() + entry.ext;
-    const btn = $('mfnSave') as HTMLButtonElement;
-    btn.disabled = true;
+    const album = safeName(albumInput.value);
+    const year = yearInput.value.trim();
+    const genre = genreInput.value.trim();
+
+    // Parse duration
+    let durSec = 0;
+    const durStr = durInput.value.trim();
+    if (durStr.includes(':')) {
+      const [m, s] = durStr.split(':').map(Number);
+      if (!isNaN(m) && !isNaN(s)) durSec = m * 60 + s;
+    } else if (durStr) {
+      const n = Number(durStr);
+      if (!isNaN(n)) durSec = n;
+    }
+
+    const toPath = newStem() + entry.ext;
+    const saveBtn = $<HTMLButtonElement>('etmSaveBtn');
+    const saveNextBtn = $<HTMLButtonElement>('etmSaveNextBtn');
+    saveBtn.disabled = true;
+    saveNextBtn.disabled = true;
+
     try {
       let renamed = false;
-      if (to !== entry.path) {
+      if (toPath !== entry.path) {
         setStatus(statusEl, 'Renaming in the bucket…');
-        await adminApi('bucketRename', { from: entry.path, to });
+        await adminApi('bucketRename', { from: entry.path, to: toPath });
         renamed = true;
       }
-      const metaChanged = title !== entry.title || artist !== entry.artist || album !== entry.album;
+
+      if (pendingCoverData) {
+        setStatus(statusEl, 'Uploading cover artwork…');
+        await adminApi('bucketCover', { path: toPath, data: pendingCoverData });
+      }
+
+      const metaChanged =
+        title !== entry.title ||
+        artist !== entry.artist ||
+        album !== entry.album ||
+        year !== entry.year ||
+        (durSec > 0 && durSec !== entry.duration) ||
+        Boolean(genre);
+
       let synced = false;
       if (entry.vid && metaChanged) {
-        setStatus(statusEl, 'Syncing metadata to the site…');
+        setStatus(statusEl, 'Syncing metadata to manifest.json…');
+        const payload: Record<string, unknown> = { id: entry.vid, title, artist, album };
+        if (year) payload.year = year;
+        if (durSec > 0) payload.duration = durSec;
+        if (genre) payload.genre = genre;
         try {
-          await adminApi('bucketManifestSet', { id: entry.vid, title, artist, album });
+          await adminApi('bucketManifestSet', payload);
           synced = true;
         } catch (e) {
           if (!/not in manifest/i.test((e as Error).message)) throw e;
         }
       }
+
+      toast(renamed || synced || pendingCoverData ? 'Track changes saved' : 'No changes to save', 'ok');
+
+      // Update in-memory entry to prevent stale state before reload
+      entry.path = toPath;
+      entry.title = title;
+      entry.artist = artist;
+      entry.album = album;
+      entry.year = year;
+      if (durSec > 0) entry.duration = durSec;
+      if (genre) entry.genre = genre;
+      libEntriesCache = null;
+      libArtistsCache = null;
+
+      if (andNext) {
+        const visible = libVisibleEntries();
+        const curIdx = visible.findIndex((e) => e.path === toPath || e.path === entry.path);
+        const next = curIdx >= 0 && curIdx + 1 < visible.length ? visible[curIdx + 1] : null;
+        if (next) {
+          void openEditTrackModal(next.path);
+          return;
+        }
+      }
+
       closeModal();
-      if (renamed) toast(synced ? 'Renamed — metadata sync queued' : 'Track renamed', 'ok');
-      else if (synced) toast('Metadata sync queued — live in about a minute', 'ok');
-      else { closeModal(); return; }
       await loadLibraryManager(true);
       await refreshLibrary(true);
     } catch (e) {
       setStatus(statusEl, '✗ ' + ((e as Error).message || 'save failed'), 'err');
-      btn.disabled = false;
+      saveBtn.disabled = false;
+      saveNextBtn.disabled = false;
     }
-  });
+  };
+
+  $('etmSaveBtn').addEventListener('click', () => void performSave(false));
+  $('etmSaveNextBtn').addEventListener('click', () => void performSave(true));
+}
+
+function openRenameModal(path: string): void {
+  void openEditTrackModal(path);
 }
 
 /* ---------- delete (single or bulk) ---------- */
@@ -1151,6 +1386,515 @@ function pickLibCover(path: string) {
     reader.readAsDataURL(file);
   };
   coverPicker.click();
+}
+
+/* ---------- audio preview player ---------- */
+let currentPlayingPath = '';
+
+function initAudioPlayer(): void {
+  const audio = $<HTMLAudioElement>('admAudioElem');
+  const bar = $<HTMLElement>('admAudioBar');
+  const playBtn = $<HTMLButtonElement>('admAudioPlayBtn');
+  const playIcon = $<HTMLElement>('admAudioPlayIcon');
+  const curTime = $<HTMLElement>('admAudioCurTime');
+  const totalTime = $<HTMLElement>('admAudioTotalTime');
+  const seek = $<HTMLInputElement>('admAudioSeek');
+  const muteBtn = $<HTMLButtonElement>('admAudioMuteBtn');
+  const muteIcon = $<HTMLElement>('admAudioMuteIcon');
+  const closeBtn = $<HTMLButtonElement>('admAudioCloseBtn');
+
+  playBtn.addEventListener('click', () => {
+    if (audio.paused) void audio.play();
+    else audio.pause();
+  });
+
+  audio.addEventListener('play', () => {
+    playIcon.className = 'fa-solid fa-pause';
+  });
+
+  audio.addEventListener('pause', () => {
+    playIcon.className = 'fa-solid fa-play';
+  });
+
+  audio.addEventListener('ended', () => {
+    playIcon.className = 'fa-solid fa-play';
+    seek.value = '0';
+    curTime.textContent = '0:00';
+  });
+
+  audio.addEventListener('timeupdate', () => {
+    if (!audio.duration || isNaN(audio.duration)) return;
+    curTime.textContent = fmtDur(audio.currentTime);
+    seek.value = String((audio.currentTime / audio.duration) * 100);
+  });
+
+  audio.addEventListener('loadedmetadata', () => {
+    if (audio.duration && !isNaN(audio.duration)) {
+      totalTime.textContent = fmtDur(audio.duration);
+    }
+  });
+
+  seek.addEventListener('input', () => {
+    if (audio.duration && !isNaN(audio.duration)) {
+      audio.currentTime = (Number(seek.value) / 100) * audio.duration;
+    }
+  });
+
+  muteBtn.addEventListener('click', () => {
+    audio.muted = !audio.muted;
+    muteIcon.className = audio.muted ? 'fa-solid fa-volume-xmark' : 'fa-solid fa-volume-high';
+  });
+
+  closeBtn.addEventListener('click', () => {
+    audio.pause();
+    audio.src = '';
+    bar.hidden = true;
+    currentPlayingPath = '';
+  });
+}
+
+function playTrackPreview(entry: { path: string; title: string; artist: string; coverUrl?: string; duration?: number }): void {
+  const audio = $<HTMLAudioElement>('admAudioElem');
+  const bar = $<HTMLElement>('admAudioBar');
+  const img = $<HTMLImageElement>('admAudioImg');
+  const title = $<HTMLElement>('admAudioTitle');
+  const artist = $<HTMLElement>('admAudioArtist');
+  const totalTime = $<HTMLElement>('admAudioTotalTime');
+
+  currentPlayingPath = entry.path;
+  img.src = entry.coverUrl || 'data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" width="40" height="40" viewBox="0 0 40 40"><rect width="40" height="40" fill="%23222"/><text x="20" y="25" font-size="16" text-anchor="middle" fill="%23888">♪</text></svg>';
+  title.textContent = entry.title || 'Unknown Title';
+  artist.textContent = entry.artist || 'Unknown Artist';
+  if (entry.duration) totalTime.textContent = fmtDur(entry.duration);
+
+  bar.hidden = false;
+  audio.src = hfLibUrl(entry.path);
+  audio.currentTime = 0;
+  audio.play().catch((e) => {
+    console.warn('Audio playback error:', e);
+  });
+}
+
+/* ---------- artist management ---------- */
+function buildAdminArtists(): AdminArtist[] {
+  if (libArtistsCache) return libArtistsCache;
+  const entries = buildLibEntries();
+  const map = new Map<string, { name: string; tracks: LibEntry[]; albums: Set<string> }>();
+
+  for (const e of entries) {
+    const rawArtist = (e.artist || '').trim() || 'Unknown Artist';
+    const norm = rawArtist.toLowerCase();
+    let g = map.get(norm);
+    if (!g) {
+      g = { name: rawArtist, tracks: [], albums: new Set() };
+      map.set(norm, g);
+    }
+    g.tracks.push(e);
+    if (e.album) g.albums.add(e.album);
+  }
+
+  const result: AdminArtist[] = [];
+  for (const [norm, g] of map.entries()) {
+    const custom = libArtists[norm] || Object.values(libArtists).find((a) => (a.name || '').toLowerCase() === norm);
+    const name = custom?.name || g.name;
+    const sampleCover = g.tracks.find((t) => t.coverUrl)?.coverUrl || '';
+    const img = custom?.img || sampleCover;
+    const hasCustomImg = Boolean(custom?.img);
+    const bio = custom?.bio || '';
+    const genres = Array.isArray(custom?.genres) ? custom.genres : [];
+    const social = custom?.social || '';
+
+    result.push({
+      name,
+      normKey: norm,
+      trackCount: g.tracks.length,
+      tracks: g.tracks,
+      albums: Array.from(g.albums),
+      img,
+      hasCustomImg,
+      bio,
+      genres,
+      social,
+    });
+  }
+
+  // Include custom artists from manifest with 0 tracks
+  for (const [norm, meta] of Object.entries(libArtists)) {
+    const k = norm.toLowerCase();
+    if (!map.has(k) && meta) {
+      result.push({
+        name: meta.name || norm,
+        normKey: k,
+        trackCount: 0,
+        tracks: [],
+        albums: [],
+        img: meta.img || '',
+        hasCustomImg: Boolean(meta.img),
+        bio: meta.bio || '',
+        genres: Array.isArray(meta.genres) ? meta.genres : [],
+        social: meta.social || '',
+      });
+    }
+  }
+
+  libArtistsCache = result;
+  return libArtistsCache;
+}
+
+function artistVisibleList(): AdminArtist[] {
+  let list = buildAdminArtists().slice();
+
+  if (artistFilter === 'hascustom') {
+    list = list.filter((a) => a.hasCustomImg || a.bio || a.genres.length > 0);
+  } else if (artistFilter === 'defaultpic') {
+    list = list.filter((a) => !a.hasCustomImg);
+  }
+
+  const q = artistQuery.toLowerCase().trim();
+  if (q) {
+    list = list.filter((a) =>
+      a.name.toLowerCase().includes(q) ||
+      a.genres.some((g) => g.toLowerCase().includes(q)) ||
+      a.bio.toLowerCase().includes(q),
+    );
+  }
+
+  const cmp: Record<string, (a: AdminArtist, b: AdminArtist) => number> = {
+    countDesc: (a, b) => b.trackCount - a.trackCount || a.name.localeCompare(b.name),
+    nameAsc: (a, b) => a.name.localeCompare(b.name),
+    nameDesc: (a, b) => b.name.localeCompare(a.name),
+    customFirst: (a, b) => (b.hasCustomImg ? 1 : 0) - (a.hasCustomImg ? 1 : 0) || b.trackCount - a.trackCount,
+  };
+
+  return list.sort(cmp[artistSortMode] || cmp.countDesc);
+}
+
+function renderArtistsGrid(): void {
+  const grid = $('artistGrid');
+  const all = buildAdminArtists();
+  const shown = artistVisibleList();
+
+  const customCount = all.filter((a) => a.hasCustomImg).length;
+  const counts = {
+    all: all.length,
+    hascustom: customCount,
+    defaultpic: all.length - customCount,
+  };
+
+  $('artistFilters').querySelectorAll<HTMLElement>('button').forEach((b) => {
+    const el = b.querySelector('b');
+    if (el) el.textContent = String(counts[(b.dataset.f || 'all') as keyof typeof counts] ?? 0);
+  });
+
+  $('artistStats').textContent = all.length
+    ? `Showing ${shown.length === all.length ? all.length : shown.length + ' of ' + all.length} artists · ${customCount} with custom pictures`
+    : '';
+  $('artistsHeadSub').textContent = all.length ? `${all.length} artists` : '';
+  const badge = $('artistsTabCount');
+  badge.hidden = !all.length;
+  badge.textContent = String(all.length);
+
+  if (!all.length) {
+    grid.innerHTML = '<span class="adm-chip dim">no artists found in library</span>';
+    return;
+  }
+  if (!shown.length) {
+    grid.innerHTML = '<span class="adm-chip dim">no artists match this search/filter</span>';
+    return;
+  }
+
+  grid.innerHTML = shown.map((a) => {
+    const avatar = a.img
+      ? `<img src="${escHtml(a.img)}" alt="${escHtml(a.name)}" loading="lazy">`
+      : '<i class="fa-solid fa-user" style="font-size:32px;color:var(--dim)"></i>';
+    const customBadge = a.hasCustomImg
+      ? '<span class="adm-acard-badge" title="Custom portrait set"><i class="fa-solid fa-star"></i> Custom</span>'
+      : '';
+    const genres = a.genres.length
+      ? `<div class="adm-acard-genres">${a.genres.map((g) => `<span class="adm-acard-tag">${escHtml(g)}</span>`).join('')}</div>`
+      : '';
+
+    return `
+      <div class="adm-acard" data-artist="${escHtml(a.name)}">
+        <div class="adm-acard-avatar">
+          ${avatar}
+          ${customBadge}
+        </div>
+        <div class="adm-acard-name" title="${escHtml(a.name)}">${escHtml(a.name)}</div>
+        <div class="adm-acard-count">${a.trackCount} ${a.trackCount === 1 ? 'track' : 'tracks'}${a.albums.length ? ` · ${a.albums.length} ${a.albums.length === 1 ? 'album' : 'albums'}` : ''}</div>
+        ${genres}
+        <div class="adm-acard-acts">
+          <button type="button" class="adm-btn small ghost" data-artist-view="${escHtml(a.name)}"><i class="fa-solid fa-music"></i> Tracks</button>
+          <button type="button" class="adm-btn small primary" data-artist-edit="${escHtml(a.name)}"><i class="fa-solid fa-pen"></i> Edit</button>
+        </div>
+      </div>
+    `;
+  }).join('');
+}
+
+async function loadArtistsManager(force = false): Promise<void> {
+  const statusEl = $('artistStatus');
+  if (force) setStatus(statusEl, 'Loading artists…');
+  try {
+    if (!libFiles.length || force) {
+      const data = await adminApi<LibraryResponse>('library');
+      ingestLibraryData(data);
+    }
+    libArtistsCache = null;
+    renderArtistsGrid();
+    if (force) setStatus(statusEl, `Loaded ${buildAdminArtists().length} artists`, 'ok');
+  } catch (e) {
+    setStatus(statusEl, '✗ ' + ((e as Error).message || 'could not load artists'), 'err');
+  }
+}
+
+function viewArtistSongs(artistName: string): void {
+  switchTab('panelLibrary');
+  libQuery = artistName;
+  const input = $<HTMLInputElement>('libSearchInput');
+  input.value = artistName;
+  renderLibGrid();
+}
+
+function openEditArtistModal(artistName: string): void {
+  const artists = buildAdminArtists();
+  const artist = artists.find((a) => a.name.toLowerCase() === artistName.toLowerCase() || a.normKey === artistName.toLowerCase());
+  if (!artist) {
+    toast('Artist not found', 'err');
+    return;
+  }
+
+  let chosenImg = artist.hasCustomImg ? artist.img : '';
+  const albumCovers = Array.from(new Set(artist.tracks.map((t) => t.coverUrl).filter(Boolean)));
+
+  const carouselHtml = albumCovers.length ? `
+    <label class="adm-label">Pick from song album covers</label>
+    <div class="adm-artist-carousel" id="aemCarousel">
+      ${albumCovers.map((c) => `
+        <div class="adm-artist-thumb-opt${c === chosenImg ? ' active' : ''}" data-cover="${escHtml(c)}" title="Click to use this artwork">
+          <img src="${escHtml(c)}" alt="" loading="lazy">
+        </div>
+      `).join('')}
+    </div>
+  ` : '';
+
+  const songsHtml = artist.tracks.length ? `
+    <label class="adm-label" style="margin-top:12px;">Tracks by this artist (${artist.tracks.length})</label>
+    <div class="adm-artist-songs-list" id="aemSongsList">
+      ${artist.tracks.map((t) => `
+        <div class="adm-artist-song-item" data-path="${escHtml(t.path)}">
+          <button type="button" class="adm-artist-song-play" data-song-play="${escHtml(t.path)}" title="Play track"><i class="fa-solid fa-play"></i></button>
+          <div class="adm-artist-song-title" title="${escHtml(t.title)}">${escHtml(t.title)}</div>
+          <div class="adm-artist-song-album">${escHtml(t.album || '—')}</div>
+          <button type="button" class="adm-btn small ghost" data-song-edit="${escHtml(t.path)}" style="padding:2px 8px;font-size:11px;">Edit</button>
+        </div>
+      `).join('')}
+    </div>
+  ` : '';
+
+  const modalHtml = `
+    <div class="adm-modal-head">
+      <div>
+        <h3 class="adm-modal-title"><i class="fa-solid fa-user-pen"></i> Edit Artist: ${escHtml(artist.name)}</h3>
+        <p class="adm-modal-sub">Customize artist portrait, biography, and genres, or batch rename artist across all tracks.</p>
+      </div>
+    </div>
+
+    <div class="adm-edit-track-grid">
+      <div class="adm-track-cover-col">
+        <div class="adm-acard-avatar" style="width:130px;height:130px;margin:0 auto;box-shadow:0 8px 24px rgba(0,0,0,0.5);" id="aemAvatarBox">
+          ${(chosenImg || artist.img) ? `<img id="aemAvatarImg" src="${escHtml(chosenImg || artist.img)}" alt="${escHtml(artist.name)}">` : '<i class="fa-solid fa-user" style="font-size:44px;color:var(--dim)"></i>'}
+        </div>
+        <button type="button" class="adm-btn small ghost" id="aemUploadBtn"><i class="fa-solid fa-upload"></i> Upload Picture</button>
+        <input type="file" id="aemFileInput" accept="image/jpeg,image/png,image/webp" style="display:none">
+        <button type="button" class="adm-btn small ghost" id="aemClearPicBtn" style="color:var(--red)"><i class="fa-solid fa-xmark"></i> Remove Picture</button>
+      </div>
+
+      <div class="adm-fields-grid">
+        <div class="adm-field-full">
+          <label class="adm-label" for="aemName">Artist Name</label>
+          <input class="adm-input" id="aemName" type="text" maxlength="120" value="${escHtml(artist.name)}">
+          <label class="adm-dcheck" style="margin-top:6px;">
+            <input type="checkbox" id="aemRenameTracks" checked>
+            <span>Also update artist name on all <b>${artist.trackCount}</b> tracks in library (batch rename)</span>
+          </label>
+        </div>
+
+        <div class="adm-field-full">
+          <label class="adm-label" for="aemImgUrl">Picture URL <small style="color:var(--dim)">(direct image link)</small></label>
+          <input class="adm-input" id="aemImgUrl" type="url" placeholder="https://..." value="${artist.hasCustomImg ? escHtml(artist.img) : ''}">
+        </div>
+
+        <div class="adm-field-full">
+          ${carouselHtml}
+        </div>
+
+        <div class="adm-field-full">
+          <label class="adm-label" for="aemGenres">Genres <small style="color:var(--dim)">(comma separated)</small></label>
+          <input class="adm-input" id="aemGenres" type="text" placeholder="e.g. Pop, Synthpop, Dance" value="${escHtml(artist.genres.join(', '))}">
+        </div>
+
+        <div class="adm-field-full">
+          <label class="adm-label" for="aemBio">Bio / Description</label>
+          <textarea class="adm-input" id="aemBio" rows="3" maxlength="600" placeholder="Short biography of the artist...">${escHtml(artist.bio)}</textarea>
+        </div>
+
+        <div class="adm-field-full">
+          <label class="adm-label" for="aemSocial">Social / Website Link</label>
+          <input class="adm-input" id="aemSocial" type="url" placeholder="https://instagram.com/..." value="${escHtml(artist.social)}">
+        </div>
+
+        <div class="adm-field-full">
+          ${songsHtml}
+        </div>
+      </div>
+    </div>
+
+    <div class="adm-status" id="aemStatus"></div>
+
+    <div class="adm-modal-actions">
+      <button type="button" class="adm-btn ghost" id="aemCancelBtn">Cancel</button>
+      <button type="button" class="adm-btn primary" id="aemSaveBtn"><i class="fa-solid fa-floppy-disk"></i> Save Artist Profile</button>
+    </div>
+  `;
+
+  openModal(modalHtml, true);
+
+  const avatarBox = $('aemAvatarBox');
+  const fileInput = $<HTMLInputElement>('aemFileInput');
+  const imgUrlInput = $<HTMLInputElement>('aemImgUrl');
+  const nameInput = $<HTMLInputElement>('aemName');
+  const bioInput = $<HTMLTextAreaElement>('aemBio');
+  const genresInput = $<HTMLInputElement>('aemGenres');
+  const socialInput = $<HTMLInputElement>('aemSocial');
+  const renameTracksCheck = $<HTMLInputElement>('aemRenameTracks');
+  const statusEl = $('aemStatus');
+
+  const updateAvatarPreview = (src: string) => {
+    if (src) {
+      avatarBox.innerHTML = `<img id="aemAvatarImg" src="${escHtml(src)}" alt="">`;
+    } else {
+      avatarBox.innerHTML = '<i class="fa-solid fa-user" style="font-size:44px;color:var(--dim)"></i>';
+    }
+  };
+
+  $('aemUploadBtn').addEventListener('click', () => fileInput.click());
+
+  fileInput.addEventListener('change', () => {
+    const file = fileInput.files?.[0];
+    if (!file) return;
+    if (file.size > MAX_COVER_BYTES) {
+      setStatus(statusEl, '✗ Image file too large (max 1.5 MB)', 'err');
+      return;
+    }
+    const reader = new FileReader();
+    reader.onload = () => {
+      const dataUri = String(reader.result || '');
+      chosenImg = dataUri;
+      imgUrlInput.value = '';
+      updateAvatarPreview(dataUri);
+    };
+    reader.readAsDataURL(file);
+  });
+
+  imgUrlInput.addEventListener('input', () => {
+    const url = imgUrlInput.value.trim();
+    chosenImg = url;
+    updateAvatarPreview(url || artist.img);
+  });
+
+  $('aemClearPicBtn').addEventListener('click', () => {
+    chosenImg = '';
+    imgUrlInput.value = '';
+    updateAvatarPreview('');
+  });
+
+  const carousel = document.getElementById('aemCarousel');
+  if (carousel) {
+    carousel.addEventListener('click', (e) => {
+      const opt = (e.target as HTMLElement).closest<HTMLElement>('.adm-artist-thumb-opt');
+      if (!opt?.dataset.cover) return;
+      chosenImg = opt.dataset.cover;
+      imgUrlInput.value = chosenImg;
+      carousel.querySelectorAll('.adm-artist-thumb-opt').forEach((o) => {
+        o.classList.toggle('active', o === opt);
+      });
+      updateAvatarPreview(chosenImg);
+    });
+  }
+
+  const songsList = document.getElementById('aemSongsList');
+  if (songsList) {
+    songsList.addEventListener('click', (e) => {
+      const playBtn = (e.target as HTMLElement).closest<HTMLElement>('[data-song-play]');
+      if (playBtn?.dataset.songPlay) {
+        const t = artist.tracks.find((item) => item.path === playBtn.dataset.songPlay);
+        if (t) playTrackPreview(t);
+        return;
+      }
+      const editBtn = (e.target as HTMLElement).closest<HTMLElement>('[data-song-edit]');
+      if (editBtn?.dataset.songEdit) {
+        closeModal();
+        void openEditTrackModal(editBtn.dataset.songEdit);
+        return;
+      }
+    });
+  }
+
+  $('aemCancelBtn').addEventListener('click', closeModal);
+
+  $('aemSaveBtn').addEventListener('click', async () => {
+    const newName = nameInput.value.trim() || artist.name;
+    const bio = bioInput.value.trim();
+    const genres = genresInput.value.split(',').map((g) => g.trim()).filter(Boolean);
+    const social = socialInput.value.trim();
+    const renameTracks = renameTracksCheck.checked;
+
+    const saveBtn = $<HTMLButtonElement>('aemSaveBtn');
+    saveBtn.disabled = true;
+    setStatus(statusEl, 'Saving artist profile…');
+
+    try {
+      const res = await adminApi<{ ok: boolean; renamedTrackCount?: number }>('artistSet', {
+        artist: artist.name,
+        name: newName,
+        img: chosenImg,
+        bio,
+        genres,
+        social,
+        renameTracks,
+      });
+
+      libArtists[artist.normKey] = {
+        name: newName,
+        img: chosenImg,
+        bio,
+        genres,
+        social,
+        updated: Date.now(),
+      };
+      if (newName.toLowerCase() !== artist.normKey) {
+        libArtists[newName.toLowerCase()] = libArtists[artist.normKey];
+      }
+
+      if (renameTracks && newName !== artist.name) {
+        for (const t of artist.tracks) {
+          t.artist = newName;
+        }
+      }
+
+      libArtistsCache = null;
+      libEntriesCache = null;
+
+      closeModal();
+      toast(res.renamedTrackCount ? `Artist saved & renamed across ${res.renamedTrackCount} tracks` : 'Artist profile saved', 'ok');
+      renderArtistsGrid();
+      renderLibGrid();
+    } catch (e) {
+      setStatus(statusEl, '✗ ' + ((e as Error).message || 'could not save artist'), 'err');
+      saveBtn.disabled = false;
+    }
+  });
 }
 
 
@@ -1999,10 +2743,55 @@ function bind() {
     const path = card.dataset.path;
     if (libSelectMode) { toggleLibSelect(path); return; }
     const act = (t.closest<HTMLElement>('[data-a]'))?.dataset.a;
-    if (act === 'ren') openRenameModal(path);
-    else if (act === 'cov') pickLibCover(path);
-    else if (act === 'del') openDeleteModal([path]);
+    if (act === 'play') {
+      const entry = buildLibEntries().find((item) => item.path === path);
+      if (entry) playTrackPreview(entry);
+    } else if (act === 'ren') {
+      void openEditTrackModal(path);
+    } else if (act === 'cov') {
+      pickLibCover(path);
+    } else if (act === 'del') {
+      openDeleteModal([path]);
+    }
   });
+
+  /* Artist manager */
+  $('artistsRefreshBtn').addEventListener('click', () => { void loadArtistsManager(true); });
+  $('artistSort').addEventListener('change', (e) => {
+    artistSortMode = (e.target as HTMLSelectElement).value;
+    renderArtistsGrid();
+  });
+  $('artistSearchInput').addEventListener('input', (e) => {
+    window.clearTimeout(artistSearchTimer);
+    artistSearchTimer = window.setTimeout(() => {
+      artistQuery = (e.target as HTMLInputElement).value;
+      renderArtistsGrid();
+    }, 200);
+  });
+  $('artistFilters').addEventListener('click', (e) => {
+    const btn = (e.target as HTMLElement).closest<HTMLElement>('.adm-chip.artistf');
+    if (!btn?.dataset.f) return;
+    artistFilter = btn.dataset.f;
+    $('artistFilters').querySelectorAll('.adm-chip.artistf').forEach((b) => {
+      b.classList.toggle('active', b === btn);
+    });
+    renderArtistsGrid();
+  });
+  $('artistGrid').addEventListener('click', (e) => {
+    const editBtn = (e.target as HTMLElement).closest<HTMLElement>('[data-artist-edit]');
+    if (editBtn?.dataset.artistEdit) {
+      openEditArtistModal(editBtn.dataset.artistEdit);
+      return;
+    }
+    const viewBtn = (e.target as HTMLElement).closest<HTMLElement>('[data-artist-view]');
+    if (viewBtn?.dataset.artistView) {
+      viewArtistSongs(viewBtn.dataset.artistView);
+      return;
+    }
+  });
+
+  /* Audio Preview Bar */
+  initAudioPlayer();
 
   /* Discord / Aura Farmer */
   $('discordRefreshBtn').addEventListener('click', () => { void initDiscord(); });

@@ -527,3 +527,414 @@ body {
   .adm-dfield-wide { grid-column: auto; }
   .adm-ditem { flex-wrap: wrap; }
 }
+
+/* ==========================================================================
+   Artists Management & Cards
+   ========================================================================== */
+.adm-artists-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(210px, 1fr));
+  gap: 16px;
+  margin-top: 14px;
+  max-height: 66vh;
+  overflow-y: auto;
+  padding: 4px;
+}
+
+.adm-acard {
+  background: rgba(0, 0, 0, 0.35);
+  border: 1px solid rgba(255, 255, 255, 0.09);
+  border-radius: 16px;
+  padding: 18px 14px 14px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+  position: relative;
+  transition: all 0.2s cubic-bezier(0.2, 0, 0, 1);
+}
+
+.adm-acard:hover {
+  border-color: rgba(220, 174, 124, 0.45);
+  background: rgba(220, 174, 124, 0.05);
+  transform: translateY(-3px);
+  box-shadow: 0 10px 24px rgba(0, 0, 0, 0.4);
+}
+
+.adm-acard-avatar {
+  width: 90px;
+  height: 90px;
+  border-radius: 50%;
+  overflow: hidden;
+  position: relative;
+  background: linear-gradient(145deg, #2a2118, #171310);
+  border: 2px solid rgba(220, 174, 124, 0.3);
+  margin-bottom: 12px;
+  display: grid;
+  place-items: center;
+  box-shadow: 0 6px 16px rgba(0, 0, 0, 0.4);
+  flex: none;
+}
+
+.adm-acard-avatar img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.adm-acard-badge {
+  position: absolute;
+  top: 10px;
+  right: 10px;
+  background: var(--gold);
+  color: #171310;
+  font-size: 10px;
+  font-weight: 700;
+  padding: 2px 7px;
+  border-radius: 999px;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.4);
+}
+
+.adm-acard-name {
+  font-size: 14.5px;
+  font-weight: 700;
+  color: var(--text);
+  margin-bottom: 4px;
+  width: 100%;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.adm-acard-count {
+  font-size: 12px;
+  color: var(--dim);
+  margin-bottom: 8px;
+}
+
+.adm-acard-genres {
+  display: flex;
+  gap: 5px;
+  flex-wrap: wrap;
+  justify-content: center;
+  margin-bottom: 12px;
+  min-height: 20px;
+}
+
+.adm-acard-tag {
+  font-size: 10.5px;
+  background: rgba(255, 255, 255, 0.07);
+  color: var(--gold);
+  padding: 1px 7px;
+  border-radius: 6px;
+  font-weight: 500;
+}
+
+.adm-acard-acts {
+  display: flex;
+  gap: 8px;
+  width: 100%;
+  margin-top: auto;
+}
+
+.adm-acard-acts .adm-btn {
+  flex: 1;
+  padding: 7px 10px;
+  font-size: 12px;
+  text-align: center;
+}
+
+/* ==========================================================================
+   Admin Audio Preview Bar
+   ========================================================================== */
+.adm-audio-bar {
+  position: fixed;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  height: 72px;
+  background: rgba(14, 12, 10, 0.95);
+  backdrop-filter: blur(18px);
+  -webkit-backdrop-filter: blur(18px);
+  border-top: 1px solid rgba(220, 174, 124, 0.3);
+  display: flex;
+  align-items: center;
+  padding: 0 clamp(16px, 4vw, 36px);
+  gap: 18px;
+  z-index: 100;
+  box-shadow: 0 -8px 28px rgba(0, 0, 0, 0.6);
+  animation: admBarSlideUp 0.25s cubic-bezier(0.2, 0, 0, 1);
+}
+
+@keyframes admBarSlideUp {
+  from { transform: translateY(100%); }
+  to { transform: translateY(0); }
+}
+
+.adm-audio-bar[hidden] {
+  display: none !important;
+}
+
+.adm-audio-art {
+  width: 48px;
+  height: 48px;
+  border-radius: 8px;
+  overflow: hidden;
+  flex: none;
+  background: #171310;
+  box-shadow: 0 4px 10px rgba(0, 0, 0, 0.4);
+}
+
+.adm-audio-art img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.adm-audio-info {
+  width: 200px;
+  flex: 0 1 240px;
+  min-width: 0;
+}
+
+.adm-audio-title {
+  font-size: 13.5px;
+  font-weight: 700;
+  color: var(--text);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.adm-audio-artist {
+  font-size: 11.5px;
+  color: var(--dim);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  margin-top: 2px;
+}
+
+.adm-audio-ctrls {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-width: 0;
+}
+
+.adm-audio-btn {
+  width: 38px;
+  height: 38px;
+  border-radius: 50%;
+  background: var(--gold);
+  color: #171310;
+  border: none;
+  display: grid;
+  place-items: center;
+  cursor: pointer;
+  font-size: 14px;
+  flex: none;
+  transition: transform 0.15s, background 0.15s;
+}
+
+.adm-audio-btn:hover {
+  transform: scale(1.08);
+  filter: brightness(1.1);
+}
+
+.adm-audio-btn.small {
+  width: 30px;
+  height: 30px;
+  font-size: 12px;
+  background: transparent;
+  color: var(--dim);
+}
+
+.adm-audio-btn.small:hover {
+  color: var(--text);
+  background: rgba(255, 255, 255, 0.08);
+}
+
+.adm-audio-time {
+  font-size: 11.5px;
+  font-family: ui-monospace, SFMono-Regular, monospace;
+  color: var(--dim);
+  flex: none;
+}
+
+.adm-audio-seek {
+  flex: 1;
+  height: 5px;
+  border-radius: 999px;
+  accent-color: var(--gold);
+  background: rgba(255, 255, 255, 0.12);
+  cursor: pointer;
+  outline: none;
+}
+
+.adm-audio-close {
+  background: transparent;
+  border: none;
+  color: var(--dim);
+  font-size: 24px;
+  cursor: pointer;
+  padding: 4px 8px;
+  line-height: 1;
+  transition: color 0.15s;
+}
+
+.adm-audio-close:hover {
+  color: var(--text);
+}
+
+/* ==========================================================================
+   Revamped Modals (Wide modal card, track editor layout, artist editor layout)
+   ========================================================================== */
+.adm-modal-card.wide {
+  width: min(720px, 94vw);
+  max-height: 90vh;
+}
+
+.adm-edit-track-grid {
+  display: grid;
+  grid-template-columns: 160px 1fr;
+  gap: 20px;
+  margin-top: 14px;
+}
+
+@media (max-width: 640px) {
+  .adm-edit-track-grid {
+    grid-template-columns: 1fr;
+  }
+}
+
+.adm-track-cover-col {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 10px;
+}
+
+.adm-track-cover-img {
+  width: 150px;
+  height: 150px;
+  border-radius: 12px;
+  overflow: hidden;
+  background: #171310;
+  border: 1px solid rgba(255, 255, 255, 0.14);
+  box-shadow: 0 8px 24px rgba(0, 0, 0, 0.5);
+  display: grid;
+  place-items: center;
+}
+
+.adm-track-cover-img img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.adm-fields-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 12px;
+}
+
+.adm-field-full {
+  grid-column: 1 / -1;
+}
+
+.adm-field-with-btn {
+  display: flex;
+  gap: 6px;
+}
+
+.adm-field-with-btn .adm-input {
+  flex: 1;
+}
+
+.adm-artist-carousel {
+  display: flex;
+  gap: 10px;
+  overflow-x: auto;
+  padding: 6px 2px 10px;
+  scrollbar-width: thin;
+}
+
+.adm-artist-thumb-opt {
+  width: 60px;
+  height: 60px;
+  border-radius: 8px;
+  overflow: hidden;
+  flex: none;
+  border: 2px solid transparent;
+  cursor: pointer;
+  transition: all 0.15s;
+}
+
+.adm-artist-thumb-opt:hover {
+  border-color: var(--gold);
+  transform: scale(1.05);
+}
+
+.adm-artist-thumb-opt.active {
+  border-color: var(--gold);
+  box-shadow: 0 0 10px rgba(220, 174, 124, 0.5);
+}
+
+.adm-artist-thumb-opt img {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+}
+
+.adm-artist-songs-list {
+  max-height: 180px;
+  overflow-y: auto;
+  border: 1px solid rgba(255, 255, 255, 0.1);
+  border-radius: 10px;
+  background: rgba(0, 0, 0, 0.25);
+  margin-top: 8px;
+}
+
+.adm-artist-song-item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 12px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+  font-size: 12.5px;
+}
+
+.adm-artist-song-item:last-child {
+  border-bottom: none;
+}
+
+.adm-artist-song-play {
+  background: transparent;
+  border: none;
+  color: var(--gold);
+  cursor: pointer;
+  font-size: 13px;
+  padding: 4px;
+}
+
+.adm-artist-song-title {
+  flex: 1;
+  font-weight: 600;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.adm-artist-song-album {
+  color: var(--dim);
+  font-size: 11.5px;
+  max-width: 140px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
