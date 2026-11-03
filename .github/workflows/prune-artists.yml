@@ -1,0 +1,28 @@
+name: Prune Artists from Hugging Face Bucket
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  prune:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+
+      - name: Install dependencies
+        run: |
+          pip install -q --upgrade huggingface_hub
+
+      - name: Run Prune Script
+        env:
+          HF_TOKEN: ${{ secrets.HF_TOKEN }}
+          HF_BUCKET_ID: ${{ secrets.HF_BUCKET_ID }}
+        run: |
+          python scripts/prune_artists.py

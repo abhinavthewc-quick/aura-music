@@ -14,16 +14,23 @@ const COVER_RE = /\.(jpe?g|png|webp|gif)$/i;
 const VIDEO_ID_SUFFIX_RE = /\s\[[A-Za-z0-9_-]{11}\]$/;
 const VIDEO_ID_RE = /\[([A-Za-z0-9_-]{11})\]$/;
 
-/* Tracks hidden from the library — accidental duplicates uploaded to the
-   bucket. Matched as bracketed YouTube video IDs (the stable identity of
-   each upload) and applied to BOTH fresh fetches and cached catalogs, so
-   hiding one takes effect immediately.
-   (Starboy dup: kept "The Weeknd - Starboy [3_g2un5M350]".) */
+/* Tracks hidden from the library — duplicates or pruned artists.
+   Applied to BOTH fresh fetches and cached catalogs so removal is instant. */
 const HIDDEN_TRACK_PATTERNS: string[] = [
-  '[34Na4j8AVgA]', // Starboy (feat. Daft Punk) — duplicate of [3_g2un5M350]
+  '[34Na4j8AVgA]', // duplicate
 ];
-const isHiddenTrack = (path: string) =>
-  HIDDEN_TRACK_PATTERNS.some((pat) => path.includes(pat));
+
+export function isPrunedArtist(text: string): boolean {
+  if (!text) return false;
+  const t = text.toLowerCase();
+  return t.includes('michael jackson') || t.includes('weeknd');
+}
+
+const isHiddenTrack = (path: string, artist = '', title = '') =>
+  HIDDEN_TRACK_PATTERNS.some((pat) => path.includes(pat)) ||
+  isPrunedArtist(path) ||
+  isPrunedArtist(artist) ||
+  isPrunedArtist(title);
 
 export const DEFAULT_COVER =
   'data:image/svg+xml;utf8,' +
@@ -109,10 +116,10 @@ export function readCatalogCache(): any[] {
     if (!raw) return [];
     const parsed = JSON.parse(raw);
     if (!Array.isArray(parsed?.tracks)) return [];
-    // Drop hidden tracks even from the cache so removal is instant.
+    // Drop hidden/pruned tracks even from the cache so removal is instant.
     return parsed.tracks.filter((t: any) => {
       const path = typeof t?.id === 'string' && t.id.startsWith('hf:') ? t.id.slice(3) : '';
-      return !path || !isHiddenTrack(path);
+      return !isHiddenTrack(path, t?.artist || '', t?.title || '');
     });
   } catch {
     return [];
@@ -217,7 +224,9 @@ export async function fetchHfCatalog(): Promise<any[]> {
     }
     if (!prev.videoId && t.videoId) bySong.set(k, t);
   }
-  const finalTracks = [...bySong.values()];
+  const finalTracks = [...bySong.values()].filter(
+    (t) => !isHiddenTrack(t.hfPath || '', t.artist || '', t.title || '')
+  );
 
   try {
     localStorage.setItem(CACHE_KEY, JSON.stringify({ tracks: finalTracks, at: Date.now() }));
