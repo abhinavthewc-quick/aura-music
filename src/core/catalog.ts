@@ -23,7 +23,13 @@ const HIDDEN_TRACK_PATTERNS: string[] = [
 export function isPrunedArtist(text: string): boolean {
   if (!text) return false;
   const t = text.toLowerCase();
-  return t.includes('michael jackson') || t.includes('weeknd');
+  return (
+    t.includes('michael jackson') ||
+    t.includes('weeknd') ||
+    t.includes('jackson 5') ||
+    t.includes('the jacksons') ||
+    t.includes('jacksons')
+  );
 }
 
 const isHiddenTrack = (path: string, artist = '', title = '') =>

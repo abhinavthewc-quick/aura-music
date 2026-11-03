@@ -25,7 +25,7 @@ def is_target(text: str) -> bool:
     if not text:
         return False
     t = text.lower()
-    return "michael jackson" in t or "weeknd" in t
+    return "michael jackson" in t or "weeknd" in t or "jackson" in t
 
 def fetch_bucket_tree(bucket_id: str) -> list:
     url = f"https://huggingface.co/api/buckets/{bucket_id}/tree?recursive=true"
