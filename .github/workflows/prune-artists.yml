@@ -1,9 +1,6 @@
 name: Prune Artists from Hugging Face Bucket
 
 on:
-  push:
-    paths:
-      - 'scripts/trigger_prune.txt'
   workflow_dispatch:
 
 permissions:
