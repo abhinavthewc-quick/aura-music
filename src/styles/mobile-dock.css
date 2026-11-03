@@ -140,7 +140,8 @@ body.light-theme .nav-fab.active{
     width:100%;
     transform:scaleX(0);
     transform-origin:left;
-    background:#e6b77b;
+    /* Art-driven like the rest of the transport (warm default in base.css) */
+    background:rgb(var(--dyn-rgb));
     transition:transform .1s linear;
     pointer-events:none;
   }

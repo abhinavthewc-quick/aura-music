@@ -9,3 +9,9 @@ __pycache__/
 .wrangler/
 rooms-worker/node_modules/
 rooms-worker/.wrangler/
+
+# Python / Telepathy
+.venv/
+*.db
+.pytest_cache/
+tsconfig.tsbuildinfo

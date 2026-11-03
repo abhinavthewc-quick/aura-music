@@ -8,6 +8,7 @@
 @import './radio.css';
 @import './add-music.css';
 @import './track-sheet.css';
+@import './overlays.css';
 @import './library.css';
 @import './settings.css';
 @import './effects.css';
@@ -26,3 +27,5 @@
 @import './mobile-dock.css';
 @import './updates-oct24.css';
 @import './playlists.css';
+@import './design-polish.css';
+@import './ytm-aesthetic.css';

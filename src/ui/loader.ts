@@ -77,39 +77,98 @@
   window.AuraOrb={create:create,mountAll:mountAll,reduce:reduce};
 })();
 
-/* Full-screen intro loader: shows on every visit (new or returning), then the orb rushes toward the viewer and fills the screen as the app appears. */
+import {
+  createLiquidGlassLogoRenderer,
+  liquidGlassLogoDefaults,
+  normalizeLiquidGlassLogo,
+} from '../components/liquid-glass-logo-renderer';
+
+/* Full-screen intro loader: plays the ReactDrops Liquid Glass Logo startup animation and smoothly dissolves into Aura Music. */
 (function(){
   var el=document.getElementById('auraLoader'); if(!el) return;
   var root=document.documentElement;
-  var MIN_MS=600, CAP_MS=6000;                 /* shortest time the orb is shown / longest we ever wait */
-  function cleanup(){ if(el.parentNode) el.parentNode.removeChild(el); root.classList.remove('aura-loading'); }
+  var MIN_MS=3800, CAP_MS=6000;
+  var reduce=false;
+  try{ reduce=window.matchMedia('(prefers-reduced-motion:reduce)').matches; }catch(e){}
+  if(reduce) MIN_MS=300;
+
+  var canvas = document.getElementById('auraLiquidCanvas') as HTMLCanvasElement | null;
+  var liquidRenderer: ReturnType<typeof createLiquidGlassLogoRenderer> | null = null;
+
+  function cleanup(){
+    if(liquidRenderer){
+      try { liquidRenderer.dispose(); } catch(e){}
+      liquidRenderer = null;
+    }
+    if(el && el.parentNode) el.parentNode.removeChild(el);
+    root.classList.remove('aura-loading');
+  }
+
   try{
-    var small=Math.min(window.screen.width||1000,window.screen.height||1000)<700;
-    var orb=window.AuraOrb.create(el.querySelector('canvas'),{count:small?420:720,radius:.36,cy:.46,dot:1,speed:.9});
-    if(!orb){ cleanup(); return; }
-    var t0=performance.now(), done=false, loaded=document.readyState==='complete', fontsOk=!document.fonts, timer;
-    window.addEventListener('load',function(){ loaded=true; check(); });
-    if(document.fonts && document.fonts.ready){ document.fonts.ready.then(function(){ fontsOk=true; },function(){ fontsOk=true; }); }
+    var t0=performance.now(), done=false;
+    var loaded=document.readyState==='complete';
+    var fontsOk=!document.fonts;
+    var timer: any;
+
+    if(canvas){
+      try {
+        var isLight = document.body && document.body.classList.contains('light-theme');
+        var tuning = normalizeLiquidGlassLogo({
+          ...liquidGlassLogoDefaults,
+          logo: '/aura-vinyl-logo.png',
+          ending: 'logo',
+          depth: 2.4,
+          dispersion: 1.45,
+          relief: 1.2,
+          caustics: 1.35,
+          highlights: 1.5,
+          bloom: 0.7,
+          dropStrength: 2.1,
+          decay: 3,
+          innerWallFocus: 0.15,
+          speed: 0.45,
+          loopDelay: 2.4,
+          background: isLight ? '#e2e2e5' : '#000000',
+        });
+        liquidRenderer = createLiquidGlassLogoRenderer(canvas, tuning, function(){
+          if(el) el.setAttribute('data-ready', '1');
+        });
+      } catch(err) {
+        if(el) el.setAttribute('data-ready', '1');
+      }
+    }
+
+    window.addEventListener('load', function(){ loaded=true; check(); });
+    el.addEventListener('click', leave);
+    if(document.fonts && document.fonts.ready){
+      document.fonts.ready.then(function(){ fontsOk=true; check(); }, function(){ fontsOk=true; check(); });
+    }
+
     function check(){
       if(done) return;
       var spent=performance.now()-t0;
       var sheets=window.__aura && window.__aura.sheets>=2;
-      if((spent>=MIN_MS && loaded && fontsOk && sheets) || spent>=CAP_MS) leave();
+      var appReady=loaded && fontsOk && sheets;
+      if((spent>=MIN_MS && appReady) || spent>=CAP_MS){
+        leave();
+      }
     }
+
     function leave(){
-      done=true; clearInterval(timer);
-      var tx=document.getElementById('auraLoaderText'); if(tx) tx.classList.add('leaving');
-      el.style.pointerEvents='none';
+      if(done) return;
+      done=true;
+      clearInterval(timer);
+      var tx=document.getElementById('auraLoaderText');
+      if(tx) tx.classList.add('leaving');
+      el.classList.add('leaving');
       el.setAttribute('aria-hidden','true');
-      var dur=window.AuraOrb.reduce?350:550, s=performance.now();
-      setTimeout(function(){ el.style.transition='opacity .35s ease'; el.style.opacity='0'; }, window.AuraOrb.reduce?0:150);
-      (function tick(now){
-        var p=Math.min(1,(now-s)/dur);
-        orb.setZoom(window.AuraOrb.reduce?0:p);
-        if(p<1) requestAnimationFrame(tick);
-        else { orb.stop(); cleanup(); }
-      })(s);
+      var fadeDur=reduce?200:450;
+      setTimeout(cleanup, fadeDur + 50);
     }
-    timer=setInterval(check,100);
-  }catch(err){ cleanup(); }
+
+    timer=setInterval(check, 80);
+    check();
+  }catch(err){
+    cleanup();
+  }
 })();

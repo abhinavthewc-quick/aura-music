@@ -134,7 +134,7 @@ async function startRemote(name: string, requestedRoom: string | null, keyFromUr
   try {
     await transport.connect();
     client.join(name);
-    setStatus(ownerKey && !requestedRoom ? 'connected to the room server — you are the admin' : 'connected to the room server', 'ok');
+      setStatus(ownerKey && !requestedRoom ? 'connected to the room server — you are the admin' : 'connected to the room server', 'ok');
   } catch (err) {
     setStatus(`✗ ${(err as Error).message}`, 'err');
   }

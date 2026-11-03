@@ -6,6 +6,16 @@ export default defineConfig({
     proxy: {
       // Local dev: forward admin API calls to the deployed Pages function.
       '/api/admin': 'https://aura-music-01g.pages.dev',
+      // Local dev: forward audio edge proxy to deployed Pages function
+      '/api/audio': {
+        target: 'https://aura-music-01g.pages.dev',
+        changeOrigin: true,
+      },
+      // Local dev: forward telepathy / telemetry API
+      '/api/v1': {
+        target: 'https://aura-music-01g.pages.dev',
+        changeOrigin: true,
+      },
       // Local dev: rooms run against a local Durable Object
       // (`cd rooms-worker && npm run dev`). Set ROOMS_DEV_URL to change the
       // port. In production this path is served by functions/api/rooms.ts.

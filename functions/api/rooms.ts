@@ -53,8 +53,8 @@ export const onRequestPost = async ({ request, env }: { request: Request; env: E
     const origin = urlOrigin(request);
     return json({
       ...created,
-      shareUrl: `${origin}/#/room/${created.roomId}`,
-      adminUrl: `${origin}/#/room/${created.roomId}?k=${created.adminKey}`,
+      shareUrl: `${origin}/rooms?r=${created.roomId}`,
+      adminUrl: `${origin}/rooms?r=${created.roomId}&k=${created.adminKey}`,
     });
   }
 

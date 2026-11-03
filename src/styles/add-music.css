@@ -45,8 +45,8 @@
 
     /* Shuffle / Repeat active states */
     .full-ctrl-btn{position:relative}
-    .full-ctrl-btn.mode-active{color:var(--accent)}
-    .repeat-one-badge{position:absolute;top:-2px;right:-6px;font-size:9px;font-weight:800;background:var(--accent);color:#fff;border-radius:50%;width:13px;height:13px;display:flex;align-items:center;justify-content:center}
+    .full-ctrl-btn.mode-active{color:rgb(var(--dyn-rgb))}
+    .repeat-one-badge{position:absolute;top:-2px;right:-6px;font-size:9px;font-weight:800;background:rgb(var(--dyn-rgb));color:var(--dyn-fg);border-radius:50%;width:13px;height:13px;display:flex;align-items:center;justify-content:center}
 
     /* Song item action buttons (menu) */
     .song-item-actions{display:flex;align-items:center;gap:0;flex-shrink:0}

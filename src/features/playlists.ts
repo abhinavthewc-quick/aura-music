@@ -78,14 +78,26 @@ function ownerAvatarHTML(cls: string): string {
 
 export function renderSidebarPlaylists() {
   const pls = getPlaylists();
-  const render = (containerId: string, drawer: boolean) => {
-    const c = $(containerId);
-    if (!c) return;
-    /* drawer taps also close the drawer; sidebar taps don't need to */
-    const tap = (kind: string, plId: string) => drawer
-      ? `drawerPlaylistTap('${kind}','${plId}')`
-      : (kind === 'favorites' || kind === 'recent' ? `goToSearchCategory('${kind}')` : `openPlaylistPage('${plId}')`);
-    c.innerHTML = `
+
+  /* Desktop sidebar: user-created playlists in the YTM sidebar style.
+     Liked Music / Recently Played / Local Files are pinned statically in the markup. */
+  const sidebar = $('sidebarPlaylists');
+  if (sidebar) {
+    sidebar.innerHTML = pls.map(p => `
+      <div class="ytm-playlist-item" role="button" tabindex="0" onclick="openPlaylistPage('${p.id}')">
+        <div class="ytm-pl-row">
+          <span class="ytm-pl-name">${esc(p.title)}</span>
+          <small class="pl-count">${p.tracks.length}</small>
+        </div>
+        <span class="ytm-pl-sub">${esc(p.privacy)}${p.tracks.length ? ` • ${p.tracks.length} track${p.tracks.length !== 1 ? 's' : ''}` : ' • Empty'}</span>
+      </div>`).join('');
+  }
+
+  /* Mobile drawer: full list, same data — taps close the drawer first. */
+  const drawerEl = $('drawerPlaylists');
+  if (drawerEl) {
+    const tap = (kind: string, plId: string) => `drawerPlaylistTap('${kind}','${plId}')`;
+    drawerEl.innerHTML = `
       <button class="pl-link" type="button" onclick="${tap('favorites','')}"><i class="fa-solid fa-heart"></i><span>Liked Music</span></button>
       <button class="pl-link" type="button" onclick="${tap('recent','')}"><i class="fa-solid fa-clock-rotate-left"></i><span>Recently Played</span></button>
       ${pls.map(p => `
@@ -95,9 +107,7 @@ export function renderSidebarPlaylists() {
         </button>`).join('')}
       <button class="pl-link pl-new" type="button" onclick="${tap('new','')}"><i class="fa-solid fa-plus"></i><span>New playlist</span></button>
     `;
-  };
-  render('sidebarPlaylists', false);
-  render('drawerPlaylists', true);
+  }
 }
 
 /* unified drawer playlist tap: closes the drawer, then opens the target */

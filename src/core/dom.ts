@@ -8,6 +8,13 @@ import { DEFAULT_COVER } from './catalog';
       return `${m}:${s < 10 ? '0' : ''}${s}`;
     }
 
+    /** Escape text before it is interpolated into an HTML string. Track and
+        artist names come from uploads and YouTube metadata, so they must never
+        be treated as markup. */
+    export function escapeHtml(value){
+      return String(value ?? '').replace(/[&<>'"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;',"'":'&#39;','"':'&quot;'}[c]));
+    }
+
     /* ---------- Adaptive player color (from cover art) ----------
        Samples the current track's cover image on a small canvas and washes
        the full-player background with that color, Spotify/Apple-Music
@@ -32,10 +39,10 @@ import { DEFAULT_COVER } from './catalog';
 /* ===== 2995-3005 ===== */
     /* Toast Notifications */
     export function toast(msg, icon='circle-check'){
-      const c = $('toastContainer');
+      const c = $('toastContainer'); if(!c) return;
       const t = document.createElement('div');
       t.className='toast';
-      t.innerHTML=`<i class="fa-solid fa-${icon}"></i><span>${msg}</span>`;
+      t.innerHTML=`<i class="fa-solid fa-${icon}" aria-hidden="true"></i><span>${escapeHtml(msg)}</span>`;
       c.appendChild(t);
       requestAnimationFrame(()=>t.classList.add('show'));
       setTimeout(()=>{ t.classList.remove('show'); setTimeout(()=>t.remove(),300); },2500);
@@ -115,5 +122,5 @@ import { DEFAULT_COVER } from './catalog';
         ? '<div class="aura-state-orb"><canvas class="aura-orb-mini" aria-hidden="true"></canvas></div>'
         : `<div class="aura-state-icon"><i class="fa-solid ${icons[kind]||icons.empty}"></i></div>`;
       if(kind==='loading' && window.AuraOrb) requestAnimationFrame(()=>window.AuraOrb.mountAll());
-      return `<div class="aura-state aura-state-${kind}" role="status">${iconHtml}<b>${title}</b>${sub?`<p>${sub}</p>`:''}${btnLabel?`<button type="button" class="aura-state-btn" onclick="${btnJs}">${btnLabel}</button>`:''}</div>`;
+      return `<div class="aura-state aura-state-${kind}" role="status">${iconHtml}<b>${escapeHtml(title)}</b>${sub?`<p>${escapeHtml(sub)}</p>`:''}${btnLabel?`<button type="button" class="aura-state-btn" onclick="${btnJs}">${escapeHtml(btnLabel)}</button>`:''}</div>`;
     }

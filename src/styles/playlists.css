@@ -39,22 +39,18 @@ body.light-theme .playlist-btn.ghost{border-color:rgba(120,85,45,.3);color:#5a4a
 .playlist-btn.primary:disabled{opacity:.45;cursor:not-allowed;box-shadow:none}
 
 /* ---------- playlist links (desktop sidebar + mobile drawer, same data) ---------- */
-.desktop-playlists{margin-top:10px}
+.ytm-user-playlists{margin-top:2px}
 .pl-link{
   display:flex;align-items:center;gap:12px;width:100%;min-height:42px;padding:0 12px;margin:2px 0;
   border:1px solid transparent;border-radius:13px;background:transparent;color:var(--sb-text);
-  font:inherit;font-size:12.5px;font-weight:600;text-align:left;cursor:pointer;transition:.2s ease;
+  font:inherit;font-size:13px;font-weight:600;text-align:left;cursor:pointer;transition:.2s ease;
 }
 .pl-link i{width:19px;text-align:center;font-size:14px;flex:0 0 19px}
 .pl-link span{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .pl-link .pl-count{font-size:10px;color:var(--text-sub);font-weight:700}
-.pl-link:hover,.pl-link:active{color:var(--text);background:rgba(255,236,210,.07);border-color:rgba(220,174,124,.16)}
-.pl-link.pl-new{color:#e6bd92}
-.pl-link.pl-new i{color:#e6bd92}
-body.light-theme .pl-link{color:#4a3f33}
-body.light-theme .pl-link:hover,body.light-theme .pl-link:active{background:rgba(120,85,45,.08)}
-body.light-theme .pl-link.pl-new{color:#8f4f18}
-body:not(.sb-collapsed) .desktop-playlists{display:block}
+.pl-link:hover,.pl-link:active{color:var(--text);background:rgba(255,255,255,.07);border-color:rgba(255,255,255,.1)}
+.pl-link.pl-new{color:var(--accent)}
+.pl-link.pl-new i{color:var(--accent)}
 
 /* drawer list (mobile menu) — scrollable, in sync with the sidebar */
 .drawer-playlists{
@@ -123,8 +119,9 @@ body.light-theme .pl-add-btn{color:#8f4f18;background:rgba(220,174,124,.28)}
 /* ---------- mobile search bar in the top header ---------- */
 .mobile-search-icon{display:none}
 .mobile-search-bar{
-  position:absolute;left:0;right:0;top:0;bottom:0;z-index:20;align-items:center;gap:10px;padding:0 6px;
-  background:rgba(13,11,9,.92);backdrop-filter:blur(20px) saturate(160%);-webkit-backdrop-filter:blur(20px) saturate(160%);
+  position:fixed;left:0;right:0;top:0;height:var(--ytm-header-h,62px);z-index:400;
+  align-items:center;gap:10px;padding:0 6px;
+  background:rgba(13,11,9,.96);backdrop-filter:blur(20px) saturate(160%);-webkit-backdrop-filter:blur(20px) saturate(160%);
   display:none;
 }
 body.light-theme .mobile-search-bar{background:rgba(250,246,239,.94)}
@@ -137,11 +134,10 @@ body.light-theme .mobile-search-bar{background:rgba(250,246,239,.94)}
 .mobile-search-back:active{transform:scale(.92)}
 .mobile-search-input-wrap{flex:1;min-width:0}
 @media(max-width:899px){
-  .mobile-search-icon{display:inline-flex;align-items:center;justify-content:center;position:relative;z-index:21}
-  .top-header{position:relative}
-  /* hide the headline text label on small phones so the icon + avatar fit */
+  .mobile-search-icon{display:inline-flex;align-items:center;justify-content:center}
+  .ytm-top-search-wrap{display:none}
 }
 @media(min-width:900px){
   .mobile-search-bar{display:none!important}
-  .mobile-search-back{display:none}
+  .mobile-search-icon{display:none}
 }

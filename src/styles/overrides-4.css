@@ -3,31 +3,35 @@
 .profile-btn img{transform:scale(1.36);border-radius:50%}
 .profile-btn:focus-visible{outline:2px solid rgba(220,174,124,.7);outline-offset:2px}
 
-    /* Warm play controls only — preserve AURA liquid-glass surfaces. */
+    /* Album-art play controls — the same shapes as before, but their colors
+       follow the playing cover via the --dyn-* vars (warm defaults in
+       base.css when no cover color is available). */
     .full-player-overlay .full-ctrl-btn.play-btn{
-      background:linear-gradient(145deg,#f0c58d 0%,#e2ad70 52%,#c98b50 100%) !important;
-      color:#24170e !important;
-      box-shadow:0 12px 30px rgba(207,143,80,.24),inset 0 1px 0 rgba(255,255,255,.42) !important;
+      background:linear-gradient(145deg,rgb(var(--dyn-rgb-hi)) 0%,rgb(var(--dyn-rgb)) 52%,rgb(var(--dyn-rgb-lo)) 100%) !important;
+      color:var(--dyn-fg) !important;
+      box-shadow:0 12px 30px rgba(var(--dyn-rgb),.24),inset 0 1px 0 rgba(255,255,255,.42) !important;
     }
     .full-player-overlay .full-seek-slider{
       background:rgba(255,255,255,.22) !important;
     }
     .full-player-overlay .full-seek-slider::-webkit-slider-thumb{
+      /* The large player's fill stays deliberately white (its own design
+         pass); the art color is carried by the play button beside it. */
       background:#fff !important;
       box-shadow:-1000px 0 0 996px #fff !important;
     }
     .full-player-overlay .full-seek-slider::-moz-range-progress{background:#fff !important}
     .full-player-overlay .full-seek-slider::-moz-range-thumb{background:#fff !important}
 
-    /* Mini/task player: keep the existing liquid-glass background, warm only the play button and progress fill. */
+    /* Mini/task player: keep the existing liquid-glass background, color only the play button and progress fill. */
     .player-bar .ctrl-glass-btn.play-primary,
     .radio-player-bar .radio-mini-btn.primary{
-      background:linear-gradient(145deg,#f0c58d 0%,#e2ad70 52%,#c98b50 100%) !important;
-      color:#24170e !important;
-      border-color:rgba(255,235,204,.34) !important;
-      box-shadow:0 8px 22px rgba(207,143,80,.22),inset 0 1px 0 rgba(255,255,255,.38) !important;
+      background:linear-gradient(145deg,rgb(var(--dyn-rgb-hi)) 0%,rgb(var(--dyn-rgb)) 52%,rgb(var(--dyn-rgb-lo)) 100%) !important;
+      color:var(--dyn-fg) !important;
+      border-color:rgba(var(--dyn-rgb-hi),.34) !important;
+      box-shadow:0 8px 22px rgba(var(--dyn-rgb),.22),inset 0 1px 0 rgba(255,255,255,.38) !important;
     }
-    .player-bar .mini-progress-fill{background:var(--accent) !important}
+    .player-bar .mini-progress-fill{background:rgb(var(--dyn-rgb)) !important}
 
     /* Warm accent for the bottom navigation icons only — keep the liquid-glass surface unchanged. */
     .nav-bar .nav-btn.active,

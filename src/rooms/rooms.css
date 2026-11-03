@@ -361,3 +361,4 @@ button:focus-visible, input:focus-visible { outline: 2px solid var(--gold); outl
 .add-btn:disabled { background: var(--ok); cursor: default; opacity: .9; }
 
 .lib-empty { color: var(--dimmer); font-style: italic; font-size: 12.5px; padding: 8px 0; }
+

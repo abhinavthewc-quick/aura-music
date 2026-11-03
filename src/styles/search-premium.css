@@ -1,4 +1,6 @@
 /* ===== Round 11: premium search tab ===== */
+/* The search tab already owns a full-size search field with mic and trending chips. */
+body.tab-search-active .ytm-top-search-wrap{display:none}
 .srch-head{margin:2px 2px 16px}
 .srch-kicker{font-size:11px;font-weight:800;letter-spacing:3px;color:#dcae7c;margin-bottom:6px}
 .srch-title{font-size:34px!important;font-weight:800;letter-spacing:-1.2px;line-height:1.05;margin:0 0 6px!important;background:linear-gradient(90deg,var(--text) 40%,#dcae7c);-webkit-background-clip:text;background-clip:text;-webkit-text-fill-color:transparent}

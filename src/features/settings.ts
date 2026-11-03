@@ -26,16 +26,25 @@ import { $, state } from '../core/state';
       }, 1500);
     }
 
-    /* Theme Toggle */
-    $('themeToggleBtn').onclick = () => {
-      document.body.classList.toggle('light-theme');
-      const isLight = document.body.classList.contains('light-theme');
-      $('themeIcon').className = isLight ? "fa-solid fa-moon" : "fa-solid fa-sun";
-      $('themeLabel').textContent = isLight ? "Dark Mode" : "Light Mode";
-      const dIcon = $('desktopThemeIcon'); const dLabel = $('desktopThemeLabel');
-      if(dIcon) dIcon.className = isLight ? "fa-solid fa-moon" : "fa-solid fa-sun";
-      if(dLabel) dLabel.textContent = isLight ? "Dark Mode" : "Light Mode";
-    };
+    /* Theme Toggle — persisted so a reload keeps the chosen theme. The tiny
+       inline script at the top of <body> applies the class before first paint
+       (no dark flash); this keeps both labels/icons in sync afterwards. */
+    export const THEME_KEY = 'auraTheme';
+    export function applyTheme(isLight, persist = true){
+      document.body.classList.toggle('light-theme', !!isLight);
+      const icon = isLight ? 'fa-solid fa-moon' : 'fa-solid fa-sun';
+      const label = isLight ? 'Dark Mode' : 'Light Mode';
+      const mi = $('themeIcon'), ml = $('themeLabel');
+      if(mi) mi.className = icon;
+      if(ml) ml.textContent = label;
+      const dIcon = $('desktopThemeIcon'), dLabel = $('desktopThemeLabel');
+      if(dIcon) dIcon.className = icon;
+      if(dLabel) dLabel.textContent = label;
+      $('themeToggleBtn')?.setAttribute('aria-pressed', isLight ? 'true' : 'false');
+      if(persist){ try{ localStorage.setItem(THEME_KEY, isLight ? 'light' : 'dark'); }catch(e){} }
+    }
+    $('themeToggleBtn').onclick = () => applyTheme(!document.body.classList.contains('light-theme'));
+    applyTheme(document.body.classList.contains('light-theme'), false);
 
 
     /* Interactive Settings */
@@ -87,11 +96,18 @@ import { $, state } from '../core/state';
       const K='auraSidebarCollapsed';
       try{ if(localStorage.getItem(K)!=='0') document.body.classList.add('sb-collapsed'); }catch(e){}
       const t=document.getElementById('sidebarToggle');
-      if(t) t.addEventListener('click',()=>{ const c=document.body.classList.toggle('sb-collapsed'); try{localStorage.setItem(K,c?'1':'0');}catch(e){} });
+      if(t){
+        t.setAttribute('aria-expanded', String(!document.body.classList.contains('sb-collapsed')));
+        t.addEventListener('click',()=>{
+          const c=document.body.classList.toggle('sb-collapsed');
+          t.setAttribute('aria-expanded', String(!c));
+          try{localStorage.setItem(K,c?'1':'0');}catch(e){}
+        });
+      }
       document.addEventListener('keydown',e=>{ if(e.key==='Escape') closeHelp(); });
     })();
-    export function openHelp(){ document.getElementById('helpOverlay').classList.add('open'); }
-    export function closeHelp(){ const h=document.getElementById('helpOverlay'); if(h) h.classList.remove('open'); }
+    export function openHelp(){ const h=document.getElementById('helpOverlay'); if(!h) return; h.classList.add('open'); h.setAttribute('aria-hidden','false'); }
+    export function closeHelp(){ const h=document.getElementById('helpOverlay'); if(!h) return; h.classList.remove('open'); h.setAttribute('aria-hidden','true'); }
 /* ===== 4748-4812 ===== */
     export function formatLoginDate(value){
       if(!value) return 'Not available';

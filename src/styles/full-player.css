@@ -43,8 +43,8 @@
     .up-next-sheet.active{transform:translateY(0);visibility:visible;pointer-events:auto;transition:transform .24s cubic-bezier(.22,1,.36,1)}
     .up-next-sheet-header{height:78px;display:flex;align-items:flex-end;justify-content:center;padding:0 52px 15px;position:relative}
     .up-next-sheet-title{font-size:25px;line-height:1;font-weight:500;letter-spacing:-.7px;color:#fff}
-    .up-next-sheet-close{position:absolute;right:14px;bottom:11px;width:34px;height:34px;border:0;border-radius:50%;background:rgba(255,255,255,.06);color:rgba(255,255,255,.82);font-size:18px;display:grid;place-items:center;cursor:pointer}
-    .up-next-sheet-close:active{transform:scale(.94)}
+    .up-next-sheet-close{position:static;width:34px;height:34px;border:0;border-radius:50%;background:rgba(255,255,255,.08);color:rgba(255,255,255,.9);font-size:16px;display:grid;place-items:center;cursor:pointer}
+    .up-next-sheet-close:active{transform:scale(.92)}
     .up-next-list{height:calc(100% - 78px);overflow:auto;padding:5px 22px 22px;scrollbar-width:none}
     .up-next-list::-webkit-scrollbar{display:none}
     .up-next-row{display:flex;align-items:center;gap:12px;min-height:76px;padding:6px 0;color:#fff;transition:opacity .12s ease}

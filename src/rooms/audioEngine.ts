@@ -49,6 +49,9 @@ export class WebAudioTarget implements SyncTarget {
   /** Decoded buffers, oldest first. Kept tiny on purpose — see MAX_BUFFERED. */
   private buffers = new Map<string, AudioBuffer>();
 
+  /** The server time of the start this target has queued, or null. */
+  private scheduledStart: { atServerMs: number; fromMs: number } | null = null;
+
   /**
    * Where the playhead is, integrated over time rather than derived from
    * elapsed wall-clock.
@@ -266,6 +269,7 @@ export class WebAudioTarget implements SyncTarget {
     this.playing = false;
     this.startPending = false;
     this.currentRate = 1;
+    this.clearScheduledStart();
     this.anchor(0, this.audibleCtxNow());
     this.opts.onTrackChanged?.(this.track);
   }
@@ -302,6 +306,7 @@ export class WebAudioTarget implements SyncTarget {
       this.playing = false;
       this.startPending = false;
       this.currentRate = 1;
+      this.clearScheduledStart();
       this.anchor(dur * 1000, this.audibleCtxNow());
       this.opts.onEnded?.();
     };
@@ -316,6 +321,7 @@ export class WebAudioTarget implements SyncTarget {
     }
     this.playing = false;
     this.startPending = false;
+    this.clearScheduledStart();
   }
 
   /**
@@ -346,6 +352,8 @@ export class WebAudioTarget implements SyncTarget {
 
   async play(): Promise<void> {
     if (!(await this.unlock())) throw new Error('audio is blocked');
+    // A direct play is not a server-scheduled start.
+    this.scheduledStart = null;
     this.startAt(this.getPositionMs() / 1000);
   }
 
@@ -357,7 +365,17 @@ export class WebAudioTarget implements SyncTarget {
   schedulePlay(atServerMs: number, fromMs: number, serverNowMs: number): boolean {
     const delayS = (atServerMs - serverNowMs) / 1000;
     if (!Number.isFinite(delayS) || delayS < 0 || delayS > 30) return false;
-    return this.startAt(Math.max(0, fromMs) / 1000, delayS);
+    const ok = this.startAt(Math.max(0, fromMs) / 1000, delayS);
+    if (ok) {
+      this.scheduledStart = { atServerMs, fromMs: Math.max(0, fromMs) };
+    } else {
+      this.scheduledStart = null;
+    }
+    return ok;
+  }
+
+  getScheduledStart(): { atServerMs: number; fromMs: number } | null {
+    return this.scheduledStart;
   }
 
   /** Best-effort context resume. False means a gesture is still required. */
@@ -387,6 +405,11 @@ export class WebAudioTarget implements SyncTarget {
     this.anchor(at, this.audibleCtxNow());
   }
 
+  /** A scheduled start is no longer valid once the graph is torn down. */
+  private clearScheduledStart(): void {
+    this.scheduledStart = null;
+  }
+
   /**
    * Seeking is a stop-and-restart, which is genuinely sample-accurate with
    * Web Audio — no rounding to the nearest frame the way an element does.
@@ -396,6 +419,8 @@ export class WebAudioTarget implements SyncTarget {
     const target = dur > 0
       ? Math.max(0, Math.min(ms / 1000, dur - 0.02))
       : Math.max(0, ms / 1000);
+    // A direct seek is not a server-scheduled start.
+    this.scheduledStart = null;
     if (this.playing) { this.startAt(target); return; }
     this.currentRate = 1;
     this.anchor(target * 1000, this.audibleCtxNow());

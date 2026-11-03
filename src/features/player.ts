@@ -7,6 +7,7 @@ import { auraYTQueue, extractYouTubeId } from './search';
 import { auraSettings } from './settings';
 import { roomModeActive } from '../rooms/roomFlag';
 import { $, persistLikedHistory, savedLikeMap, state } from '../core/state';
+import { fetchLyricsForTrack, renderLyrics, updateLyricsProgress, prepareLyricsForNewSong, getTrackKey, lyricsCache } from './lyrics';
 /* ===== 2955-2994 ===== */
     export const dynamicColorCache = {};
 
@@ -59,8 +60,35 @@ import { $, persistLikedHistory, savedLikeMap, state } from '../core/state';
       return rgb;
     }
 
+    /* The scanned cover color drives more than the full player's background:
+       every transport control (play buttons, seek fills, active toggles)
+       reads the --dyn-* variables. They are written on <html> so all
+       surfaces inherit, and when nothing scanned they are removed so the
+       warm :root defaults in base.css take back over — a control never sits
+       on an undefined var. */
     export function setDynamicColorVar(rgbStr){
-      $('fullPlayerOverlay').style.setProperty('--dynamic-color', rgbStr ? `rgba(${rgbStr},0.55)` : 'transparent');
+      const root = document.documentElement.style;
+      if(!rgbStr){
+        root.removeProperty('--dyn-rgb');
+        root.removeProperty('--dyn-rgb-hi');
+        root.removeProperty('--dyn-rgb-lo');
+        root.removeProperty('--dyn-fg');
+        return;
+      }
+      const [r,g,b] = String(rgbStr).split(',').map(Number);
+      if([r,g,b].some(v => !Number.isFinite(v))) return;
+      // Soft-lit gradient stops around the base color, like the hard-coded
+      // warm ramp this replaces (240/226/201 ≈ +6% / 0% / -11%).
+      const clamp=c=>Math.max(0,Math.min(255,Math.round(c)));
+      const hi=[r,g,b].map(c=>clamp(c+(255-c)*0.35));
+      const lo=[r,g,b].map(c=>clamp(c*0.88));
+      root.setProperty('--dyn-rgb',`${Math.round(r)},${Math.round(g)},${Math.round(b)}`);
+      root.setProperty('--dyn-rgb-hi',hi.join(','));
+      root.setProperty('--dyn-rgb-lo',lo.join(','));
+      // The color that reaches here (pickColor above) is lightness-clamped
+      // until white text clears 4.5:1 on it, so the control label is always
+      // white while art colors are active; the warm fallback keeps its dark.
+      root.setProperty('--dyn-fg','#ffffff');
     }
 
     /* Cross-fade (600ms, CSS opacity on .fp-bg-layer) the art-derived gradient
@@ -185,9 +213,9 @@ import { $, persistLikedHistory, savedLikeMap, state } from '../core/state';
       return auraYTReadyPromise;
     }
 
-    // Preload the official YouTube IFrame API early so the first AURA Play
-    // tap is not lost while the API script is still downloading.
-    setTimeout(()=>{ try{ ensureYouTubeAPI().catch(()=>{}); }catch(e){} },0);
+    /* The YouTube IFrame API is loaded on demand by playYouTubeInsideAura().
+       Preloading it here pulled YouTube's third-party script on every visit,
+       including the majority that only play library/radio audio. */
 
     export function resetFullPlayerArtToImage(poster){
       const art=$('fullPlayerArt');
@@ -218,15 +246,24 @@ import { $, persistLikedHistory, savedLikeMap, state } from '../core/state';
       auraYTDesiredPlaying=false;
       auraYTPlayerReady=false;
       auraYTVideoId=String(videoId);
-      auraYTTitle=title||'YouTube Music';
       auraYTPoster=poster||'';
+
+      let ytArtist = 'YouTube Music';
+      let ytTitle = title || 'YouTube Music';
+      if (ytTitle.includes(' - ')) {
+        const parts = ytTitle.split(' - ');
+        ytArtist = parts[0].trim();
+        ytTitle = parts.slice(1).join(' - ').trim();
+      }
+      auraYTTitle = ytTitle;
 
       let idx=state.songs.findIndex(x=>String(x.id)===`youtube-${auraYTVideoId}`);
       if(idx===-1){
-        state.songs.push({id:`youtube-${auraYTVideoId}`,title:auraYTTitle,artist:'YouTube Music',img:auraYTPoster,url:'',favorite:!!liked,isLocal:false,missing:false,isYouTube:true,videoId:auraYTVideoId});
+        state.songs.push({id:`youtube-${auraYTVideoId}`,title:ytTitle,artist:ytArtist,img:auraYTPoster,url:'',favorite:!!liked,isLocal:false,missing:false,isYouTube:true,videoId:auraYTVideoId});
         idx=state.songs.length-1;
       }else{
-        state.songs[idx].title=auraYTTitle;
+        state.songs[idx].title=ytTitle;
+        state.songs[idx].artist=ytArtist;
         state.songs[idx].img=auraYTPoster||state.songs[idx].img;
         state.songs[idx].isYouTube=true;
         state.songs[idx].videoId=auraYTVideoId;
@@ -234,11 +271,11 @@ import { $, persistLikedHistory, savedLikeMap, state } from '../core/state';
       state.currentIndex=idx;
       state.songs[idx].favorite = !!savedLikeMap[String(state.songs[idx].id)];
       $('currentImg').src=auraYTPoster;
-      $('currentTitle').textContent=auraYTTitle;
-      $('currentArtist').textContent='YouTube Music';
-      $('fullTitle').textContent=auraYTTitle;
-      $('fullArtist').textContent='YouTube Music';
-      $('fullHeaderTitle').textContent=auraYTTitle;
+      $('currentTitle').textContent=ytTitle;
+      $('currentArtist').textContent=ytArtist;
+      $('fullTitle').textContent=ytTitle;
+      $('fullArtist').textContent=ytArtist;
+      $('fullHeaderTitle').textContent=ytTitle;
       $('fullLikeBtn').className=`like-btn ${state.songs[idx].favorite?'active':''}`;
       $('fullLikeBtn').innerHTML=`<i class="fa-${state.songs[idx].favorite?'solid':'regular'} fa-heart"></i>`;
       applyDynamicPlayerColor(auraYTPoster);
@@ -253,6 +290,8 @@ import { $, persistLikedHistory, savedLikeMap, state } from '../core/state';
       art.classList.add('youtube-mode');
       art.innerHTML=`<div id="auraYTFrameHost" style="width:100%;height:100%;background:#000"></div>`;
       updatePlayState();
+      prepareLyricsForNewSong(ytTitle, ytArtist, videoId);
+      fetchLyricsForTrack(ytTitle, ytArtist, undefined, videoId).then(l => renderLyrics(l));
 
       try{
         // IMPORTANT: finish loading the API and create the player before the
@@ -408,11 +447,22 @@ import { $, persistLikedHistory, savedLikeMap, state } from '../core/state';
     }
 
     export function loadSong(i){
-      const s=state.songs[i]; if(!s) return; state.audio.src=s.url;
+      const s=state.songs[i]; if(!s) return;
+      state.audio.src=s.url;
+      // Resilient fallback: if edge proxy has a transient failure, seamlessly fall back to direct Hugging Face URL
+      state.audio.onerror = () => {
+        if (s.hfUrl && state.audio.src !== s.hfUrl) {
+          console.warn('[Aura Audio] Edge proxy unreachable, falling back to direct Hugging Face URL');
+          state.audio.src = s.hfUrl;
+          state.audio.load();
+          state.audio.play().catch(() => {});
+        }
+      };
       $('currentImg').src=$('fullImg').src=s.img;
       $('currentTitle').textContent=$('fullTitle').textContent=$('fullHeaderTitle').textContent=s.title;
       $('currentArtist').textContent=$('fullArtist').textContent=s.artist;
       $('fullLikeBtn').className=`like-btn ${s.favorite?'active':''}`;
+      $('fullLikeBtn').setAttribute('aria-pressed', s.favorite ? 'true' : 'false');
       $('fullLikeBtn').innerHTML=`<i class="fa-${s.favorite?'solid':'regular'} fa-heart"></i>`;
       $('progressFill').style.width = '0%';
       $('fullSeekSlider').value = 0;
@@ -423,6 +473,8 @@ import { $, persistLikedHistory, savedLikeMap, state } from '../core/state';
       applyDynamicPlayerColor(s.img);
       updateMainMediaSession();
       state.audio.load();
+      prepareLyricsForNewSong(s.title, s.artist, s.videoId);
+      fetchLyricsForTrack(s.title, s.artist, s.duration, s.videoId).then(l => renderLyrics(l));
     }
 
     /* Some direct/streamed MP3 links don't report a usable duration right
@@ -468,7 +520,7 @@ import { $, persistLikedHistory, savedLikeMap, state } from '../core/state';
       stopRadio();
       if(keepBigPlayer || keepFull) $('fullPlayerOverlay').classList.add('active');
       if(s.missing){ toast('This file is unavailable — please re-add it', 'triangle-exclamation'); return; }
-      state.currentIndex=i; loadSong(i); state.audio.play(); state.isPlaying=true;
+      state.currentIndex=i; loadSong(i); state.audio.play().catch(()=>{ state.isPlaying=false; updatePlayState(); }); state.isPlaying=true;
       $('miniPlayer').classList.add('active');
       updatePlayState(); filterSongs(); addToRecent(s);
       updateLibNowPlaying();
@@ -480,6 +532,9 @@ import { $, persistLikedHistory, savedLikeMap, state } from '../core/state';
     export function updatePlayState(){
       const icon = state.isPlaying ? "fa-solid fa-pause" : "fa-solid fa-play";
       $('playIcon').className = $('fullPlayIcon').className = icon;
+      const label = state.isPlaying ? 'Pause' : 'Play';
+      $('fullPlayBtn')?.setAttribute('aria-label', label);
+      $('playPauseBtn')?.setAttribute('aria-label', label);
       // Apple-Music artwork pulse: springs between scale(1) and scale(.8)
       $('fullPlayerOverlay').classList.toggle('art-paused', !state.isPlaying);
     }
@@ -523,7 +578,7 @@ import { $, persistLikedHistory, savedLikeMap, state } from '../core/state';
       }
       if(!state.audio.src) playSong(0);
       else if(state.isPlaying){ state.audio.pause(); state.isPlaying=false; }
-      else{ state.audio.play(); state.isPlaying=true; }
+      else{ state.audio.play().catch(()=>{ state.isPlaying=false; updatePlayState(); }); state.isPlaying=true; }
       updatePlayState();
     }
     
@@ -543,6 +598,7 @@ import { $, persistLikedHistory, savedLikeMap, state } from '../core/state';
         const tuApi = (window as any).__auraMiniProgress;
         if(tuApi && tuApi.apply) tuApi.apply(pct);
       }
+      updateLyricsProgress(state.audio.currentTime);
     });
     state.audio.addEventListener('play',()=>{state.isPlaying=true;updatePlayState();updateMainMediaSession();});
     state.audio.addEventListener('pause',()=>{state.isPlaying=false;updatePlayState();updateMainMediaSession();});
@@ -551,14 +607,15 @@ import { $, persistLikedHistory, savedLikeMap, state } from '../core/state';
        the room and start something nobody else was expecting. */
     state.audio.addEventListener('ended',()=>{
       if(roomModeActive()) return;
-      if(state.repeatMode==='one'){state.audio.currentTime=0;state.audio.play();state.isPlaying=true;updatePlayState();return;}
+      if(state.repeatMode==='one'){state.audio.currentTime=0;state.audio.play().catch(()=>{ state.isPlaying=false; updatePlayState(); });state.isPlaying=true;updatePlayState();return;}
       if(auraSettings.autoplayNext){playNext();}else if(!state.isPlaying) updatePlayState();
     });
     setInterval(()=>{
-      if(!auraYTPlayer) return;
+      if(!auraYTPlayer || document.hidden) return;
       try{
         const d=auraYTPlayer.getDuration()||0, c=auraYTPlayer.getCurrentTime()||0;
         if(d){ $('fullSeekSlider').value=(c/d)*100; $('fullCurrentTime').textContent=fmt(c); $('fullDurationTime').textContent=fmt(d); }
+        updateLyricsProgress(c);
       }catch(e){}
     },500);
     $('fullSeekSlider').oninput=()=>{
@@ -570,12 +627,15 @@ import { $, persistLikedHistory, savedLikeMap, state } from '../core/state';
             const t=(pct/100)*d;
             auraYTPlayer.seekTo(t,true);
             $('fullCurrentTime').textContent=fmt(t);
+            updateLyricsProgress(t);
           }
         }catch(e){} return;
       }
       if(state.audio.duration && isFinite(state.audio.duration) && state.audio.duration > 0){
-        state.audio.currentTime=(pct/100)*state.audio.duration;
-        $('fullCurrentTime').textContent=fmt((pct/100)*state.audio.duration);
+        const targetTime = (pct/100)*state.audio.duration;
+        state.audio.currentTime=targetTime;
+        $('fullCurrentTime').textContent=fmt(targetTime);
+        updateLyricsProgress(targetTime);
       }
     };
 
@@ -621,5 +681,198 @@ import { $, persistLikedHistory, savedLikeMap, state } from '../core/state';
 
     export function filterSongs(){
       renderSongs(state.songs);
+    }
+
+    export function getCurrentActiveTrack(): { title: string; artist: string; videoId?: string; duration?: number } | null {
+      if (auraYTVideoId) {
+        let ytArtist = 'YouTube Music';
+        let ytTitle = auraYTTitle;
+        if (auraYTTitle.includes(' - ')) {
+          const parts = auraYTTitle.split(' - ');
+          ytArtist = parts[0].trim();
+          ytTitle = parts.slice(1).join(' - ').trim();
+        }
+        return { title: ytTitle, artist: ytArtist, videoId: auraYTVideoId };
+      }
+      const s = state.songs[state.currentIndex];
+      if (!s) return null;
+      let title = s.title || '';
+      let artist = s.artist || '';
+      if ((!artist || artist === 'YouTube Music' || artist === 'Unknown Artist') && title.includes(' - ')) {
+        const parts = title.split(' - ');
+        artist = parts[0].trim();
+        title = parts.slice(1).join(' - ').trim();
+      }
+      return { title, artist, videoId: s.videoId, duration: s.duration };
+    }
+
+    export function switchRightPanelTab(tab: 'lyrics' | 'related') {
+      const sheet = $('upNextSheet');
+      if (sheet) sheet.setAttribute('data-tab', tab);
+
+      const lBtn = $('ytmTabLyricsBtn');
+      const rBtn = $('ytmTabRelatedBtn');
+      const lPan = $('ytmLyricsPanel');
+      const rPan = $('ytmRelatedPanel');
+
+      const fullLyricsBtn = $('playerTabLyricsBtn');
+      const fullRelatedBtn = $('playerTabRelatedBtn');
+      fullLyricsBtn?.classList.toggle('active', tab === 'lyrics');
+      fullRelatedBtn?.classList.toggle('active', tab === 'related');
+
+      lBtn?.classList.toggle('active', tab === 'lyrics');
+      rBtn?.classList.toggle('active', tab === 'related');
+
+      if (lPan) lPan.style.setProperty('display', tab === 'lyrics' ? 'flex' : 'none', 'important');
+      if (rPan) rPan.style.setProperty('display', tab === 'related' ? 'flex' : 'none', 'important');
+
+      if (tab === 'lyrics') {
+        const cur = getCurrentActiveTrack();
+        if (cur) {
+          const key = getTrackKey(cur.title, cur.artist);
+          if (lyricsCache.has(key)) {
+            renderLyrics(lyricsCache.get(key) || null);
+          } else {
+            prepareLyricsForNewSong(cur.title, cur.artist, cur.videoId);
+            fetchLyricsForTrack(cur.title, cur.artist, cur.duration, cur.videoId).then(l => {
+              renderLyrics(l);
+            });
+          }
+        }
+        setTimeout(() => {
+          (window as any).centerActiveLyricLine?.(undefined, false);
+        }, 50);
+      } else if (tab === 'related') {
+        renderRelated();
+      }
+    }
+
+    export function openPlayerSheet(tab: 'lyrics' | 'related' = 'lyrics') {
+      switchRightPanelTab(tab);
+      const sheet = $('upNextSheet');
+      if (sheet) {
+        sheet.classList.add('active');
+        sheet.setAttribute('aria-hidden', 'false');
+        if (tab === 'lyrics') {
+          setTimeout(() => {
+            (window as any).centerActiveLyricLine?.(undefined, false);
+          }, 180);
+        }
+      }
+    }
+
+    export function closePlayerSheet() {
+      const sheet = $('upNextSheet');
+      if (sheet) {
+        sheet.classList.remove('active');
+        sheet.setAttribute('aria-hidden', 'true');
+      }
+    }
+
+    export function renderRelated() {
+      const container = $('ytmRelatedList');
+      if (!container) return;
+      const currentSong = state.songs[state.currentIndex];
+      if (!currentSong) return;
+
+      const currentArtist = (currentSong.artist || '').toLowerCase().trim();
+
+      // Tracks by same artist
+      const sameArtistSongs = state.songs.filter((s, idx) => {
+        if (idx === state.currentIndex) return false;
+        const a = (s.artist || '').toLowerCase().trim();
+        return a && (a === currentArtist || a.includes(currentArtist) || currentArtist.includes(a));
+      });
+
+      // Other recommended tracks
+      const otherSongs = state.songs.filter((s, idx) => {
+        if (idx === state.currentIndex) return false;
+        return !sameArtistSongs.some(same => same.id === s.id);
+      });
+
+      const youMightLike = otherSongs.slice(0, 5);
+
+      let html = '';
+
+      // Section 1: You might also like
+      if (youMightLike.length > 0) {
+        html += `
+          <div class="ytm-rel-section">
+            <div class="ytm-rel-section-title">You might also like</div>
+            <div class="ytm-rel-grid">
+              ${youMightLike.map(s => {
+                const originalIdx = state.songs.findIndex(x => x.id === s.id);
+                return `
+                  <div class="ytm-rel-card" onclick="playSong(${originalIdx >= 0 ? originalIdx : 0})" role="button" tabindex="0">
+                    <div class="ytm-rel-art-wrap">
+                      <img src="${escapeHtml(s.img || '')}" alt="" loading="lazy">
+                      <div class="ytm-rel-play-overlay"><i class="fa-solid fa-play"></i></div>
+                    </div>
+                    <div class="ytm-rel-info">
+                      <div class="ytm-rel-title">${escapeHtml(s.title || '')}</div>
+                      <div class="ytm-rel-artist">${escapeHtml(s.artist || '')}</div>
+                    </div>
+                  </div>
+                `;
+              }).join('')}
+            </div>
+          </div>
+        `;
+      }
+
+      // Section 2: About the artist spotlight card
+      html += `
+        <div class="ytm-rel-section">
+          <div class="ytm-rel-section-title">About the artist</div>
+          <div class="ytm-rel-artist-card">
+            <div class="ytm-rel-artist-header">
+              <div class="ytm-rel-artist-avatar">
+                <i class="fa-solid fa-user-astronaut"></i>
+              </div>
+              <div>
+                <div class="ytm-rel-artist-name">${escapeHtml(currentSong.artist || 'Artist')}</div>
+                <div class="ytm-rel-artist-desc">Featured on AURA Music</div>
+              </div>
+            </div>
+            <div class="ytm-rel-artist-tags">
+              <span class="ytm-rel-tag"><i class="fa-solid fa-compact-disc"></i> Studio Track</span>
+              <span class="ytm-rel-tag"><i class="fa-solid fa-sparkles"></i> High Fidelity</span>
+              <span class="ytm-rel-tag"><i class="fa-solid fa-headphones"></i> Immersive</span>
+            </div>
+          </div>
+        </div>
+      `;
+
+      // Section 3: More from this artist
+      if (sameArtistSongs.length > 0) {
+        html += `
+          <div class="ytm-rel-section">
+            <div class="ytm-rel-section-title">More by ${escapeHtml(currentSong.artist || '')}</div>
+            <div class="ytm-rel-list">
+              ${sameArtistSongs.map(s => {
+                const originalIdx = state.songs.findIndex(x => x.id === s.id);
+                return `
+                  <div class="ytm-rel-row" onclick="playSong(${originalIdx >= 0 ? originalIdx : 0})" role="button" tabindex="0">
+                    <img class="ytm-rel-row-img" src="${escapeHtml(s.img || '')}" alt="" loading="lazy">
+                    <div class="ytm-rel-row-meta">
+                      <div class="ytm-rel-row-title">${escapeHtml(s.title || '')}</div>
+                      <div class="ytm-rel-row-sub">${escapeHtml(s.artist || '')}</div>
+                    </div>
+                    <button type="button" class="ytm-rel-row-play"><i class="fa-solid fa-play"></i></button>
+                  </div>
+                `;
+              }).join('')}
+            </div>
+          </div>
+        `;
+      }
+
+      container.innerHTML = html;
+    }
+
+    if (typeof window !== 'undefined') {
+      (window as any).switchRightPanelTab = switchRightPanelTab;
+      (window as any).openPlayerSheet = openPlayerSheet;
+      (window as any).closePlayerSheet = closePlayerSheet;
     }
 

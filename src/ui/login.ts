@@ -162,37 +162,49 @@ import { $ } from '../core/state';
       if(box) box.hidden = false;
     }
 
+    let authBusy = false;
     async function submitEmailAuth(){
+      if(authBusy) return;
       setAuthErr('');
       const email = normEmail(($('authEmailInput') as HTMLInputElement)?.value || '');
       const pw = ($('authPasswordInput') as HTMLInputElement)?.value || '';
       const pw2 = ($('authPassword2Input') as HTMLInputElement)?.value || '';
       if(!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)){ setAuthErr('Enter a valid email address.'); return; }
       if(pw.length < 6){ setAuthErr('Password needs at least 6 characters.'); return; }
-      if(authMode === 'register'){
-        if(pw !== pw2){ setAuthErr('Passwords don\'t match.'); return; }
-        try{ await registerLocalAccount(email, pw); }
-        catch(e){ setAuthErr((e as Error).message); return; }
-      }else{
-        try{
-          if(!await loginLocalAccount(email, pw)){ setAuthErr('Wrong password for this account.'); return; }
-        }catch(e){ setAuthErr((e as Error).message); return; }
+      if(authMode === 'register' && pw !== pw2){ setAuthErr('Passwords don\'t match.'); return; }
+
+      const go = $('authGo') as HTMLButtonElement;
+      const goLabel = go ? go.textContent : '';
+      authBusy = true;
+      if(go){ go.disabled = true; go.setAttribute('aria-busy','true'); go.textContent = authMode === 'register' ? 'Creating account…' : 'Signing in…'; }
+      try{
+        if(authMode === 'register'){
+          try{ await registerLocalAccount(email, pw); }
+          catch(e){ setAuthErr((e as Error).message); return; }
+        }else{
+          try{
+            if(!await loginLocalAccount(email, pw)){ setAuthErr('Wrong password for this account.'); return; }
+          }catch(e){ setAuthErr((e as Error).message); return; }
+        }
+        const pwEl = $('authPasswordInput') as HTMLInputElement;
+        const pw2El = $('authPassword2Input') as HTMLInputElement;
+        if(pwEl) pwEl.value = '';
+        if(pw2El) pw2El.value = '';
+        enterWithProfile(
+          { email, name: email, picture: '', exp: Math.floor(Date.now() / 1000) + 180 * 24 * 3600 },
+          'local:' + email,
+        );
+      }finally{
+        authBusy = false;
+        if(go){ go.disabled = false; go.removeAttribute('aria-busy'); go.textContent = goLabel; }
       }
-      const pwEl = $('authPasswordInput') as HTMLInputElement;
-      const pw2El = $('authPassword2Input') as HTMLInputElement;
-      if(pwEl) pwEl.value = '';
-      if(pw2El) pw2El.value = '';
-      enterWithProfile(
-        { email, name: email, picture: '', exp: Math.floor(Date.now() / 1000) + 180 * 24 * 3600 },
-        'local:' + email,
-      );
     }
 
     $('emailAuthToggle')?.addEventListener('click', showEmailAuth);
     $('authGoogleBack')?.addEventListener('click', showGoogleAuth);
     $('authSwitch')?.addEventListener('click', () => setAuthMode(authMode === 'login' ? 'register' : 'login'));
     $('authGo')?.addEventListener('click', submitEmailAuth);
-    [$('authPasswordInput'), $('authPassword2Input')].forEach(el =>
+    [$('authEmailInput'), $('authPasswordInput'), $('authPassword2Input')].forEach(el =>
       el?.addEventListener('keydown', (e: KeyboardEvent) => { if(e.key === 'Enter') submitEmailAuth(); }),
     );
 
