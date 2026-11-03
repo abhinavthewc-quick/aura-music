@@ -1,8 +1,9 @@
-import { artistMergeKey, timeGreeting, toast } from '../core/dom';
+import { timeGreeting, toast } from '../core/dom';
 import { playSong } from './player';
 import { escapeHtml } from './radio';
 import { DEFAULT_COVER } from '../core/catalog';
 import { $, state } from '../core/state';
+import { getArtistGroups, artistTileHTML } from './library';
 /* ===== 3075-3096 ===== */
     export function setGreeting(){
       $('greetingLabel').textContent = timeGreeting();
@@ -58,42 +59,20 @@ import { $, state } from '../core/state';
       $('quickGrid').innerHTML = tiles.join('');
     }
 
-    /* Home: spotlight EVERY artist who has 2+ tracks in the library,
-       most-tracks-first — variants ("A. R. Rahman" / "A.R. Rahman" /
-       "… - Topic") merge into one bucket via artistKey. */
+    /* Home: artists row built straight from the library — same grouping
+       as the Library Artists view (getArtistGroups), busiest first.
+       Nothing renders (no heading) when there are no artists. */
     export function renderArtistSpotlight(){
-      const groups:any = {};
-      const keys:string[] = [];
-      state.songs.forEach(s=>{
-        if(!s.artist || s.artist==='Unknown Artist') return;
-        const k = artistMergeKey(keys, s.artist);
-        if(!groups[k]){ groups[k] = {count:0, names:{}, songs:[]}; keys.push(k); }
-        groups[k].count++;
-        groups[k].names[s.artist]=(groups[k].names[s.artist]||0)+1;
-        groups[k].songs.push(s);
-      });
-      /* show the spelling most of the library actually uses */
-      Object.values(groups).forEach((g:any)=>{
-        g.name = Object.entries(g.names).sort((a:any,b:any)=>b[1]-a[1] || b[0].length-a[0].length)[0][0];
-      });
-      const artists = Object.values(groups).filter((g:any)=>g.count>=2).sort((a:any,b:any)=>b.count-a.count);
       const container = $('artistSpotlightContainer');
-
-      if(!artists.length){ container.innerHTML=''; return; }
-
-      container.innerHTML = artists.map((g:any)=>{
-        const cards = g.songs.map(s=>{
-          const idx = state.songs.findIndex(item=>item.id===s.id);
-          return `<div class="spotlight-card" onclick="playSong(${idx})"><img src="${escapeHtml(s.img||DEFAULT_COVER)}"><p class="sc-title">${s.title}</p><p class="sc-sub">${s.artist}</p></div>`;
-        }).join('');
-        return `<div class="artist-spotlight-block" style="margin-bottom:24px">
-          <div class="spotlight-header">
-            <img class="spotlight-avatar" src="${escapeHtml(g.songs[0].img||DEFAULT_COVER)}" alt="">
-            <div><p style="font-size:11px;color:var(--text-sub)">More from</p><p style="font-size:16px;font-weight:800">${g.name}</p></div>
-          </div>
-          <div class="recent-scroll">${cards}</div>
-        </div>`;
-      }).join('');
+      if(!container) return;
+      let groups:any[] = [];
+      try{ groups = getArtistGroups() || []; }catch(e){ groups = []; }
+      if(!groups.length){ container.innerHTML = ''; return; }
+      container.innerHTML =
+        `<p style="font-size:15px;font-weight:700;margin:0 0 12px">Artists</p>
+         <div class="artist-row">` +
+        groups.map((g:any, i:any) => artistTileHTML(g, i)).join('') +
+        `</div>`;
     }
 
 /* ===== 4646-4660 ===== */

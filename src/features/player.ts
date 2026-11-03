@@ -579,6 +579,20 @@ import { $, persistLikedHistory, savedLikeMap, state } from '../core/state';
       }
     };
 
+    /* Tap the big artwork to play/pause — same handler as the play button so
+       both stay in sync and share the grow/shrink pulse. Swipes and drags are
+       ignored (only a short, still pointer press counts as a tap). */
+    const artTap = $('fullPlayerArt');
+    let artTapDownX = 0, artTapDownY = 0, artTapDownT = 0;
+    artTap.addEventListener('pointerdown', e => {
+      artTapDownX = e.clientX; artTapDownY = e.clientY; artTapDownT = Date.now();
+    });
+    artTap.addEventListener('pointerup', e => {
+      if(Math.abs(e.clientX - artTapDownX) > 12 || Math.abs(e.clientY - artTapDownY) > 12) return;
+      if(Date.now() - artTapDownT > 600) return;
+      togglePlay();
+    });
+
 
     $('miniPlayer').onclick=e=>{
       if(e.target.closest('button,input')) return;

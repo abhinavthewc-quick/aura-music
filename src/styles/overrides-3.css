@@ -32,8 +32,8 @@ body.light-theme .desktop-sidebar-note p{color:var(--sb-text)}
 body.light-theme .sb-ready{color:#3d8a5a}
 body.light-theme.sb-collapsed .desktop-nav-btn.active{background:rgba(220,174,124,.35)}
 /* panels & modals */
-body.light-theme .about-card,body.light-theme .settings-modal-card,body.light-theme .effects-card,body.light-theme .beeboo-chat-panel,body.light-theme .track-sheet,body.light-theme .help-card,body.light-theme .name-modal-card{--accent:#a8642a;background:linear-gradient(160deg,#fffdf9,#f6ede0)!important;border-color:rgba(120,85,45,.22)!important;box-shadow:0 24px 60px rgba(120,85,45,.22)!important;color:var(--text)}
-body.light-theme .modal-overlay,body.light-theme .effects-modal,body.light-theme .help-overlay,body.light-theme .beeboo-chat-overlay,body.light-theme .track-sheet-overlay{background:rgba(60,40,20,.32)}
+body.light-theme .about-card,body.light-theme .settings-modal-card,body.light-theme .effects-card,body.light-theme .track-sheet,body.light-theme .help-card,body.light-theme .name-modal-card{--accent:#a8642a;background:linear-gradient(160deg,#fffdf9,#f6ede0)!important;border-color:rgba(120,85,45,.22)!important;box-shadow:0 24px 60px rgba(120,85,45,.22)!important;color:var(--text)}
+body.light-theme .modal-overlay,body.light-theme .effects-modal,body.light-theme .help-overlay,body.light-theme .track-sheet-overlay{background:rgba(60,40,20,.32)}
 body.light-theme .settings-row,body.light-theme .help-row,body.light-theme .about-row,body.light-theme .effect-row,body.light-theme .effect-choice{background:rgba(255,255,255,.75);border-color:rgba(120,85,45,.14)}
 body.light-theme .effect-row.active,body.light-theme .effect-choice.active{background:linear-gradient(135deg,rgba(220,174,124,.35),rgba(220,174,124,.12))!important;border-color:rgba(168,100,42,.45)!important}
 body.light-theme .help-close{background:rgba(120,85,45,.08);border-color:rgba(120,85,45,.18);color:var(--text)}
@@ -41,11 +41,6 @@ body.light-theme .settings-icon,body.light-theme .effects-icon{background:linear
 body.light-theme .settings-switch:checked{background:linear-gradient(90deg,#e6bd92,#c58f5c)}
 body.light-theme .track-sheet-row i,body.light-theme .about-row i{color:#a8642a}
 body.light-theme .track-sheet-row.danger,body.light-theme .track-sheet-row.danger i{color:#c0392b}
-body.light-theme .beeboo-msg.bot{background:rgba(120,85,45,.07);border-color:rgba(120,85,45,.1)}
-body.light-theme .beeboo-msg.user,body.light-theme .beeboo-chat-send{background:linear-gradient(135deg,#e6bd92,#c58f5c);color:#2b1a0d}
-body.light-theme .beeboo-suggest-chip{background:rgba(220,174,124,.2);border-color:rgba(168,100,42,.3);color:#6b3d12}
-body.light-theme .beeboo-chat-input-row input{background:rgba(255,255,255,.85);border-color:rgba(120,85,45,.25);color:var(--text)}
-body.light-theme .beeboo-song-row,body.light-theme .beeboo-language-row,body.light-theme .beeboo-chat-note{background:rgba(255,255,255,.7);border-color:rgba(120,85,45,.14)}
 /* radio tab controls */
 body.light-theme .radio-segment-btn:not(.active),body.light-theme .radio-chip:not(.active){color:var(--text);background:rgba(255,255,255,.75);border-color:rgba(120,85,45,.18)}
 body.light-theme .radio-segment-btn i{color:#a8642a}

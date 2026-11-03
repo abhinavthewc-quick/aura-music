@@ -5,6 +5,35 @@ import { $ } from '../core/state';
 /* ===== 3073-3074 ===== */
     export function goTab(tabId){ const b=document.querySelector(`.desktop-nav-btn[data-tab="${tabId}"]`)||document.querySelector(`[onclick*="'${tabId}'"]`); if(b) navClick(b,tabId); }
 
+/* Playlist pseudo-tab — activates a generated tab without touching nav highlight */
+    export function showPlaylistTab(tabId){
+      document.querySelectorAll('.tab-content').forEach(t=>t.classList.remove('active'));
+      $(tabId).classList.add('active');
+      document.querySelectorAll('.desktop-nav-btn[data-tab]').forEach(b=>b.classList.remove('active'));
+    }
+
+/* Mobile expandable search bar in the top header (desktop keeps the normal box) */
+    export function openMobileSearch(){
+      const bar=$('mobileSearchBar'); if(!bar) return;
+      bar.classList.add('open');
+      goTab('tabSearch');
+      setTimeout(()=>{ (document.getElementById('mobileSearchInput') as HTMLInputElement)?.focus(); },90);
+    }
+    export function closeMobileSearch(){ $('mobileSearchBar')?.classList.remove('open'); }
+    export function mobileSearchOnInput(el){
+      const input=$('searchTabInput') as HTMLInputElement;
+      if(input){ input.value=el.value; }
+      filterSearchTab();
+    }
+    export function mobileSearchClear(){
+      const el=$('mobileSearchInput') as HTMLInputElement;
+      if(el) el.value='';
+      const input=$('searchTabInput') as HTMLInputElement;
+      if(input){ input.value=''; }
+      filterSearchTab();
+      el?.focus();
+    }
+
 /* ===== 4872-4924 ===== */
     setTimeout(()=>{ const initial=document.querySelector('.nav-bar .nav-btn.active'); if(initial) moveNavIndicator(initial,true); }, 0);
 
@@ -59,4 +88,9 @@ import { $ } from '../core/state';
       const active=document.querySelector('.nav-bar .nav-btn.active');
       if(active) moveNavIndicator(active,true);
     });
+
+document.addEventListener('keydown',e=>{
+  const bar=document.getElementById('mobileSearchBar');
+  if(e.key==='Escape' && bar && bar.classList.contains('open')) bar.classList.remove('open');
+});
 

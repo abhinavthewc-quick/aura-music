@@ -115,7 +115,7 @@
       .desktop-hero-stats{position:static;display:flex;flex-wrap:wrap;align-items:center;gap:18px;margin-top:16px;z-index:2}.desktop-hero-stats div{display:flex;align-items:baseline;gap:6px}.desktop-hero-stats b{font-size:16px}.desktop-hero-stats span{font-size:9px;color:var(--text-sub);text-transform:uppercase;letter-spacing:1px}
 
       .greeting{position:relative;min-height:126px;margin:0 0 20px;padding:22px 24px!important;border-radius:24px!important;overflow:hidden;display:flex;flex-direction:column;justify-content:center;background:linear-gradient(115deg,rgba(0,242,254,.08),rgba(255,255,255,.045),rgba(126,92,255,.09))!important;border:1px solid rgba(255,255,255,.12)!important;box-shadow:inset 0 1px 0 rgba(255,255,255,.13),0 18px 50px rgba(0,0,0,.18)!important}
-      .greeting h1{font-size:26px!important;margin:4px 0 2px!important}.greeting .lib-count{font-size:10px!important}.beeboo-mascot-btn{right:22px!important;bottom:18px!important}
+      .greeting h1{font-size:26px!important;margin:4px 0 2px!important}.greeting .lib-count{font-size:10px!important}
 
       .quick-grid{display:grid!important;grid-template-columns:repeat(4,minmax(0,1fr));gap:14px;margin-bottom:22px}
       .quick-grid > *{min-height:112px!important}
@@ -163,7 +163,7 @@
     .song-list > *{min-width:0}
 
     /* Prevent long titles / URLs from creating horizontal overflow. */
-    .song-item *, .library-song *, .song-card *, .track-card *, .recent-card *, .quick-tile *, .radio-station *, .settings-row *, .beeboo-msg{min-width:0;overflow-wrap:anywhere}
+    .song-item *, .library-song *, .song-card *, .track-card *, .recent-card *, .quick-tile *, .radio-station *, .settings-row *{min-width:0;overflow-wrap:anywhere}
 
     /* Touch targets stay comfortable without making desktop controls oversized. */
     @media (pointer:coarse){
@@ -199,7 +199,7 @@
       .browse-grid{grid-template-columns:repeat(3,minmax(0,1fr))}
       .quick-grid{grid-template-columns:repeat(2,minmax(0,1fr))}
       .upload-card{max-width:620px}
-      .beeboo-chat,.chat-container{max-width:760px}
+      .chat-container{max-width:760px}
     }
 
     /* Large desktop / ultrawide: keep reading and controls centered. */

@@ -2,6 +2,8 @@ import { fetchYouTubeMeta, artistMergeKey, stateHTML, toast } from '../core/dom'
 import { renderArtistSpotlight, renderAuraPicks, renderQuickAccess } from './home';
 import { filterSongs, loadSong, playSong, resetFullPlayerArtToImage, stopAuraYouTube, updatePlayState } from './player';
 import { filterSearchTab, getYouTubeIdFromUrl } from './search';
+import { escapeHtml } from './radio';
+import { goTab } from '../ui/nav';
 import { $, persistLikedHistory, rebuildSongs, savedLikeMap, state } from '../core/state';
 /* ===== 3006-3012 ===== */
     /* Library Count */
@@ -390,6 +392,7 @@ import { $, persistLikedHistory, rebuildSongs, savedLikeMap, state } from '../co
 
     export function setLibView(v){
       libView = v === 'artists' || v === 'albums' || v === 'films' ? v : 'tracks';
+      currentArtistKey = null;   // any explicit view switch leaves artist pages
       document.querySelectorAll('#libViewSeg .lib-seg-btn').forEach(b => {
         b.classList.toggle('active', (b as HTMLElement).dataset.view === libView);
       });
@@ -400,6 +403,110 @@ import { $, persistLikedHistory, rebuildSongs, savedLikeMap, state } from '../co
       const idxs = libGroupIndex.get(key);
       if(idxs && idxs.length) playSong(idxs[0]);
     }
+
+    /* ---------- Artists: library-wide grouping, circle tiles, detail page ----------
+       One source of truth for Home (scrolling row) and Library (grid tab):
+       groups merge artist variants via artistMergeKey, label each group with
+       the spelling most tracks use, sort busiest-first, and use the first
+       available cover as the avatar. */
+    export function getArtistGroups(){
+      const keys: string[] = [];
+      const groups: any[] = [];
+      state.songs.forEach(s => {
+        const a = (s.artist || '').trim();
+        if(!a || a === 'Unknown Artist') return;
+        const k = artistMergeKey(keys, a);
+        let g = groups.find(x => x.key === k);
+        if(!g){ g = { key:k, name:'', names:new Map(), songs:[], cover:'' }; groups.push(g); }
+        g.songs.push(s);
+        g.names.set(a, (g.names.get(a) || 0) + 1);
+        if(!g.cover && s.img) g.cover = s.img;
+      });
+      groups.forEach(g => {
+        g.name = [...g.names.entries()].sort((x, y) => y[1] - x[1] || y[0].length - x[0].length)[0][0];
+      });
+      groups.sort((a, b) => b.songs.length - a.songs.length || a.name.localeCompare(b.name));
+      return groups;
+    }
+
+    function artistInitial(name){ return String(name || '').trim().charAt(0) || '#'; }
+    function artistFallbackColor(name){
+      let h = 0; const s = String(name || '');
+      for(let i = 0; i < s.length; i++) h = (h * 31 + s.charCodeAt(i)) % 360;
+      return `hsl(${h},42%,38%)`;
+    }
+    function artistAvatarHTML(g, cls){
+      if(g.cover) return `<img class="artist-avatar ${cls || ''}" src="${escapeHtml(g.cover)}" alt="">`;
+      return `<span class="artist-avatar artist-avatar-fallback ${cls || ''}" style="background:${artistFallbackColor(g.name)}">${escapeHtml(artistInitial(g.name))}</span>`;
+    }
+    export function artistTileHTML(g, i){
+      return `<button type="button" class="artist-tile" onclick="openArtist(${i})">${artistAvatarHTML(g, '')}<span class="artist-name">${escapeHtml(g.name)}</span></button>`;
+    }
+
+    let currentArtistKey: any = null;
+    let artistGroupsCache: any[] = [];
+
+    function renderLibraryArtists(){
+      const c = $('librarySongList');
+      const heading = $('allTracksSection');
+      artistGroupsCache = getArtistGroups();
+      if(!artistGroupsCache.length){
+        if(heading) heading.style.display = 'none';   // no artists -> no empty heading
+        c.innerHTML = '';
+        return;
+      }
+      if(heading){ heading.style.display = ''; heading.textContent = 'Artists'; }
+      if(currentArtistKey != null){
+        const gi = artistGroupsCache.findIndex(g => g.key === currentArtistKey);
+        const g = gi >= 0 ? artistGroupsCache[gi] : null;
+        if(g){
+          const n = g.songs.length;
+          c.innerHTML = `<div class="artist-page">
+            <button type="button" class="artist-page-back" onclick="setLibView('artists')"><i class="fa-solid fa-arrow-left"></i> Artists</button>
+            <div class="artist-page-head">
+              ${artistAvatarHTML(g, 'artist-page-avatar')}
+              <div class="artist-page-meta"><div class="artist-page-name">${escapeHtml(g.name)}</div><div class="lib-group-sub">${n} song${n !== 1 ? 's' : ''}</div></div>
+              <div class="artist-page-actions">
+                <button type="button" onclick="playArtist(${gi})"><i class="fa-solid fa-play"></i> Play</button>
+                <button type="button" onclick="shuffleArtist(${gi})"><i class="fa-solid fa-shuffle"></i> Shuffle</button>
+              </div>
+            </div>
+            <div class="song-list">${g.songs.map(songItemHTML).join('')}</div>
+          </div>`;
+          return;
+        }
+        currentArtistKey = null;
+      }
+      c.innerHTML = `<div class="artist-tiles">${artistGroupsCache.map((g, i) => artistTileHTML(g, i)).join('')}</div>`;
+    }
+
+    export function openArtist(i){
+      const groups = artistGroupsCache.length ? artistGroupsCache : getArtistGroups();
+      artistGroupsCache = groups;
+      currentArtistKey = groups[i] ? groups[i].key : null;
+      libView = 'artists';
+      document.querySelectorAll('#libViewSeg .lib-seg-btn').forEach(b => {
+        b.classList.toggle('active', (b as HTMLElement).dataset.view === 'artists');
+      });
+      goTab('tabLibrary');
+      renderLibrary();
+    }
+
+    export function playArtist(i, shuffle){
+      const groups = artistGroupsCache.length ? artistGroupsCache : getArtistGroups();
+      artistGroupsCache = groups;
+      const g = groups[i];
+      if(!g || !g.songs.length) return;
+      const idxs = g.songs.map(s => state.songs.findIndex(x => x.id === s.id)).filter(x => x >= 0);
+      if(!idxs.length) return;
+      if(shuffle){
+        if(!state.isShuffle){ state.isShuffle = true; const sb = $('shuffleBtn'); if(sb) sb.classList.add('mode-active'); }
+      }
+      const pick = shuffle ? idxs[Math.floor(Math.random() * idxs.length)] : idxs[0];
+      playSong(pick);
+      $('fullPlayerOverlay').classList.add('active');
+    }
+    export function shuffleArtist(i){ playArtist(i, true); }
 
     /* Soundtrack credit lives in the album/title as (From "Film Name" …) */
     const FILM_RE = /\(\s*From\s+[“"「＂]([^”"」＂]+)[”"」＂]/i;
@@ -479,11 +586,14 @@ import { $, persistLikedHistory, rebuildSongs, savedLikeMap, state } from '../co
     export function renderLibrary(){
       const c=$('librarySongList');
       const heading=$('allTracksSection');
-      if(heading) heading.textContent = libView==='artists'?'Artists':libView==='albums'?'Albums':libView==='films'?'Films':'All Tracks';
-      if(!state.songs.length){
+      if(heading) heading.textContent = libView==='artists'?'Artists':libView==='albums'?'Albums':libView==='films'?'Films':'All Tracks';      if(!state.songs.length){
+        if(heading) heading.style.display = libView === 'artists' ? 'none' : '';
         c.innerHTML=stateHTML('empty','Your library is empty','Add your own songs or search online to get started.','Search music',"goTab('tabSearch')");
       }else if(libView==='tracks'){
+        if(heading) heading.style.display = '';
         c.innerHTML=state.songs.map(songItemHTML).join('');
+      }else if(libView==='artists'){
+        renderLibraryArtists();
       }else{
         renderGroups(libView);
       }
