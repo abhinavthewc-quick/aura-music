@@ -58,6 +58,7 @@ import { $ } from '../core/state';
       });
       document.querySelectorAll('.tab-content').forEach(t=>t.classList.remove('active'));
       $(tabId).classList.add('active');
+      document.body.classList.toggle('tab-search-active', tabId==='tabSearch');
       if(tabId==='tabLibrary')renderLibrary();
       if(tabId==='tabSearch')filterSearchTab();
       if(tabId==='tabRadio' && !$('radioStationList').dataset.loaded){ $('radioStationList').dataset.loaded='1'; loadRadioStations('top'); }

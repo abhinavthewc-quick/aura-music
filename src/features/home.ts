@@ -379,6 +379,7 @@ import { $, state } from '../core/state';
           if(tabInput){
             tabInput.value = q;
             tabInput.dispatchEvent(new Event('input', { bubbles: true }));
+            tabInput.focus();
           }
         }
       });
