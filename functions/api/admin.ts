@@ -35,7 +35,12 @@ interface Env {
   ADMIN_PASSWORD?: string; // optional — enables the email+password login
   HF_TOKEN?: string; // bucket mutations (rename/delete) — set in Pages env
   HF_BUCKET_ID?: string;
+  BOT_SERVICE_TOKEN?: string; // shared secret for the Aura Farmer Worker
 }
+
+/* The Discord bot's Worker may only use these read/dispatch actions. It never
+   gets a Google credential or an admin session. */
+const BOT_ACTIONS = new Set(['search', 'expand', 'dispatch', 'runs', 'runJobs']);
 
 interface BucketFile {
   path: string;
@@ -1018,6 +1023,20 @@ export const onRequestPost = async ({ request, env, ctx }: {
     return json({ error: 'invalid JSON body' }, 400);
   }
 
+  /* ----- service auth: the Aura Farmer Worker presents a shared secret and is
+     limited to the bot's actions. It never becomes a normal admin session. ----- */
+  let isBot = false;
+  if (env.BOT_SERVICE_TOKEN && typeof body?.service_token === 'string' && body.service_token) {
+    const [given, stored] = await Promise.all([
+      sha256Hex(body.service_token),
+      sha256Hex(env.BOT_SERVICE_TOKEN),
+    ]);
+    isBot = given === stored;
+    if (isBot && !BOT_ACTIONS.has(String(body?.action || ''))) {
+      return json({ error: 'action not allowed for the bot service token' }, 403);
+    }
+  }
+
   /* ----- password login: verify against ADMIN_PASSWORD, issue signed token ----- */
   if (body?.action === 'login') {
     const loginEmail = String(body.email || '').toLowerCase().trim();
@@ -1061,25 +1080,32 @@ export const onRequestPost = async ({ request, env, ctx }: {
 
   /* ----- authenticate every other action: Google ID token or signed fallback token ----- */
   let email: string;
-  const credential = String(body?.credential || '');
-  try {
-    if (credential.startsWith('v1.')) {
-      const matched = await verifyFallbackToken(env, credential);
-      if (!matched) throw new Error('session expired — sign in again');
-      email = matched;
-    } else {
-      if (!env.GOOGLE_CLIENT_ID) throw new Error('Google sign-in is not configured on the server');
-      ({ email } = await verifyGoogle(credential, env.GOOGLE_CLIENT_ID));
+  if (isBot) {
+    email = 'aura-farmer@service';
+  } else {
+    const credential = String(body?.credential || '');
+    try {
+      if (credential.startsWith('v1.')) {
+        const matched = await verifyFallbackToken(env, credential);
+        if (!matched) throw new Error('session expired — sign in again');
+        email = matched;
+      } else {
+        if (!env.GOOGLE_CLIENT_ID) throw new Error('Google sign-in is not configured on the server');
+        ({ email } = await verifyGoogle(credential, env.GOOGLE_CLIENT_ID));
+      }
+    } catch (e) {
+      return json({ error: (e as Error).message }, 401);
     }
-  } catch (e) {
-    return json({ error: (e as Error).message }, 401);
-  }
-  if (!ALLOWED_EMAILS.has(email)) {
-    return json({ error: email + ' is not allowed' }, 403);
+    if (!ALLOWED_EMAILS.has(email)) {
+      return json({ error: email + ' is not allowed' }, 403);
+    }
   }
 
   try {
     switch (body?.action) {
+      case 'verify':
+        return json({ ok: true, email });
+
       case 'search': {
         const q = String(body.q || '').trim().slice(0, SEARCH_MAX_Q);
         if (!q) return json({ error: 'empty query' }, 400);
@@ -1373,24 +1399,29 @@ export const onRequestPost = async ({ request, env, ctx }: {
         } catch { /* tree unavailable — dispatch anyway */ }
         const seen = new Set<string>();
         const keep: string[] = [];
+        const skippedIds: string[] = [];
+        const skippedUploadedIds: string[] = [];
         let skippedDup = 0;
         let skippedUploaded = 0;
         for (const u of urls as string[]) {
           const id = ytIdOf(u);
           if (!id || seen.has(id)) {
             skippedDup++;
+            if (id) skippedIds.push(id);
             continue;
           }
           seen.add(id);
           if (uploaded.has(id)) {
             skippedUploaded++;
+            skippedUploadedIds.push(id);
+            skippedIds.push(id);
             continue;
           }
           keep.push(u);
         }
         const skipped = skippedDup + skippedUploaded;
         if (!keep.length) {
-          return json({ ok: true, dispatched: 0, skipped, skippedUploaded });
+          return json({ ok: true, dispatched: 0, skipped, skippedIds, skippedUploaded, skippedUploadedIds });
         }
         /* Clean metadata (title/artist/album from search results) rides along
            for manifest.json. This run gets the first batch; the rest travels
@@ -1462,7 +1493,9 @@ export const onRequestPost = async ({ request, env, ctx }: {
           chained: rest.length,
           runs: Math.ceil(keep.length / MAX_URLS),
           skipped,
+          skippedIds,
           skippedUploaded,
+          skippedUploadedIds,
           runId,
         });
       }

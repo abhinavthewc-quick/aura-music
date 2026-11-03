@@ -40,6 +40,7 @@
     <nav class="adm-tabs adm-gated" id="admTabs" hidden aria-label="Admin sections">
       <button type="button" class="adm-tab active" data-panel="panelAdd">Find &amp; queue</button>
       <button type="button" class="adm-tab" data-panel="panelLibrary">Library <span class="adm-tabcount" id="libTabCount" hidden></span></button>
+      <button type="button" class="adm-tab" data-panel="panelDiscord">Discord <span class="adm-tabcount" id="discordTabCount" hidden></span></button>
       <button type="button" class="adm-tab" data-panel="panelSettings">Settings</button>
     </nav>
 
@@ -151,6 +152,161 @@
       </div>
     </details>
     </div><!-- /panelSettings -->
+
+    <!-- Discord tab: Aura Farmer bot -->
+    <div class="adm-panel" id="panelDiscord" hidden>
+    <section class="adm-card adm-span2" id="discordOverviewCard">
+      <h2><span class="adm-num">4</span> Aura Farmer <span class="adm-dbadge" id="discordBotBadge">offline</span>
+        <button type="button" class="adm-btn ghost small" id="discordRefreshBtn">Refresh</button>
+      </h2>
+      <p class="adm-hint">Discord links queue in the bot backend until the threshold is reached, then hand off to the same <code>upload-music.yml</code> download workflow the rest of this panel uses. The gateway runs on your VPS; this panel talks to its Cloudflare Worker backend.</p>
+      <div class="adm-dstats" id="discordStats">
+        <div class="adm-dstat"><span class="k">Gateway</span><span class="v" id="discordGatewayState">—</span></div>
+        <div class="adm-dstat"><span class="k">Queue</span><span class="v" id="discordQueueState">—</span></div>
+        <div class="adm-dstat"><span class="k">Active batch</span><span class="v" id="discordActiveBatch">—</span></div>
+        <div class="adm-dstat"><span class="k">Downloaded / failed</span><span class="v" id="discordTotals">—</span></div>
+      </div>
+      <div class="adm-status" id="discordOverviewStatus"></div>
+
+      <div class="adm-seg adm-dsubnav" id="discordSubnav">
+        <button type="button" class="adm-seg-btn active" data-dsec="queue">Queue</button>
+        <button type="button" class="adm-seg-btn" data-dsec="batches">Batches</button>
+        <button type="button" class="adm-seg-btn" data-dsec="users">Users</button>
+        <button type="button" class="adm-seg-btn" data-dsec="settings">Settings</button>
+        <button type="button" class="adm-seg-btn" data-dsec="audit">Activity</button>
+      </div>
+    </section>
+
+    <!-- Discord → queue -->
+    <section class="adm-card adm-span2 adm-dsec" id="dsecQueue" hidden>
+      <h2>Submission queue <span class="adm-count" id="discordQueueCount"></span>
+        <button type="button" class="adm-btn ghost small" id="discordDispatchBtn">Dispatch now</button>
+      </h2>
+      <p class="adm-hint">Everything Discord users submitted, oldest first. Dispatch now overrides the threshold and sends up to 25 tracks. Removing a link here only removes it from the bot queue.</p>
+      <div class="adm-libbar">
+        <div class="adm-libsearch">
+          <input id="discordQueueSearch" class="adm-input" type="search" placeholder="Search title, artist, user or video id…" autocomplete="off" spellcheck="false" aria-label="Search Discord queue">
+        </div>
+        <select id="discordQueueFilter" class="adm-input adm-libsort" aria-label="Queue status">
+          <option value="queued">Queued</option>
+          <option value="all">All submissions</option>
+          <option value="failed">Failed</option>
+          <option value="dispatched">Dispatched</option>
+          <option value="downloaded">Downloaded</option>
+          <option value="removed">Removed</option>
+        </select>
+        <button type="button" class="adm-btn ghost small" id="discordQueueRefresh">Refresh</button>
+      </div>
+      <div class="adm-dlist" id="discordQueueList"><span class="adm-chip dim">loading…</span></div>
+      <div class="adm-row adm-row-wrap">
+        <button type="button" class="adm-btn danger" id="discordQueueRemove">Remove selected</button>
+        <button type="button" class="adm-btn" id="discordQueueRetry">Retry failed selected</button>
+      </div>
+      <div class="adm-status" id="discordQueueStatus"></div>
+    </section>
+
+    <!-- Discord → batches -->
+    <section class="adm-card adm-span2 adm-dsec" id="dsecBatches" hidden>
+      <h2>Download batches <button type="button" class="adm-btn ghost small" id="discordBatchesRefresh">Refresh</button></h2>
+      <p class="adm-hint">Each batch is one hand-off to GitHub Actions. A batch only becomes active when the previous workflow has finished, because GitHub cancels queued runs in the same concurrency group.</p>
+      <div class="adm-dlist" id="discordBatchesList"><span class="adm-chip dim">loading…</span></div>
+      <div class="adm-status" id="discordBatchesStatus"></div>
+    </section>
+
+    <!-- Discord → users -->
+    <section class="adm-card adm-span2 adm-dsec" id="dsecUsers" hidden>
+      <h2>Users <span class="adm-count" id="discordUserCount"></span>
+        <button type="button" class="adm-btn ghost small" id="discordUsersRefresh">Refresh</button>
+      </h2>
+      <p class="adm-hint">Anyone in the configured channel can submit unless banned. Banning also removes that user's queued links. Counters are a running total from the audit log.</p>
+      <div class="adm-libbar">
+        <div class="adm-libsearch">
+          <input id="discordUserSearch" class="adm-input" type="search" placeholder="Search Discord name or user id…" autocomplete="off" spellcheck="false" aria-label="Search Discord users">
+        </div>
+      </div>
+      <div class="adm-dlist" id="discordUsersList"><span class="adm-chip dim">loading…</span></div>
+      <div class="adm-status" id="discordUsersStatus"></div>
+    </section>
+
+    <!-- Discord → settings -->
+    <section class="adm-card adm-span2 adm-dsec" id="dsecSettings" hidden>
+      <h2>Bot settings <button type="button" class="adm-btn ghost small" id="discordSettingsReload">Reload</button></h2>
+      <p class="adm-hint">Changes apply within about 30 seconds — the gateway polls this configuration. Channel IDs are numeric Discord IDs; separate multiple channels with commas.</p>
+      <div class="adm-dform">
+        <div class="adm-dfield">
+          <label class="adm-label" for="dsBotName">Bot display name</label>
+          <input id="dsBotName" class="adm-input" type="text" maxlength="80">
+        </div>
+        <div class="adm-dfield">
+          <label class="adm-label" for="dsThreshold">Dispatch threshold <small>links</small></label>
+          <input id="dsThreshold" class="adm-input" type="number" min="1" max="300">
+        </div>
+        <div class="adm-dfield">
+          <label class="adm-label" for="dsDispatchSize">Tracks per batch <small>max 25</small></label>
+          <input id="dsDispatchSize" class="adm-input" type="number" min="1" max="25">
+        </div>
+        <div class="adm-dfield">
+          <label class="adm-label" for="dsCooldown">Cooldown <small>seconds between submissions</small></label>
+          <input id="dsCooldown" class="adm-input" type="number" min="0" max="3600">
+        </div>
+        <div class="adm-dfield">
+          <label class="adm-label" for="dsDailyLimit">Daily limit <small>0 = unlimited</small></label>
+          <input id="dsDailyLimit" class="adm-input" type="number" min="0" max="1000">
+        </div>
+        <div class="adm-dfield">
+          <label class="adm-label" for="dsGuildId">Guild ID <small>optional</small></label>
+          <input id="dsGuildId" class="adm-input" type="text" maxlength="32" placeholder="123456789012345678">
+        </div>
+        <div class="adm-dfield adm-dfield-wide">
+          <label class="adm-label" for="dsChannelIds">Submission channels <small>comma-separated IDs</small></label>
+          <input id="dsChannelIds" class="adm-input" type="text" maxlength="1000" placeholder="123456789012345678, 987654321098765432">
+        </div>
+        <div class="adm-dfield">
+          <label class="adm-label" for="dsLogChannelId">Log channel ID <small>optional</small></label>
+          <input id="dsLogChannelId" class="adm-input" type="text" maxlength="32" placeholder="Batch announcements go to the first channel if empty">
+        </div>
+        <div class="adm-dfield adm-dfield-wide">
+          <label class="adm-label" for="dsMaintenanceMessage">Maintenance message</label>
+          <input id="dsMaintenanceMessage" class="adm-input" type="text" maxlength="300">
+        </div>
+      </div>
+      <div class="adm-dchecks">
+        <label class="adm-dcheck"><input type="checkbox" id="dsEnabled"> Bot enabled</label>
+        <label class="adm-dcheck"><input type="checkbox" id="dsMaintenance"> Maintenance mode</label>
+        <label class="adm-dcheck"><input type="checkbox" id="dsAutoDispatch"> Auto-dispatch at threshold</label>
+        <label class="adm-dcheck"><input type="checkbox" id="dsSearchEnabled"> Allow search</label>
+        <label class="adm-dcheck"><input type="checkbox" id="dsPlaylistExpand"> Expand playlists</label>
+        <label class="adm-dcheck"><input type="checkbox" id="dsNotifyDispatch"> Announce dispatches</label>
+        <label class="adm-dcheck"><input type="checkbox" id="dsNotifyComplete"> Announce completions</label>
+        <label class="adm-dcheck"><input type="checkbox" id="dsNotifyFailure"> Announce failures</label>
+      </div>
+      <div class="adm-row adm-row-wrap">
+        <button type="button" class="adm-btn primary" id="discordSettingsSave">Save settings</button>
+        <span class="adm-count">Saved changes are written to the audit log with your admin email.</span>
+      </div>
+      <div class="adm-status" id="discordSettingsStatus"></div>
+    </section>
+
+    <!-- Discord → audit -->
+    <section class="adm-card adm-span2 adm-dsec" id="dsecAudit" hidden>
+      <h2>Activity log <span class="adm-count" id="discordAuditCount"></span>
+        <button type="button" class="adm-btn ghost small" id="discordAuditRefresh">Refresh</button>
+      </h2>
+      <p class="adm-hint">Every submission, duplicate, batch hand-off, admin change, ban and removal. This is the “who did what” trail for Discord.</p>
+      <div class="adm-libbar">
+        <div class="adm-libsearch">
+          <input id="discordAuditSearch" class="adm-input" type="search" placeholder="Filter by Discord user or admin email…" autocomplete="off" spellcheck="false" aria-label="Filter activity">
+        </div>
+        <select id="discordAuditAction" class="adm-input adm-libsort" aria-label="Activity type">
+          <option value="all">All activity</option>
+          <option value="submission.">Discord submissions</option>
+          <option value="batch.">Batches</option>
+          <option value="admin.">Admin actions</option>
+        </select>
+      </div>
+      <div class="adm-dlist adm-dlog" id="discordAuditList"><span class="adm-chip dim">loading…</span></div>
+    </section>
+    </div><!-- /panelDiscord -->
 
   </main>
 

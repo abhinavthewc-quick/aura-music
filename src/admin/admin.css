@@ -462,3 +462,68 @@ body {
 .adm-config[open] .adm-summary-title i{transform:rotate(90deg)}
 .adm-config-body{margin-top:16px;border-top:1px solid var(--card-border);padding-top:4px}
 .adm-where{margin-top:14px;padding-top:12px;border-top:1px dashed rgba(255,255,255,.1)}
+
+/* ---- Discord / Aura Farmer ---- */
+.adm-dstats {
+  display: grid; grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+  gap: 12px; margin-top: 16px;
+}
+.adm-dstat {
+  background: rgba(0, 0, 0, 0.32); border: 1px solid rgba(255, 255, 255, 0.09);
+  border-radius: 13px; padding: 13px 15px; display: flex; flex-direction: column; gap: 4px;
+}
+.adm-dstat .k { font-size: 10.5px; letter-spacing: 0.09em; text-transform: uppercase; color: var(--dim); }
+.adm-dstat .v { font-size: 17px; font-weight: 700; color: var(--text); overflow-wrap: anywhere; }
+.adm-dstat .v.ok { color: var(--green); }
+.adm-dstat .v.err { color: var(--red); }
+.adm-dstat .v.gold { color: var(--gold); }
+
+.adm-dbadge {
+  font-size: 11px; font-weight: 700; letter-spacing: 0.04em; text-transform: uppercase;
+  padding: 3px 9px; border-radius: 999px; white-space: nowrap;
+  border: 1px solid rgba(255, 255, 255, 0.16); color: var(--dim); background: transparent;
+}
+.adm-dbadge.ok, .adm-dbadge.downloaded, .adm-dbadge.uploaded, .adm-dbadge.completed {
+  border-color: rgba(125, 211, 160, 0.4); color: var(--green); background: rgba(125, 211, 160, 0.08);
+}
+.adm-dbadge.gold, .adm-dbadge.queued, .adm-dbadge.dispatched, .adm-dbadge.running, .adm-dbadge.dispatching {
+  border-color: rgba(220, 174, 124, 0.45); color: var(--gold); background: var(--gold-soft);
+}
+.adm-dbadge.err, .adm-dbadge.failed, .adm-dbadge.banned, .adm-dbadge.removed {
+  border-color: rgba(239, 139, 139, 0.4); color: var(--red); background: rgba(239, 139, 139, 0.08);
+}
+
+.adm-dsubnav { margin-top: 18px; width: max-content; max-width: 100%; flex-wrap: wrap; }
+.adm-dlist {
+  display: flex; flex-direction: column; gap: 8px; margin-top: 14px;
+  max-height: 56vh; overflow-y: auto; padding-right: 2px;
+}
+.adm-dlist > .adm-chip { align-self: flex-start; }
+.adm-ditem {
+  display: flex; gap: 12px; align-items: center;
+  background: rgba(0, 0, 0, 0.3); border: 1px solid rgba(255, 255, 255, 0.09);
+  border-radius: 12px; padding: 10px 13px; font-size: 13.5px;
+}
+.adm-ditem .grow { flex: 1; min-width: 0; }
+.adm-ditem .title { font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.adm-ditem .title a { color: inherit; text-decoration: none; }
+.adm-ditem .title a:hover { color: var(--gold); text-decoration: underline; }
+.adm-ditem .meta { color: var(--dim); font-size: 12px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.adm-ditem .actions { display: flex; gap: 6px; flex: none; align-items: center; }
+.adm-ditem .when { color: var(--dim); font-size: 11.5px; white-space: nowrap; flex: none; }
+.adm-ditem .who { color: var(--gold); font-weight: 600; }
+.adm-drowcheck { accent-color: var(--gold); width: 15px; height: 15px; flex: none; }
+
+.adm-dform { display: grid; grid-template-columns: 1fr 1fr; gap: 0 16px; margin-top: 6px; }
+.adm-dfield { min-width: 0; }
+.adm-dfield-wide { grid-column: 1 / -1; }
+.adm-dchecks { display: flex; flex-wrap: wrap; gap: 10px 20px; margin: 18px 0 4px; }
+.adm-dcheck { display: flex; align-items: center; gap: 8px; font-size: 13px; color: var(--text); cursor: pointer; }
+.adm-dcheck input { accent-color: var(--gold); width: 15px; height: 15px; }
+.adm-dlog .adm-ditem { align-items: flex-start; }
+.adm-dlog .adm-ditem .title { white-space: normal; }
+@media (max-width: 700px) {
+  .adm-dform { grid-template-columns: 1fr; }
+  .adm-dfield-wide { grid-column: auto; }
+  .adm-ditem { flex-wrap: wrap; }
+}
