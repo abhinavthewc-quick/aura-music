@@ -41,6 +41,24 @@ Every request is a `POST` with a JSON body.
 `credential` is required. A `v1.` token is verified with HMAC; anything else is
 treated as a Google ID token. The resolved email must be in the allow-list.
 
+### Service token (Aura Farmer)
+
+The Discord bot's Worker may call a small subset of actions without a Google
+credential:
+
+```json
+{ "service_token": "<BOT_SERVICE_TOKEN>", "action": "search", "q": "…" }
+```
+
+- Enabled only when `BOT_SERVICE_TOKEN` is set in the Pages environment; the
+  value is compared as a SHA-256 digest.
+- Allowed actions: `search`, `expand`, `dispatch`, `runs`, `runJobs`, `verify`.
+  Anything else returns `403`, even with a valid token.
+- The resolved identity is `aura-farmer@service`; it is not an admin session and
+  cannot be used for `library`, secrets or bucket mutations.
+- `verify` returns `{ ok: true, email }` so the bot can confirm the token before
+  queueing work.
+
 ### Failure responses
 
 | Status | Meaning |
@@ -191,7 +209,10 @@ Starts the upload pipeline.
   the workflow chains the next batch after it completes.
 - If a run is already `in_progress`/`queued`, returns `409` with the run id
   (GitHub keeps only one pending run per concurrency group).
-- Returns `{ ok, dispatched, skipped, skippedUploaded, runId }`.
+- Returns `{ ok, dispatched, skipped, skippedIds, skippedUploaded, skippedUploadedIds, runId }`.
+  `skippedIds` lists every refused id; `skippedUploadedIds` is the subset already
+  in the bucket. The Discord bot uses these to mark duplicate queue entries
+  instead of leaving them stuck in a batch.
 
 ### `setSecret` / `deleteSecret`
 
@@ -241,6 +262,25 @@ curl -s https://aura-music-01g.pages.dev/api/admin \
 ```
 
 There is no `GET` handler; browsing to `/api/admin` returns 405/404.
+
+## Discord bot proxy (`/api/bot`)
+
+[`functions/api/bot.ts`](../functions/api/bot.ts) is the admin panel's only route
+to the Aura Farmer Worker. It:
+
+1. verifies the caller by calling `/api/admin` with `action: "verify"`, reusing
+   the same Google/session checks and allow-list;
+2. forwards the request to `BOT_WORKER_URL/v1/admin` with `BOT_ADMIN_TOKEN` and
+   the verified email in `x-admin-email`;
+3. relays the JSON response unchanged.
+
+Request body: `{ action, credential, ...payload }`. The body shape follows the
+bot Worker's admin RPC (`overview`, `queue`, `batches`, `users`, `audit`,
+`settings`, `settingsUpdate`, `queueRemove`, `queueRetry`, `batchRetry`,
+`userBan`, `dispatch`).
+
+The browser never sees `BOT_ADMIN_TOKEN`; `BOT_WORKER_URL` and
+`BOT_ADMIN_TOKEN` must be present in Pages or the route returns `500`.
 
 ## Limits and caching
 

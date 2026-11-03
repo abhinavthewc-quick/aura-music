@@ -49,6 +49,9 @@ Production (and Preview if used):
 | `HF_TOKEN` | for bucket mutations | `/api/admin` | Hugging Face token for rename/delete/cover/manifest actions. |
 | `HF_BUCKET_ID` | for bucket mutations | `/api/admin` | e.g. `Angelrider/sonora`; must match the client bucket. |
 | `ROOMS_WORKER_URL` | for rooms | `functions/api/rooms.ts` | Public URL of `rooms-worker`, e.g. `https://aura-rooms.<sub>.workers.dev`. Without it `/api/rooms` returns 503. |
+| `BOT_WORKER_URL` | for the Discord tab | `functions/api/bot.ts` | Base URL of the Aura Farmer Worker, e.g. `https://aura-farmer.<sub>.workers.dev`. |
+| `BOT_ADMIN_TOKEN` | for the Discord tab | `functions/api/bot.ts` | Shared secret the Worker expects on `/v1/admin` (the Worker's `BOT_ADMIN_TOKEN`). |
+| `BOT_SERVICE_TOKEN` | for Discord dispatch | `/api/admin` | Shared secret the Worker presents on `/api/admin`, limited to `search`, `expand`, `dispatch`, `runs`, `runJobs`. Must match the Worker's `AURA_SERVICE_TOKEN`. |
 
 `GH_TOKEN` must not be exposed to the browser. The admin panel never receives
 it: it sends either a Google ID token or a `v1.<exp>.<hmac>` session token, and
@@ -69,6 +72,13 @@ Repository → Settings → Secrets and variables → Actions:
 (`setSecret`/`deleteSecret` in `/api/admin`). `HF_TOKEN`/`HF_BUCKET_ID` must be
 set as Pages environment variables for the admin bucket actions; they are not
 managed from the panel.
+
+The `BOT_*` variables connect the Discord tab to the separate
+[`AURA-FARMER`](https://github.com/angel2rider/AURA-FARMER) repository. They are
+optional: without them the rest of the panel works and the Discord tab shows a
+configuration error. The Worker's `AURA_SERVICE_TOKEN` and the Pages
+`BOT_SERVICE_TOKEN` must be the same value; `BOT_ADMIN_TOKEN` is a different
+secret shared only between Pages and the Worker.
 
 ## 4. Hard-coded values that must stay in sync
 

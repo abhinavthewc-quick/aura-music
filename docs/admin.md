@@ -60,7 +60,33 @@ Shows all bucket audio files, grouped with their cover/manifest state.
 - “Already uploaded” marks come from the `library` action; the tree cache is
   60 s, so a just-finished upload may be missing until the cache expires.
 
-### 3. Settings (`panelSettings`)
+### 3. Discord (`panelDiscord`)
+
+Controls the Aura Farmer bot ([separate repo](https://github.com/angel2rider/AURA-FARMER)).
+The panel talks to the bot's Cloudflare Worker through `/api/bot`; the Discord
+gateway itself runs on the VPS.
+
+- **Overview** — gateway online/offline, queue depth vs threshold, active batch,
+  downloaded/failed totals.
+- **Queue** — every submission with title, artist, submitter and status. Filter
+  by status, search, remove links, retry failed ones, or **Dispatch now** to
+  bypass the threshold (25 tracks per batch).
+- **Batches** — hand-offs to `upload-music.yml`, with run links, done/failed
+  counts, and a retry that returns failed tracks to the queue.
+- **Users** — submissions, duplicates, downloads and last-seen per Discord user;
+  ban/unban with a reason. Banning can also drop that user's queued links.
+- **Settings** — threshold, tracks per batch (max 25), cooldown, daily limit,
+  guild/channel IDs, search/playlist toggles, announcements and maintenance
+  mode. The gateway polls every 30 seconds.
+- **Activity** — submissions, duplicates, batch events and admin actions, with
+  the actor (Discord user or admin email) and a detail line.
+
+Requirements: `BOT_WORKER_URL`, `BOT_ADMIN_TOKEN` and `BOT_SERVICE_TOKEN` in
+Pages (see [configuration](configuration.md#2-cloudflare-pages-environment)).
+The Worker also needs *its* `AURA_SERVICE_TOKEN` to call `dispatch`, `search`
+and `runs` here.
+
+### 4. Settings (`panelSettings`)
 
 - **YouTube cookies** — load a Netscape `cookies.txt` and save it as the
   `YOUTUBE_COOKIES` GitHub secret (sealed with GitHub’s public key by the
@@ -133,5 +159,7 @@ Shows all bucket audio files, grouped with their cover/manifest state.
 
 - [Admin API](admin-api.md) — request/response shapes and limits.
 - [Deployment](deployment.md#3-github-actions) — workflow inputs/secrets.
+- [AURA-FARMER](https://github.com/angel2rider/AURA-FARMER) — Discord bot source,
+  Discord app setup and VPS deployment.
 - [Troubleshooting](troubleshooting.md#admin-panel--api) — 401/409/500 and
   “upload ran but no music appeared”.
