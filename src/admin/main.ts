@@ -57,7 +57,7 @@ async function adminApi<T = any>(action: string, payload: Record<string, unknown
     res = await fetch('/api/admin', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ credential: session.token, action, ...payload }),
+      body: JSON.stringify({ ...payload, credential: session.token, action }),
     });
   } catch {
     throw new Error('network error — is the site reachable?');
@@ -152,13 +152,14 @@ function unlock() {
   refreshRuns();
   void refreshLibrary(); // populate "already uploaded" marks for search/queue/dispatch
   void loadLibraryManager(); // bucket file list + Library tab badge
+  void loadDiscordOverview(true); // Discord tab badge + gateway status
   switchTab('panelAdd');
 }
 
 function lock(msg?: string) {
   $('sessionBar').hidden = true;
   gatedSections.forEach((s) => { s.hidden = true; });
-  ['panelAdd', 'panelLibrary', 'panelSettings'].forEach((id) => { $(id).hidden = true; });
+  ['panelAdd', 'panelLibrary', 'panelDiscord', 'panelSettings'].forEach((id) => { $(id).hidden = true; });
   gBtnBox.innerHTML = '';
   gateCard.hidden = false;
   renderGisButton();
@@ -170,8 +171,9 @@ function switchTab(panelId: string): void {
   document.querySelectorAll<HTMLElement>('.adm-tab').forEach((b) => {
     b.classList.toggle('active', b.dataset.panel === panelId);
   });
-  for (const id of ['panelAdd', 'panelLibrary', 'panelSettings']) $(id).hidden = id !== panelId;
+  for (const id of ['panelAdd', 'panelLibrary', 'panelDiscord', 'panelSettings']) $(id).hidden = id !== panelId;
   if (panelId === 'panelLibrary') void loadLibraryManager();
+  if (panelId === 'panelDiscord') void initDiscord();
   if (panelId === 'panelSettings') ($('configCard') as HTMLDetailsElement).open = true;
 }
 
@@ -1300,6 +1302,493 @@ async function tickRuns() {
   scheduleRunsPoll();
 }
 
+/* ---------- Discord / Aura Farmer ---------- */
+type DiscordSection = 'queue' | 'batches' | 'users' | 'settings' | 'audit';
+
+const DISCORD_STATE_KEY = 'auraAdmin_discordSection';
+let discordSection: DiscordSection = 'queue';
+let discordPollTimer: number | undefined;
+let discordQueueRows: any[] = [];
+let discordUserRows: any[] = [];
+let discordQueueSearchTimer: number | undefined;
+let discordUserSearchTimer: number | undefined;
+let discordAuditSearchTimer: number | undefined;
+
+async function botApi<T = any>(action: string, payload: Record<string, unknown> = {}): Promise<T> {
+  const session = getSession();
+  if (!session) {
+    lock('Your session expired — sign in again.');
+    throw new Error('Sign in first.');
+  }
+  let res: Response;
+  try {
+    res = await fetch('/api/bot', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ ...payload, credential: session.token, action }),
+    });
+  } catch {
+    throw new Error('network error — is the site reachable?');
+  }
+  let data: any = null;
+  try { data = await res.json(); } catch { /* non-JSON */ }
+  if (!res.ok) {
+    if (res.status === 401 || res.status === 403) {
+      if (session.token.startsWith('v1.') || session.token.startsWith('local:')) clearSession();
+      lock(data?.error || 'Sign-in required.');
+    }
+    throw new Error(data?.error || 'HTTP ' + res.status);
+  }
+  return data as T;
+}
+
+function fmtWhen(ms: number | null | undefined): string {
+  if (!ms) return '—';
+  return new Date(ms).toLocaleString();
+}
+
+function fmtAgo(ms: number | null | undefined): string {
+  if (!ms) return 'never';
+  const diff = Math.max(0, Date.now() - ms);
+  const min = Math.floor(diff / 60000);
+  if (min < 1) return 'just now';
+  if (min < 60) return min + 'm ago';
+  const hours = Math.floor(min / 60);
+  if (hours < 24) return hours + 'h ago';
+  const days = Math.floor(hours / 24);
+  return days + 'd ago';
+}
+
+function setDiscordBadge(el: HTMLElement, kind: string, label: string): void {
+  el.className = 'adm-dbadge ' + kind;
+  el.textContent = label;
+}
+
+function setDiscordLoading(host: HTMLElement, text = 'loading…'): void {
+  host.innerHTML = '<span class="adm-chip dim">' + escHtml(text) + '</span>';
+}
+
+function setDiscordError(host: HTMLElement, text: string): void {
+  host.innerHTML = '<span class="adm-chip missing">' + escHtml(text) + '</span>';
+}
+
+async function loadDiscordOverview(silent = false): Promise<void> {
+  try {
+    const data = await botApi<any>('overview');
+    const counts = data.counts || {};
+    const settings = data.settings || {};
+    const bot = data.bot || {};
+    const online = Boolean(bot.online);
+
+    setDiscordBadge($('discordBotBadge'), online ? 'ok' : 'err', online ? 'online' : 'offline');
+    const gateway = $('discordGatewayState');
+    gateway.textContent = online
+      ? (bot.botUser || 'connected') + ' · ' + (bot.latencyMs == null ? '—' : bot.latencyMs + ' ms')
+      : bot.lastSeen ? 'last seen ' + fmtAgo(bot.lastSeen) : 'not connected yet';
+    gateway.className = 'v ' + (online ? 'ok' : 'err');
+
+    const queued = Number(counts.queued || 0);
+    $('discordQueueState').textContent = queued + ' / ' + (settings.threshold ?? '—');
+    $('discordQueueState').className = 'v gold';
+    $('discordActiveBatch').textContent = data.activeBatch
+      ? '#' + data.activeBatch.id + ' · ' + data.activeBatch.status + ' · ' + data.activeBatch.trackCount + ' tracks'
+      : 'none';
+    $('discordTotals').textContent = Number(counts.downloaded || 0) + ' / ' + Number(counts.failed || 0);
+
+    const tabCount = $('discordTabCount');
+    tabCount.hidden = queued === 0;
+    tabCount.textContent = String(queued);
+
+    if (!silent) {
+      const bits: string[] = ['Worker v' + (data.worker?.version || '?')];
+      if (bot.version) bits.push('gateway v' + bot.version);
+      bits.push(Number(counts.users || 0) + ' users');
+      bits.push(Number(counts.submissions || 0) + ' submissions');
+      bits.push(Number(counts.today || 0) + ' today');
+      setStatus($('discordOverviewStatus'), bits.join(' · '), '');
+      if (!settings.channelIds) {
+        setStatus($('discordOverviewStatus'), 'No submission channel configured yet — open Settings and add the channel ID.', 'err');
+      }
+    }
+  } catch (e) {
+    if (!silent) setStatus($('discordOverviewStatus'), '✗ ' + (e as Error).message, 'err');
+  }
+}
+
+function discordStatusBadge(status: string): string {
+  const safe = escHtml(status || 'unknown');
+  return '<span class="adm-dbadge ' + safe + '">' + safe + '</span>';
+}
+
+async function loadDiscordQueue(): Promise<void> {
+  const host = $('discordQueueList');
+  setDiscordLoading(host);
+  try {
+    const status = ($('discordQueueFilter') as HTMLSelectElement).value;
+    const q = ($('discordQueueSearch') as HTMLInputElement).value.trim();
+    const data = await botApi<any>('queue', { status, q, limit: 100 });
+    discordQueueRows = Array.isArray(data.items) ? data.items : [];
+    $('discordQueueCount').textContent = data.total + ' total';
+    if (!discordQueueRows.length) {
+      setDiscordLoading(host, q ? 'no submissions match that search' : 'nothing here yet — paste a YouTube link in Discord');
+      return;
+    }
+    host.innerHTML = discordQueueRows.map((row) => {
+      const title = row.title || row.videoId || row.url;
+      const meta: string[] = [];
+      if (row.artist) meta.push(escHtml(row.artist));
+      meta.push('@' + escHtml(row.username || 'unknown'));
+      meta.push(fmtWhen(row.createdAt));
+      if (row.batchId) meta.push('batch #' + row.batchId);
+      if (row.error) meta.push('<span style="color:var(--red)">' + escHtml(String(row.error).slice(0, 120)) + '</span>');
+      return (
+        '<label class="adm-ditem">' +
+          '<input type="checkbox" class="adm-drowcheck" data-id="' + Number(row.id) + '" aria-label="Select submission">' +
+          '<div class="grow">' +
+            '<div class="title"><a href="' + escHtml(row.url) + '" target="_blank" rel="noopener">' + escHtml(title) + '</a></div>' +
+            '<div class="meta">' + meta.join(' · ') + '</div>' +
+          '</div>' +
+          discordStatusBadge(row.status) +
+        '</label>'
+      );
+    }).join('');
+    setStatus($('discordQueueStatus'), '', '');
+  } catch (e) {
+    setDiscordError(host, (e as Error).message);
+  }
+}
+
+function selectedDiscordQueueIds(): number[] {
+  return Array.from(document.querySelectorAll<HTMLInputElement>('#discordQueueList .adm-drowcheck:checked'))
+    .map((el) => Number(el.dataset.id))
+    .filter((id) => Number.isFinite(id) && id > 0);
+}
+
+async function removeDiscordQueue(): Promise<void> {
+  const ids = selectedDiscordQueueIds();
+  if (!ids.length) {
+    setStatus($('discordQueueStatus'), 'Select one or more queued links first.', 'err');
+    return;
+  }
+  if (!window.confirm('Remove ' + ids.length + ' submission(s) from the bot queue?')) return;
+  try {
+    const data = await botApi<any>('queueRemove', { ids });
+    toast('Removed ' + data.removed + ' link(s)', 'ok');
+    await Promise.all([loadDiscordQueue(), loadDiscordOverview(true)]);
+  } catch (e) {
+    setStatus($('discordQueueStatus'), '✗ ' + (e as Error).message, 'err');
+  }
+}
+
+async function retryDiscordQueue(): Promise<void> {
+  const ids = selectedDiscordQueueIds();
+  if (!ids.length) {
+    setStatus($('discordQueueStatus'), 'Select one or more failed links first.', 'err');
+    return;
+  }
+  try {
+    const data = await botApi<any>('queueRetry', { ids });
+    setStatus($('discordQueueStatus'), '✓ ' + data.retried + ' link(s) returned to the queue.', 'ok');
+    await Promise.all([loadDiscordQueue(), loadDiscordOverview(true)]);
+  } catch (e) {
+    setStatus($('discordQueueStatus'), '✗ ' + (e as Error).message, 'err');
+  }
+}
+
+async function dispatchDiscordNow(): Promise<void> {
+  if (!window.confirm('Send up to 25 queued tracks to GitHub Actions now?')) return;
+  const btn = $<HTMLButtonElement>('discordDispatchBtn');
+  btn.disabled = true;
+  try {
+    const data = await botApi<any>('dispatch', {});
+    if (data.waiting) {
+      setStatus($('discordQueueStatus'), 'Nothing dispatched: ' + (data.reason || data.error || 'dispatch is busy'), 'err');
+    } else {
+      setStatus(
+        $('discordQueueStatus'),
+        '✓ Batch #' + data.batchId + ' — ' + data.dispatched + ' track(s) sent to GitHub' + (data.runUrl ? ' · ' + data.runUrl : ''),
+        'ok',
+      );
+      toast('Discord queue dispatched', 'ok');
+    }
+    await Promise.all([loadDiscordQueue(), loadDiscordOverview(true), loadDiscordBatches()]);
+  } catch (e) {
+    setStatus($('discordQueueStatus'), '✗ ' + (e as Error).message, 'err');
+  } finally {
+    btn.disabled = false;
+  }
+}
+
+async function loadDiscordBatches(): Promise<void> {
+  const host = $('discordBatchesList');
+  setDiscordLoading(host);
+  try {
+    const data = await botApi<any>('batches', { limit: 40 });
+    const items: any[] = Array.isArray(data.items) ? data.items : [];
+    if (!items.length) {
+      setDiscordLoading(host, 'no batches yet — the first hand-off appears here');
+      return;
+    }
+    host.innerHTML = items.map((batch) => {
+      const meta: string[] = [];
+      meta.push('requested by ' + escHtml(batch.requestedBy || 'auto'));
+      meta.push('created ' + fmtWhen(batch.createdAt));
+      if (batch.dispatchedAt) meta.push('dispatched ' + fmtWhen(batch.dispatchedAt));
+      if (batch.error) meta.push('<span style="color:var(--red)">' + escHtml(String(batch.error).slice(0, 140)) + '</span>');
+      const active = ['dispatching', 'dispatched', 'running'].includes(batch.status);
+      return (
+        '<div class="adm-ditem">' +
+          discordStatusBadge(batch.status) +
+          '<div class="grow">' +
+            '<div class="title">Batch #' + Number(batch.id) + ' · ' + Number(batch.trackCount) + ' track(s)' +
+              '<span class="adm-count"> · ' + Number(batch.doneCount || 0) + ' done / ' + Number(batch.failedCount || 0) + ' failed</span>' +
+            '</div>' +
+            '<div class="meta">' + meta.join(' · ') + '</div>' +
+          '</div>' +
+          (batch.runId
+            ? '<a class="adm-btn ghost small" href="' + escHtml(batch.runUrl || '#') + '" target="_blank" rel="noopener">run #' + Number(batch.runId) + '</a>'
+            : '') +
+          (!active
+            ? '<button type="button" class="adm-btn ghost small" data-batch-retry="' + Number(batch.id) + '">Retry</button>'
+            : '') +
+        '</div>'
+      );
+    }).join('');
+  } catch (e) {
+    setDiscordError(host, (e as Error).message);
+  }
+}
+
+async function retryDiscordBatch(id: number): Promise<void> {
+  try {
+    const data = await botApi<any>('batchRetry', { id });
+    toast('Returned ' + data.retried + ' failed track(s) to the queue', 'ok');
+    await Promise.all([loadDiscordBatches(), loadDiscordQueue(), loadDiscordOverview(true)]);
+  } catch (e) {
+    setStatus($('discordBatchesStatus'), '✗ ' + (e as Error).message, 'err');
+  }
+}
+
+async function loadDiscordUsers(): Promise<void> {
+  const host = $('discordUsersList');
+  setDiscordLoading(host);
+  try {
+    const q = ($('discordUserSearch') as HTMLInputElement).value.trim();
+    const data = await botApi<any>('users', { q, limit: 100 });
+    discordUserRows = Array.isArray(data.items) ? data.items : [];
+    $('discordUserCount').textContent = data.total + ' total';
+    if (!discordUserRows.length) {
+      setDiscordLoading(host, q ? 'no users match that search' : 'no Discord users yet');
+      return;
+    }
+    host.innerHTML = discordUserRows.map((user) => {
+      const meta: string[] = ['@' + escHtml(user.username)];
+      if (user.displayName && user.displayName !== user.username) meta.push(escHtml(user.displayName));
+      meta.push('id ' + escHtml(user.discordId));
+      meta.push(Number(user.accepted || 0) + ' accepted');
+      meta.push(Number(user.duplicates || 0) + ' duplicate');
+      meta.push(Number(user.downloaded || 0) + ' downloaded');
+      meta.push('last seen ' + fmtAgo(user.lastSeen));
+      return (
+        '<div class="adm-ditem">' +
+          '<div class="grow">' +
+            '<div class="title">' + escHtml(user.displayName || user.username) + ' ' +
+              (user.banned ? '<span class="adm-dbadge err">banned</span>' : '') + '</div>' +
+            '<div class="meta">' + meta.join(' · ') + '</div>' +
+            (user.banReason ? '<div class="meta" style="color:var(--red)">' + escHtml(user.banReason) + '</div>' : '') +
+          '</div>' +
+          '<div class="actions"><button type="button" class="adm-btn ' + (user.banned ? 'ghost' : 'danger') + ' small" data-ban="' + escHtml(user.discordId) + '" data-banned="' + (user.banned ? '1' : '0') + '">' +
+            (user.banned ? 'Unban' : 'Ban') + '</button></div>' +
+        '</div>'
+      );
+    }).join('');
+  } catch (e) {
+    setDiscordError(host, (e as Error).message);
+  }
+}
+
+async function toggleDiscordUserBan(discordId: string, banned: boolean): Promise<void> {
+  let reason = '';
+  if (!banned) {
+    reason = window.prompt('Reason for banning this user (shown in the audit log):', '') || '';
+    if (!reason.trim()) return;
+  }
+  try {
+    const data = await botApi<any>('userBan', { discordId, banned: !banned, reason, removeQueued: true });
+    toast((banned ? 'Unbanned' : 'Banned') + ' user' + (data.removed ? ' · removed ' + data.removed + ' queued link(s)' : ''), 'ok');
+    await Promise.all([loadDiscordUsers(), loadDiscordOverview(true)]);
+  } catch (e) {
+    setStatus($('discordUsersStatus'), '✗ ' + (e as Error).message, 'err');
+  }
+}
+
+function fillDiscordSettings(settings: any): void {
+  const val = (id: string, value: unknown) => { ($(id) as HTMLInputElement).value = value == null ? '' : String(value); };
+  const check = (id: string, value: unknown) => { ($(id) as HTMLInputElement).checked = Boolean(value); };
+  val('dsBotName', settings.botName);
+  val('dsThreshold', settings.threshold);
+  val('dsDispatchSize', settings.dispatchSize);
+  val('dsCooldown', settings.cooldownSeconds);
+  val('dsDailyLimit', settings.dailyLimit);
+  val('dsGuildId', settings.guildId);
+  val('dsChannelIds', settings.channelIds);
+  val('dsLogChannelId', settings.logChannelId);
+  val('dsMaintenanceMessage', settings.maintenanceMessage);
+  check('dsEnabled', settings.enabled);
+  check('dsMaintenance', settings.maintenance);
+  check('dsAutoDispatch', settings.autoDispatch);
+  check('dsSearchEnabled', settings.searchEnabled);
+  check('dsPlaylistExpand', settings.playlistExpand);
+  check('dsNotifyDispatch', settings.notifyOnDispatch);
+  check('dsNotifyComplete', settings.notifyOnComplete);
+  check('dsNotifyFailure', settings.notifyOnFailure);
+}
+
+async function loadDiscordSettings(): Promise<void> {
+  try {
+    const data = await botApi<any>('settings');
+    fillDiscordSettings(data.settings || {});
+    setStatus($('discordSettingsStatus'), '', '');
+  } catch (e) {
+    setStatus($('discordSettingsStatus'), '✗ ' + (e as Error).message, 'err');
+  }
+}
+
+async function saveDiscordSettings(): Promise<void> {
+  const btn = $<HTMLButtonElement>('discordSettingsSave');
+  const number = (id: string) => Number(($(id) as HTMLInputElement).value);
+  const text = (id: string) => ($(id) as HTMLInputElement).value.trim();
+  const checked = (id: string) => ($(id) as HTMLInputElement).checked;
+  const settings = {
+    botName: text('dsBotName'),
+    threshold: number('dsThreshold'),
+    dispatchSize: number('dsDispatchSize'),
+    cooldownSeconds: number('dsCooldown'),
+    dailyLimit: number('dsDailyLimit'),
+    guildId: text('dsGuildId'),
+    channelIds: text('dsChannelIds'),
+    logChannelId: text('dsLogChannelId'),
+    maintenanceMessage: text('dsMaintenanceMessage'),
+    enabled: checked('dsEnabled'),
+    maintenance: checked('dsMaintenance'),
+    autoDispatch: checked('dsAutoDispatch'),
+    searchEnabled: checked('dsSearchEnabled'),
+    playlistExpand: checked('dsPlaylistExpand'),
+    notifyOnDispatch: checked('dsNotifyDispatch'),
+    notifyOnComplete: checked('dsNotifyComplete'),
+    notifyOnFailure: checked('dsNotifyFailure'),
+  };
+  if (settings.threshold < 1) {
+    setStatus($('discordSettingsStatus'), 'Threshold must be at least 1.', 'err');
+    return;
+  }
+  if (settings.dispatchSize < 1 || settings.dispatchSize > 25) {
+    setStatus($('discordSettingsStatus'), 'Tracks per batch must be between 1 and 25.', 'err');
+    return;
+  }
+  btn.disabled = true;
+  try {
+    const data = await botApi<any>('settingsUpdate', { settings });
+    fillDiscordSettings(data.settings || settings);
+    setStatus($('discordSettingsStatus'), '✓ Saved' + (data.changed?.length ? ' — ' + data.changed.join(', ') : ' — no changes'), 'ok');
+    toast('Discord bot settings saved', 'ok');
+    await loadDiscordOverview(true);
+  } catch (e) {
+    setStatus($('discordSettingsStatus'), '✗ ' + (e as Error).message, 'err');
+  } finally {
+    btn.disabled = false;
+  }
+}
+
+function auditSummary(entry: any): string {
+  const d = entry.details || {};
+  switch (entry.action) {
+    case 'submission.queued': return 'Queued ' + (d.title || entry.targetId || 'a track');
+    case 'submission.duplicate': return 'Duplicate skipped — ' + (d.title || entry.targetId || 'a track');
+    case 'submission.rejected': return 'Submission rejected — ' + (d.error || 'invalid link');
+    case 'submission.banned': return 'Blocked a banned user — ' + (d.reason || 'no reason given');
+    case 'batch.dispatched': return 'Batch #' + (d.batchId || entry.targetId) + ' dispatched — ' + (d.dispatched ?? d.count ?? 0) + ' track(s)';
+    case 'batch.completed': return 'Batch #' + (d.batchId || entry.targetId) + ' completed — ' + (d.downloaded ?? d.trackCount ?? 0) + ' downloaded';
+    case 'batch.failed': return 'Batch #' + (d.batchId || entry.targetId) + ' failed — ' + (d.error || 'workflow error');
+    case 'admin.settings_changed': return 'Changed settings — ' + (Array.isArray(d.changed) ? d.changed.join(', ') : 'bot');
+    case 'admin.queue_removed': return 'Removed ' + (d.removed ?? 0) + ' queued link(s)';
+    case 'admin.queue_retried': return 'Returned ' + (d.retried ?? 0) + ' link(s) to the queue';
+    case 'admin.batch_retried': return 'Retried failed tracks in batch #' + (d.batchId || entry.targetId);
+    case 'admin.user_banned': return 'Banned ' + (d.username || entry.targetId) + (d.reason ? ' — ' + d.reason : '');
+    case 'admin.user_unbanned': return 'Unbanned ' + (d.username || entry.targetId);
+    case 'admin.reconcile': return 'Reconciled batches — ' + (d.completed ?? 0) + ' completed, ' + (d.failed ?? 0) + ' failed';
+    default: return entry.action + (entry.targetId ? ' · ' + entry.targetId : '');
+  }
+}
+
+async function loadDiscordAudit(): Promise<void> {
+  const host = $('discordAuditList');
+  setDiscordLoading(host);
+  try {
+    const actor = ($('discordAuditSearch') as HTMLInputElement).value.trim();
+    const actionFilter = ($('discordAuditAction') as HTMLSelectElement).value;
+    const data = await botApi<any>('audit', { actor, actionFilter, limit: 100 });
+    const items: any[] = Array.isArray(data.items) ? data.items : [];
+    $('discordAuditCount').textContent = data.total + ' entries';
+    if (!items.length) {
+      setDiscordLoading(host, 'no activity matches those filters');
+      return;
+    }
+    host.innerHTML = items.map((entry) => {
+      const who = entry.actorName || entry.actorId || entry.actorType;
+      return (
+        '<div class="adm-ditem">' +
+          '<div class="grow">' +
+            '<div class="title">' + escHtml(auditSummary(entry)) + '</div>' +
+            '<div class="meta"><span class="who">' + escHtml(String(who)) + '</span> · ' + escHtml(entry.actorType || 'system') + ' · ' + fmtWhen(entry.createdAt) + '</div>' +
+          '</div>' +
+          discordStatusBadge(String(entry.action || '').split('.')[0]) +
+        '</div>'
+      );
+    }).join('');
+  } catch (e) {
+    setDiscordError(host, (e as Error).message);
+  }
+}
+
+const DISCORD_SECTIONS: Array<{ id: DiscordSection; el: string; load: () => Promise<void> }> = [
+  { id: 'queue', el: 'dsecQueue', load: loadDiscordQueue },
+  { id: 'batches', el: 'dsecBatches', load: loadDiscordBatches },
+  { id: 'users', el: 'dsecUsers', load: loadDiscordUsers },
+  { id: 'settings', el: 'dsecSettings', load: loadDiscordSettings },
+  { id: 'audit', el: 'dsecAudit', load: loadDiscordAudit },
+];
+
+function setDiscordSection(section: DiscordSection): void {
+  discordSection = section;
+  try { localStorage.setItem(DISCORD_STATE_KEY, section); } catch { /* ignore */ }
+  document.querySelectorAll<HTMLElement>('#discordSubnav .adm-seg-btn').forEach((btn) => {
+    btn.classList.toggle('active', btn.dataset.dsec === section);
+  });
+  for (const item of DISCORD_SECTIONS) $(item.el).hidden = item.id !== section;
+  const active = DISCORD_SECTIONS.find((item) => item.id === section);
+  if (active) void active.load();
+}
+
+function scheduleDiscordPoll(): void {
+  window.clearInterval(discordPollTimer);
+  discordPollTimer = window.setInterval(() => {
+    if (document.visibilityState === 'visible' && getSession() && !$('panelDiscord').hidden) {
+      void loadDiscordOverview(true);
+    }
+  }, 20000);
+}
+
+async function initDiscord(): Promise<void> {
+  try {
+    const stored = localStorage.getItem(DISCORD_STATE_KEY);
+    if (stored && DISCORD_SECTIONS.some((item) => item.id === stored)) discordSection = stored as DiscordSection;
+  } catch { /* ignore */ }
+  await loadDiscordOverview();
+  setDiscordSection(discordSection);
+  scheduleDiscordPoll();
+}
+
 /* ---------- wiring ---------- */
 function bind() {
   $('signOutBtn').addEventListener('click', () => {
@@ -1513,6 +2002,45 @@ function bind() {
     if (act === 'ren') openRenameModal(path);
     else if (act === 'cov') pickLibCover(path);
     else if (act === 'del') openDeleteModal([path]);
+  });
+
+  /* Discord / Aura Farmer */
+  $('discordRefreshBtn').addEventListener('click', () => { void initDiscord(); });
+  $('discordSubnav').addEventListener('click', (e) => {
+    const btn = (e.target as HTMLElement).closest<HTMLElement>('[data-dsec]');
+    if (btn?.dataset.dsec) setDiscordSection(btn.dataset.dsec as DiscordSection);
+  });
+  $('discordQueueRefresh').addEventListener('click', () => { void loadDiscordQueue(); });
+  $('discordQueueFilter').addEventListener('change', () => { void loadDiscordQueue(); });
+  $('discordQueueSearch').addEventListener('input', () => {
+    window.clearTimeout(discordQueueSearchTimer);
+    discordQueueSearchTimer = window.setTimeout(() => { void loadDiscordQueue(); }, 250);
+  });
+  $('discordQueueRemove').addEventListener('click', () => { void removeDiscordQueue(); });
+  $('discordQueueRetry').addEventListener('click', () => { void retryDiscordQueue(); });
+  $('discordDispatchBtn').addEventListener('click', () => { void dispatchDiscordNow(); });
+  $('discordBatchesRefresh').addEventListener('click', () => { void loadDiscordBatches(); });
+  $('discordBatchesList').addEventListener('click', (e) => {
+    const btn = (e.target as HTMLElement).closest<HTMLElement>('[data-batch-retry]');
+    if (btn?.dataset.batchRetry) void retryDiscordBatch(Number(btn.dataset.batchRetry));
+  });
+  $('discordUsersRefresh').addEventListener('click', () => { void loadDiscordUsers(); });
+  $('discordUserSearch').addEventListener('input', () => {
+    window.clearTimeout(discordUserSearchTimer);
+    discordUserSearchTimer = window.setTimeout(() => { void loadDiscordUsers(); }, 250);
+  });
+  $('discordUsersList').addEventListener('click', (e) => {
+    const btn = (e.target as HTMLElement).closest<HTMLElement>('[data-ban]');
+    if (!btn?.dataset.ban) return;
+    void toggleDiscordUserBan(btn.dataset.ban, btn.dataset.banned === '1');
+  });
+  $('discordSettingsReload').addEventListener('click', () => { void loadDiscordSettings(); });
+  $('discordSettingsSave').addEventListener('click', () => { void saveDiscordSettings(); });
+  $('discordAuditRefresh').addEventListener('click', () => { void loadDiscordAudit(); });
+  $('discordAuditAction').addEventListener('change', () => { void loadDiscordAudit(); });
+  $('discordAuditSearch').addEventListener('input', () => {
+    window.clearTimeout(discordAuditSearchTimer);
+    discordAuditSearchTimer = window.setTimeout(() => { void loadDiscordAudit(); }, 250);
   });
 
   scheduleRunsPoll(); // replaces a fixed interval: 3s while active/expanded, else 10s
