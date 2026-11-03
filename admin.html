@@ -190,71 +190,97 @@
     <!-- Discord tab: Aura Farmer bot -->
     <div class="adm-panel" id="panelDiscord" hidden>
     <section class="adm-card adm-span2" id="discordOverviewCard">
-      <h2><span class="adm-num">4</span> Aura Farmer <span class="adm-dbadge" id="discordBotBadge">offline</span>
+      <h2><span class="adm-num">4</span> AURA FARMER <span class="adm-dbadge" id="discordBotBadge">offline</span>
         <button type="button" class="adm-btn ghost small" id="discordRefreshBtn">Refresh</button>
       </h2>
       <p class="adm-hint">Discord links queue in the bot backend until the threshold is reached, then hand off to the same <code>upload-music.yml</code> download workflow the rest of this panel uses. The gateway runs on your VPS; this panel talks to its Cloudflare Worker backend.</p>
-      <div class="adm-dstats" id="discordStats">
-        <div class="adm-dstat"><span class="k">Gateway</span><span class="v" id="discordGatewayState">—</span></div>
-        <div class="adm-dstat"><span class="k">Queue</span><span class="v" id="discordQueueState">—</span></div>
-        <div class="adm-dstat"><span class="k">Active batch</span><span class="v" id="discordActiveBatch">—</span></div>
-        <div class="adm-dstat"><span class="k">Downloaded / failed</span><span class="v" id="discordTotals">—</span></div>
+      <div class="adm-dashboard" id="discordStats">
+        <div class="adm-dstat-card">
+          <div class="adm-dstat-icon gold"><i class="fa-solid fa-server"></i></div>
+          <div class="adm-dstat-info">
+            <div class="adm-dstat-label">Gateway</div>
+            <div class="adm-dstat-value" id="discordGatewayState">—</div>
+          </div>
+        </div>
+        <div class="adm-dstat-card">
+          <div class="adm-dstat-icon gold"><i class="fa-solid fa-seedling"></i></div>
+          <div class="adm-dstat-info">
+            <div class="adm-dstat-label">Silo</div>
+            <div class="adm-dstat-value gold" id="discordQueueState">—</div>
+          </div>
+        </div>
+        <div class="adm-dstat-card">
+          <div class="adm-dstat-icon green"><i class="fa-solid fa-tractor"></i></div>
+          <div class="adm-dstat-info">
+            <div class="adm-dstat-label">Active Harvest</div>
+            <div class="adm-dstat-value" id="discordActiveBatch">—</div>
+          </div>
+        </div>
+        <div class="adm-dstat-card">
+          <div class="adm-dstat-icon dim"><i class="fa-solid fa-chart-simple"></i></div>
+          <div class="adm-dstat-info">
+            <div class="adm-dstat-label">Stored / Lost</div>
+            <div class="adm-dstat-value" id="discordTotals">—</div>
+          </div>
+        </div>
       </div>
       <div class="adm-status" id="discordOverviewStatus"></div>
 
-      <div class="adm-seg adm-dsubnav" id="discordSubnav">
-        <button type="button" class="adm-seg-btn active" data-dsec="queue">Queue</button>
-        <button type="button" class="adm-seg-btn" data-dsec="batches">Batches</button>
-        <button type="button" class="adm-seg-btn" data-dsec="users">Users</button>
-        <button type="button" class="adm-seg-btn" data-dsec="settings">Settings</button>
-        <button type="button" class="adm-seg-btn" data-dsec="audit">Activity</button>
+      <div class="adm-dsubnav" id="discordSubnav">
+        <button type="button" class="adm-dsubnav-btn active" data-dsec="queue"><i class="fa-solid fa-list"></i> Queue</button>
+        <button type="button" class="adm-dsubnav-btn" data-dsec="batches"><i class="fa-solid fa-tractor"></i> Harvests</button>
+        <button type="button" class="adm-dsubnav-btn" data-dsec="users"><i class="fa-solid fa-users"></i> Farmers</button>
+        <button type="button" class="adm-dsubnav-btn" data-dsec="settings"><i class="fa-solid fa-gear"></i> Settings</button>
+        <button type="button" class="adm-dsubnav-btn" data-dsec="audit"><i class="fa-solid fa-scroll"></i> Activity</button>
       </div>
     </section>
 
     <!-- Discord → queue -->
     <section class="adm-card adm-span2 adm-dsec" id="dsecQueue" hidden>
-      <h2>Submission queue <span class="adm-count" id="discordQueueCount"></span>
-        <button type="button" class="adm-btn ghost small" id="discordDispatchBtn">Dispatch now</button>
+      <h2>Submission Queue <span class="adm-count" id="discordQueueCount"></span>
+        <button type="button" class="adm-btn ghost small" id="discordDispatchBtn"><i class="fa-solid fa-rocket"></i> Dispatch now</button>
       </h2>
       <p class="adm-hint">Everything Discord users submitted, oldest first. Dispatch now overrides the threshold and sends up to 25 tracks. Removing a link here only removes it from the bot queue.</p>
       <div class="adm-libbar">
         <div class="adm-libsearch">
+          <svg viewBox="0 0 20 20" aria-hidden="true"><path d="M9 3a6 6 0 1 0 3.6 10.8l3.3 3.3 1.4-1.4-3.3-3.3A6 6 0 0 0 9 3zm0 2a4 4 0 1 1 0 8 4 4 0 0 1 0-8z"/></svg>
           <input id="discordQueueSearch" class="adm-input" type="search" placeholder="Search title, artist, user or video id…" autocomplete="off" spellcheck="false" aria-label="Search Discord queue">
         </div>
         <select id="discordQueueFilter" class="adm-input adm-libsort" aria-label="Queue status">
-          <option value="queued">Queued</option>
+          <option value="queued">🌱 Queued</option>
           <option value="all">All submissions</option>
-          <option value="failed">Failed</option>
-          <option value="dispatched">Dispatched</option>
-          <option value="downloaded">Downloaded</option>
-          <option value="removed">Removed</option>
+          <option value="failed">🌧️ Failed</option>
+          <option value="dispatched">🚜 Dispatched</option>
+          <option value="downloaded">🌾 Downloaded</option>
+          <option value="removed">🪨 Removed</option>
         </select>
         <button type="button" class="adm-btn ghost small" id="discordQueueRefresh">Refresh</button>
       </div>
       <div class="adm-dlist" id="discordQueueList"><span class="adm-chip dim">loading…</span></div>
       <div class="adm-row adm-row-wrap">
         <button type="button" class="adm-btn danger" id="discordQueueRemove">Remove selected</button>
-        <button type="button" class="adm-btn" id="discordQueueRetry">Retry failed selected</button>
+        <button type="button" class="adm-btn" id="discordQueueRetry">Retry failed</button>
       </div>
       <div class="adm-status" id="discordQueueStatus"></div>
     </section>
 
     <!-- Discord → batches -->
     <section class="adm-card adm-span2 adm-dsec" id="dsecBatches" hidden>
-      <h2>Download batches <button type="button" class="adm-btn ghost small" id="discordBatchesRefresh">Refresh</button></h2>
-      <p class="adm-hint">Each batch is one hand-off to GitHub Actions. A batch only becomes active when the previous workflow has finished, because GitHub cancels queued runs in the same concurrency group.</p>
+      <h2>Harvests <button type="button" class="adm-btn ghost small" id="discordBatchesRefresh">Refresh</button></h2>
+      <p class="adm-hint">Each harvest is one hand-off to GitHub Actions. A harvest only becomes active when the previous workflow has finished, because GitHub cancels queued runs in the same concurrency group.</p>
       <div class="adm-dlist" id="discordBatchesList"><span class="adm-chip dim">loading…</span></div>
       <div class="adm-status" id="discordBatchesStatus"></div>
     </section>
 
     <!-- Discord → users -->
     <section class="adm-card adm-span2 adm-dsec" id="dsecUsers" hidden>
-      <h2>Users <span class="adm-count" id="discordUserCount"></span>
+      <h2>Farmers <span class="adm-count" id="discordUserCount"></span>
         <button type="button" class="adm-btn ghost small" id="discordUsersRefresh">Refresh</button>
       </h2>
       <p class="adm-hint">Anyone in the configured channel can submit unless banned. Banning also removes that user's queued links. Counters are a running total from the audit log.</p>
       <div class="adm-libbar">
         <div class="adm-libsearch">
+          <svg viewBox="0 0 20 20" aria-hidden="true"><path d="M9 3a6 6 0 1 0 3.6 10.8l3.3 3.3 1.4-1.4-3.3-3.3A6 6 0 0 0 9 3zm0 2a4 4 0 1 1 0 8 4 4 0 0 1 0-8z"/></svg>
           <input id="discordUserSearch" class="adm-input" type="search" placeholder="Search Discord name or user id…" autocomplete="off" spellcheck="false" aria-label="Search Discord users">
         </div>
       </div>
@@ -264,58 +290,58 @@
 
     <!-- Discord → settings -->
     <section class="adm-card adm-span2 adm-dsec" id="dsecSettings" hidden>
-      <h2>Bot settings <button type="button" class="adm-btn ghost small" id="discordSettingsReload">Reload</button></h2>
+      <h2>Bot Settings <button type="button" class="adm-btn ghost small" id="discordSettingsReload">Reload</button></h2>
       <p class="adm-hint">Changes apply within about 30 seconds — the gateway polls this configuration. Channel IDs are numeric Discord IDs; separate multiple channels with commas.</p>
       <div class="adm-dform">
         <div class="adm-dfield">
-          <label class="adm-label" for="dsBotName">Bot display name</label>
+          <label class="adm-label" for="dsBotName"><i class="fa-solid fa-tag"></i> Bot display name</label>
           <input id="dsBotName" class="adm-input" type="text" maxlength="80">
         </div>
         <div class="adm-dfield">
-          <label class="adm-label" for="dsThreshold">Dispatch threshold <small>links</small></label>
+          <label class="adm-label" for="dsThreshold"><i class="fa-solid fa-seedling"></i> Dispatch threshold <small>links</small></label>
           <input id="dsThreshold" class="adm-input" type="number" min="1" max="300">
         </div>
         <div class="adm-dfield">
-          <label class="adm-label" for="dsDispatchSize">Tracks per batch <small>max 25</small></label>
+          <label class="adm-label" for="dsDispatchSize"><i class="fa-solid fa-tractor"></i> Tracks per harvest <small>max 25</small></label>
           <input id="dsDispatchSize" class="adm-input" type="number" min="1" max="25">
         </div>
         <div class="adm-dfield">
-          <label class="adm-label" for="dsCooldown">Cooldown <small>seconds between submissions</small></label>
+          <label class="adm-label" for="dsCooldown"><i class="fa-solid fa-hourglass-half"></i> Cooldown <small>seconds between submissions</small></label>
           <input id="dsCooldown" class="adm-input" type="number" min="0" max="3600">
         </div>
         <div class="adm-dfield">
-          <label class="adm-label" for="dsDailyLimit">Daily limit <small>0 = unlimited</small></label>
+          <label class="adm-label" for="dsDailyLimit"><i class="fa-solid fa-calendar-day"></i> Daily limit <small>0 = unlimited</small></label>
           <input id="dsDailyLimit" class="adm-input" type="number" min="0" max="1000">
         </div>
         <div class="adm-dfield">
-          <label class="adm-label" for="dsGuildId">Guild ID <small>optional</small></label>
+          <label class="adm-label" for="dsGuildId"><i class="fa-solid fa-users"></i> Guild ID <small>optional</small></label>
           <input id="dsGuildId" class="adm-input" type="text" maxlength="32" placeholder="123456789012345678">
         </div>
         <div class="adm-dfield adm-dfield-wide">
-          <label class="adm-label" for="dsChannelIds">Submission channels <small>comma-separated IDs</small></label>
+          <label class="adm-label" for="dsChannelIds"><i class="fa-solid fa-hashtag"></i> Submission channels <small>comma-separated IDs</small></label>
           <input id="dsChannelIds" class="adm-input" type="text" maxlength="1000" placeholder="123456789012345678, 987654321098765432">
         </div>
         <div class="adm-dfield">
-          <label class="adm-label" for="dsLogChannelId">Log channel ID <small>optional</small></label>
-          <input id="dsLogChannelId" class="adm-input" type="text" maxlength="32" placeholder="Batch announcements go to the first channel if empty">
+          <label class="adm-label" for="dsLogChannelId"><i class="fa-solid fa-bullhorn"></i> Log channel ID <small>optional</small></label>
+          <input id="dsLogChannelId" class="adm-input" type="text" maxlength="32" placeholder="Harvest announcements go to the first channel if empty">
         </div>
         <div class="adm-dfield adm-dfield-wide">
-          <label class="adm-label" for="dsMaintenanceMessage">Maintenance message</label>
+          <label class="adm-label" for="dsMaintenanceMessage"><i class="fa-solid fa-comment"></i> Maintenance message</label>
           <input id="dsMaintenanceMessage" class="adm-input" type="text" maxlength="300">
         </div>
       </div>
       <div class="adm-dchecks">
-        <label class="adm-dcheck"><input type="checkbox" id="dsEnabled"> Bot enabled</label>
-        <label class="adm-dcheck"><input type="checkbox" id="dsMaintenance"> Maintenance mode</label>
-        <label class="adm-dcheck"><input type="checkbox" id="dsAutoDispatch"> Auto-dispatch at threshold</label>
-        <label class="adm-dcheck"><input type="checkbox" id="dsSearchEnabled"> Allow search</label>
-        <label class="adm-dcheck"><input type="checkbox" id="dsPlaylistExpand"> Expand playlists</label>
-        <label class="adm-dcheck"><input type="checkbox" id="dsNotifyDispatch"> Announce dispatches</label>
-        <label class="adm-dcheck"><input type="checkbox" id="dsNotifyComplete"> Announce completions</label>
-        <label class="adm-dcheck"><input type="checkbox" id="dsNotifyFailure"> Announce failures</label>
+        <label class="adm-dcheck"><input type="checkbox" id="dsEnabled"> <i class="fa-solid fa-power-off"></i> Bot enabled</label>
+        <label class="adm-dcheck"><input type="checkbox" id="dsMaintenance"> <i class="fa-solid fa-wrench"></i> Maintenance mode</label>
+        <label class="adm-dcheck"><input type="checkbox" id="dsAutoDispatch"> <i class="fa-solid fa-magic"></i> Auto-harvest at threshold</label>
+        <label class="adm-dcheck"><input type="checkbox" id="dsSearchEnabled"> <i class="fa-solid fa-magnifying-glass"></i> Allow search</label>
+        <label class="adm-dcheck"><input type="checkbox" id="dsPlaylistExpand"> <i class="fa-solid fa-layer-group"></i> Expand playlists</label>
+        <label class="adm-dcheck"><input type="checkbox" id="dsNotifyDispatch"> <i class="fa-solid fa-bell"></i> Announce dispatches</label>
+        <label class="adm-dcheck"><input type="checkbox" id="dsNotifyComplete"> <i class="fa-solid fa-check-circle"></i> Announce completions</label>
+        <label class="adm-dcheck"><input type="checkbox" id="dsNotifyFailure"> <i class="fa-solid fa-triangle-exclamation"></i> Announce failures</label>
       </div>
       <div class="adm-row adm-row-wrap">
-        <button type="button" class="adm-btn primary" id="discordSettingsSave">Save settings</button>
+        <button type="button" class="adm-btn primary" id="discordSettingsSave"><i class="fa-solid fa-floppy-disk"></i> Save settings</button>
         <span class="adm-count">Saved changes are written to the audit log with your admin email.</span>
       </div>
       <div class="adm-status" id="discordSettingsStatus"></div>
@@ -323,19 +349,20 @@
 
     <!-- Discord → audit -->
     <section class="adm-card adm-span2 adm-dsec" id="dsecAudit" hidden>
-      <h2>Activity log <span class="adm-count" id="discordAuditCount"></span>
+      <h2>Activity Log <span class="adm-count" id="discordAuditCount"></span>
         <button type="button" class="adm-btn ghost small" id="discordAuditRefresh">Refresh</button>
       </h2>
-      <p class="adm-hint">Every submission, duplicate, batch hand-off, admin change, ban and removal. This is the “who did what” trail for Discord.</p>
+      <p class="adm-hint">Every submission, duplicate, harvest hand-off, admin change, ban and removal. This is the "who did what" trail for Discord.</p>
       <div class="adm-libbar">
         <div class="adm-libsearch">
+          <svg viewBox="0 0 20 20" aria-hidden="true"><path d="M9 3a6 6 0 1 0 3.6 10.8l3.3 3.3 1.4-1.4-3.3-3.3A6 6 0 0 0 9 3zm0 2a4 4 0 1 1 0 8 4 4 0 0 1 0-8z"/></svg>
           <input id="discordAuditSearch" class="adm-input" type="search" placeholder="Filter by Discord user or admin email…" autocomplete="off" spellcheck="false" aria-label="Filter activity">
         </div>
         <select id="discordAuditAction" class="adm-input adm-libsort" aria-label="Activity type">
           <option value="all">All activity</option>
-          <option value="submission.">Discord submissions</option>
-          <option value="batch.">Batches</option>
-          <option value="admin.">Admin actions</option>
+          <option value="submission.">🌱 Submissions</option>
+          <option value="batch.">🚜 Harvests</option>
+          <option value="admin.">⚙️ Admin actions</option>
         </select>
       </div>
       <div class="adm-dlist adm-dlog" id="discordAuditList"><span class="adm-chip dim">loading…</span></div>
