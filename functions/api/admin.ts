@@ -166,22 +166,29 @@ async function hfBatch(env: Env, ops: Record<string, unknown>[]): Promise<any> {
    keyed by video ID. Fetched anonymously (the resolve URL is public) with a
    hard timeout so a slow CDN never stalls an admin action; never fatal. */
 type ManifestTracks = Record<string, Record<string, unknown>>;
-let manifestMem: { tracks: ManifestTracks; at: number } | null = null;
+type ManifestArtists = Record<string, Record<string, unknown>>;
+interface ManifestData {
+  v?: number;
+  tracks: ManifestTracks;
+  artists: ManifestArtists;
+}
+let manifestMem: { data: ManifestData; at: number } | null = null;
 const MANIFEST_TTL_MS = 30_000;
-async function hfManifest(env: Env): Promise<ManifestTracks> {
-  if (manifestMem && Date.now() - manifestMem.at < MANIFEST_TTL_MS) return manifestMem.tracks;
+async function hfManifest(env: Env): Promise<ManifestData> {
+  if (manifestMem && Date.now() - manifestMem.at < MANIFEST_TTL_MS) return manifestMem.data;
   try {
     const res = await fetch(`https://huggingface.co/buckets/${hfBucketId(env)}/resolve/manifest.json`, {
       signal: AbortSignal.timeout(8000),
     });
-    if (!res.ok) return {};
+    if (!res.ok) return { v: 1, tracks: {}, artists: {} };
     const data: any = await res.json();
-    const tracks = data && data.tracks;
-    const out = tracks && typeof tracks === 'object' ? (tracks as ManifestTracks) : {};
-    manifestMem = { tracks: out, at: Date.now() };
+    const tracks = data && typeof data.tracks === 'object' ? (data.tracks as ManifestTracks) : {};
+    const artists = data && typeof data.artists === 'object' ? (data.artists as ManifestArtists) : {};
+    const out: ManifestData = { v: data?.v || 1, tracks, artists };
+    manifestMem = { data: out, at: Date.now() };
     return out;
   } catch {
-    return manifestMem ? manifestMem.tracks : {};
+    return manifestMem ? manifestMem.data : { v: 1, tracks: {}, artists: {} };
   }
 }
 function invalidateManifest(): void { manifestMem = null; }
@@ -1152,12 +1159,13 @@ export const onRequestPost = async ({ request, env, ctx }: {
 
       case 'library': {
         const files = await bucketTree();
-        const manifest = await hfManifest(env);
+        const m = await hfManifest(env);
         return json({
           files,
           videoIds: [...uploadedVideoIds(files)],
           bucketId: hfBucketId(env),
-          manifest,
+          manifest: m.tracks,
+          artists: m.artists,
         });
       }
 
@@ -1257,7 +1265,7 @@ export const onRequestPost = async ({ request, env, ctx }: {
         return json({ ok: true, dispatched: true, target, staged: stagedPath });
       }
 
-      /* ----- edit manifest.json metadata (title/artist/album for the site).
+      /* ----- edit manifest.json metadata (title/artist/album/year/duration/genre for the site).
          The batch endpoint can't write new bytes, so the mutated manifest is
          staged in the repo and pushed by manage-music.yml — same pattern as
          cover art, ~1 min to appear. ----- */
@@ -1265,17 +1273,25 @@ export const onRequestPost = async ({ request, env, ctx }: {
         const vid = String(body.id || '');
         if (!/^[A-Za-z0-9_-]{11}$/.test(vid)) return json({ error: 'bad video ID' }, 400);
         const fields: Record<string, unknown> = {};
-        for (const [src, dst] of [['title', 't'], ['artist', 'a'], ['album', 'al']] as const) {
+        for (const [src, dst] of [
+          ['title', 't'],
+          ['artist', 'a'],
+          ['album', 'al'],
+          ['year', 'y'],
+          ['genre', 'g'],
+        ] as const) {
           const v = String((body as any)[src] ?? '').trim().slice(0, 200);
           if (v) fields[dst] = v;
         }
-        if (!Object.keys(fields).length) return json({ error: 'nothing to update' }, 400);
-        const tracks = await hfManifest(env);
-        const existing = tracks[vid];
-        if (!existing) {
-          return json({ error: 'not in manifest yet — its metadata arrives with the next download run for this track' }, 404);
+        if (typeof (body as any).duration === 'number' && (body as any).duration > 0) {
+          fields['d'] = Math.round((body as any).duration);
         }
-        const manifest = { v: 1, tracks: { ...tracks, [vid]: { ...existing, ...fields } } };
+        if (!Object.keys(fields).length) return json({ error: 'nothing to update' }, 400);
+        const m = await hfManifest(env);
+        const tracks = m.tracks;
+        const existing = tracks[vid] || {};
+        const updatedTracks = { ...tracks, [vid]: { ...existing, ...fields } };
+        const manifest = { v: 1, tracks: updatedTracks, artists: m.artists || {} };
         const stagedPath = `${STAGING_DIR}/manifest-${Date.now().toString(36)}.json`;
         try {
           await gh(env, `/repos/${REPO}/contents/${stagedPath}`, {
@@ -1301,7 +1317,126 @@ export const onRequestPost = async ({ request, env, ctx }: {
           await cleanupStaged(env, stagedPath);
           throw e;
         }
+        manifestMem = { data: manifest, at: Date.now() };
         return json({ ok: true, dispatched: true, target: 'manifest.json' });
+      }
+
+      /* ----- Artist Profile Management: update image, bio, genres, or batch-rename artist ----- */
+      case 'artistSet': {
+        const artist = String(body.artist || '').trim();
+        if (!artist) return json({ error: 'artist name required' }, 400);
+        const m = await hfManifest(env);
+        const artists: Record<string, Record<string, unknown>> = { ...(m.artists || {}) };
+        const tracks: Record<string, Record<string, unknown>> = { ...(m.tracks || {}) };
+
+        const artistKey = artist.toLowerCase();
+        const existing = (artists[artistKey] as Record<string, unknown>) || { name: artist };
+        const profile: Record<string, unknown> = { ...existing };
+
+        if (body.name) profile.name = String(body.name).trim();
+        if (body.img !== undefined) profile.img = String(body.img).trim();
+        if (body.bio !== undefined) profile.bio = String(body.bio).trim();
+        if (body.genres && Array.isArray(body.genres)) profile.genres = body.genres.map(String);
+        if (body.social !== undefined) profile.social = String(body.social).trim();
+        profile.updated = Date.now();
+
+        artists[artistKey] = profile;
+
+        let renamedTrackCount = 0;
+        const newName = body.renameTracks ? String(body.name || artist).trim() : null;
+        if (newName && newName !== artist) {
+          const oldNorm = artist.toLowerCase();
+          for (const [vid, entry] of Object.entries(tracks)) {
+            const a = String((entry as any).a || '').trim();
+            if (a.toLowerCase() === oldNorm || a === artist) {
+              (tracks[vid] as any).a = newName;
+              renamedTrackCount++;
+            }
+          }
+          delete artists[artistKey];
+          artists[newName.toLowerCase()] = { ...profile, name: newName };
+        }
+
+        const manifest = { v: 1, tracks, artists };
+        const stagedPath = `${STAGING_DIR}/manifest-${Date.now().toString(36)}.json`;
+        try {
+          await gh(env, `/repos/${REPO}/contents/${stagedPath}`, {
+            method: 'PUT',
+            body: JSON.stringify({
+              message: `chore: update artist metadata for ${artist}`,
+              content: toB64Utf8(JSON.stringify(manifest, null, 1)),
+              branch: 'main',
+            }),
+          });
+        } catch (e) {
+          throw new Error('could not stage manifest in repo — ' + (e as Error).message);
+        }
+        try {
+          await gh(env, `/repos/${REPO}/actions/workflows/${MANAGE_WORKFLOW_FILE}/dispatches`, {
+            method: 'POST',
+            body: JSON.stringify({
+              ref: 'main',
+              inputs: { op: 'manifest', staged_path: stagedPath, target_path: 'manifest.json' },
+            }),
+          });
+        } catch (e) {
+          await cleanupStaged(env, stagedPath);
+          throw e;
+        }
+        manifestMem = { data: manifest, at: Date.now() };
+        return json({ ok: true, dispatched: true, renamedTrackCount, artist: profile });
+      }
+
+      /* ----- Batch manifest metadata updates (batch artist/album edit) ----- */
+      case 'batchManifestSet': {
+        const updates = body.updates;
+        if (!Array.isArray(updates) || !updates.length) {
+          return json({ error: 'updates array required' }, 400);
+        }
+        const m = await hfManifest(env);
+        const tracks: Record<string, Record<string, unknown>> = { ...(m.tracks || {}) };
+        let count = 0;
+        for (const item of updates) {
+          const vid = String(item.id || '');
+          if (!vid) continue;
+          const existing = tracks[vid] || {};
+          const fields: Record<string, unknown> = {};
+          if (item.title) fields.t = String(item.title).trim();
+          if (item.artist) fields.a = String(item.artist).trim();
+          if (item.album) fields.al = String(item.album).trim();
+          if (item.year) fields.y = String(item.year).trim();
+          if (item.genre) fields.g = String(item.genre).trim();
+          tracks[vid] = { ...existing, ...fields };
+          count++;
+        }
+        const manifest = { v: 1, tracks, artists: m.artists || {} };
+        const stagedPath = `${STAGING_DIR}/manifest-${Date.now().toString(36)}.json`;
+        try {
+          await gh(env, `/repos/${REPO}/contents/${stagedPath}`, {
+            method: 'PUT',
+            body: JSON.stringify({
+              message: `chore: batch update ${count} tracks`,
+              content: toB64Utf8(JSON.stringify(manifest, null, 1)),
+              branch: 'main',
+            }),
+          });
+        } catch (e) {
+          throw new Error('could not stage manifest in repo — ' + (e as Error).message);
+        }
+        try {
+          await gh(env, `/repos/${REPO}/actions/workflows/${MANAGE_WORKFLOW_FILE}/dispatches`, {
+            method: 'POST',
+            body: JSON.stringify({
+              ref: 'main',
+              inputs: { op: 'manifest', staged_path: stagedPath, target_path: 'manifest.json' },
+            }),
+          });
+        } catch (e) {
+          await cleanupStaged(env, stagedPath);
+          throw e;
+        }
+        manifestMem = { data: manifest, at: Date.now() };
+        return json({ ok: true, dispatched: true, count });
       }
 
       case 'expand': {

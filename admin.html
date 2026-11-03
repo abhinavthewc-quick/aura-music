@@ -6,6 +6,7 @@
   <title>Aura Admin — Music Uploader</title>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;700&family=Cormorant+Garamond:wght@600&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
 </head>
 <body>
   <header class="adm-header">
@@ -38,10 +39,11 @@
 
     <!-- Top-level tabs (signed in only) -->
     <nav class="adm-tabs adm-gated" id="admTabs" hidden aria-label="Admin sections">
-      <button type="button" class="adm-tab active" data-panel="panelAdd">Find &amp; queue</button>
-      <button type="button" class="adm-tab" data-panel="panelLibrary">Library <span class="adm-tabcount" id="libTabCount" hidden></span></button>
-      <button type="button" class="adm-tab" data-panel="panelDiscord">Discord <span class="adm-tabcount" id="discordTabCount" hidden></span></button>
-      <button type="button" class="adm-tab" data-panel="panelSettings">Settings</button>
+      <button type="button" class="adm-tab active" data-panel="panelAdd"><i class="fa-solid fa-cloud-arrow-down"></i> Find &amp; queue</button>
+      <button type="button" class="adm-tab" data-panel="panelLibrary"><i class="fa-solid fa-music"></i> Library <span class="adm-tabcount" id="libTabCount" hidden></span></button>
+      <button type="button" class="adm-tab" data-panel="panelArtists"><i class="fa-solid fa-users"></i> Artists <span class="adm-tabcount" id="artistsTabCount" hidden></span></button>
+      <button type="button" class="adm-tab" data-panel="panelDiscord"><i class="fa-brands fa-discord"></i> Discord <span class="adm-tabcount" id="discordTabCount" hidden></span></button>
+      <button type="button" class="adm-tab" data-panel="panelSettings"><i class="fa-solid fa-gear"></i> Settings</button>
     </nav>
 
     <!-- 1. Find & queue + 2. runs -->
@@ -125,6 +127,38 @@
       </div>
     </section>
     </div><!-- /panelLibrary -->
+
+    <!-- Artists tab: artist manager -->
+    <div class="adm-panel" id="panelArtists" hidden>
+    <section class="adm-card adm-span2 adm-gated" id="artistsCard" hidden>
+      <h2><span class="adm-num"><i class="fa-solid fa-users" style="font-size:11px"></i></span> Artist Management <span class="adm-libhead-sub" id="artistsHeadSub"></span></h2>
+      <p class="adm-hint">Manage artist portraits, bios, genres, and batch-rename artists across your library. Changes immediately sync to Aura Music's artist shelves and directories.</p>
+
+      <div class="adm-libbar">
+        <div class="adm-libsearch">
+          <svg viewBox="0 0 20 20" aria-hidden="true"><path d="M9 3a6 6 0 1 0 3.6 10.8l3.3 3.3 1.4-1.4-3.3-3.3A6 6 0 0 0 9 3zm0 2a4 4 0 1 1 0 8 4 4 0 0 1 0-8z"/></svg>
+          <input id="artistSearchInput" class="adm-input" type="search" placeholder="Search artist name, genre..." autocomplete="off" spellcheck="false" aria-label="Search artists">
+        </div>
+        <select id="artistSort" class="adm-input adm-libsort" aria-label="Sort artists">
+          <option value="countDesc">Most songs</option>
+          <option value="nameAsc">Name A–Z</option>
+          <option value="nameDesc">Name Z–A</option>
+          <option value="customFirst">Custom pictures first</option>
+        </select>
+        <button type="button" class="adm-btn ghost small" id="artistsRefreshBtn">Refresh</button>
+      </div>
+
+      <div class="adm-libchips" id="artistFilters">
+        <button type="button" class="adm-chip artistf active" data-f="all">All artists <b>–</b></button>
+        <button type="button" class="adm-chip artistf" data-f="hascustom">Custom picture <b>–</b></button>
+        <button type="button" class="adm-chip artistf" data-f="defaultpic">Default picture <b>–</b></button>
+      </div>
+
+      <div class="adm-status" id="artistStatus"></div>
+      <div class="adm-libstats" id="artistStats"></div>
+      <div class="adm-artists-grid" id="artistGrid"><span class="adm-chip dim">loading artists…</span></div>
+    </section>
+    </div><!-- /panelArtists -->
 
     <!-- Settings tab -->
     <div class="adm-panel" id="panelSettings" hidden>
@@ -316,6 +350,26 @@
   </div>
 
   <div class="adm-toast" id="toastHost" aria-live="polite"></div>
+
+  <!-- In-Admin Audio Preview Player -->
+  <div class="adm-audio-bar" id="admAudioBar" hidden>
+    <div class="adm-audio-art">
+      <img id="admAudioImg" src="" alt="">
+    </div>
+    <div class="adm-audio-info">
+      <div class="adm-audio-title" id="admAudioTitle">No track playing</div>
+      <div class="adm-audio-artist" id="admAudioArtist"></div>
+    </div>
+    <div class="adm-audio-ctrls">
+      <button type="button" class="adm-audio-btn" id="admAudioPlayBtn" title="Play/Pause"><i class="fa-solid fa-play" id="admAudioPlayIcon"></i></button>
+      <span class="adm-audio-time" id="admAudioCurTime">0:00</span>
+      <input type="range" class="adm-audio-seek" id="admAudioSeek" min="0" max="100" value="0" step="0.1">
+      <span class="adm-audio-time" id="admAudioTotalTime">0:00</span>
+      <button type="button" class="adm-audio-btn small" id="admAudioMuteBtn" title="Mute"><i class="fa-solid fa-volume-high" id="admAudioMuteIcon"></i></button>
+    </div>
+    <button type="button" class="adm-audio-close" id="admAudioCloseBtn" title="Close player">&times;</button>
+    <audio id="admAudioElem" preload="none"></audio>
+  </div>
 
   <script type="module" src="/src/admin/main.ts"></script>
 </body>

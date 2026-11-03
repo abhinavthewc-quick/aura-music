@@ -132,8 +132,49 @@ export function readCatalogCache(): any[] {
   }
 }
 
-interface ManifestEntry { t?: string; a?: string; al?: string; y?: string; d?: number; }
-type Manifest = { v?: number; tracks?: Record<string, ManifestEntry> };
+export interface ArtistMeta {
+  name?: string;
+  img?: string;
+  bio?: string;
+  genres?: string[];
+  social?: string;
+  updated?: number;
+}
+
+export interface ManifestEntry {
+  t?: string;
+  a?: string;
+  al?: string;
+  y?: string;
+  d?: number;
+  g?: string;
+}
+
+export type Manifest = {
+  v?: number;
+  tracks?: Record<string, ManifestEntry>;
+  artists?: Record<string, ArtistMeta>;
+};
+
+export const ARTISTS_CACHE_KEY = 'auraHfArtists_v1';
+
+export function readArtistsCache(): Record<string, ArtistMeta> {
+  try {
+    const raw = localStorage.getItem(ARTISTS_CACHE_KEY);
+    if (!raw) return {};
+    const parsed = JSON.parse(raw);
+    return parsed && typeof parsed === 'object' ? parsed : {};
+  } catch {
+    return {};
+  }
+}
+
+export function getArtistMeta(artistName: string): ArtistMeta | undefined {
+  if (!artistName) return undefined;
+  const artists = readArtistsCache();
+  const k = artistName.toLowerCase().trim();
+  return artists[k] || Object.values(artists).find((a) => (a.name || '').toLowerCase().trim() === k);
+}
 
 export async function fetchHfCatalog(): Promise<any[]> {
   const [treeRes, manifestRes] = await Promise.allSettled([fetch(HF_TREE_URL), fetch(hfFileUrl('manifest.json'))]);
@@ -173,6 +214,11 @@ export async function fetchHfCatalog(): Promise<any[]> {
     try {
       const data = await manifestRes.value.json();
       if (data && typeof data === 'object') manifest = data as Manifest;
+      if (manifest.artists && typeof manifest.artists === 'object') {
+        try {
+          localStorage.setItem(ARTISTS_CACHE_KEY, JSON.stringify(manifest.artists));
+        } catch { /* quota */ }
+      }
     } catch { /* keep empty — filename parse still works */ }
   }
   const meta: Record<string, ManifestEntry> =

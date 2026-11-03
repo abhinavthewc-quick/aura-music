@@ -1,7 +1,7 @@
 import { timeGreeting, toast, artistMergeKey } from '../core/dom';
 import { playSong } from './player';
 import { escapeHtml } from './radio';
-import { DEFAULT_COVER } from '../core/catalog';
+import { DEFAULT_COVER, getArtistMeta } from '../core/catalog';
 import { $, state } from '../core/state';
 import { getArtistGroups, artistTileHTML } from './library';
 /* ===== 3075-3096 ===== */
@@ -177,10 +177,11 @@ import { getArtistGroups, artistTileHTML } from './library';
 
       const result: ArtistDirectoryEntry[] = Object.values(groups).map(g => {
         const bestName = Object.entries(g.names).sort((a, b) => b[1] - a[1] || b[0].length - a[0].length)[0][0];
+        const custom = getArtistMeta(bestName);
         const sample = g.songs.find(s => s.img && !s.img.includes('default') && !s.img.includes('data:image')) || g.songs[0];
         return {
-          name: bestName,
-          img: sample?.img || DEFAULT_COVER,
+          name: custom?.name || bestName,
+          img: custom?.img || sample?.img || DEFAULT_COVER,
           count: g.songs.length,
           songs: g.songs
         };
