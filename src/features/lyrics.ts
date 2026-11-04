@@ -862,6 +862,11 @@ export async function fetchLyricsForTrack(rawTitle: string, rawArtist: string, d
 
 /* Render Synced Lyrics into DOM with Syllable / Word progressive sweep */
 export function renderLyrics(lyrics: ParsedLyrics | null, containerId = 'fullPlayerLyricsContainer') {
+  // Clear container cache since DOM is being rebuilt
+  if (containerId === lyricsContainerIdCache) {
+    lyricsContainerCache = null;
+    lyricsContainerIdCache = '';
+  }
   const container = $(containerId);
   if (!container) return;
   currentLyrics = lyrics;
@@ -1025,9 +1030,25 @@ export function resumeLyricsAutoScroll() {
 }
 
 let lyricsRafId = 0;
+let lyricsSyncActive = false;
+let lastLyricsSync = 0;
+let lyricsContainerCache: HTMLElement | null = null;
+let lyricsContainerIdCache = '';
 export function startLyricsSyncLoop() {
-  if (lyricsRafId) cancelAnimationFrame(lyricsRafId);
+  if (lyricsSyncActive) return;
+  // Only run if lyrics container is visible
+  const container = $('fullPlayerLyricsContainer') || $('ytmLyricsPanel');
+  if (!container || container.offsetParent === null) return;
+  lyricsSyncActive = true;
   function tick() {
+    if (!lyricsSyncActive) return;
+    const now = performance.now();
+    // Throttle to ~30fps (33ms) to prevent lag on mobile
+    if (now - lastLyricsSync < 33) {
+      lyricsRafId = requestAnimationFrame(tick);
+      return;
+    }
+    lastLyricsSync = now;
     if (!currentLyrics || !currentLyrics.isSynced) {
       lyricsRafId = requestAnimationFrame(tick);
       return;
@@ -1045,9 +1066,39 @@ export function startLyricsSyncLoop() {
 }
 
 export function stopLyricsSyncLoop() {
+  lyricsSyncActive = false;
   if (lyricsRafId) {
     cancelAnimationFrame(lyricsRafId);
     lyricsRafId = 0;
+  }
+}
+
+/* Auto-stop when lyrics panel is hidden */
+function observeLyricsVisibility() {
+  const container = $('fullPlayerLyricsContainer') || $('ytmLyricsPanel');
+  if (!container) return;
+  const mo = new MutationObserver(() => {
+    if (container.offsetParent === null) {
+      stopLyricsSyncLoop();
+    } else if (currentLyrics?.isSynced && state.isPlaying) {
+      startLyricsSyncLoop();
+    }
+  });
+  mo.observe(container, { attributes: true, attributeFilter: ['style', 'class'] });
+  // Also observe the full player overlay
+  const overlay = $('fullPlayerOverlay');
+  if (overlay) {
+    new MutationObserver(() => {
+      if (!overlay.classList.contains('active')) stopLyricsSyncLoop();
+    }).observe(overlay, { attributes: true, attributeFilter: ['class'] });
+  }
+}
+// Initialize observer when lyrics module loads
+if (typeof document !== 'undefined') {
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', observeLyricsVisibility);
+  } else {
+    observeLyricsVisibility();
   }
 }
 
@@ -1066,7 +1117,12 @@ export function updateLyricsProgress(currentTime: number, containerId = 'fullPla
     }
   }
 
-  const container = $(containerId);
+  // Cache container to avoid repeated DOM queries
+  if (containerId !== lyricsContainerIdCache) {
+    lyricsContainerCache = $(containerId);
+    lyricsContainerIdCache = containerId;
+  }
+  const container = lyricsContainerCache;
   if (!container) return;
 
   if (newIdx !== activeIndex) {
