@@ -116,28 +116,79 @@ body.light-theme .pl-add-btn{color:#8f4f18;background:rgba(220,174,124,.28)}
 .pl-suggest-list .pl-track{cursor:default}
 .pl-samples{margin-bottom:8px}
 
-/* ---------- mobile search bar in the top header ---------- */
-.mobile-search-icon{display:none}
-.mobile-search-bar{
-  position:fixed;left:0;right:0;top:0;height:var(--ytm-header-h,62px);z-index:400;
-  align-items:center;gap:10px;padding:0 6px;
-  background:rgba(13,11,9,.96);backdrop-filter:blur(20px) saturate(160%);-webkit-backdrop-filter:blur(20px) saturate(160%);
-  display:none;
+/* ---------- playlist modal mobile improvements ---------- */
+@media (max-width: 600px) {
+  .playlist-modal {
+    padding: 0;
+    align-items: flex-end;
+  }
+  .playlist-modal-card {
+    width: 100%;
+    max-height: 85vh;
+    border-radius: 24px 24px 0 0;
+    overflow-y: auto;
+    -webkit-overflow-scrolling: touch;
+  }
+  .playlist-field input,
+  .playlist-field select {
+    font-size: 16px; /* Prevents zoom on iOS */
+  }
 }
-body.light-theme .mobile-search-bar{background:rgba(250,246,239,.94)}
-.mobile-search-bar.open{display:flex;animation:mobileSearchIn .25s ease both}
-@keyframes mobileSearchIn{from{opacity:0;transform:translateY(-6px)}}
-.mobile-search-back{
-  width:38px;height:38px;flex:0 0 38px;border-radius:50%;border:0;display:grid;place-items:center;
-  background:transparent;color:var(--text);font-size:15px;cursor:pointer;
-}
-.mobile-search-back:active{transform:scale(.92)}
-.mobile-search-input-wrap{flex:1;min-width:0}
-@media(max-width:899px){
-  .mobile-search-icon{display:inline-flex;align-items:center;justify-content:center}
-  .ytm-top-search-wrap{display:none}
-}
-@media(min-width:900px){
-  .mobile-search-bar{display:none!important}
-  .mobile-search-icon{display:none}
+
+/* ---------- playlist page mobile improvements ---------- */
+@media (max-width: 600px) {
+  .pl-head {
+    gap: 12px;
+    margin-bottom: 14px;
+  }
+  .pl-cover {
+    width: 96px !important;
+    height: 96px !important;
+    flex: 0 0 96px !important;
+    border-radius: 16px;
+    font-size: 32px;
+  }
+  .pl-name {
+    font-size: clamp(20px, 5vw, 28px);
+  }
+  .pl-meta {
+    font-size: 11px;
+  }
+  .pl-desc {
+    font-size: 11.5px;
+  }
+  .pl-actions {
+    gap: 6px;
+  }
+  .pl-actions button {
+    min-height: 40px;
+    padding: 0 12px;
+    font-size: 11px;
+  }
+  .pl-track {
+    padding: 10px 12px;
+    min-height: 56px;
+  }
+  .pl-track img {
+    width: 40px;
+    height: 40px;
+    flex: 0 0 40px;
+    border-radius: 8px;
+  }
+  .pl-track-meta b {
+    font-size: 13px;
+  }
+  .pl-track-meta span {
+    font-size: 11px;
+  }
+  .pl-add-btn {
+    width: 32px;
+    height: 32px;
+    flex: 0 0 32px;
+    font-size: 12px;
+  }
+  .pl-section {
+    font-size: 13px;
+    margin: 16px 0 8px;
+  }
 }

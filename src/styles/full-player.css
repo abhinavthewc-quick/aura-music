@@ -16,6 +16,31 @@
     .full-player-art img{width:100%;height:100%;object-fit:cover;display:block}
     .full-player-art.youtube-mode{aspect-ratio:16/9;max-width:760px;margin-top:16px;margin-bottom:20px}
     .full-player-art.youtube-mode iframe{width:100%;height:100%;border:0;display:block;background:#000}
+    @media (max-width: 600px) {
+      .full-player-art.youtube-mode {
+        max-width: 100%;
+        margin-top: 12px;
+        margin-bottom: 12px;
+        border-radius: 12px;
+      }
+      .full-player-overlay {
+        padding: 20px 16px 30px;
+      }
+      .full-player-header {
+        font-size: 13px;
+      }
+      .full-player-body {
+        max-width: 100%;
+      }
+      .full-controls {
+        gap: 12px;
+      }
+      .full-ctrl-btn.play-btn {
+        width: 56px;
+        height: 56px;
+        font-size: 22px;
+      }
+    }
     .youtube-mode-badge{display:none;font-size:10px;color:var(--text-sub);text-align:center;margin:-10px 0 12px}
     .youtube-mode-badge.active{display:block}
     .full-player-body{width:100%;max-width:400px;margin:0 auto}

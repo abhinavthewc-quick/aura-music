@@ -134,7 +134,15 @@ export function openPlaylistModal(id?: string) {
   $('playlistCreateError').hidden = true;
   updatePlaylistCta();
   modal.classList.add('active');
-  setTimeout(() => ($('playlistTitleInput') as HTMLInputElement)?.focus(), 60);
+  // Longer timeout on mobile to ensure modal animation completes
+  const isMobile = window.innerWidth < 600;
+  setTimeout(() => {
+    const input = $('playlistTitleInput') as HTMLInputElement;
+    input?.focus();
+    if (isMobile) {
+      input?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    }
+  }, isMobile ? 150 : 60);
 }
 
 export function closePlaylistModal() {
