@@ -1013,7 +1013,6 @@ body .up-next-sheet-close {
   z-index: 0;
   overflow: hidden;
   transition: background-image 0.8s cubic-bezier(0.2, 0, 0, 1), opacity 0.4s ease;
-  will-change: background-image;
 }
 
 .bl-lyrics-toolbar {
@@ -1162,7 +1161,21 @@ body .up-next-sheet-close {
   transition: opacity 0.25s cubic-bezier(0.2, 0, 0, 1), transform 0.3s cubic-bezier(0.34, 1.56, 0.64, 1), filter 0.25s ease;
   user-select: none;
   transform-origin: left center;
-  will-change: transform, opacity, filter;
+}
+
+/* Phones composite dozens of karaoke lines at once. Promoting every line to
+   its own layer (will-change) and blurring each one forced an offscreen raster
+   per line, which made the lyrics sheet — and the app under it — stutter. */
+@media (max-width: 899px) {
+  .bl-lyrics-backdrop {
+    filter: blur(26px) brightness(0.26) saturate(180%);
+  }
+  .bl-lyric-line {
+    filter: none;
+  }
+  .bl-lyric-line:hover {
+    filter: none;
+  }
 }
 
 .bl-lyric-line.first-upcoming {

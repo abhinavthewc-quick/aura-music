@@ -30,8 +30,40 @@ import { $, getPlayCount, persistLikedHistory, rebuildSongs, recordPlayCount, sa
       state.recentlyPlayed = state.recentlyPlayed.filter(s => s.id !== song.id);
       state.recentlyPlayed.unshift({id:song.id,title:song.title,artist:song.artist,img:song.img});
       state.recentlyPlayed = state.recentlyPlayed.slice(0,10);
-      localStorage.setItem('recentlyPlayed', JSON.stringify(state.recentlyPlayed));
-      renderRecent();
+      try{ localStorage.setItem('recentlyPlayed', JSON.stringify(state.recentlyPlayed)); }catch(e){}
+      schedulePlaybackHomeRefresh();
+    }
+
+    /* Starting a track used to rebuild every Home rail (recent cards, quick
+       picks, featured artists, aura picks) synchronously on the play tap, which
+       froze mid-range phones for a beat each time. Coalesce those paints into
+       one frame, and only spend them when Home is actually the visible tab —
+       otherwise remember the change and paint it on the next Home visit. */
+    let playbackHomeRaf = 0;
+    let playbackHomePending = false;
+
+    function paintPlaybackHomeSections(){
+      try{ renderRecent(); }catch(e){}
+    }
+
+    export function schedulePlaybackHomeRefresh(){
+      playbackHomePending = true;
+      if(playbackHomeRaf) return;
+      playbackHomeRaf = requestAnimationFrame(()=>{
+        playbackHomeRaf = 0;
+        if(!playbackHomePending) return;
+        if(!$('tabHome')?.classList.contains('active')) return;
+        playbackHomePending = false;
+        paintPlaybackHomeSections();
+      });
+    }
+
+    export function flushPlaybackHomeRefresh(){
+      if(!playbackHomePending) return;
+      if(!$('tabHome')?.classList.contains('active')) return;
+      if(playbackHomeRaf){ cancelAnimationFrame(playbackHomeRaf); playbackHomeRaf = 0; }
+      playbackHomePending = false;
+      paintPlaybackHomeSections();
     }
 
     export function renderRecent(){

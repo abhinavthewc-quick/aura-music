@@ -1,6 +1,6 @@
 import { copyToClipboard, showTrackSheet, toast } from '../core/dom';
 import { deleteTrack, openEditModal, renderLibrary } from './library';
-import { auraYTVideoId, filterSongs, playSong, playYouTubeProResult } from './player';
+import { auraYTVideoId, filterSongs, playSong, playYouTubeProResult, refreshLyricsForOpenSheet } from './player';
 import { escapeHtml } from './radio';
 import { auraYTQueue, extractYouTubeId, filterSearchTab } from './search';
 import { $, persistLikedHistory, savedLikeMap, state } from '../core/state';
@@ -227,6 +227,7 @@ import { $, persistLikedHistory, savedLikeMap, state } from '../core/state';
       sheet.classList.remove('dragging');
       sheet.classList.add('active');
       sheet.setAttribute('aria-hidden','false');
+      refreshLyricsForOpenSheet();
     }
     export function closeUpNext(){
       const sheet=$('upNextSheet');

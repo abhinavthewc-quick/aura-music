@@ -7,7 +7,7 @@ import { auraYTQueue, extractYouTubeId } from './search';
 import { auraSettings } from './settings';
 import { roomModeActive } from '../rooms/roomFlag';
 import { $, persistLikedHistory, savedLikeMap, state } from '../core/state';
-import { fetchLyricsForTrack, renderLyrics, updateLyricsProgress, prepareLyricsForNewSong, getTrackKey, lyricsCache } from './lyrics';
+import { fetchLyricsForTrack, renderLyrics, updateLyricsProgress, prepareLyricsForNewSong, getTrackKey, lyricsCache, startLyricsSyncLoop } from './lyrics';
 /* ===== 2955-2994 ===== */
     export const dynamicColorCache = {};
 
@@ -451,12 +451,17 @@ import { fetchLyricsForTrack, renderLyrics, updateLyricsProgress, prepareLyricsF
       state.audio.src=s.url;
       // Resilient fallback: if edge proxy has a transient failure, seamlessly fall back to direct Hugging Face URL
       state.audio.onerror = () => {
-        if (s.hfUrl && state.audio.src !== s.hfUrl) {
-          console.warn('[Aura Audio] Edge proxy unreachable, falling back to direct Hugging Face URL');
-          state.audio.src = s.hfUrl;
-          state.audio.load();
-          state.audio.play().catch(() => {});
-        }
+        if (!s.hfUrl) return;
+        let fallback = s.hfUrl;
+        try { fallback = new URL(s.hfUrl, location.href).href; } catch (_) {}
+        /* src is always the resolved absolute URL; comparing it to a possibly
+           relative hfUrl meant a broken file reloaded itself forever. Once the
+           fallback is in place, let the failure stand. */
+        if (state.audio.src === fallback) return;
+        console.warn('[Aura Audio] Edge proxy unreachable, falling back to direct Hugging Face URL');
+        state.audio.src = fallback;
+        state.audio.load();
+        state.audio.play().catch(() => {});
       };
       $('currentImg').src=$('fullImg').src=s.img;
       $('currentTitle').textContent=$('fullTitle').textContent=$('fullHeaderTitle').textContent=s.title;
@@ -473,28 +478,43 @@ import { fetchLyricsForTrack, renderLyrics, updateLyricsProgress, prepareLyricsF
       applyDynamicPlayerColor(s.img);
       updateMainMediaSession();
       state.audio.load();
-      prepareLyricsForNewSong(s.title, s.artist, s.videoId);
-      fetchLyricsForTrack(s.title, s.artist, s.duration, s.videoId).then(l => renderLyrics(l));
+      /* Lyrics used to be fetched and rendered on every play, which meant a
+         handful of provider requests plus a full lyrics DOM build on the main
+         thread in the same moment the audio started — very noticeable on
+         phones. The lyrics panel already fetches on demand when it opens, so
+         only do the eager work when it is actually on screen. */
+      if(lyricsPanelOpen()){
+        prepareLyricsForNewSong(s.title, s.artist, s.videoId);
+        fetchLyricsForTrack(s.title, s.artist, s.duration, s.videoId).then(l => renderLyrics(l));
+      }
+    }
+
+    /* True while the lyrics sheet is showing the lyrics tab (not Related). */
+    function lyricsPanelOpen(): boolean{
+      const sheet = $('upNextSheet');
+      return !!sheet && sheet.classList.contains('active') && sheet.getAttribute('data-tab') !== 'related';
+    }
+
+    /* The lyrics sheet can also be opened from outside the player (the Up Next
+       button). Because lyrics are no longer fetched on every play, make sure
+       what the panel shows belongs to the track that is actually playing. */
+    export function refreshLyricsForOpenSheet(){
+      if(!lyricsPanelOpen()) return;
+      switchRightPanelTab('lyrics');
     }
 
     /* Some direct/streamed MP3 links don't report a usable duration right
-       away (or report Infinity on Chrome for chunked/streamed state.audio).
-       This forces the browser to resolve the real duration and keeps the
-       duration label from being stuck at 0:00. */
+       away (or report Infinity on Chrome for chunked streams). Show it as soon
+       as it is known; 'durationchange' fires again when it resolves. */
     export function refreshDurationDisplay(){
       const d = state.audio.duration;
-      if(!d || !isFinite(d)){
-        if(d === Infinity){
-          const onTimeUpdate = () => {
-            state.audio.removeEventListener('timeupdate', onTimeUpdate);
-            state.audio.currentTime = 0;
-            if(isFinite(state.audio.duration)) $('fullDurationTime').textContent = fmt(state.audio.duration);
-          };
-          state.audio.addEventListener('timeupdate', onTimeUpdate);
-          state.audio.currentTime = 1e101;
-        }
-        return;
-      }
+      /* Streamed MP3s can report Infinity until the browser has probed further
+         into the file. The old code forced that probe by seeking to 1e101 and
+         then snapping the playhead back to 0: on mobile WebViews that seek can
+         hang the element (audio stops, progress freezes) and it threw away the
+         listener's position. 'durationchange' fires again once the real length
+         is known, so simply show it when it is available. */
+      if(!d || !isFinite(d)) return;
       $('fullDurationTime').textContent = fmt(d);
     }
     state.audio.addEventListener('loadedmetadata', refreshDurationDisplay);
@@ -520,9 +540,24 @@ import { fetchLyricsForTrack, renderLyrics, updateLyricsProgress, prepareLyricsF
       stopRadio();
       if(keepBigPlayer || keepFull) $('fullPlayerOverlay').classList.add('active');
       if(s.missing){ toast('This file is unavailable — please re-add it', 'triangle-exclamation'); return; }
-      state.currentIndex=i; loadSong(i); state.audio.play().catch(()=>{ state.isPlaying=false; updatePlayState(); }); state.isPlaying=true;
+      state.currentIndex=i; loadSong(i);
+      /* A play() that is superseded by a newer track rejects with AbortError a
+         moment later. That used to flip the controls to "paused" while audio was
+         actually playing, which looked like the player had got stuck. */
+      const requestAt = lastPlayRequestAt;
+      state.audio.play().catch(err => {
+        if(requestAt !== lastPlayRequestAt) return;
+        if(err && (err as any).name === 'AbortError') return;
+        state.isPlaying=false; updatePlayState();
+      });
+      state.isPlaying=true;
       $('miniPlayer').classList.add('active');
-      updatePlayState(); filterSongs(); addToRecent(s);
+      updatePlayState();
+      /* Re-rendering the whole song list on every play froze the UI on phones.
+         The list is already rebuilt when the Library tab opens, so only refresh
+         it here when the user is actually looking at it. */
+      if($('tabLibrary')?.classList.contains('active')) filterSongs();
+      addToRecent(s);
       updateLibNowPlaying();
       if(keepFull && !window.matchMedia('(min-width:900px)').matches){
         $('fullPlayerOverlay').classList.add('active');
@@ -588,17 +623,28 @@ import { fetchLyricsForTrack, renderLyrics, updateLyricsProgress, prepareLyricsF
         if(lmdApi && lmdApi.apply) lmdApi.apply(0, false);
       }
     });
+    /* While a thumb is being dragged, timeupdate must not write the value back
+       — otherwise the playhead fights the finger and seeking feels stuck. */
+    let fullSeekDragging = false;
+    const fullSeekEl = $('fullSeekSlider') as HTMLInputElement;
+    fullSeekEl.addEventListener('pointerdown', ()=>{ fullSeekDragging = true; });
+    fullSeekEl.addEventListener('change', ()=>{ fullSeekDragging = false; });
+    window.addEventListener('pointerup', ()=>{ fullSeekDragging = false; });
+    window.addEventListener('pointercancel', ()=>{ fullSeekDragging = false; });
+
     state.audio.addEventListener('timeupdate', ()=>{
       if(state.audio.duration && isFinite(state.audio.duration) && state.audio.duration > 0){
         const pct=(state.audio.currentTime/state.audio.duration)*100;
         $('progressFill').style.width=pct+'%';
-        $('fullSeekSlider').value=pct;
+        if(!fullSeekDragging) $('fullSeekSlider').value=pct;
         $('fullCurrentTime').textContent=fmt(state.audio.currentTime);
         $('fullDurationTime').textContent=fmt(state.audio.duration);
         const tuApi = (window as any).__auraMiniProgress;
         if(tuApi && tuApi.apply) tuApi.apply(pct);
       }
-      updateLyricsProgress(state.audio.currentTime);
+      /* Only the visible lyrics panel needs karaoke updates; opening it
+         resyncs from the current position. */
+      if(lyricsPanelOpen()) updateLyricsProgress(state.audio.currentTime);
     });
     state.audio.addEventListener('play',()=>{state.isPlaying=true;updatePlayState();updateMainMediaSession();});
     state.audio.addEventListener('pause',()=>{state.isPlaying=false;updatePlayState();updateMainMediaSession();});
@@ -614,8 +660,8 @@ import { fetchLyricsForTrack, renderLyrics, updateLyricsProgress, prepareLyricsF
       if(!auraYTPlayer || document.hidden) return;
       try{
         const d=auraYTPlayer.getDuration()||0, c=auraYTPlayer.getCurrentTime()||0;
-        if(d){ $('fullSeekSlider').value=(c/d)*100; $('fullCurrentTime').textContent=fmt(c); $('fullDurationTime').textContent=fmt(d); }
-        updateLyricsProgress(c);
+        if(d){ if(!fullSeekDragging) $('fullSeekSlider').value=(c/d)*100; $('fullCurrentTime').textContent=fmt(c); $('fullDurationTime').textContent=fmt(d); }
+        if(lyricsPanelOpen()) updateLyricsProgress(c);
       }catch(e){}
     },500);
     $('fullSeekSlider').oninput=()=>{
@@ -754,6 +800,8 @@ import { fetchLyricsForTrack, renderLyrics, updateLyricsProgress, prepareLyricsF
         sheet.classList.add('active');
         sheet.setAttribute('aria-hidden', 'false');
         if (tab === 'lyrics') {
+          /* The lyrics loop only runs while this sheet is on screen. */
+          startLyricsSyncLoop();
           setTimeout(() => {
             (window as any).centerActiveLyricLine?.(undefined, false);
           }, 180);

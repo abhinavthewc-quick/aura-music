@@ -1,4 +1,4 @@
-import { renderLibrary } from '../features/library';
+import { renderLibrary, flushPlaybackHomeRefresh } from '../features/library';
 import { loadRadioStations } from '../features/radio';
 import { filterSearchTab } from '../features/search';
 import { $ } from '../core/state';
@@ -89,6 +89,7 @@ import { $ } from '../core/state';
       $(tabId).classList.add('active');
       document.body.classList.toggle('tab-search-active', tabId==='tabSearch');
       if(tabId==='tabLibrary')renderLibrary();
+      if(tabId==='tabHome')flushPlaybackHomeRefresh();
       if(tabId==='tabSearch')filterSearchTab();
       if(tabId==='tabRadio' && !$('radioStationList').dataset.loaded){ $('radioStationList').dataset.loaded='1'; loadRadioStations('top'); }
     }

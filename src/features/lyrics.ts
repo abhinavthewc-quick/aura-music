@@ -1025,11 +1025,34 @@ export function resumeLyricsAutoScroll() {
 }
 
 let lyricsRafId = 0;
+let lyricsParkTimer = 0;
+
+/* Lyrics are the only thing here that needs per-frame updates, and only while
+   the lyrics panel is actually on screen. This loop used to re-arm itself
+   unconditionally — including with no synced lyrics and after the panel was
+   closed — so a single play left a 60fps frame callback running for the rest
+   of the session. That is what made phones stutter and drain battery once a
+   song started. Now it runs at full rate only while lyrics are visible and
+   parks on a slow timer otherwise, so it costs nothing to leave running. */
+const LYRICS_PARK_MS = 400;
+
+function lyricsPanelVisible(): boolean {
+  const sheet = document.getElementById('upNextSheet');
+  if (!sheet || !sheet.classList.contains('active')) return false;
+  const panel = document.getElementById('ytmLyricsPanel');
+  return !panel || panel.style.display !== 'none';
+}
+
 export function startLyricsSyncLoop() {
-  if (lyricsRafId) cancelAnimationFrame(lyricsRafId);
+  if (lyricsRafId || lyricsParkTimer) return;
+  const resume = () => {
+    lyricsParkTimer = 0;
+    if (!lyricsRafId) lyricsRafId = requestAnimationFrame(tick);
+  };
   function tick() {
-    if (!currentLyrics || !currentLyrics.isSynced) {
-      lyricsRafId = requestAnimationFrame(tick);
+    lyricsRafId = 0;
+    if (document.hidden || !currentLyrics || !currentLyrics.isSynced || !lyricsPanelVisible()) {
+      lyricsParkTimer = window.setTimeout(resume, LYRICS_PARK_MS);
       return;
     }
     const curTime = state.isPlaying
@@ -1048,6 +1071,10 @@ export function stopLyricsSyncLoop() {
   if (lyricsRafId) {
     cancelAnimationFrame(lyricsRafId);
     lyricsRafId = 0;
+  }
+  if (lyricsParkTimer) {
+    clearTimeout(lyricsParkTimer);
+    lyricsParkTimer = 0;
   }
 }
 

@@ -74,6 +74,13 @@ import { state } from '../core/state';
 
   /* ---- seek line ---- */
   const seek = $('miniSeek'), fullSeek = $('fullSeekSlider');
+  /* Same drag guard as the big player: the 250ms sync below must not overwrite
+     the thumb the user is currently dragging. */
+  let miniSeekDragging = false;
+  seek.addEventListener('pointerdown', () => { miniSeekDragging = true; });
+  seek.addEventListener('change', () => { miniSeekDragging = false; });
+  window.addEventListener('pointerup', () => { miniSeekDragging = false; });
+  window.addEventListener('pointercancel', () => { miniSeekDragging = false; });
   const miniProgressFill = $('progressFill'), miniProgressTrack = $('miniProgressTrack');
   const miniProgressDash = $('miniProgressTap');
   const edgeHost = $('miniEdgeProgress');
@@ -209,7 +216,7 @@ import { state } from '../core/state';
        dock opens, then skip the UI work entirely while nothing is on screen. */
     try{ if(auraYTPlayer && auraYTPlayerReady && auraYTPlayer !== ytSeen) applyVolume(false); }catch(e){}
     if(!mq.matches || (!isOn(overlay) && !isOn(mini))) return;
-    if(document.activeElement !== seek){ seek.value = fullSeek.value; seek.style.setProperty('--seek-pct', (parseFloat(fullSeek.value)||0) + '%'); }
+    if(!miniSeekDragging && document.activeElement !== seek){ seek.value = fullSeek.value; seek.style.setProperty('--seek-pct', (parseFloat(fullSeek.value)||0) + '%'); }
     const timeText = $('fullCurrentTime').textContent + ' / ' + $('fullDurationTime').textContent;
     if(timeText !== lastMiniTime){ lastMiniTime = timeText; $('miniTime').textContent = timeText; }
     syncLike(false); syncModes();
