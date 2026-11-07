@@ -178,8 +178,15 @@ installPresence();
 report(true);
 
 /* Media events keep the snapshot fresh even when the tab is in the background
-   and its timers are being throttled; the interval is the idle heartbeat. */
-state.audio.addEventListener('timeupdate', () => report());
+   and its timers are being throttled; the interval is the idle heartbeat.
+   Throttle timeupdate to ~2fps (500ms) to avoid excessive calls on mobile. */
+let presenceTimeUpdateThrottle = 0;
+state.audio.addEventListener('timeupdate', () => {
+  const now = Date.now();
+  if (now - presenceTimeUpdateThrottle < 500) return;
+  presenceTimeUpdateThrottle = now;
+  report();
+});
 state.audio.addEventListener('play', () => report(true));
 state.audio.addEventListener('pause', () => report(true));
 state.audio.addEventListener('seeked', () => report(true));

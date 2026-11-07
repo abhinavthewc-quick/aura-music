@@ -211,24 +211,44 @@ import { state } from '../core/state';
     }
   }
   let lastMiniPct = -1, lastMiniTime = '';
-  setInterval(() => {
-    /* Keep a newly-created YouTube player's volume in sync even before the
-       dock opens, then skip the UI work entirely while nothing is on screen. */
-    try{ if(auraYTPlayer && auraYTPlayerReady && auraYTPlayer !== ytSeen) applyVolume(false); }catch(e){}
-    if(!mq.matches || (!isOn(overlay) && !isOn(mini))) return;
-    if(!miniSeekDragging && document.activeElement !== seek){ seek.value = fullSeek.value; seek.style.setProperty('--seek-pct', (parseFloat(fullSeek.value)||0) + '%'); }
-    const timeText = $('fullCurrentTime').textContent + ' / ' + $('fullDurationTime').textContent;
-    if(timeText !== lastMiniTime){ lastMiniTime = timeText; $('miniTime').textContent = timeText; }
-    syncLike(false); syncModes();
-    const pct = Number(fullSeek.value)||0;
-    if(pct !== lastMiniPct){
-      lastMiniPct = pct;
-      if(edgeFill && !edgeDragActive){
-        edgeFill.style.transition = 'transform .1s linear';
-        edgeFill.style.transform = `scaleX(${pct / 100})`;
+  /* Mobile-friendly: use timeupdate event instead of polling interval.
+     The player.ts timeupdate handler calls __auraMiniProgress.apply() which
+     keeps the mini player progress in sync. This interval only needs to
+     sync volume for newly-created YouTube players and update time display. */
+  let miniSyncTimer: number;
+  function startMiniSync() {
+    if (miniSyncTimer) return;
+    miniSyncTimer = window.setInterval(() => {
+      try{ if(auraYTPlayer && auraYTPlayerReady && auraYTPlayer !== ytSeen) applyVolume(false); }catch(e){}
+      if(!mq.matches || (!isOn(overlay) && !isOn(mini))) return;
+      if(!miniSeekDragging && document.activeElement !== seek){ seek.value = fullSeek.value; seek.style.setProperty('--seek-pct', (parseFloat(fullSeek.value)||0) + '%'); }
+      const timeText = $('fullCurrentTime').textContent + ' / ' + $('fullDurationTime').textContent;
+      if(timeText !== lastMiniTime){ lastMiniTime = timeText; $('miniTime').textContent = timeText; }
+      syncLike(false); syncModes();
+      const pct = Number(fullSeek.value)||0;
+      if(pct !== lastMiniPct){
+        lastMiniPct = pct;
+        if(edgeFill && !edgeDragActive){
+          edgeFill.style.transition = 'transform .1s linear';
+          edgeFill.style.transform = `scaleX(${pct / 100})`;
+        }
       }
-    }
-  }, 250);
+    }, 500); // Reduced from 250ms to 500ms for mobile performance
+  }
+  function stopMiniSync() {
+    if (miniSyncTimer) { clearInterval(miniSyncTimer); miniSyncTimer = 0; }
+  }
+  /* Start/stop based on player visibility to save battery/CPU on mobile */
+  new MutationObserver(() => {
+    const visible = isOn(mini) || isOn(overlay);
+    if (visible) startMiniSync(); else stopMiniSync();
+  }).observe(mini, {attributes: true, attributeFilter: ['class']});
+  new MutationObserver(() => {
+    const visible = isOn(mini) || isOn(overlay);
+    if (visible) startMiniSync(); else stopMiniSync();
+  }).observe(overlay, {attributes: true, attributeFilter: ['class']});
+  // Initial check
+  if (isOn(mini) || isOn(overlay)) startMiniSync();
 
 
   /* ---- keyboard: Esc closes the big player ---- */

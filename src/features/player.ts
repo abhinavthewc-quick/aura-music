@@ -632,19 +632,30 @@ import { fetchLyricsForTrack, renderLyrics, updateLyricsProgress, prepareLyricsF
     window.addEventListener('pointerup', ()=>{ fullSeekDragging = false; });
     window.addEventListener('pointercancel', ()=>{ fullSeekDragging = false; });
 
+    /* Throttled timeupdate handler — mobile browsers fire this very frequently
+   (4-10x/sec). We batch DOM writes to avoid layout thrashing and lag.
+   Lyrics progress is now handled by the dedicated lyrics sync loop. */
+    let timeUpdateRaf = 0;
+    let lastTimeUpdate = 0;
     state.audio.addEventListener('timeupdate', ()=>{
-      if(state.audio.duration && isFinite(state.audio.duration) && state.audio.duration > 0){
-        const pct=(state.audio.currentTime/state.audio.duration)*100;
-        $('progressFill').style.width=pct+'%';
-        if(!fullSeekDragging) $('fullSeekSlider').value=pct;
-        $('fullCurrentTime').textContent=fmt(state.audio.currentTime);
-        $('fullDurationTime').textContent=fmt(state.audio.duration);
-        const tuApi = (window as any).__auraMiniProgress;
-        if(tuApi && tuApi.apply) tuApi.apply(pct);
-      }
-      /* Only the visible lyrics panel needs karaoke updates; opening it
-         resyncs from the current position. */
-      if(lyricsPanelOpen()) updateLyricsProgress(state.audio.currentTime);
+      const now = performance.now();
+      // Throttle to ~30fps (33ms) max to prevent UI lag on mobile
+      if (now - lastTimeUpdate < 33) return;
+      lastTimeUpdate = now;
+
+      if (timeUpdateRaf) cancelAnimationFrame(timeUpdateRaf);
+      timeUpdateRaf = requestAnimationFrame(() => {
+        if(state.audio.duration && isFinite(state.audio.duration) && state.audio.duration > 0){
+          const pct=(state.audio.currentTime/state.audio.duration)*100;
+          $('progressFill').style.width=pct+'%';
+          if(!fullSeekDragging) $('fullSeekSlider').value=pct;
+          $('fullCurrentTime').textContent=fmt(state.audio.currentTime);
+          $('fullDurationTime').textContent=fmt(state.audio.duration);
+          const tuApi = (window as any).__auraMiniProgress;
+          if(tuApi && tuApi.apply) tuApi.apply(pct);
+        }
+        // updateLyricsProgress moved to lyrics sync loop to avoid duplicate work
+      });
     });
     state.audio.addEventListener('play',()=>{state.isPlaying=true;updatePlayState();updateMainMediaSession();});
     state.audio.addEventListener('pause',()=>{state.isPlaying=false;updatePlayState();updateMainMediaSession();});
@@ -661,9 +672,9 @@ import { fetchLyricsForTrack, renderLyrics, updateLyricsProgress, prepareLyricsF
       try{
         const d=auraYTPlayer.getDuration()||0, c=auraYTPlayer.getCurrentTime()||0;
         if(d){ if(!fullSeekDragging) $('fullSeekSlider').value=(c/d)*100; $('fullCurrentTime').textContent=fmt(c); $('fullDurationTime').textContent=fmt(d); }
-        if(lyricsPanelOpen()) updateLyricsProgress(c);
+        // updateLyricsProgress handled by lyrics sync loop
       }catch(e){}
-    },500);
+    },1000); // Reduced from 500ms to 1000ms for mobile performance
     $('fullSeekSlider').oninput=()=>{
       const pct=Number($('fullSeekSlider').value)||0;
       if(auraYTPlayer){

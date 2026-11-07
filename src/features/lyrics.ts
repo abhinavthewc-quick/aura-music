@@ -862,6 +862,11 @@ export async function fetchLyricsForTrack(rawTitle: string, rawArtist: string, d
 
 /* Render Synced Lyrics into DOM with Syllable / Word progressive sweep */
 export function renderLyrics(lyrics: ParsedLyrics | null, containerId = 'fullPlayerLyricsContainer') {
+  // Clear container cache since DOM is being rebuilt
+  if (containerId === lyricsContainerIdCache) {
+    lyricsContainerCache = null;
+    lyricsContainerIdCache = '';
+  }
   const container = $(containerId);
   if (!container) return;
   currentLyrics = lyrics;
@@ -1026,15 +1031,19 @@ export function resumeLyricsAutoScroll() {
 
 let lyricsRafId = 0;
 let lyricsParkTimer = 0;
+let lyricsSyncActive = false;
+let lastLyricsSync = 0;
+let lyricsContainerCache: HTMLElement | null = null;
+let lyricsContainerIdCache = '';
 
 /* Lyrics are the only thing here that needs per-frame updates, and only while
-   the lyrics panel is actually on screen. This loop used to re-arm itself
+   the lyrics panel is actually on screen. The loop used to re-arm itself
    unconditionally — including with no synced lyrics and after the panel was
-   closed — so a single play left a 60fps frame callback running for the rest
-   of the session. That is what made phones stutter and drain battery once a
-   song started. Now it runs at full rate only while lyrics are visible and
-   parks on a slow timer otherwise, so it costs nothing to leave running. */
+   closed — so a single play left a frame callback running for the rest of the
+   session. It now runs at ~30fps only while lyrics are visible and parks on a
+   slow timer otherwise, so it costs nothing to leave running. */
 const LYRICS_PARK_MS = 400;
+const LYRICS_FRAME_MS = 33;
 
 function lyricsPanelVisible(): boolean {
   const sheet = document.getElementById('upNextSheet');
@@ -1045,16 +1054,27 @@ function lyricsPanelVisible(): boolean {
 
 export function startLyricsSyncLoop() {
   if (lyricsRafId || lyricsParkTimer) return;
+  lyricsSyncActive = true;
   const resume = () => {
     lyricsParkTimer = 0;
-    if (!lyricsRafId) lyricsRafId = requestAnimationFrame(tick);
+    if (!lyricsRafId && lyricsSyncActive) lyricsRafId = requestAnimationFrame(tick);
   };
   function tick() {
     lyricsRafId = 0;
+    if (!lyricsSyncActive) return;
     if (document.hidden || !currentLyrics || !currentLyrics.isSynced || !lyricsPanelVisible()) {
+      /* Nothing to paint right now: park on a slow timer instead of burning
+         frames. The visibility observers below resume the loop on demand. */
       lyricsParkTimer = window.setTimeout(resume, LYRICS_PARK_MS);
       return;
     }
+    const now = performance.now();
+    // Throttle to ~30fps (33ms) to prevent lag on mobile
+    if (now - lastLyricsSync < LYRICS_FRAME_MS) {
+      lyricsRafId = requestAnimationFrame(tick);
+      return;
+    }
+    lastLyricsSync = now;
     const curTime = state.isPlaying
       ? (state.audio?.currentTime || (window as any).auraYTPlayer?.getCurrentTime?.() || 0)
       : ((window as any).auraYTPlayer?.getCurrentTime?.() || 0);
@@ -1068,6 +1088,7 @@ export function startLyricsSyncLoop() {
 }
 
 export function stopLyricsSyncLoop() {
+  lyricsSyncActive = false;
   if (lyricsRafId) {
     cancelAnimationFrame(lyricsRafId);
     lyricsRafId = 0;
@@ -1075,6 +1096,35 @@ export function stopLyricsSyncLoop() {
   if (lyricsParkTimer) {
     clearTimeout(lyricsParkTimer);
     lyricsParkTimer = 0;
+  }
+}
+
+/* Auto-stop when lyrics panel is hidden */
+function observeLyricsVisibility() {
+  const container = $('fullPlayerLyricsContainer') || $('ytmLyricsPanel');
+  if (!container) return;
+  const mo = new MutationObserver(() => {
+    if (container.offsetParent === null) {
+      stopLyricsSyncLoop();
+    } else if (currentLyrics?.isSynced && state.isPlaying) {
+      startLyricsSyncLoop();
+    }
+  });
+  mo.observe(container, { attributes: true, attributeFilter: ['style', 'class'] });
+  // Also observe the full player overlay
+  const overlay = $('fullPlayerOverlay');
+  if (overlay) {
+    new MutationObserver(() => {
+      if (!overlay.classList.contains('active')) stopLyricsSyncLoop();
+    }).observe(overlay, { attributes: true, attributeFilter: ['class'] });
+  }
+}
+// Initialize observer when lyrics module loads
+if (typeof document !== 'undefined') {
+  if (document.readyState === 'loading') {
+    document.addEventListener('DOMContentLoaded', observeLyricsVisibility);
+  } else {
+    observeLyricsVisibility();
   }
 }
 
@@ -1093,7 +1143,12 @@ export function updateLyricsProgress(currentTime: number, containerId = 'fullPla
     }
   }
 
-  const container = $(containerId);
+  // Cache container to avoid repeated DOM queries
+  if (containerId !== lyricsContainerIdCache) {
+    lyricsContainerCache = $(containerId);
+    lyricsContainerIdCache = containerId;
+  }
+  const container = lyricsContainerCache;
   if (!container) return;
 
   if (newIdx !== activeIndex) {
