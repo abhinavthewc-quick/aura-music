@@ -1,0 +1,2377 @@
+{
+ "v": 1,
+ "tracks": {
+  "Fi3GovijpWA": {
+   "t": "Tere Bina",
+   "a": "A. R. Rahman",
+   "d": 310,
+   "y": "2006",
+   "al": "Guru"
+  },
+  "PHPqCbOjFdQ": {
+   "t": "Veera Raja Veera",
+   "a": "A. R. Rahman"
+  },
+  "lbEtG0ZjyJA": {
+   "t": "Aaya Sher (From ＂The Paradise＂) (Telugu)",
+   "a": "Anirudh Ravichander"
+  },
+  "e2-yAj_wthU": {
+   "t": "Ain't Nobody (From ＂DC＂)",
+   "a": "Anirudh Ravichander"
+  },
+  "DsjRNPrvq6U": {
+   "t": "Hukum - Thalaivar Alappara - Tamil (From ＂Jailer＂)",
+   "a": "Anirudh Ravichander"
+  },
+  "5XthUghC2Po": {
+   "t": "Vikram (Title Track)",
+   "a": "Anirudh Ravichander"
+  },
+  "-BJt4fCAtZE": {
+   "t": "Arz Kiya Hai ｜ Coke Studio Bharat",
+   "a": "Anuv Jain"
+  },
+  "xTvyyoF_LZY": {
+   "t": "Shape of You",
+   "a": "Ed Sheeran"
+  },
+  "ju4KQT0wL0I": {
+   "t": "All The Stars",
+   "a": "Kendrick Lamar"
+  },
+  "5DF9aRuiOZo": {
+   "t": "Animals",
+   "a": "Maroon 5"
+  },
+  "CnEqrgMlWLQ": {
+   "t": "I Think They Call This Love (Cover)",
+   "a": "Matthew Ifield"
+  },
+  "8BiLurrzFRw": {
+   "t": "Night Changes",
+   "a": "One Direction"
+  },
+  "qemjcgBJMCE": {
+   "t": "God Mode (From ＂Karuppu＂)",
+   "a": "Sai Abhyankkar"
+  },
+  "Fqg1QYrD7ZA": {
+   "t": "Magale (From ＂Baththa＂)",
+   "a": "Sai Abhyankkar"
+  },
+  "KmQiD0g6lZE": {
+   "t": "Oorum Blood (From ＂Dude＂)",
+   "a": "Sai Abhyankkar"
+  },
+  "GoAAlACyXBg": {
+   "t": "The Wild Theme (From ＂OM Chapter 1 Udhiram - The Blood Wood＂)",
+   "a": "Sai Abhyankkar",
+   "al": "OM"
+  },
+  "XfEMj-z3TtA": {
+   "t": "STAY",
+   "a": "The Kid LAROI."
+  },
+  "8jUbbUlG-jI": {
+   "t": "Moongil Thottam",
+   "a": "A.R. Rahman",
+   "d": 275,
+   "y": "2012"
+  },
+  "9vDIzVuDzTs": {
+   "t": "Perfect (Acoustic)",
+   "a": "Ed Sheeran",
+   "d": 261,
+   "y": "2017"
+  },
+  "Jvrrd2rEOB4": {
+   "t": "Ghilli (Love BGM)",
+   "a": "Jeyasuriyaa Jeyakumar",
+   "d": 102,
+   "y": "2023"
+  },
+  "aZcW8KXPuC4": {
+   "t": "Kannukulla (Reprise)",
+   "a": "Sai Abhyankkar & Adesh Krishna",
+   "d": 274,
+   "y": "2025"
+  },
+  "n8TzilDacIo": {
+   "t": "Nallaru Po (From \"Dude\")",
+   "a": "Sai Abhyankkar",
+   "d": 236,
+   "y": "2025"
+  },
+  "L6A4rowiz78": {
+   "t": "Something Something BGM (Cover)",
+   "a": "The Half Note",
+   "d": 38,
+   "y": "2023"
+  },
+  "zzz00000000": {
+   "t": "Chain test 0",
+   "a": "Chain Tester"
+  },
+  "zzz00000001": {
+   "t": "Chain test 1",
+   "a": "Chain Tester"
+  },
+  "zzz00000002": {
+   "t": "Chain test 2",
+   "a": "Chain Tester"
+  },
+  "zzz00000003": {
+   "t": "Chain test 3",
+   "a": "Chain Tester"
+  },
+  "zzz00000004": {
+   "t": "Chain test 4",
+   "a": "Chain Tester"
+  },
+  "zzz00000005": {
+   "t": "Chain test 5",
+   "a": "Chain Tester"
+  },
+  "zzz00000006": {
+   "t": "Chain test 6",
+   "a": "Chain Tester"
+  },
+  "zzz00000007": {
+   "t": "Chain test 7",
+   "a": "Chain Tester"
+  },
+  "zzz00000008": {
+   "t": "Chain test 8",
+   "a": "Chain Tester"
+  },
+  "zzz00000009": {
+   "t": "Chain test 9",
+   "a": "Chain Tester"
+  },
+  "zzz00000010": {
+   "t": "Chain test 10",
+   "a": "Chain Tester"
+  },
+  "zzz00000011": {
+   "t": "Chain test 11",
+   "a": "Chain Tester"
+  },
+  "zzz00000012": {
+   "t": "Chain test 12",
+   "a": "Chain Tester"
+  },
+  "zzz00000013": {
+   "t": "Chain test 13",
+   "a": "Chain Tester"
+  },
+  "zzz00000014": {
+   "t": "Chain test 14",
+   "a": "Chain Tester"
+  },
+  "zzz00000015": {
+   "t": "Chain test 15",
+   "a": "Chain Tester"
+  },
+  "zzz00000016": {
+   "t": "Chain test 16",
+   "a": "Chain Tester"
+  },
+  "zzz00000017": {
+   "t": "Chain test 17",
+   "a": "Chain Tester"
+  },
+  "zzz00000018": {
+   "t": "Chain test 18",
+   "a": "Chain Tester"
+  },
+  "zzz00000019": {
+   "t": "Chain test 19",
+   "a": "Chain Tester"
+  },
+  "zzz00000020": {
+   "t": "Chain test 20",
+   "a": "Chain Tester"
+  },
+  "zzz00000021": {
+   "t": "Chain test 21",
+   "a": "Chain Tester"
+  },
+  "zzz00000022": {
+   "t": "Chain test 22",
+   "a": "Chain Tester"
+  },
+  "zzz00000023": {
+   "t": "Chain test 23",
+   "a": "Chain Tester"
+  },
+  "VPR-7gIlGpk": {
+   "t": "Aarambhame Le (From ＂Jersey＂)",
+   "a": "Anirudh Ravichander",
+   "d": 115,
+   "y": "2019"
+  },
+  "NjQWctpXU-g": {
+   "t": "Darshana (From ＂Hridayam＂)",
+   "a": "Hesham Abdul Wahab",
+   "d": 226,
+   "y": "2021"
+  },
+  "jfO-PmsdsWE": {
+   "t": "Onakka Munthiri (From ＂Hridayam＂)",
+   "a": "Hesham Abdul Wahab",
+   "d": 119,
+   "y": "2021"
+  },
+  "3igIAOJlJ2s": {
+   "t": "Topic - Asalayavale (From ＂Khalifa＂)",
+   "a": "Jakes Bejoy",
+   "d": 302,
+   "y": "2026"
+  },
+  "-76FUKpIz_g": {
+   "t": "Topic - Minnalvala (From ＂Narivetta＂)",
+   "a": "Jakes Bejoy",
+   "d": 299,
+   "y": "2025"
+  },
+  "2xUQO-qj3pc": {
+   "t": "Topic - Neeye Punchiri - One Side Love",
+   "a": "Jakes Bejoy",
+   "d": 255,
+   "y": "2025"
+  },
+  "3Qw3M7ibgaM": {
+   "t": "Topic - Ranam Title Track",
+   "a": "Jakes Bejoy",
+   "d": 302,
+   "y": "2018"
+  },
+  "BP_lDdvPZ-U": {
+   "t": "Topic - Ennilerinju",
+   "a": "Rzee",
+   "d": 196,
+   "y": "2016"
+  },
+  "5T0N7djnah4": {
+   "t": "Galatta (From ＂Aavesham＂)",
+   "a": "Sushin Shyam",
+   "d": 130,
+   "y": "2024"
+  },
+  "S1jo8K4kDJc": {
+   "t": "Illuminati (From ＂Aavesham＂)",
+   "a": "Sushin Shyam",
+   "d": 213,
+   "y": "2024"
+  },
+  "rn1ph-gmoLA": {
+   "t": "Ordinary (Wedding Version)",
+   "a": "Alex Warren",
+   "d": 187,
+   "y": "2025"
+  },
+  "KyhFbXanKk8": {
+   "t": "Bum Baa Diga Diga",
+   "a": "Anirudh Ravichander",
+   "d": 206,
+   "y": "2026"
+  },
+  "kynWdUG1NvY": {
+   "t": "Hangova",
+   "a": "Anirudh Ravichander",
+   "d": 248,
+   "y": "2026",
+   "al": "DC"
+  },
+  "A2hCPRKT-S8": {
+   "t": "Monica",
+   "a": "Anirudh Ravichander",
+   "d": 218,
+   "y": "2025"
+  },
+  "Of_28tkrIHU": {
+   "t": "Thaalam Trip (Instrumental)",
+   "a": "Anirudh Ravichander",
+   "d": 141,
+   "y": "2026"
+  },
+  "_deqdZmKzyg": {
+   "t": "Husn",
+   "a": "Anuv Jain",
+   "d": 218,
+   "y": "2023"
+  },
+  "usvVGXFIpTM": {
+   "t": "Jo Tum Mere Ho",
+   "a": "Anuv Jain",
+   "d": 252,
+   "y": "2024"
+  },
+  "H89qGpQo7NA": {
+   "t": "Powerhouse (From ＂Coolie＂) (Tamil)",
+   "a": "Arivu",
+   "d": 207,
+   "y": "2025"
+  },
+  "vxUBYHz_q1I": {
+   "t": "Attention",
+   "a": "Charlie Puth",
+   "d": 211,
+   "y": "2017"
+  },
+  "TA1W-pHNKl8": {
+   "t": "a thousand years",
+   "a": "Christina Perri",
+   "d": 285,
+   "y": "2011"
+  },
+  "858GKxHbiUg": {
+   "t": "Arcade",
+   "a": "Duncan Laurence",
+   "d": 184,
+   "y": "2019"
+  },
+  "xT-5e1F1p8Y": {
+   "t": "Sapphire",
+   "a": "Ed Sheeran",
+   "d": 179,
+   "y": "2025"
+  },
+  "wPY6dOC-MDA": {
+   "t": "Sailor Song",
+   "a": "Gigi Perez",
+   "d": 212,
+   "y": "2024"
+  },
+  "DCYmJDO2_IE": {
+   "t": "Cinnamon Girl",
+   "a": "Lana Del Rey",
+   "d": 301,
+   "y": "2019"
+  },
+  "fRQg_9ulGuI": {
+   "t": "Summertime Sadness",
+   "a": "Lana Del Rey",
+   "d": 265,
+   "y": "2012"
+  },
+  "mjcX-5lKdeg": {
+   "t": "Young And Beautiful",
+   "a": "Lana Del Rey",
+   "d": 236,
+   "y": "2013"
+  },
+  "nyuo9-OjNNg": {
+   "t": "I Wanna Be Yours",
+   "a": "Official Arctic Monkeys",
+   "d": 184,
+   "y": "2013"
+  },
+  "8a1eG-Y0u6Y": {
+   "t": "Let Her Go (Anniversary Edition)",
+   "a": "Passenger",
+   "d": 257,
+   "y": "2023"
+  },
+  "HfpR4tAmI7E": {
+   "t": "Love Me Not",
+   "a": "Ravyn Lenae",
+   "d": 213,
+   "y": "2024"
+  },
+  "tiGcbb5g4Tc": {
+   "t": "Line Without a Hook",
+   "a": "Ricky Montgomery",
+   "d": 250,
+   "y": "2020"
+  },
+  "HJstyRBLqBQ": {
+   "t": "I Thought I Saw Your Face Today",
+   "a": "SheandHimOfficial",
+   "d": 170,
+   "y": "2008"
+  },
+  "OtWjS4I2ojU": {
+   "t": "Majboor",
+   "a": "Sheheryar Rehan",
+   "d": 145,
+   "y": "2025"
+  },
+  "ltdqa0kxCuA": {
+   "t": "Sweater Weather (Sped Up)",
+   "a": "The Neighbourhood",
+   "d": 219,
+   "y": "2013"
+  },
+  "MHCsrKA9gh8": {
+   "t": "blue",
+   "a": "yung kai",
+   "d": 214,
+   "y": "2024"
+  },
+  "zAiIgYOH4Ys": {
+   "t": "KALYANI (Remix)",
+   "a": "ARJN",
+   "d": 269,
+   "y": "2026"
+  },
+  "2ZedAROncPM": {
+   "t": "Dheema (From ＂Love Insurance Kompany＂)",
+   "a": "Anirudh Ravichander",
+   "d": 235,
+   "y": "2024"
+  },
+  "NmGQuqTJhyc": {
+   "t": "Namaste",
+   "a": "Anirudh Ravichander",
+   "d": 150,
+   "y": "2026",
+   "al": "DC"
+  },
+  "tD41hAie8jc": {
+   "t": "Oru Pere Varalaaru",
+   "a": "Anirudh Ravichander",
+   "d": 235,
+   "y": "2026"
+  },
+  "geIAO3PrE2g": {
+   "t": "Why This Kolaveri Di？ (The Soup of Love)",
+   "a": "Anirudh Ravichander",
+   "d": 259,
+   "y": "2011"
+  },
+  "FfPhY57cbWM": {
+   "t": "Topic - Illathe Kallyaanathinu (Version, 1)",
+   "a": "Berny-Ignatius",
+   "d": 278,
+   "y": "2004"
+  },
+  "Wr-Fi1DCi6g": {
+   "t": "Topic - Karuthappenne",
+   "a": "Berny-Ignatius",
+   "d": 288,
+   "y": "1994"
+  },
+  "LXR2Y8TtY4E": {
+   "t": "Othaiyadi Pathayila",
+   "a": "Dhibu Ninan Thomas",
+   "d": 250,
+   "y": "2018"
+  },
+  "ESj2LAxi-N4": {
+   "t": "Topic - Oru Kari Mukilinu (From ＂Charlie＂)",
+   "a": "Gopi Sundar",
+   "d": 283,
+   "y": "2016"
+  },
+  "RPC1H_JjAOw": {
+   "t": "Topic - Pularikalo (From ＂Charlie＂)",
+   "a": "Gopi Sundar",
+   "d": 349,
+   "y": "2016"
+  },
+  "V1LLFFm3smM": {
+   "t": "Topic - Kalapakkaara (From ＂King of Kotha＂)",
+   "a": "Jakes Bejoy",
+   "d": 252,
+   "y": "2023"
+  },
+  "0xSvmcImvqc": {
+   "t": "Topic - Kanmanipoove (From ＂Thudarum＂)",
+   "a": "Jakes Bejoy",
+   "d": 355,
+   "y": "2025"
+  },
+  "rVqcPUQ2YXI": {
+   "t": "Aasa Kooda (From ＂Think Indie＂)",
+   "a": "Sai Abhyankkar",
+   "d": 216,
+   "y": "2024"
+  },
+  "JPHImc3OPIA": {
+   "t": "Karuppa Kooda Va",
+   "a": "Sai Abhyankkar",
+   "d": 250,
+   "y": "2026"
+  },
+  "tOaizzQG8Cw": {
+   "t": "Pavazha Malli (From ＂Think Indie＂)",
+   "a": "Sai Abhyankkar",
+   "d": 253,
+   "y": "2026"
+  },
+  "ymWvIgV93SU": {
+   "t": "Topic - Walking In The Moonlight",
+   "a": "Vidyasagar",
+   "d": 336,
+   "y": "2000"
+  },
+  "94Mn5Iok-KI": {
+   "t": "Topic - Ee Shishirakaalam",
+   "a": "Vineeth Sreenivasan",
+   "d": 225,
+   "y": "2016"
+  },
+  "UbucDKmlvYQ": {
+   "t": "Topic - Illey Illa (From ＂Bethlehem Kudumba Unit＂)",
+   "a": "Vishnu Vijay",
+   "d": 210,
+   "y": "2026"
+  },
+  "wLG9P297wLg": {
+   "t": "Topic - Indrajaalam",
+   "a": "Vishnu Vijay",
+   "d": 199,
+   "y": "2026"
+  },
+  "DlFXDl_ROAM": {
+   "t": "Die With A Smile",
+   "a": "Lady Gaga",
+   "d": 252,
+   "y": "2024"
+  },
+  "LAeEXy00MsE": {
+   "t": "Aalaporaan Thamizhan (From ＂Mersal＂)",
+   "a": "A. R. Rahman",
+   "d": 348,
+   "y": "2017"
+  },
+  "S5Gfs0beg3Q": {
+   "t": "Adangaatha Asuran (From ＂Raayan＂)",
+   "a": "A. R. Rahman",
+   "d": 249,
+   "y": "2024"
+  },
+  "lnY-RsN1Hr0": {
+   "t": "Deewaana Deewaana",
+   "a": "A. R. Rahman",
+   "d": 337,
+   "y": "2025"
+  },
+  "6DIuKEWWEg8": {
+   "t": "Hosanna",
+   "a": "A. R. Rahman",
+   "d": 331,
+   "y": "2011"
+  },
+  "-zY2eMZwkdo": {
+   "t": "Innum Konjam Neram",
+   "a": "A. R. Rahman",
+   "d": 314,
+   "y": "2013"
+  },
+  "NdAHrwXQIOU": {
+   "t": "Jai Jai Ram",
+   "a": "A. R. Rahman",
+   "d": 320,
+   "y": "2026"
+  },
+  "7Q5Ymboa01E": {
+   "t": "Jinguchaa (From ＂Thug Life＂) (Tamil)",
+   "a": "A. R. Rahman",
+   "d": 260,
+   "y": "2025"
+  },
+  "FFReZqNcrR4": {
+   "t": "Kun Faya Kun (From ＂Rockstar＂)",
+   "a": "A. R. Rahman",
+   "d": 469,
+   "y": "2020"
+  },
+  "3OiyHwe9Is4": {
+   "t": "Mallipoo",
+   "a": "A. R. Rahman",
+   "d": 245,
+   "y": "2022"
+  },
+  "15U7toSI6ck": {
+   "t": "Neethanae (From ＂Mersal＂)",
+   "a": "A. R. Rahman",
+   "d": 268,
+   "y": "2017"
+  },
+  "zUcZKys9qc4": {
+   "t": "Nenjukkule",
+   "a": "A. R. Rahman",
+   "d": 289,
+   "y": "2012"
+  },
+  "ZSmxB9nBdVM": {
+   "t": "Ponni Nadhi (From ＂Ponniyin Selvan Part - 1＂)",
+   "a": "A. R. Rahman",
+   "d": 291,
+   "y": "2022"
+  },
+  "WAb5Qlu1exw": {
+   "t": "Pudhu Vellai Mazhai",
+   "a": "A. R. Rahman",
+   "d": 319,
+   "y": "2016"
+  },
+  "Menqhb0c7Lk": {
+   "t": "Singappenney (From ＂Bigil＂)",
+   "a": "A. R. Rahman",
+   "d": 364,
+   "y": "2019"
+  },
+  "9fpY_WTwam8": {
+   "t": "Tum Tak (From ＂Raanjhanaa＂)",
+   "a": "A. R. Rahman",
+   "d": 304,
+   "y": "2013"
+  },
+  "P9E5IxNkIHk": {
+   "t": "Urvashi Uravashi (Tamil)",
+   "a": "A. R. Rahman",
+   "d": 339,
+   "y": "1994"
+  },
+  "xC6frp5aR9g": {
+   "t": "Verithanam (From ＂Bigil＂)",
+   "a": "A. R. Rahman",
+   "d": 246,
+   "y": "2019"
+  },
+  "JdJlUAW4xyc": {
+   "t": "Water Packet (From ＂Raayan＂)",
+   "a": "A. R. Rahman",
+   "d": 246,
+   "y": "2024"
+  },
+  "SSoBDsuOyUc": {
+   "t": "Topic - Dil Se Re",
+   "a": "Release",
+   "d": 406,
+   "y": "1998"
+  },
+  "efwk_hOqVeA": {
+   "t": "Kaadhal Rojave",
+   "a": "SP Balasubrahmanyam (SpBaluofficial)",
+   "d": 302,
+   "y": "1992"
+  },
+  "05GTf2PggOs": {
+   "t": "Aathi",
+   "a": "Anirudh Ravichander",
+   "d": 305,
+   "y": "2014"
+  },
+  "me4lu_vyfbg": {
+   "t": "Adaavadi (From ＂Love Insurance Kompany＂)",
+   "a": "Anirudh Ravichander",
+   "d": 194,
+   "y": "2026"
+  },
+  "nn7WJlphPSE": {
+   "t": "Don'u Don'u Don'u (The Don's Romance)",
+   "a": "Anirudh Ravichander",
+   "d": 196,
+   "y": "2015"
+  },
+  "2hEDZcOtjbc": {
+   "t": "Hunter Vantaar (From ＂Vettaiyan＂)",
+   "a": "Anirudh Ravichander",
+   "d": 193,
+   "y": "2024"
+  },
+  "4Yhyr_OoFdc": {
+   "t": "Kaavaalaa",
+   "a": "Anirudh Ravichander",
+   "d": 191,
+   "y": "2022"
+  },
+  "JmLhGLM4Uqc": {
+   "t": "Maari Thara Local (Here Comes Maari)",
+   "a": "Anirudh Ravichander",
+   "d": 230,
+   "y": "2015"
+  },
+  "XJLd1Ooq_c8": {
+   "t": "Manasilaayo (From ＂Vettaiyan＂)",
+   "a": "Anirudh Ravichander",
+   "d": 236,
+   "y": "2024"
+  },
+  "_pEI3p2EuR8": {
+   "t": "Naa Ready (From ＂Leo＂)",
+   "a": "Anirudh Ravichander",
+   "d": 248,
+   "y": "2023"
+  },
+  "J6H6JQHvFMQ": {
+   "t": "Oh Penne",
+   "a": "Anirudh Ravichander",
+   "d": 276,
+   "y": "2013"
+  },
+  "326UBY4B-ZU": {
+   "t": "Ordinary Person (From ＂Leo＂)",
+   "a": "Anirudh Ravichander",
+   "d": 139,
+   "y": "2023"
+  },
+  "emwl2Ejy83o": {
+   "t": "Selfie Pulla",
+   "a": "Anirudh Ravichander",
+   "d": 293,
+   "y": "2014"
+  },
+  "ghxTQGJm_Cc": {
+   "t": "Topic - Oru Kaathilola",
+   "a": "Berny-Ignatius",
+   "d": 350,
+   "y": "2004"
+  },
+  "BsoEgkiYFsc": {
+   "t": "Topic - Parayathe Vannen",
+   "a": "Deepak Dev",
+   "d": 248,
+   "y": "2022"
+  },
+  "kusTGsBiES4": {
+   "t": "Topic - Govinda govinda",
+   "a": "Deepan Chatterji",
+   "d": 328,
+   "y": "2025"
+  },
+  "0EMiKDeQ3lM": {
+   "t": "Topic - Paadaam vanamaali",
+   "a": "Deepan Chatterji",
+   "d": 323,
+   "y": "2025"
+  },
+  "sJqP4Q3XtHE": {
+   "t": "Minungum Minnaminunge (Duet Version)",
+   "a": "Jim",
+   "d": 315,
+   "y": "2016"
+  },
+  "uupFWpjztew": {
+   "t": "Topic - Jiya Jale (From ＂Dil Se＂)",
+   "a": "Lata Mangeshkar",
+   "d": 309,
+   "y": "2016"
+  },
+  "twkBhmn3-o0": {
+   "t": "Dil De Salam",
+   "a": "MG",
+   "d": 339,
+   "y": "2025"
+  },
+  "q2pC0H55oU4": {
+   "t": "Kondattam (From ＂Thudarum＂)",
+   "a": "MG",
+   "d": 253,
+   "y": "2025"
+  },
+  "1sXVCRVDQVQ": {
+   "t": "Topic - Kandu Njaan Mizhikalil",
+   "a": "Raveendran",
+   "d": 287,
+   "y": "1991"
+  },
+  "z10BLYwETlM": {
+   "t": "Topic - Maanthrikam (From ＂Bethlehem Kudumba Unit＂)",
+   "a": "Vishnu Vijay",
+   "d": 197,
+   "y": "2026"
+  },
+  "v_rUv6BK9l8": {
+   "t": "Aravindh",
+   "a": "Anirudh Ravichander",
+   "d": 249,
+   "y": "2026"
+  },
+  "qgv9VBoK8po": {
+   "t": "Bloody Valentine (From ＂DC＂)",
+   "a": "Anirudh Ravichander",
+   "d": 102,
+   "y": "2026",
+   "al": "DC"
+  },
+  "IcLdJ93eP18": {
+   "t": "Yeshanagula (From ＂The Paradise＂) (Telugu)",
+   "a": "Anirudh Ravichander",
+   "d": 189,
+   "y": "2026"
+  },
+  "rTDUuEwvBG8": {
+   "t": "Topic - Megham Karukatha (From ＂Thiruchitrambalam＂)",
+   "a": "Dhanush",
+   "d": 290,
+   "y": "2021"
+  },
+  "Rzrtcwd3HYI": {
+   "t": "Topic - 23 Theme (From ＂Aa23＂)",
+   "a": "Hector Salamanca",
+   "d": 47,
+   "y": "2026"
+  },
+  "kDKyHNrEjd0": {
+   "t": "Topic - Thee Minnal",
+   "a": "Release",
+   "d": 133,
+   "y": "2021"
+  },
+  "SS4QdqgvFl0": {
+   "t": "Uyiril Thodum (From ＂Kumbalangi Nights＂)",
+   "a": "Sooraj Santhosh",
+   "d": 236,
+   "y": "2019"
+  },
+  "4IwnpMwFwHM": {
+   "t": "Aadharanjali",
+   "a": "Sushin Shyam",
+   "d": 149,
+   "y": "2022"
+  },
+  "Xkwq6kqDlkQ": {
+   "t": "Armadham",
+   "a": "Sushin Shyam",
+   "d": 174,
+   "y": "2024"
+  },
+  "7VzZ2yJFYzY": {
+   "t": "Engotta (From ＂Balan - The Boy＂)",
+   "a": "Sushin Shyam",
+   "d": 204,
+   "y": "2026"
+  },
+  "MQs-6Oeobnw": {
+   "t": "Nebulakal - Travel Song (From ＂Manjummel Boys＂)",
+   "a": "Sushin Shyam",
+   "d": 283,
+   "y": "2024"
+  },
+  "QtuKQh0ovMc": {
+   "t": "Odimaga",
+   "a": "Sushin Shyam",
+   "d": 171,
+   "y": "2024"
+  },
+  "NxOd0mwvYmc": {
+   "t": "Thaakkol (From ＂Balan - The Boy＂)",
+   "a": "Sushin Shyam",
+   "d": 127,
+   "y": "2026"
+  },
+  "tALVCwJCCXk": {
+   "t": "Thalatherichavar",
+   "a": "Sushin Shyam",
+   "d": 261,
+   "y": "2023"
+  },
+  "mhul8ODUvRw": {
+   "t": "Theerame",
+   "a": "Sushin Shyam",
+   "d": 263,
+   "y": "2021"
+  },
+  "rSGNtDPEwfc": {
+   "t": "Topic - Brahmakalasha (From ＂Kantara A Legend Chapter 1 - Malayalam＂)",
+   "a": "B. Ajaneesh Loknath",
+   "d": 344,
+   "y": "2025"
+  },
+  "5ZhgFwAznBs": {
+   "t": "Topic - Santhatha Sakhiye (From ＂Sahasam＂)",
+   "a": "Bibin Ashok",
+   "d": 196,
+   "y": "2025"
+  },
+  "OrWFN1GCH4g": {
+   "t": "Kiliye (From ＂ARM＂)",
+   "a": "Dhibu Ninan Thomas",
+   "d": 272,
+   "y": "2024"
+  },
+  "EkCxT2SgP7k": {
+   "t": "Aradhya (From ＂Kushi＂) (Malayalam)",
+   "a": "Hesham Abdul Wahab",
+   "d": 281,
+   "y": "2023"
+  },
+  "ZqBmRegGM9Y": {
+   "t": "Nagumo",
+   "a": "Hesham Abdul Wahab",
+   "d": 160,
+   "y": "2022"
+  },
+  "EsPjWg_9zl4": {
+   "t": "Puthiyoru Lokam",
+   "a": "Hesham Abdul Wahab",
+   "d": 202,
+   "y": "2022"
+  },
+  "UqXEGGZzwSg": {
+   "t": "Topic - Kaattuchembakam (From ＂Pallichattambi＂)",
+   "a": "Jakes Bejoy",
+   "d": 276,
+   "y": "2026"
+  },
+  "1ujRCiGIpZM": {
+   "t": "Padayatra (Live)",
+   "a": "Job Kurian",
+   "d": 290,
+   "y": "2015"
+  },
+  "49dvf7oEpJc": {
+   "t": "Aalolam",
+   "a": "KS Harisankar",
+   "d": 257,
+   "y": "2019"
+  },
+  "ppldODPhZYM": {
+   "t": "Kamini",
+   "a": "KS Harisankar",
+   "d": 239,
+   "y": "2019"
+  },
+  "U9ETqN2VgJ4": {
+   "t": "Pavizha Mazha",
+   "a": "KS Harisankar",
+   "d": 233,
+   "y": "2024"
+  },
+  "OwXG1NPXzf8": {
+   "t": "Topic - Jeevamshamayi",
+   "a": "Kailas Menon",
+   "d": 323,
+   "y": "2018"
+  },
+  "POg9dutCmrc": {
+   "t": "The Hymn Of Dharma (From ＂777 Charlie - Malayalam＂)",
+   "a": "Nobin Paul",
+   "d": 288,
+   "y": "2022"
+  },
+  "oD07_9M-5tc": {
+   "t": "Topic - Ee Mizhikalin",
+   "a": "Vineeth Sreenivasan",
+   "d": 219,
+   "y": "2014"
+  },
+  "EgY5GSCy1Lk": {
+   "t": "Topic - Kattu Mooliyo",
+   "a": "Vineeth Sreenivasan",
+   "d": 230,
+   "y": "2014"
+  },
+  "E4TERi7Yytk": {
+   "t": "Topic - Rasathi",
+   "a": "Vineeth Sreenivasan",
+   "d": 238,
+   "y": "2018"
+  },
+  "pX8AJG6hu7M": {
+   "t": "Topic - Avarohanam",
+   "a": "Vishnu Vijay",
+   "d": 307,
+   "y": "2026"
+  },
+  "xnr-potwWXY": {
+   "t": "Topic - IYKYK (From ＂Athiradi＂)",
+   "a": "Vishnu Vijay",
+   "d": 143,
+   "y": "2026"
+  },
+  "W4YFKVsSpf0": {
+   "t": "Topic - Kutty Kudiye (From ＂Premalu＂)",
+   "a": "Vishnu Vijay",
+   "d": 185,
+   "y": "2024"
+  },
+  "cVNlag3Ojug": {
+   "t": "Topic - Welcome To Hyderabad (From ＂Premalu＂)",
+   "a": "Vishnu Vijay",
+   "d": 221,
+   "y": "2024"
+  },
+  "Z0S8OOhuhIE": {
+   "t": "Katchi Sera (From ＂Think Indie＂)",
+   "a": "Sai Abhyankkar",
+   "d": 182,
+   "y": "2024"
+  },
+  "FIrATJ_FUZ0": {
+   "t": "Naanga Naalu Peru (From ＂Karuppu＂)",
+   "a": "Sai Abhyankkar",
+   "d": 197,
+   "y": "2026"
+  },
+  "BnmFO6yJeCw": {
+   "t": "Ooroda Oththa Don (From ＂Baththa＂)",
+   "a": "Sai Abhyankkar",
+   "d": 212,
+   "y": "2026"
+  },
+  "XD13fvExM6Q": {
+   "t": "Raathu Raasan (From ＂Karuppu＂)",
+   "a": "Sai Abhyankkar",
+   "d": 195,
+   "y": "2026"
+  },
+  "Gy39PQKx928": {
+   "t": "Singari",
+   "a": "Sai Abhyankkar",
+   "d": 208,
+   "y": "2025"
+  },
+  "lPXl1__XtFI": {
+   "t": "Verappa (From ＂Karuppu＂)",
+   "a": "Sai Abhyankkar",
+   "d": 100,
+   "y": "2025"
+  },
+  "BvVwjw5xltI": {
+   "t": "Jaalakaari",
+   "a": "Sublahshini",
+   "d": 239,
+   "y": "2025"
+  },
+  "T6FRddbH3wk": {
+   "t": "Topic - Maanikkyakkallaal",
+   "a": "Vidyasagar",
+   "d": 267,
+   "y": "1996"
+  },
+  "w44au_CEfmI": {
+   "t": "Runaway",
+   "a": "Aurora",
+   "d": 251,
+   "y": "2016"
+  },
+  "tthafU1Ao40": {
+   "t": "Royalty",
+   "a": "Egzod",
+   "d": 224,
+   "y": "2024"
+  },
+  "Kx7B-XvmFtE": {
+   "t": "Believer",
+   "a": "ImagineDragons",
+   "d": 204,
+   "y": "2017"
+  },
+  "cfhwSpSDA9c": {
+   "t": "Unstoppable",
+   "a": "Sia",
+   "d": 218,
+   "y": "2015"
+  },
+  "BOMFt9OCsT0": {
+   "t": "Mortals",
+   "a": "Warriyo",
+   "d": 228,
+   "y": "2016"
+  },
+  "O8WwOxociN8": {
+   "t": "Nee Yaaro",
+   "a": "Anirudh Ravichander",
+   "d": 235,
+   "y": "2014"
+  },
+  "MUIzn5TAkXE": {
+   "t": "One Name (From ＂Jailer 2＂)",
+   "a": "Anirudh Ravichander",
+   "d": 204,
+   "y": "2026"
+  },
+  "xYmh-0Sixh0": {
+   "t": "Pathikichu (Trending Version)",
+   "a": "Anirudh Ravichander",
+   "d": 66,
+   "y": "2025"
+  },
+  "Md1WZl4DBXY": {
+   "t": "Soul of Doctor (Theme) (From ＂Doctor＂)",
+   "a": "Anirudh Ravichander",
+   "d": 64,
+   "y": "2021"
+  },
+  "TPU5qB1cvGc": {
+   "t": "Angu Vaana Konilu (From ＂ARM＂)",
+   "a": "Dhibu Ninan Thomas",
+   "d": 249,
+   "y": "2024"
+  },
+  "ZRJiDN2Wa7g": {
+   "t": "Attirambile Kombile",
+   "a": "Ilaiyaraaja Official",
+   "d": 345,
+   "y": "1996"
+  },
+  "w5RyxXHMe_w": {
+   "t": "Oorai Therinjukitten",
+   "a": "Ilaiyaraaja Official",
+   "d": 246,
+   "y": "1985"
+  },
+  "p_kESrr0aHs": {
+   "t": "Poove Sempoove (Male)",
+   "a": "Ilaiyaraaja Official",
+   "d": 332,
+   "y": "1988"
+  },
+  "I-gUVuOcmmU": {
+   "t": "Ariyathe Ariyathe (Duet)",
+   "a": "M G",
+   "d": 332,
+   "y": "2014"
+  },
+  "Y2ERx-drS2M": {
+   "t": "Topic - Anjusharangalum",
+   "a": "K.J. Yesudas",
+   "d": 292,
+   "y": "1994",
+   "al": "Malayalam 90's hits"
+  },
+  "25cWT226dd4": {
+   "t": "Topic - Deevanganangal",
+   "a": "K.J. Yesudas",
+   "d": 423,
+   "y": "1991",
+   "al": "Malayalam 90's hits"
+  },
+  "ZNdz0y2W7UU": {
+   "t": "Topic - Gori Tera Gaon Bada Pyara",
+   "a": "K.J. Yesudas",
+   "d": 308,
+   "y": "1976"
+  },
+  "BWe38LJUW40": {
+   "t": "Topic - Innale",
+   "a": "K.J. Yesudas",
+   "d": 292,
+   "y": "2024"
+  },
+  "Ndhk9ttzkA8": {
+   "t": "Topic - Pramadavanam",
+   "a": "K.J. Yesudas",
+   "d": 347,
+   "y": "1990",
+   "al": "Malayalam 90's hits"
+  },
+  "qOtx_6KUnso": {
+   "t": "Topic - Pichakappoomkaavukalkkum",
+   "a": "Ousepachan",
+   "d": 221,
+   "y": "1990"
+  },
+  "gFBXpejQ-JE": {
+   "t": "Topic - Yavanakathayil",
+   "a": "Ousepachan",
+   "d": 266,
+   "y": "1995"
+  },
+  "6fLP-3obiPs": {
+   "t": "Topic - Vaathi Kabaddi (From ＂Master＂)",
+   "a": "Anirudh Ravichander",
+   "d": 206,
+   "y": "2021"
+  },
+  "nZiJTYiujUs": {
+   "t": "Chuttamalle",
+   "a": "Shilpa Rao",
+   "d": 222,
+   "y": "2024"
+  },
+  "0tiLHxmp-4c": {
+   "t": "Topic - Junile Nilamazhayil",
+   "a": "Sujatha",
+   "d": 288,
+   "y": "2004"
+  },
+  "QX7mD7GqtBc": {
+   "t": "Topic - Thamarai Poovukum",
+   "a": "Vidyasagar",
+   "d": 327,
+   "y": "1995"
+  },
+  "eXkHvT--DBU": {
+   "t": "Zaalima",
+   "a": "Arijit Singh",
+   "d": 299,
+   "y": "2017"
+  },
+  "SmeCfsmvFK0": {
+   "t": "Topic - Kanneerppoovinte",
+   "a": "Johnson",
+   "d": 274,
+   "y": "1989"
+  },
+  "i1o1p_DD6TU": {
+   "t": "Gehra Hua (From ＂Dhurandhar＂)",
+   "a": "Shashwat Sachdev",
+   "d": 362,
+   "y": "2025"
+  },
+  "1pmrnwWWSRM": {
+   "t": "Rekka Rekka (From ＂Bison Kaalamaadan＂)",
+   "a": "Arivu",
+   "d": 303,
+   "y": "2025"
+  },
+  "Ex3APkYFgdU": {
+   "t": "Topic - Ballaatha Jaathi",
+   "a": "Dabzee",
+   "d": 230,
+   "y": "2024"
+  },
+  "4rDbsl7tt48": {
+   "t": "Topic - Malabari Banger",
+   "a": "Dabzee",
+   "d": 246,
+   "y": "2023"
+  },
+  "6iWAQtEHgb4": {
+   "t": "Topic - Vatteppam (From ＂Mandakini＂)",
+   "a": "Dabzee",
+   "d": 192,
+   "y": "2024"
+  },
+  "1D9V70w2n-o": {
+   "t": "Topic - Kotha Raja",
+   "a": "Jakes Bejoy",
+   "d": 273,
+   "y": "2023"
+  },
+  "3CKDUJ52Nr4": {
+   "t": "Topic - Manamariyunnolu",
+   "a": "Jakes Bejoy",
+   "d": 291,
+   "y": "2019"
+  },
+  "pcfZv76GsdM": {
+   "t": "Topic - Vaada Veda (From ＂Narivetta＂)",
+   "a": "Jakes Bejoy",
+   "d": 239,
+   "y": "2025"
+  },
+  "4iud4dCuTX8": {
+   "t": "Topic - Kochu Kunjintachanoru (From ＂Vaazha 2＂) (Remix) (Original Motion Picture Soundtrack)",
+   "a": "Kalabhavan Mani",
+   "d": 185,
+   "y": "2026"
+  },
+  "RsuZX6q690Q": {
+   "t": "Topic - Hope Song (From ＂Sarkeet＂)",
+   "a": "Kapil Kapilan",
+   "d": 183,
+   "y": "2025"
+  },
+  "gltU1ex6Opc": {
+   "t": "Topic - Kondal Vedan Song (From ＂Kondal＂)",
+   "a": "Sam C.S.",
+   "d": 247,
+   "y": "2024"
+  },
+  "3GyOnsGDeqY": {
+   "t": "Topic - Neela Nilave (From ＂RDX＂)",
+   "a": "Sam C.S.",
+   "d": 253,
+   "y": "2023"
+  },
+  "fyXAHZ_3nRY": {
+   "t": "Topic - Innalekalil",
+   "a": "Shaan Rahman",
+   "d": 193,
+   "y": "2017"
+  },
+  "3KAxuAi5PoA": {
+   "t": "Sreeraagamo Thedunnu",
+   "a": "Sharreth",
+   "d": 309,
+   "y": "1994"
+  },
+  "cq1M8GYb4Cc": {
+   "t": "Mayajaalame (From ＂Sarvam Maya＂)",
+   "a": "Sooraj Santhosh",
+   "d": 267,
+   "y": "2025"
+  },
+  "njkr5TJeLH4": {
+   "t": "Kuthanthram",
+   "a": "Sushin Shyam",
+   "d": 240,
+   "y": "2024"
+  },
+  "vPssUXI0_cQ": {
+   "t": "MAUNA LOA",
+   "a": "VEDAN with word",
+   "d": 148,
+   "y": "2025"
+  },
+  "1GA7HsWMfxs": {
+   "t": "Ullasa Gaayike",
+   "a": "VidhuPrathap Official",
+   "d": 225,
+   "y": "2015"
+  },
+  "VY2JoNWi-9o": {
+   "t": "We Still Don't Trust You",
+   "a": "Future",
+   "d": 253,
+   "y": "2024"
+  },
+  "VYsr8v1jMHI": {
+   "t": "Creepin'",
+   "a": "Metro Boomin",
+   "d": 222,
+   "y": "2022"
+  },
+  "0KYyJqapypc": {
+   "t": "All to Myself",
+   "a": "Future",
+   "d": 254,
+   "y": "2024"
+  },
+  "nS2sbIxmUoc": {
+   "t": "K-POP",
+   "a": "Travis Scott",
+   "d": 185,
+   "y": "2023"
+  },
+  "r1LIFKNFt3Q": {
+   "t": "Power is Power",
+   "a": "SZA",
+   "d": 211,
+   "y": "2019"
+  },
+  "DEQRHplYpWs": {
+   "t": "After Hours Nightmare – Halloween Horror Nights 2022",
+   "a": "Halloween Horror Nights",
+   "d": 44,
+   "y": "2022"
+  },
+  "OldMPQdM3iw": {
+   "t": "Yaanji",
+   "a": "Anirudh Ravichander",
+   "d": 270,
+   "y": "2017"
+  },
+  "k-3RVmy9ZJc": {
+   "t": "Topic - Pillaa Raa",
+   "a": "Anurag Kulkarni",
+   "d": 235,
+   "y": "2018"
+  },
+  "Zz-P8mfVBNk": {
+   "t": "Ondu Malebillu",
+   "a": "Armaan Malik",
+   "d": 281,
+   "y": "2017"
+  },
+  "8n0IcNGQ5RQ": {
+   "t": "Topic - Singara Siriye (From ＂Kantara＂)",
+   "a": "B. Ajaneesh Loknath",
+   "d": 282,
+   "y": "2022"
+  },
+  "XDjB9E3YtUE": {
+   "t": "Heat Waves",
+   "a": "Glass Animals",
+   "d": 239,
+   "y": "2020"
+  },
+  "7-qAsUrWyVc": {
+   "t": "Topic - Aethu Kari Raavilum (From ＂Bangalore Days＂)",
+   "a": "Gopi Sundar",
+   "d": 327,
+   "y": "2014"
+  },
+  "GjpUUk3Ujp8": {
+   "t": "Topic - Appangal",
+   "a": "Gopi Sundar",
+   "d": 282,
+   "y": "2012"
+  },
+  "OoKoCdBjnXw": {
+   "t": "Topic - Mukkathe Penne",
+   "a": "Gopi Sundar",
+   "d": 255,
+   "y": "2015"
+  },
+  "bF6bFy5oUno": {
+   "t": "Topic - Vaathilil",
+   "a": "Gopi Sundar",
+   "d": 370,
+   "y": "2012"
+  },
+  "7cO_n-T8RjE": {
+   "t": "Topic - Oru Maalai",
+   "a": "Karthik",
+   "d": 354,
+   "y": "2005"
+  },
+  "pRIZohFFOMo": {
+   "t": "Someone You Loved",
+   "a": "Lewis Capaldi",
+   "d": 182,
+   "y": "2018"
+  },
+  "fbMZyeYLS-g": {
+   "t": "Topic - Amma Mazhakkaarinu",
+   "a": "M. Jayachandran",
+   "d": 245,
+   "y": "2008"
+  },
+  "_Z6wxp-WPjw": {
+   "t": "Topic - Munbe Vaa",
+   "a": "Naresh Iyer",
+   "d": 357,
+   "y": "2006"
+  },
+  "d46-sQEedfE": {
+   "t": "Vaazhanum Baththa (From ＂Baththa＂)",
+   "a": "Sai Abhyankkar",
+   "d": 211,
+   "y": "2026"
+  },
+  "peLhDdjKUWU": {
+   "t": "Samajavaragamana",
+   "a": "Sid Sriram",
+   "d": 220,
+   "y": "2019"
+  },
+  "cKHYAZaF3Ww": {
+   "t": "Thalli Pogathey (From ＂Achcham Yenbadhu Madamaiyada＂)",
+   "a": "Sid Sriram",
+   "d": 266,
+   "y": "2016"
+  },
+  "ZY5rK7R_nmk": {
+   "t": "Topic - Kalaavathi",
+   "a": "Thaman S",
+   "d": 242,
+   "y": "2022"
+  },
+  "eYq7WapuDLU": {
+   "t": "Dhee ft. Arivu - Enjoy Enjaami (Prod. Santhosh Narayanan)",
+   "a": "maajja",
+   "d": 305,
+   "y": "2021"
+  },
+  "n0GXk_T2zs8": {
+   "t": "Training Season",
+   "a": "Dua Lipa",
+   "d": 209,
+   "y": "2024"
+  },
+  "SdH3ML3dtdM": {
+   "t": "Raavana Mavandaa",
+   "a": "Anirudh Ravichander & Vivek",
+   "d": 107,
+   "y": "2026",
+   "al": "Jana Nayagan - Tamil"
+  },
+  "QCBRrOKsiH8": {
+   "t": "Kannuodu Kaanbadhalam",
+   "a": "Nithya Sree",
+   "d": 310,
+   "y": "1998",
+   "al": "Jeans (Original Motion Picture Soundtrack)"
+  },
+  "KM3kCfmY6Cc": {
+   "t": "Paaraake (Extended)",
+   "a": "Sooraj S Kurup",
+   "d": 355,
+   "y": "2020",
+   "al": "Kilometers & Kilometers"
+  },
+  "pgMCk_T5jnU": {
+   "t": "Monica (From Coolie ) (Tamil)",
+   "a": "Anirudh ravichander",
+   "d": 218,
+   "y": "2025",
+   "al": "Monica (From Coolie ) (Tamil)"
+  },
+  "VuhgLQUE0aQ": {
+   "t": "Hosanna",
+   "a": "A. R. Rahman",
+   "d": 331,
+   "y": "2009"
+  },
+  "-GyOKmoLbng": {
+   "t": "Malare",
+   "a": "Vijay Yesudas",
+   "d": 317,
+   "y": "2015"
+  },
+  "JRbcRiGi1xM": {
+   "t": "Ilamai Thirumbudhe (From \"Petta\")",
+   "a": "Anirudh Ravichander",
+   "d": 217,
+   "y": "2018"
+  },
+  "hU8IfRTMqsQ": {
+   "t": "Kollagottey",
+   "a": "Anirudh Ravichander",
+   "d": 251,
+   "y": "2016"
+  },
+  "kDVPbEUU5L4": {
+   "t": "Nenjame Nenjame",
+   "a": "A.R. Rahman",
+   "d": 410,
+   "y": "2023",
+   "al": "Maamannan (Original Motion Picture Soundtrack)"
+  },
+  "DXoTBf3qCTk": {
+   "t": "NERA",
+   "a": "ARJN",
+   "d": 214,
+   "y": "2025",
+   "al": "NERA"
+  },
+  "95NlDaWI9Y0": {
+   "t": "Anjaana Anjaani (From \"The Paradise\") (Telugu)",
+   "a": "Anirudh Ravichander",
+   "d": 231,
+   "y": "2026",
+   "al": "Anjaana Anjaani (From \"The Paradise\") (Telugu)"
+  },
+  "3BXSQS1405g": {
+   "t": "Senjitaley (From \"Remo\")",
+   "a": "Anirudh Ravichander",
+   "d": 251,
+   "y": "2016"
+  },
+  "tiPOguEO5RA": {
+   "t": "Sirikkadhey (From \"Remo\")",
+   "a": "Anirudh Ravichander",
+   "d": 246,
+   "y": "2016"
+  },
+  "aD9snLyynzM": {
+   "t": "CHAL",
+   "a": "Dabzee",
+   "d": 228,
+   "y": "2025",
+   "al": "DELKOCHI"
+  },
+  "L15DRYhjraY": {
+   "t": "Sundaree Onnu Parayoo (Version, 1)",
+   "a": "Deepak Dev",
+   "d": 341,
+   "y": "2006",
+   "al": "Lion (Original Motion Picture Soundtrack)"
+  },
+  "NwAcrGnpvyY": {
+   "t": "Podimeesha",
+   "a": "P.Jayachandran",
+   "d": 196,
+   "y": "2016",
+   "al": "Pa Va"
+  },
+  "Dor5wduf14w": {
+   "t": "Uyire",
+   "a": "Narayani Gopan & Mithun Jayaraj",
+   "d": 327,
+   "y": "2021",
+   "al": "Minnal Murali"
+  },
+  "qdOMzJklc44": {
+   "t": "Uyirayi Maarave (From \"2018\")",
+   "a": "Nobin Paul",
+   "d": 79,
+   "y": "2023",
+   "al": "2018 (Original Motion Picture Soundtrack)"
+  },
+  "TI3tEbNOBPg": {
+   "t": "Poomuthole",
+   "a": "Ranjin Raj & Vijay Yesudas",
+   "d": 291,
+   "y": "2018",
+   "al": "Joseph"
+  },
+  "neAXgS7ZAZY": {
+   "t": "Manavaalan Thug - From \"Thallumaala\"",
+   "a": "Dabzee & SA",
+   "d": 200,
+   "y": "2022",
+   "al": "Thallumaala"
+  },
+  "UGGO93YvjEQ": {
+   "t": "Mascara",
+   "a": "Supriya Joshi",
+   "d": 296,
+   "y": "2020",
+   "al": "Salim"
+  },
+  "3aGSN7bBU4w": {
+   "t": "Enakkoru Snehidhi",
+   "a": "S.A. Rajkumar",
+   "d": 295,
+   "y": "2000",
+   "al": "Priyamaanavale (Original Motion Picture Soundtrack)"
+  },
+  "r0VmFe3Ns8I": {
+   "t": "Sithira Puthiri (From \"Think Indie\")",
+   "a": "Sai Abhyankkar",
+   "d": 226,
+   "y": "2025",
+   "al": "Sithira Puthiri (From \"Think Indie\")"
+  },
+  "D6CLK8vR3UI": {
+   "t": "Anuraagathin Velayil",
+   "a": "Shaan Rahman & Vineeth Sreenivasan",
+   "d": 298,
+   "y": "2012",
+   "al": "Thattathin Marayathu (Original Motion Picture Soundtrack)"
+  },
+  "uA4_zcTZjko": {
+   "t": "Muthuchippi",
+   "a": "Shaan Rahman",
+   "d": 245,
+   "y": "2012",
+   "al": "Thattathin Marayathu (Original Motion Picture Soundtrack)"
+  },
+  "rDJGdTkoA7g": {
+   "t": "Shyaamaambaram",
+   "a": "Shaan Rahman",
+   "d": 208,
+   "y": "2012",
+   "al": "Thattathin Marayathu (Original Motion Picture Soundtrack)"
+  },
+  "FTQoaGIJA2A": {
+   "t": "Manmatha Raasa",
+   "a": "Shankar Mahadevan",
+   "d": 289,
+   "y": "2003",
+   "al": "Thiruda Thirudi"
+  },
+  "jxPRbGlXkC0": {
+   "t": "Idhuvum Kadandhu Pogum (The Healing Song) (From \"Netrikann\")",
+   "a": "Sid Sriram",
+   "d": 313,
+   "y": "2021",
+   "al": "Idhuvum Kadandhu Pogum (The Healing Song) (From \"Netrikann\")"
+  },
+  "jifBuWCqGJ8": {
+   "t": "Pesamale",
+   "a": "Siri Xander & Arra Aria Khayal",
+   "d": 178,
+   "y": "2026",
+   "al": "Pesamale"
+  },
+  "dHpvF5Vn7Dg": {
+   "t": "Aluva Puzha",
+   "a": "Vineeth Sreenivasan",
+   "d": 183,
+   "y": "2015",
+   "al": "Premam"
+  },
+  "RRu9CHlazhk": {
+   "t": "Kurumugil (From \"Sita Ramam (Tamil)\")",
+   "a": "Vishal Chandrashekhar",
+   "d": 219,
+   "y": "2022",
+   "al": "Kurumugil (From \"Sita Ramam (Tamil)\")"
+  },
+  "nJnettaldXM": {
+   "t": "Cha Cha Chi Chi Choo",
+   "a": "Vishnu Vijay",
+   "d": 225,
+   "y": "2026"
+  },
+  "7ehAme-SRGI": {
+   "t": "Varnajaalam",
+   "a": "Vishnu Vijay",
+   "d": 203,
+   "y": "2026",
+   "al": "Bethlehem Kudumba Unit (Original Motion Picture Soundtrack)"
+  },
+  "kDy8sSefpag": {
+   "t": "Parayathe Vannen (From \"Bro Daddy\")",
+   "a": "Deepak Dev",
+   "d": 248,
+   "y": "2022",
+   "al": "Parayathe Vannen (From \"Bro Daddy\")"
+  },
+  "AR9xP_NohTA": {
+   "t": "Poomaaname (From \"Abraham Ozler\")",
+   "a": "Shyam",
+   "d": 263,
+   "y": "2024",
+   "al": "Poomaaname (From \"Abraham Ozler\")"
+  },
+  "duZ08myT3hc": {
+   "t": "Parayaathe Ariyaathe (Duet Version)",
+   "a": "Deepak Dev",
+   "al": "Udayananu Tharam (Original Motion Picture Soundtrack)"
+  },
+  "vGZYZN5VL8Y": {
+   "t": "Dileep Theme (Instrumental)",
+   "a": "Anirudh Ravichander",
+   "d": 72,
+   "y": "2026",
+   "al": "Jailer 2 (Original Motion Picture Soundtrack)"
+  },
+  "yaKIKTz9yfI": {
+   "t": "Siya Entry (From \"OM Chapter 1: Udhiram - The Blood Wood\")",
+   "a": "Sai Abhyankkar",
+   "d": 113,
+   "y": "2026",
+   "al": "Siya Entry (From \"OM Chapter 1: Udhiram - The Blood Wood\")"
+  },
+  "0MQwuGR_tr0": {
+   "t": "Singari (From \"Dude\")",
+   "a": "Sai Abhyankkar",
+   "d": 208,
+   "y": "2025"
+  },
+  "JZExDJN7WFI": {
+   "t": "Pavizha Mazha",
+   "a": "KS Harisankar",
+   "d": 233,
+   "y": "2019",
+   "al": "Athiran",
+   "g": "Romantic"
+  },
+  "_xHO6f9DoPo": {
+   "t": "Mandaadi Mandaadi (From \"Mandaadi\")",
+   "a": "G. V. Prakash Kumar",
+   "d": 220,
+   "y": "2026"
+  },
+  "X5YUnLxGOH8": {
+   "t": "Kannaadi Vaathil",
+   "a": "Rahul Raj",
+   "d": 345,
+   "y": "2014"
+  },
+  "TKV9C7xa8CA": {
+   "t": "Bindaas",
+   "a": "Release",
+   "d": 254,
+   "y": "2026"
+  },
+  "IW6ct9S4MYc": {
+   "t": "Aane Wala Star",
+   "a": "Sai Abhyankkar",
+   "d": 133,
+   "y": "2026"
+  },
+  "bN1t-9ZH-uU": {
+   "t": "Aathi Iva Yarraa Lyric | SCENE | Suriya | Nazriya Nazim | Naslen | Sushin Shyam | JithuMadhavan",
+   "a": "Sony Music South",
+   "d": 183,
+   "y": "2026"
+  },
+  "l0bITy9S-Kw": {
+   "t": "Ore Kannal",
+   "a": "Sooraj S Kurup",
+   "d": 234,
+   "y": "2019"
+  },
+  "KB88XofTXMc": {
+   "t": "Okkela Okkela",
+   "a": "Vidyasagar",
+   "d": 268,
+   "y": "1996"
+  },
+  "RArAS0WMgKw": {
+   "t": "Poove Poove",
+   "a": "Vidyasagar"
+  },
+  "SBOwcGnwuKM": {
+   "t": "Udi Udi",
+   "a": "Aneesh",
+   "d": 161,
+   "y": "2026",
+   "al": "Udi Udi"
+  },
+  "FgXP3na9bP4": {
+   "t": "Ullaallaa (From \"Petta\")",
+   "a": "Anirudh Ravichander",
+   "d": 296,
+   "y": "2018",
+   "al": "Petta (Original Motion Picture Soundtrack)"
+  },
+  "OGO1XPi8CJg": {
+   "t": "Punchiri",
+   "a": "Eechuu",
+   "d": 164,
+   "y": "2026",
+   "al": "Punchiri"
+  },
+  "G5zIvIe_aC4": {
+   "t": "Dheera Dheera",
+   "a": "Mohan Krishna",
+   "d": 223,
+   "y": "2018",
+   "al": "KGF Chapter 1 (Tamil)"
+  },
+  "XO-KOtJD7WM": {
+   "t": "Chirapunji (From Saina Music Indie)",
+   "a": "Nihal Sadiq & Hanan Shaah",
+   "d": 160,
+   "y": "2025",
+   "al": "Chirapunji (From Saina Music Indie)"
+  },
+  "wkz07LzGpcY": {
+   "t": "Veezha Veera (From \"OM Chapter 1: Udhiram - The Blood Wood\") [Tamil]",
+   "a": "Sai Abhyankkar",
+   "d": 236,
+   "y": "2026",
+   "al": "Veezha Veera (From \"OM Chapter 1: Udhiram - The Blood Wood\") [Tamil]"
+  },
+  "TqP3ZJq5M7w": {
+   "t": "Welcome to Punjab",
+   "a": "Shaan Rahman",
+   "d": 158,
+   "y": "2017",
+   "al": "Godha (Original Motion Picture Soundtrack)"
+  },
+  "l04LNsO31V4": {
+   "t": "Ishtamalle",
+   "a": "Alex Paul",
+   "d": 264,
+   "y": "2007",
+   "al": "Chocolate (Original Motion Picture Soundtrack)"
+  },
+  "T4Q4kIuddKk": {
+   "t": "Aaja Raja (From \"KH x RK Reunion\")",
+   "a": "Anirudh Ravichander & Chintu",
+   "d": 128,
+   "y": "2026",
+   "al": "Aaja Raja (From \"KH x RK Reunion\")"
+  },
+  "1uMQjN7PQew": {
+   "t": "Bindaas",
+   "a": "Anirudh Ravichander",
+   "d": 254,
+   "y": "2026",
+   "al": "Jailer 2 (Original Motion Picture Soundtrack)"
+  },
+  "4IZFPXNE27k": {
+   "t": "Bloody Band (From \"DC\")",
+   "a": "Anirudh Ravichander",
+   "d": 156,
+   "y": "2026",
+   "al": "Bloody Band (From \"DC\")"
+  },
+  "g7pgz8J7N7I": {
+   "t": "Echoes of DC (Instrumental)",
+   "a": "Anirudh Ravichander",
+   "d": 170,
+   "y": "2026",
+   "al": "DC (Original Motion Picture Soundtrack)"
+  },
+  "OxzKRbP6cjc": {
+   "t": "Jadal Zamana (Interval Theme)",
+   "a": "Anirudh Ravichander",
+   "d": 79,
+   "y": "2026",
+   "al": "The Paradise (Telugu)"
+  },
+  "ISj56SheazU": {
+   "t": "Malayla",
+   "a": "Anirudh Ravichander & Ashwin Krishna",
+   "d": 138,
+   "y": "2026",
+   "al": "DC (Original Motion Picture Soundtrack)"
+  },
+  "Z0DOC2eolVY": {
+   "t": "Mathew Theme (From \"Jailer\")",
+   "a": "Anirudh Ravichander",
+   "d": 129,
+   "y": "2022",
+   "al": "Mathew Theme (From \"Jailer\")"
+  },
+  "t8Udy3Qm7LI": {
+   "t": "Putaapu Gang",
+   "a": "Anirudh Ravichander & Thamizh Aadhavan",
+   "d": 161,
+   "y": "2026",
+   "al": "Jailer 2 (Original Motion Picture Soundtrack)"
+  },
+  "efIqLlcp_q8": {
+   "t": "The Karma Theme (Telugu (From \"U Turn\"))",
+   "a": "Anirudh Ravichander & Sri Sai Kiran",
+   "d": 214,
+   "y": "2018",
+   "al": "The Karma Theme (Telugu (From \"U Turn\"))"
+  },
+  "-LT9BfBC2UU": {
+   "t": "Ulla Olicha Uyire",
+   "a": "Anirudh Ravichander & Vivek",
+   "d": 228,
+   "y": "2026",
+   "al": "Jana Nayagan - Tamil"
+  },
+  "CJtKA78QnLA": {
+   "t": "Veluveluthoru",
+   "a": "Gopi Sundar",
+   "d": 286,
+   "y": "2015",
+   "al": "Two Countries (Original Motion Picture Soundtrack)"
+  },
+  "atmMSNAQQq8": {
+   "t": "Salsa",
+   "a": "Masala Coffee Band",
+   "d": 211,
+   "y": "2018",
+   "al": "Kunjiramayanam"
+  },
+  "NlQ458dZ-WU": {
+   "t": "Thalayude Vilayattu (Theme Song) (From \"Aaraattu\")",
+   "a": "Rahul Raj",
+   "d": 254,
+   "y": "2022",
+   "al": "Thalayude Vilayattu (Theme Song) (From \"Aaraattu\")"
+  },
+  "6LDmgL0obos": {
+   "t": "Veerabhadrudu (From \"VeeraBhadrudu\")",
+   "a": "Sai Abhyankkar",
+   "d": 248,
+   "y": "2026",
+   "al": "Veerabhadrudu (From \"VeeraBhadrudu\")"
+  },
+  "CrSqrqG5o-c": {
+   "t": "Verappa - Extended (From \"Karuppu\")",
+   "a": "Sai Abhyankkar",
+   "d": 261,
+   "y": "2026",
+   "al": "Verappa - Extended (From \"Karuppu\")"
+  },
+  "Kjo1CXlQrtM": {
+   "t": "Puthu Mazha (From \"Sarvam Maya\")",
+   "a": "Shakthisree Gopalan",
+   "d": 262,
+   "y": "2025",
+   "al": "Puthu Mazha (From \"Sarvam Maya\")"
+  },
+  "ruhCmb8lZbw": {
+   "t": "Aarezhuthi Aavo",
+   "a": "Vidyasagar",
+   "d": 299,
+   "y": "2011",
+   "al": "Spanish Masala (Original Motion Picture Soundtrack)"
+  },
+  "zlDTg0bJip0": {
+   "t": "Aiyyo Aiyyo",
+   "a": "Vidyasagar",
+   "d": 327,
+   "y": "2011",
+   "al": "Spanish Masala (Original Motion Picture Soundtrack)"
+  },
+  "MmBYaFMiFDo": {
+   "t": "Akkarey Ninnoru",
+   "a": "Vidyasagar",
+   "d": 281,
+   "y": "2011",
+   "al": "Spanish Masala (Original Motion Picture Soundtrack)"
+  },
+  "ARu1K462bIs": {
+   "t": "Irulil Oru Kaithiri",
+   "a": "Vidyasagar & Karthik",
+   "d": 262,
+   "y": "2011",
+   "al": "Spanish Masala (Original Motion Picture Soundtrack)"
+  },
+  "JOa3WtZKoRk": {
+   "t": "Irulil Oru Kaithiri",
+   "a": "Vidyasagar & Udit Narayan",
+   "d": 262,
+   "y": "2011",
+   "al": "Spanish Masala (Original Motion Picture Soundtrack)"
+  },
+  "0UjULnprunQ": {
+   "t": "Thammil Thammil",
+   "a": "Vidyasagar",
+   "d": 300,
+   "y": "2010",
+   "al": "Pappi Appacha (Original Motion Picture Soundtrack)"
+  },
+  "2HxD4jkc3zU": {
+   "t": "Pampa Ganapathy",
+   "a": "Vidyasagar",
+   "al": "Pattalam (Original Motion Picture Soundtrack)"
+  },
+  "aQUTTyH3pLI": {
+   "t": "Chundathu",
+   "a": "Deepak Dev",
+   "al": "Chronic Bachelor (Original Motion Picture Soundtrack)"
+  },
+  "nYSc6wnG5A8": {
+   "t": "Cheen Dapak Dum Dum",
+   "a": "Sai Abhyankkar",
+   "d": 150,
+   "y": "2026",
+   "al": "Baththa (Original Motion Picture Soundtrack)"
+  },
+  "0ylHY0aKV_Y": {
+   "t": "Ex flashback",
+   "a": "Sai Abhyankkar",
+   "d": 68,
+   "y": "2025",
+   "al": "Dude - Side A (Original Score)"
+  },
+  "EXOKgxUUaUY": {
+   "t": "He will never leave me alone",
+   "a": "Sai Abhyankkar",
+   "d": 49,
+   "y": "2025",
+   "al": "Dude - Side B (Original Score)"
+  },
+  "PA8xnjJSM_c": {
+   "t": "Mama’s boy",
+   "a": "Sai Abhyankkar",
+   "d": 108,
+   "y": "2025",
+   "al": "Dude - Side A (Original Score)"
+  },
+  "a_cz7ysWRa8": {
+   "t": "Newly married",
+   "a": "Sai Abhyankkar",
+   "d": 54,
+   "y": "2025",
+   "al": "Dude - Side A (Original Score)"
+  },
+  "HUOZ7RGmB2I": {
+   "t": "Saami Veta (From \"VeeraBhadrudu\")",
+   "a": "Sai Abhyankkar",
+   "d": 195,
+   "y": "2026",
+   "al": "Saami Veta (From \"VeeraBhadrudu\")"
+  },
+  "lSqDKNeoGcs": {
+   "t": "The One",
+   "a": "Sai Abhyankkar",
+   "d": 25,
+   "y": "2026",
+   "al": "Karuppu - Side B (God Mode Begins) (Original Score)"
+  },
+  "GTDJcvAcQAw": {
+   "t": "Rathinamo (Female Version)",
+   "a": "Saurav Srisan & Tanisha Gnanavel",
+   "d": 177,
+   "y": "2026",
+   "al": "Rathinamo (Female Version)"
+  },
+  "aZwklvDdaVw": {
+   "t": "Alone",
+   "a": "Alan Walker",
+   "d": 161,
+   "y": "2016",
+   "al": "Alone"
+  },
+  "LcAhcun2FDw": {
+   "t": "Blue",
+   "a": "Alan Walker & Ina Wroldsen",
+   "d": 158,
+   "y": "2022",
+   "al": "Walkerverse, Pt. I"
+  },
+  "CXU7Xlf8wTI": {
+   "t": "Darkside",
+   "a": "Alan Walker",
+   "d": 212,
+   "y": "2018",
+   "al": "Different World"
+  },
+  "8RLYCeCRHis": {
+   "t": "Diamond Heart (feat. Sophia Somajo)",
+   "a": "Alan Walker",
+   "d": 240,
+   "y": "2018",
+   "al": "Different World"
+  },
+  "pIWaVJPl0-c": {
+   "t": "Faded",
+   "a": "Alan Walker",
+   "d": 212,
+   "y": "2015",
+   "al": "Different World"
+  },
+  "-yJPm8kmdrk": {
+   "t": "Hello World",
+   "a": "Alan Walker & Torine",
+   "d": 172,
+   "y": "2022",
+   "al": "Hello World"
+  },
+  "8HF0iwaQITM": {
+   "t": "Hero",
+   "a": "Alan Walker & Sasha Alex Sloan",
+   "d": 175,
+   "y": "2023",
+   "al": "Hero"
+  },
+  "vi6v0MOWp2Q": {
+   "t": "Lost Control",
+   "a": "Alan Walker & Sorana",
+   "d": 222,
+   "y": "2018",
+   "al": "Different World"
+  },
+  "lNM9HlEK4q4": {
+   "t": "The Spectre",
+   "a": "Alan Walker",
+   "d": 194,
+   "y": "2017",
+   "al": "The Spectre"
+  },
+  "QX1KRphxnQc": {
+   "t": "Headlights (feat. KIDDO)",
+   "a": "Alok & Alan Walker",
+   "d": 158,
+   "y": "2022",
+   "al": "Headlights"
+  },
+  "ciwx8yJPX54": {
+   "t": "Alone, Pt. II",
+   "a": "Ava Max & Alan Walker",
+   "d": 179,
+   "y": "2019",
+   "al": "World Of Walker"
+  },
+  "5L9oTft3UWc": {
+   "t": "Disfruto",
+   "a": "Carla Morrison",
+   "d": 245,
+   "y": "2012",
+   "al": "Déjenme Llorar"
+  },
+  "I-CMtScCtc8": {
+   "t": "Ignite (feat. Seungri)",
+   "a": "K-391",
+   "d": 210,
+   "y": "2018",
+   "al": "Ignite"
+  },
+  "twrt-nHgU2o": {
+   "t": "Unity (Acoustic)",
+   "a": "SAPPHIRE",
+   "d": 181,
+   "y": "2019",
+   "al": "Unity (Acoustic)"
+  },
+  "1FeEa2Ew2yo": {
+   "t": "Waka Waka (Esto es Africa) [Cancion Oficial de la Copa Mundial de la FIFA (TM) Sudafrica 2010] (feat. Freshlyground)",
+   "a": "Shakira",
+   "d": 203,
+   "y": "2010",
+   "al": "Waka Waka (Esto es Africa) [Cancion Oficial de la Copa Mundial de la FIFA (TM) Sudafrica 2010]"
+  },
+  "uX-iyNO1zno": {
+   "t": "Roddy Theme (From \"Jailer 2\")",
+   "a": "Anirudh Ravichander",
+   "d": 111,
+   "y": "2026",
+   "al": "Roddy Theme (From \"Jailer 2\")"
+  },
+  "ZM8rAsTT7yE": {
+   "t": "On My Way",
+   "a": "Sabrina Carpenter",
+   "d": 194,
+   "y": "2019",
+   "al": "World Of Walker"
+  },
+  "ksVpx-O2ODY": {
+   "t": "Digi Rigi Dum Dum",
+   "a": "M. G. Sreekumar & Bindu Anirudhan",
+   "d": 266,
+   "y": "2019",
+   "al": "Big Brother (Original Motion Picture Soundtrack)"
+  },
+  "OnlaU-NBbe4": {
+   "t": "Changaathi Nannaayaal (From \"Aadu 2\")",
+   "a": "Shaan Rahman",
+   "d": 225,
+   "y": "2017",
+   "al": "Changaathi Nannaayaal (From \"Aadu 2\")"
+  },
+  "QOy1SAclROE": {
+   "t": "Sulthaan (From \"Aadu 3\")",
+   "a": "Shaan Rahman",
+   "d": 273,
+   "y": "2026",
+   "al": "Sulthaan (From \"Aadu 3\")"
+  },
+  "EWoTpielYJA": {
+   "t": "Nenjakame",
+   "a": "Vishnu Vijay & Shankar Mahadevan",
+   "d": 326,
+   "y": "2019",
+   "al": "Ambili"
+  },
+  "egOv_cqIWXs": {
+   "t": "Shishiramo (From \"Bachelor Party D'eux\")",
+   "a": "Christo Xavier",
+   "d": 265,
+   "y": "2026"
+  },
+  "vTfsZhQopzE": {
+   "t": "Sundara Ravanan (From \"Athimanoharam\")",
+   "a": "Jakes Bejoy",
+   "d": 275,
+   "y": "2026"
+  },
+  "qh8XMjd0X5s": {
+   "t": "Fearless",
+   "a": "Lost Sky",
+   "d": 194,
+   "y": "2017"
+  },
+  "nmtHtt15h7s": {
+   "t": "Aeroplane (From Scene )",
+   "a": "Sushin Shyam",
+   "d": 147,
+   "y": "2026",
+   "al": "Scene",
+   "g": "Soundtrack / Tamil Pop"
+  },
+  "VFRnzNHxOv4": {
+   "t": "Dhikr Paadi (The Flip Scene)",
+   "a": "Dabzee",
+   "d": 209,
+   "y": "2026"
+  },
+  "VPI2ORXVwgg": {
+   "t": "Killin' 'em (From \"Scene\")",
+   "a": "Release",
+   "d": 94,
+   "y": "2026"
+  },
+  "3GZmpXAGF-k": {
+   "t": "Respectaa (From \"Scene\")",
+   "a": "Sushin Shyam",
+   "d": 125,
+   "y": "2026"
+  },
+  "8MDmdvlh3VU": {
+   "t": "OM Special Duty (From \"OM Chapter 1: Udhiram - The Blood Wood\")",
+   "a": "Sai Abhyankkar",
+   "d": 108,
+   "y": "2026"
+  },
+  "Zv2CHQfnCKU": {
+   "t": "Marandhu Poche (From \"With Love\")",
+   "a": "Sean Roldan",
+   "d": 198,
+   "y": "2026"
+  },
+  "xmnGlGctYR0": {
+   "t": "Gold Rush (From \"Khalifa\")",
+   "a": "Jakes Bejoy",
+   "al": "Gold Rush (From \"Khalifa\")"
+  },
+  "kKRLf9a0NWQ": {
+   "t": "Sita's Aspiration",
+   "a": "A.R. Ameen, Vaishali Samant, Rakshita Suresh & Antara Nandy",
+   "d": 162,
+   "y": "2026"
+  },
+  "WgiqNddtBTA": {
+   "t": "Jai Jai Rama (Tamil)",
+   "a": "A.R. Rahman, Chinmayi Sripada, Haricharan & Karthik Netha",
+   "d": 320,
+   "y": "2026"
+  },
+  "RtTXazIkpQ8": {
+   "t": "Ravana Tandavam (Tamil)",
+   "a": "A.R. Rahman, G.V. Prakash Kumar, Anirudh Ravichander & Ilango Krishnan",
+   "d": 194,
+   "y": "2026"
+  },
+  "uYN0VbbQTP8": {
+   "t": "Mr. Saxobeat (Radio Edit)",
+   "a": "Alexandra Stan",
+   "d": 195,
+   "y": "2010"
+  },
+  "hwfk5_50qJ4": {
+   "t": "Rowdy Baby",
+   "a": "Dhanush",
+   "d": 281,
+   "y": "2018"
+  },
+  "XaDKElYStBw": {
+   "t": "Golden Sparrow (From \"Nilavuku En Mel Ennadi Kobam\")",
+   "a": "G. V. Prakash Kumar",
+   "d": 230,
+   "y": "2024"
+  },
+  "Dy4MFwwkz2I": {
+   "t": "Soul Of Varisu",
+   "a": "K.S. Chithra",
+   "d": 127,
+   "y": "2022",
+   "al": "Varisu"
+  },
+  "BLZWkjBXfN8": {
+   "t": "In the End",
+   "a": "Linkin Park",
+   "d": 217,
+   "y": "2000",
+   "al": "Hybrid Theory (Bonus Edition)"
+  },
+  "uU7y15P0zOk": {
+   "t": "Aadame (From \"Disco\")",
+   "a": "Manikandan Ayyappa, Chemban Vinod Jose, Himna Hilari & Hinitha Hilary",
+   "d": 174,
+   "y": "2026"
+  },
+  "kOn-HdEg6AQ": {
+   "t": "Beat It",
+   "a": "Michael Jackson",
+   "d": 258,
+   "y": "1982"
+  },
+  "hKpCyjeCZKg": {
+   "t": "Jai Jai Ram (Orchestral)",
+   "a": "Hans Zimmer & A.R. Rahman",
+   "d": 182,
+   "y": "2026"
+  },
+  "0GQBQE37BAE": {
+   "t": "Unnai Kaanadhu Naan",
+   "a": "Shankar Ehsaan Loy",
+   "d": 337,
+   "y": "2012"
+  },
+  "Cc5oZAR4E6Y": {
+   "t": "Jaan Se Guzarte Hain (From \"Dhurandhar The Revenge\")",
+   "a": "Shashwat Sachdev",
+   "d": 332,
+   "y": "2026"
+  },
+  "1CUtdqtw5yw": {
+   "t": "California Dreamin'",
+   "a": "The Beach Boys",
+   "d": 202,
+   "y": "1986"
+  },
+  "u-OyizDoyFw": {
+   "t": "Venmegam",
+   "a": "Yuvan Shankar Raja",
+   "d": 275,
+   "y": "2008"
+  },
+  "oyy-gA8upvg": {
+   "t": "Karkalamegham (From \"Orijinal\")",
+   "a": "electronic Kili, Sushin Shyam, Ramees & Vijay anand",
+   "d": 167,
+   "y": "2026"
+  },
+  "i0xYbzeXLvM": {
+   "t": "MONTAGEM ALQUIMIA (SUPER SLOWED)",
+   "a": "h6itam",
+   "d": 125,
+   "y": "2026"
+  },
+  "W-K7pv_e3mA": {
+   "t": "Rama Theme",
+   "a": "Hans Zimmer & A.R. Rahman"
+  },
+  "NT3-XFoCGWI": {
+   "t": "Ashley's Flashback (Re-Imagined)",
+   "a": "Mr.Manglish"
+  }
+ },
+ "artists": {}
+}
