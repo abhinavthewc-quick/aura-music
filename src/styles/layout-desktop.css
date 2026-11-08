@@ -179,8 +179,7 @@
       .greeting{padding:15px;border-radius:18px}
       .browse-grid{gap:8px}
       .browse-tile{padding:12px;min-height:58px;font-size:13px}
-      .nav-bar{width:calc(100% - 20px);bottom:calc(8px + var(--safe-bottom));height:56px}
-      .player-bar,.radio-player-bar{width:calc(100% - 20px);bottom:calc(72px + var(--safe-bottom));border-radius:22px;padding:9px 11px}
+      .player-bar,.radio-player-bar{bottom:calc(98px + var(--safe-bottom, 0px))!important;border-radius:26px;padding:11px 15px}
     }
 
     /* Phones in landscape: prioritize usable vertical space. */
@@ -216,9 +215,7 @@
 
     /* Safe-area aware fixed UI for notched phones and gesture navigation. */
     @media (max-width:899px){
-      .nav-bar{bottom:calc(10px + var(--safe-bottom));}
-      .player-bar{bottom:calc(70px + var(--safe-bottom));}
-      .radio-player-bar{bottom:calc(70px + var(--safe-bottom));}
+      .player-bar,.radio-player-bar{bottom:calc(98px + var(--safe-bottom, 0px))!important;}
       .full-player-overlay,.radio-full-overlay{min-height:100dvh;padding-top:calc(30px + var(--safe-top));padding-bottom:calc(40px + var(--safe-bottom))}
       .side-menu-content{padding-top:calc(30px + var(--safe-top));padding-bottom:calc(30px + var(--safe-bottom))}
     }

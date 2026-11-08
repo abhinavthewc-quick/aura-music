@@ -1,4 +1,4 @@
-    /* Floating Player — transparent liquid-glass style */
+    /* Floating Player — solid liquid-glass style with high opacity */
     .player-bar{
       position:fixed;
       bottom:70px;
@@ -6,10 +6,11 @@
       transform:translateX(-50%);
       width:calc(100% - 32px);
       max-width:800px;
-      background:linear-gradient(135deg,rgba(255,255,255,.13),rgba(255,255,255,.055) 45%,rgba(255,255,255,.025));
-      -webkit-backdrop-filter:blur(32px) saturate(180%);
-      backdrop-filter:blur(32px) saturate(180%);
-      border:1px solid rgba(255,255,255,.20);
+      background: #181513;
+      background: linear-gradient(165deg, rgba(32, 26, 22, 0.96), rgba(16, 13, 11, 0.98));
+      -webkit-backdrop-filter: blur(28px) saturate(180%);
+      backdrop-filter: blur(28px) saturate(180%);
+      border: 1px solid rgba(230, 189, 146, 0.22);
       border-radius:26px;
       padding:12px 16px;
       display:none;
@@ -18,7 +19,13 @@
       z-index:90;
       overflow:hidden;
       cursor:pointer;
-      box-shadow:0 18px 45px rgba(0,0,0,.30),inset 0 1px 0 rgba(255,255,255,.16),inset 0 -1px 0 rgba(255,255,255,.035);
+      box-shadow: 0 16px 45px rgba(0,0,0,0.75), 0 2px 10px rgba(0,0,0,0.5), inset 0 1px 0 rgba(255,236,210,0.16);
+    }
+    body.light-theme .player-bar{
+      background: #fdfaf6;
+      background: linear-gradient(165deg, rgba(255, 252, 247, 0.97), rgba(245, 238, 227, 0.98));
+      border: 1px solid rgba(170, 120, 60, 0.25);
+      box-shadow: 0 14px 34px rgba(120, 85, 45, 0.18), inset 0 1px 0 rgba(255, 255, 255, 0.9);
     }
     .player-bar::before{
       content:"";

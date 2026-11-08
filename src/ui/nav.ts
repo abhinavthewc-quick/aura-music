@@ -99,7 +99,13 @@ import { $ } from '../core/state';
       document.body.classList.toggle('tab-search-active', tabId==='tabSearch');
       if(tabId==='tabLibrary')renderLibrary();
       if(tabId==='tabHome')flushPlaybackHomeRefresh();
-      if(tabId==='tabSearch')filterSearchTab();
+      if(tabId==='tabSearch'){
+        filterSearchTab();
+        const tabInput = $('searchTabInput') as HTMLInputElement | null;
+        if(tabInput){
+          setTimeout(() => { tabInput.focus(); }, 60);
+        }
+      }
       if(tabId==='tabRadio' && !$('radioStationList').dataset.loaded){ $('radioStationList').dataset.loaded='1'; loadRadioStations('top'); }
     }
 

@@ -12,20 +12,34 @@
 
   const builtKey = new Map<string, string>();
   let raf = 0;
+  let isInternalUpdate = false;
 
-  function cleanTitleText(t){
+  function cleanTitleText(t: string | null | undefined): string {
     let s = String(t || '').replace(/\s+/g, ' ');
     /* fix stray spaces inside quoted sections: From  " Raayan " -> From "Raayan" */
     s = s.replace(/(["“”])([^"“”]+)\1/g, (m, q, inner) => q + inner.trim() + q);
     return s.trim();
   }
 
-  function refresh(titleId){
+  function getRawTitle(el: HTMLElement): string {
+    // If marquee already inserted multiple copies, get only the canonical single copy
+    const copy = el.querySelector('.mq-copy');
+    if (copy && copy.textContent) {
+      return cleanTitleText(copy.textContent);
+    }
+    return cleanTitleText(el.textContent);
+  }
+
+  function refresh(titleId: string){
     const el = document.getElementById(titleId);
     if(!el) return;
-    const text = cleanTitleText(el.textContent);
+
+    const text = getRawTitle(el);
+    el.dataset.rawTitle = text;
+
     const visible = el.getClientRects().length > 0;
-    const key = `${titleId}|${text}|${visible ? Math.round(el.clientWidth) : 'hidden'}|${reduced.matches ? 'R' : 'M'}`;
+    const clientW = el.clientWidth;
+    const key = `${titleId}|${text}|${visible ? Math.round(clientW) : 'hidden'}|${reduced.matches ? 'R' : 'M'}`;
     if(builtKey.get(titleId) === key) return;
     builtKey.set(titleId, key);
 
@@ -36,8 +50,17 @@
     /* hidden element: leave as-is, re-evaluated when it becomes visible */
     if(!visible){ return; }
 
-    if(!text){ el.textContent = ''; return; }
-    if(reduced.matches || !text){ el.textContent = text; return; }
+    if(!text){
+      isInternalUpdate = true;
+      try { el.textContent = ''; } finally { isInternalUpdate = false; }
+      return;
+    }
+
+    if(reduced.matches){
+      isInternalUpdate = true;
+      try { el.textContent = text; } finally { isInternalUpdate = false; }
+      return;
+    }
 
     /* build the track, measure, then decide marquee vs static */
     const track = document.createElement('span');
@@ -46,12 +69,23 @@
     c0.className = 'mq-copy';
     c0.textContent = text;
     track.appendChild(c0);
-    el.replaceChildren(track);
+
+    isInternalUpdate = true;
+    try {
+      el.replaceChildren(track);
+    } finally {
+      isInternalUpdate = false;
+    }
 
     const vw = el.clientWidth;
     const cw = c0.getBoundingClientRect().width;
     if(cw <= vw + 1){
-      el.replaceChildren(document.createTextNode(text));
+      isInternalUpdate = true;
+      try {
+        el.replaceChildren(document.createTextNode(text));
+      } finally {
+        isInternalUpdate = false;
+      }
       return;
     }
 
@@ -75,11 +109,16 @@
     raf = requestAnimationFrame(() => refreshAll());
   }
 
-  const mo = new MutationObserver(() => schedule());
+  const mo = new MutationObserver(() => {
+    if (isInternalUpdate) return;
+    schedule();
+  });
+
   TITLE_IDS.forEach(id => {
     const el = document.getElementById(id);
     if(el) mo.observe(el, { childList:true, characterData:true, subtree:true });
   });
+
   /* re-evaluate when the players open/close (widths go 0 <-> real) */
   ['miniPlayer', 'fullPlayerOverlay'].forEach(id => {
     const p = document.getElementById(id);

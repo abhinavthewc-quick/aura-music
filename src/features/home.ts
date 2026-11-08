@@ -389,29 +389,41 @@ import { goTab } from '../ui/nav';
         }
       };
 
-      input.addEventListener('focus', () => {
-        if(input.value.trim()){
-          ensureSearchTab();
-        }
-      });
-
+      // Only sync the query while typing without jumping tabs
       input.addEventListener('input', () => {
-        ensureSearchTab();
         triggerSearch();
       });
 
+      // Pressing Enter confirms search and smoothly opens Search tab
       input.addEventListener('keydown', (e) => {
         if(e.key === 'Enter'){
-          ensureSearchTab();
-          triggerSearch();
-          const tabInput = $('searchTabInput') as HTMLInputElement | null;
-          if(tabInput) tabInput.focus();
+          const q = input.value.trim();
+          if(q){
+            ensureSearchTab();
+            triggerSearch();
+            const tabInput = $('searchTabInput') as HTMLInputElement | null;
+            if(tabInput) tabInput.focus();
+          }
         } else if(e.key === 'Escape'){
           input.value = '';
           triggerSearch();
           input.blur();
         }
       });
+
+      // Clicking the search icon inside the top search bar confirms search
+      const searchIcon = input.parentElement?.querySelector('i.fa-magnifying-glass');
+      if(searchIcon){
+        searchIcon.addEventListener('click', () => {
+          if(input.value.trim()){
+            ensureSearchTab();
+            triggerSearch();
+          } else {
+            input.focus();
+          }
+        });
+        (searchIcon as HTMLElement).style.cursor = 'pointer';
+      }
 
       // Keep header search input in sync when user types directly in searchTabInput
       const tabInput = $('searchTabInput') as HTMLInputElement | null;
