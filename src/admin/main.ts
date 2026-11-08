@@ -8,7 +8,10 @@ const SECRET_NAMES = ['HF_TOKEN', 'HF_BUCKET_ID', 'YOUTUBE_COOKIES'] as const;
 
 const $ = <T extends HTMLElement = HTMLElement>(id: string): T => {
   const el = document.getElementById(id);
-  if (!el) throw new Error('missing #' + id);
+  if (!el) {
+    console.warn('missing #' + id);
+    return document.createElement('div') as unknown as T;
+  }
   return el as T;
 };
 

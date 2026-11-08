@@ -1,7 +1,7 @@
 import { AURA_JAMENDO_CLIENT_ID, AURA_YOUTUBE_API_KEY } from '../core/config';
 import { fetchYouTubeMeta, stateHTML, toast } from '../core/dom';
 import { songIndexById, songItemHTML, updateLibCount } from './library';
-import { navClick } from '../ui/nav';
+import { navClick, goTab } from '../ui/nav';
 import { playSong, playYouTubeInsideAura, playYouTubeProResult } from './player';
 import { escapeHtml } from './radio';
 import { auraSettings } from './settings';
@@ -10,7 +10,7 @@ import { $, state } from '../core/state';
     /* Jump into the Search tab pre-filtered to a category */
     export function goToSearchCategory(cat){
       searchCategory = cat;
-      navClick($('navSearchBtn'), 'tabSearch');
+      goTab('tabSearch');
       $('browseGrid').querySelectorAll('.browse-tile').forEach(t=>t.classList.toggle('active', t.dataset.filter===cat));
       filterSearchTab();
     }
@@ -193,33 +193,73 @@ import { $, state } from '../core/state';
        played through YouTube's official IFrame Player API; AURA does not
        extract, download, cache, or separate YouTube state.audio streams. */
     export let auraYoutubeKeyInvalid = false;
-    export async function searchYouTubeMusic(query){
-      const key = localStorage.getItem('auraYoutubeApiKey') || AURA_YOUTUBE_API_KEY;
+    export async function searchYouTubeMusic(query: string){
       if(!auraSettings.youtubeResults) return [];
-      if(!key) return [];
-      // Quota saver: repeat searches within 12h come from a local cache instead of costing 100 units each.
-      const cKey=query.trim().toLowerCase(); let cache={};
-      try{ cache=JSON.parse(localStorage.getItem('auraYtCache_v1')||'{}'); }catch(e){}
-      if(cache[cKey] && Date.now()-cache[cKey].t < 12*3600*1000) return cache[cKey].items;
-      const url='https://www.googleapis.com/youtube/v3/search?part=snippet&type=video&videoCategoryId=10&maxResults=8&q='+encodeURIComponent(query)+'&key='+encodeURIComponent(key);
-      const res=await fetch(url);
-      if(!res.ok){
-        if(res.status===400||res.status===403) auraYoutubeKeyInvalid=true;
-        throw new Error('YouTube search failed');
+
+      // 1. Primary: keyless YouTube Music search via /api/search
+      try {
+        const res = await fetch('/api/search?q=' + encodeURIComponent(query));
+        if(res.ok) {
+          const data = await res.json();
+          if(data && Array.isArray(data.results) && data.results.length) {
+            return data.results.map((r: any) => ({
+              source: 'youtube',
+              id: r.id || r.videoId,
+              videoId: r.videoId || r.id,
+              title: r.title,
+              artist: r.artist || 'YouTube Music',
+              img: r.img || `https://i.ytimg.com/vi/${r.videoId || r.id}/mqdefault.jpg`,
+              full: true
+            }));
+          }
+        }
+      } catch(e) {
+        /* fallback to API key or external engines */
       }
-      auraYoutubeKeyInvalid=false;
-      const data=await res.json();
-      const items=(data && data.items || []).filter(r=>r.id && r.id.videoId).map(r=>({
-        source:'youtube', id:r.id.videoId, videoId:r.id.videoId,
-        title:r.snippet.title, artist:r.snippet.channelTitle||'YouTube Music',
-        img:(r.snippet.thumbnails && (r.snippet.thumbnails.medium||r.snippet.thumbnails.default)||{}).url||'', full:true
-      }));
-      try{
-        cache[cKey]={t:Date.now(),items};
-        const keys=Object.keys(cache); if(keys.length>40){ keys.sort((a,b)=>cache[a].t-cache[b].t).slice(0,keys.length-40).forEach(k=>delete cache[k]); }
-        localStorage.setItem('auraYtCache_v1',JSON.stringify(cache));
-      }catch(e){}
-      return items;
+
+      // 2. Fallback to user-configured YouTube API key if provided
+      const key = localStorage.getItem('auraYoutubeApiKey') || AURA_YOUTUBE_API_KEY;
+      if(key) {
+        try {
+          const cKey = query.trim().toLowerCase();
+          let cache: any = {};
+          try { cache = JSON.parse(localStorage.getItem('auraYtCache_v1') || '{}'); } catch(e){}
+          if(cache[cKey] && Date.now() - cache[cKey].t < 12 * 3600 * 1000) return cache[cKey].items;
+          const url = 'https://www.googleapis.com/youtube/v3/search?part=snippet&type=video&videoCategoryId=10&maxResults=10&q=' + encodeURIComponent(query) + '&key=' + encodeURIComponent(key);
+          const res = await fetch(url);
+          if(res.ok) {
+            const data = await res.json();
+            const items = (data?.items || []).filter((r: any) => r.id?.videoId).map((r: any) => ({
+              source: 'youtube', id: r.id.videoId, videoId: r.id.videoId,
+              title: r.snippet.title, artist: r.snippet.channelTitle || 'YouTube Music',
+              img: (r.snippet.thumbnails?.medium || r.snippet.thumbnails?.default || {}).url || '', full: true
+            }));
+            try {
+              cache[cKey] = { t: Date.now(), items };
+              localStorage.setItem('auraYtCache_v1', JSON.stringify(cache));
+            } catch(e){}
+            return items;
+          }
+        } catch(e) {}
+      }
+
+      // 3. Fallback: keyless iTunes search API via JSONP
+      try {
+        const itunesData = await jsonpRequest('https://itunes.apple.com/search?media=music&entity=song&limit=10&term=' + encodeURIComponent(query));
+        if(itunesData && Array.isArray(itunesData.results) && itunesData.results.length) {
+          return itunesData.results.map((r: any) => ({
+            source: 'itunes',
+            id: String(r.trackId),
+            title: r.trackName,
+            artist: r.artistName || 'Unknown Artist',
+            img: (r.artworkUrl100 || '').replace('100x100', '300x300'),
+            preview: r.previewUrl,
+            full: false
+          })).filter((t: any) => t.preview);
+        }
+      } catch(e) {}
+
+      return [];
     }
 
     /* Pasted YouTube link — works with NO api key */
@@ -440,7 +480,7 @@ import { $, state } from '../core/state';
     window.searchLikedSong = function(id){
       const song=state.songs.find(s=>String(s.id)===String(id));
       if(!song) return;
-      navClick($('navSearchBtn'),'tabSearch');
+      goTab('tabSearch');
       $('searchTabInput').value=song.title||'';
       filterSearchTab();
     };

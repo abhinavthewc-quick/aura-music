@@ -3,10 +3,15 @@ import { loadRadioStations } from '../features/radio';
 import { filterSearchTab } from '../features/search';
 import { $ } from '../core/state';
 /* ===== 3073-3074 ===== */
-    export function goTab(tabId){ const b=document.querySelector(`.desktop-nav-btn[data-tab="${tabId}"]`)||document.querySelector(`[onclick*="'${tabId}'"]`); if(b) navClick(b,tabId); }
+    export function goTab(tabId: string){
+      const b = document.querySelector(`.desktop-nav-btn[data-tab="${tabId}"]`) ||
+                document.querySelector(`.nav-bar .nav-btn[onclick*="'${tabId}'"]`) ||
+                (tabId === 'tabSearch' ? document.getElementById('navSearchFab') : null);
+      navClick(b, tabId);
+    }
 
 /* Playlist pseudo-tab — activates a generated tab without touching nav highlight */
-    export function showPlaylistTab(tabId){
+    export function showPlaylistTab(tabId: string){
       document.querySelectorAll('.tab-content').forEach(t=>t.classList.remove('active'));
       $(tabId).classList.add('active');
       document.querySelectorAll('.desktop-nav-btn[data-tab]').forEach(b=>b.classList.remove('active'));
@@ -20,16 +25,20 @@ import { $ } from '../core/state';
       setTimeout(()=>{ (document.getElementById('mobileSearchInput') as HTMLInputElement)?.focus(); },90);
     }
     export function closeMobileSearch(){ $('mobileSearchBar')?.classList.remove('open'); }
-    export function mobileSearchOnInput(el){
-      const input=$('searchTabInput') as HTMLInputElement;
+    export function mobileSearchOnInput(el: HTMLInputElement){
+      const input=$('searchTabInput') as HTMLInputElement | null;
       if(input){ input.value=el.value; }
+      const headerInput=$('headerSearchInput') as HTMLInputElement | null;
+      if(headerInput){ headerInput.value=el.value; }
       filterSearchTab();
     }
     export function mobileSearchClear(){
-      const el=$('mobileSearchInput') as HTMLInputElement;
+      const el=$('mobileSearchInput') as HTMLInputElement | null;
       if(el) el.value='';
-      const input=$('searchTabInput') as HTMLInputElement;
+      const input=$('searchTabInput') as HTMLInputElement | null;
       if(input){ input.value=''; }
+      const headerInput=$('headerSearchInput') as HTMLInputElement | null;
+      if(headerInput){ headerInput.value=''; }
       filterSearchTab();
       el?.focus();
     }

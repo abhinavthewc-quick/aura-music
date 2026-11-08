@@ -4,6 +4,7 @@ import { escapeHtml } from './radio';
 import { DEFAULT_COVER, getArtistMeta } from '../core/catalog';
 import { $, state } from '../core/state';
 import { getArtistGroups, artistTileHTML } from './library';
+import { goTab } from '../ui/nav';
 /* ===== 3075-3096 ===== */
     export function setGreeting(){
       $('greetingLabel').textContent = timeGreeting();
@@ -371,20 +372,56 @@ import { getArtistGroups, artistTileHTML } from './library';
     export function setupHeaderSearch(){
       const input = $('headerSearchInput') as HTMLInputElement | null;
       if(!input) return;
-      input.addEventListener('keydown', (e) => {
-        if(e.key === 'Enter'){
-          const q = input.value.trim();
-          if(!q) return;
-          const searchNav = document.querySelector('[data-tab="tabSearch"]') as HTMLElement | null;
-          if(searchNav) searchNav.click();
-          const tabInput = $('searchTabInput') as HTMLInputElement | null;
-          if(tabInput){
-            tabInput.value = q;
-            tabInput.dispatchEvent(new Event('input', { bubbles: true }));
-            tabInput.focus();
-          }
+
+      const triggerSearch = () => {
+        const q = input.value;
+        const tabInput = $('searchTabInput') as HTMLInputElement | null;
+        if(tabInput && tabInput.value !== q){
+          tabInput.value = q;
+          tabInput.dispatchEvent(new Event('input', { bubbles: true }));
+        }
+      };
+
+      const ensureSearchTab = () => {
+        const searchTab = $('tabSearch');
+        if(searchTab && !searchTab.classList.contains('active')){
+          goTab('tabSearch');
+        }
+      };
+
+      input.addEventListener('focus', () => {
+        if(input.value.trim()){
+          ensureSearchTab();
         }
       });
+
+      input.addEventListener('input', () => {
+        ensureSearchTab();
+        triggerSearch();
+      });
+
+      input.addEventListener('keydown', (e) => {
+        if(e.key === 'Enter'){
+          ensureSearchTab();
+          triggerSearch();
+          const tabInput = $('searchTabInput') as HTMLInputElement | null;
+          if(tabInput) tabInput.focus();
+        } else if(e.key === 'Escape'){
+          input.value = '';
+          triggerSearch();
+          input.blur();
+        }
+      });
+
+      // Keep header search input in sync when user types directly in searchTabInput
+      const tabInput = $('searchTabInput') as HTMLInputElement | null;
+      if(tabInput){
+        tabInput.addEventListener('input', () => {
+          if(input.value !== tabInput.value){
+            input.value = tabInput.value;
+          }
+        });
+      }
     }
 
     /* Home: spotlight EVERY artist who has 2+ tracks in the library,

@@ -330,7 +330,9 @@ body.light-theme #auraLoaderText{color:rgba(25,26,30,.78)}
     <aside class="desktop-sidebar" id="desktopSidebar" aria-label="Desktop navigation">
       <div class="desktop-brand"><button class="sidebar-toggle" id="sidebarToggle" type="button" aria-label="Toggle menu" title="Menu"><i class="fa-solid fa-bars"></i></button><div class="desktop-brand-mark"><img src="./src/assets/brand-logo.webp" alt="Aura Music vinyl logo" width="512" height="512" loading="eager" decoding="async" fetchpriority="high"></div><div><strong>AURA</strong><span>MUSIC</span></div></div>
       <div class="desktop-nav-label">Menu</div>
-      <button type="button" class="desktop-nav-btn active" data-tab="tabHome" onclick="navClick(this,'tabHome')"><i class="fa-solid fa-house"></i><span>Home</span></button>        <button type="button" class="desktop-nav-btn" data-tab="tabLibrary" onclick="navClick(this,'tabLibrary')"><i class="fa-solid fa-layer-group"></i><span>Library</span></button>
+      <button type="button" class="desktop-nav-btn active" data-tab="tabHome" onclick="navClick(this,'tabHome')"><i class="fa-solid fa-house"></i><span>Home</span></button>
+      <button type="button" class="desktop-nav-btn" data-tab="tabSearch" onclick="navClick(this,'tabSearch')"><i class="fa-solid fa-magnifying-glass"></i><span>Search</span></button>
+      <button type="button" class="desktop-nav-btn" data-tab="tabLibrary" onclick="navClick(this,'tabLibrary')"><i class="fa-solid fa-layer-group"></i><span>Library</span></button>
       <button type="button" class="desktop-nav-btn" data-tab="tabRadio" onclick="navClick(this,'tabRadio')"><i class="fa-solid fa-radio"></i><span>Radio</span></button>
       <button type="button" class="desktop-nav-btn" data-tab="tabProfile" onclick="navClick(this,'tabProfile')"><i class="fa-solid fa-plus"></i><span>Add music</span></button>
       <a class="desktop-nav-btn desktop-nav-link" href="/rooms"><i class="fa-solid fa-headphones"></i><span>Rooms</span></a>
@@ -492,7 +494,7 @@ body.light-theme #auraLoaderText{color:rgba(25,26,30,.78)}
         <div class="song-list" id="songList"></div>
         <div class="more-songs-note">
           <i class="fa-solid fa-magnifying-glass"></i>
-          <span>Looking for more? Head to the <strong onclick="navClick(document.getElementById('navSearchBtn'),'tabSearch')">Search</strong> tab for way more songs.</span>
+          <span>Looking for more? Head to the <strong onclick="goTab('tabSearch')" style="cursor:pointer">Search</strong> tab for way more songs.</span>
         </div>
       </div>
 
