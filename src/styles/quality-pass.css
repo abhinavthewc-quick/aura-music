@@ -92,6 +92,62 @@ body:not(.light-theme) :is(.playlist-create-btn,.name-modal-save,.pomodoro-btn:n
   color: #1a1007 !important;
 }
 
+/* Recently played is a rail, not a document flow. These rules live in the
+   final product layer because older stylesheets only sized the image at one
+   phone breakpoint and left the card itself unstyled. */
+.recent-scroll {
+  display: flex;
+  gap: 14px;
+  width: 100%;
+  overflow-x: auto;
+  overflow-y: hidden;
+  padding: 2px 2px 10px;
+  scrollbar-width: none;
+  scroll-snap-type: x proximity;
+  -webkit-overflow-scrolling: touch;
+}
+.recent-scroll::-webkit-scrollbar { display: none; }
+.recent-card {
+  flex: 0 0 142px;
+  width: 142px;
+  min-width: 0;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: var(--text);
+  cursor: pointer;
+  scroll-snap-align: start;
+}
+.recent-card img {
+  display: block;
+  width: 142px;
+  height: 142px;
+  border: 1px solid rgba(255,255,255,.08);
+  border-radius: 10px;
+  object-fit: cover;
+  background: #111;
+}
+.recent-card p {
+  display: -webkit-box;
+  margin: 9px 2px 0;
+  overflow: hidden;
+  color: var(--text);
+  font-size: 13px;
+  font-weight: 650;
+  line-height: 1.35;
+  overflow-wrap: normal !important;
+  -webkit-box-orient: vertical;
+  -webkit-line-clamp: 2;
+}
+.recent-card:hover img { border-color: rgba(229,169,94,.38); }
+
+@media (max-width: 520px) {
+  .recent-scroll { gap: 12px; margin-right: -20px; padding-right: 20px; }
+  .recent-card { flex-basis: 118px; width: 118px; }
+  .recent-card img { width: 118px !important; height: 118px !important; }
+  .recent-card p { font-size: 12.5px; }
+}
+
 @media (max-width: 700px) {
   body:not(.light-theme) :is(.settings-modal-card,.effects-card,.help-card,.name-modal-card,.track-sheet) {
     border-radius: 22px 22px 0 0 !important;
