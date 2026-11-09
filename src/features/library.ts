@@ -1,8 +1,8 @@
-import { fetchYouTubeMeta, artistMergeKey, escapeHtml, stateHTML, toast } from '../core/dom';
+import { artistMergeKey, escapeHtml, stateHTML, toast } from '../core/dom';
 import { DEFAULT_COVER, fetchHfCatalog } from '../core/catalog';
 import { renderArtistSpotlight, renderAuraPicks, renderQuickAccess } from './home';
 import { filterSongs, loadSong, playSong, resetFullPlayerArtToImage, stopAuraYouTube, updatePlayState } from './player';
-import { filterSearchTab, getYouTubeIdFromUrl } from './search';
+import { filterSearchTab } from './search';
 import { goTab } from '../ui/nav';
 import { $, getPlayCount, persistLikedHistory, rebuildSongs, recordPlayCount, savedLikeMap, setHfTracks, state, trackKey } from '../core/state';
 /* ===== 3006-3012 ===== */
@@ -132,95 +132,6 @@ import { $, getPlayCount, persistLikedHistory, rebuildSongs, recordPlayCount, sa
       });
     }
 
-    /* Read ID3/MP4/FLAC tags where the format supports it (best-effort;
-       formats like WMA fall back to the filename automatically). */
-    export function readAudioTags(file){
-      return new Promise<any>(resolve => {
-        if(typeof jsmediatags === 'undefined') return resolve(null);
-        jsmediatags.read(file, {
-          onSuccess: tag => resolve(tag.tags),
-          onError: () => resolve(null)
-        });
-      });
-    }
-    export function pictureToDataURL(picture){
-      if(!picture || !picture.data) return null;
-      try{
-        let binary = '';
-        const bytes = new Uint8Array(picture.data);
-        for(let i=0;i<bytes.length;i++) binary += String.fromCharCode(bytes[i]);
-        return `data:${picture.format};base64,${btoa(binary)}`;
-      }catch(e){ return null; }
-    }
-
-    /* Handle local file selection + drag & drop */
-    export async function handleLocalFiles(fileList){
-      const files = Array.from<any>(fileList || []).filter(f => f && (f.type.startsWith('audio/') || /\.(mp3|wma|flac|aac|m4a|alac)$/i.test(f.name)));
-      if(!files.length) return toast('Please choose audio files', 'triangle-exclamation');
-      const listEl = $('uploadFileList');
-      listEl.innerHTML = '';
-      let addedCount = 0;
-
-      for(const file of files){
-        const row = document.createElement('div');
-        row.className = 'upload-file-row';
-        row.innerHTML = `<i class="fa-solid fa-spinner fa-spin"></i><span>${escapeHtml(file.name)}</span>`;
-        listEl.appendChild(row);
-
-        let title = file.name.replace(/\.[^/.]+$/, '');
-        let artist = 'Unknown Artist';
-        let img = DEFAULT_COVER;
-
-        try{
-          const tags = await readAudioTags(file);
-          if(tags){
-            if(tags.title) title = tags.title;
-            if(tags.artist) artist = tags.artist;
-            const pic = pictureToDataURL(tags.picture);
-            if(pic) img = pic;
-          }
-        }catch(err){ /* metadata unavailable for this format — filename is used instead */ }
-
-        const id = Date.now() + Math.floor(Math.random()*10000);
-        const newTrack = { id, title, artist, url: URL.createObjectURL(file), img, favorite:false, isLocal:true };
-
-        if(hasIndexedDB){
-          try{
-            await saveLocalBlob(id, file);
-          }catch(err){
-            row.className = 'upload-file-row failed';
-            row.innerHTML = `<i class="fa-solid fa-triangle-exclamation"></i><span>${escapeHtml(file.name)} — couldn't be saved</span>`;
-            continue;
-          }
-        }
-
-        state.addedSongs.push(newTrack);
-        rebuildSongs();
-        addedCount++;
-
-        row.className = 'upload-file-row done';
-        row.innerHTML = `<i class="fa-solid fa-circle-check"></i><span>${escapeHtml(title)}</span>`;
-      }
-
-      persistAddedSongs();
-      renderSongs(state.songs);
-      updateLibCount();
-      const input = $('localFileInput');
-      if(input) input.value = '';
-      if(addedCount) toast(`${addedCount} file${addedCount!==1?'s':''} added to your library!`, 'circle-check');
-      if(!hasIndexedDB) toast('Your browser can\'t persist files — they\'ll stay for this session only', 'triangle-exclamation');
-    }
-
-    $('localFileInput').onchange = (e) => handleLocalFiles(e.target.files);
-    export const uploadDropzone = $('uploadDropzone');
-    if(uploadDropzone){
-      uploadDropzone.addEventListener('click', () => $('localFileInput').click());
-      uploadDropzone.addEventListener('keydown', e => { if(e.key === 'Enter' || e.key === ' '){ e.preventDefault(); $('localFileInput').click(); }});
-      ['dragenter','dragover'].forEach(type => uploadDropzone.addEventListener(type, e => { e.preventDefault(); e.stopPropagation(); uploadDropzone.classList.add('drag-over'); }));
-      ['dragleave','dragend','drop'].forEach(type => uploadDropzone.addEventListener(type, e => { e.preventDefault(); e.stopPropagation(); uploadDropzone.classList.remove('drag-over'); }));
-      uploadDropzone.addEventListener('drop', e => handleLocalFiles(e.dataTransfer.files));
-    }
-
     /* Restore local file blobs from IndexedDB on load */
     export async function hydrateLocalTracks(){
       if(!hasIndexedDB) return;
@@ -330,90 +241,6 @@ import { $, getPlayCount, persistLikedHistory, rebuildSongs, recordPlayCount, sa
       updateLibCount();
       renderRecent();
       toast('Track removed from your library', 'circle-check');
-    }
-
-    export function addNewTrack() {
-        const title = $('newTitle').value.trim();
-        const artist = $('newArtist').value.trim();
-        const url = $('newUrl').value.trim();
-        const img = $('newImg').value.trim();
-
-        if(!title || !url) return toast("Title and Link are required!", "triangle-exclamation");
-        try{
-          const parsed = new URL(url);
-          if(parsed.protocol !== 'http:' && parsed.protocol !== 'https:') throw new Error('protocol');
-        }catch(e){
-          return toast('Enter a valid audio URL starting with http:// or https://', 'triangle-exclamation');
-        }
-
-        const newTrack = {
-            id: Date.now(), // Unique ID
-            title: title,
-            artist: artist || "Unknown Artist",
-            url: url,
-            img: img || DEFAULT_COVER,
-            favorite: false
-        };
-
-        state.addedSongs.push(newTrack);
-        persistAddedSongs();
-        rebuildSongs();
-        
-        // Reset inputs
-        $('newTitle').value = ''; $('newArtist').value = ''; $('newUrl').value = ''; $('newImg').value = '';
-        
-        renderSongs(state.songs);
-        if($('tabLibrary').classList.contains('active')) renderLibrary();
-        updateLibCount();
-        toast("Track added to library!", "circle-check");
-    }
-
-    /* Add a track from a YouTube link — plays through YouTube's own official
-       embedded player (same pipeline as the search results). Nothing is
-       downloaded, extracted, or converted; we only fetch public oEmbed
-       metadata (title/author/thumbnail) so the track looks right in the
-       library. */
-    let addingYouTubeTrack = false;
-    export async function addYouTubeTrack(){
-      if(addingYouTubeTrack) return;
-      const raw = $('ytAddInput').value.trim();
-      if(!raw) return toast('Paste a YouTube link first', 'link');
-      const videoId = getYouTubeIdFromUrl(raw);
-      if(!videoId) return toast('Could not read a video ID from that link', 'triangle-exclamation');
-      if(state.addedSongs.some(s => s.videoId === videoId)) return toast('That video is already in your library', 'circle-info');
-
-      const btn = $('ytAddBtn') as HTMLButtonElement;
-      const label = btn ? btn.innerHTML : '';
-      addingYouTubeTrack = true;
-      if(btn){ btn.disabled = true; btn.setAttribute('aria-busy','true'); btn.innerHTML = '<i class="fa-solid fa-spinner fa-spin" aria-hidden="true"></i> Adding…'; }
-      try{
-        const { title, artist } = await fetchYouTubeMeta(videoId);
-
-        const newTrack = {
-          id: Date.now(),
-          title: title,
-          artist: artist,
-          url: '',
-          img: `https://img.youtube.com/vi/${videoId}/hqdefault.jpg`,
-          favorite: false,
-          isYouTube: true,
-          videoId: videoId
-        };
-
-        state.addedSongs.push(newTrack);
-        persistAddedSongs();
-        rebuildSongs();
-        $('ytAddInput').value = '';
-        renderSongs(state.songs);
-        if($('tabLibrary').classList.contains('active')) renderLibrary();
-        updateLibCount();
-        toast('YouTube track added to library!', 'circle-check');
-      }catch(e){
-        toast('Could not add that YouTube track — check the link and try again.', 'triangle-exclamation');
-      }finally{
-        addingYouTubeTrack = false;
-        if(btn){ btn.disabled = false; btn.removeAttribute('aria-busy'); btn.innerHTML = label; }
-      }
     }
 
 /* ===== 4925-4991 ===== */
@@ -742,12 +569,12 @@ import { $, getPlayCount, persistLikedHistory, rebuildSongs, recordPlayCount, sa
 
     export function renderStatsPanel(){
       const favCount = state.songs.filter(s=>s.favorite).length;
-      const localCount = state.songs.filter(s=>s.isLocal).length;
+      const albumCount = new Set(state.songs.map(s=>String(s.album||'').trim()).filter(Boolean)).size;
       const artistCount = new Set(state.songs.map(s=>s.artist).filter(a=>a && a!=='Unknown Artist')).size;
       $('statsPanel').innerHTML = `
         <div class="stats-cell"><div class="stat-num">${state.songs.length}</div><div class="stat-label">Total Tracks</div></div>
         <div class="stats-cell"><div class="stat-num">${favCount}</div><div class="stat-label">Favorites</div></div>
-        <div class="stats-cell"><div class="stat-num">${localCount}</div><div class="stat-label">Local Files</div></div>
+        <div class="stats-cell"><div class="stat-num">${albumCount}</div><div class="stat-label">Albums</div></div>
         <div class="stats-cell"><div class="stat-num">${artistCount}</div><div class="stat-label">Artists</div></div>`;
     }
 
@@ -765,7 +592,7 @@ import { $, getPlayCount, persistLikedHistory, rebuildSongs, recordPlayCount, sa
         updateLibCount();
       }catch(e){
         state.catalogError = true;
-        toast('Could not load the Hugging Face catalog — showing local files only.','triangle-exclamation');
+        toast('Could not refresh the Aura catalogue. Showing the last saved library.','triangle-exclamation');
       }finally{
         state.catalogLoading = false;
         renderSongs(state.songs);

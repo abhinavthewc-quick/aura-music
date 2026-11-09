@@ -13,7 +13,7 @@ import { $, setHfTracks, state } from './core/state';
     (function(){
       const nb=$('netBanner'); let t;
       function show(kind,html,ms?){ nb.className='net-banner show '+kind; nb.innerHTML=html; clearTimeout(t); if(ms) t=setTimeout(()=>nb.classList.remove('show'),ms); }
-      const offline=()=>show('offline','<i class="fa-solid fa-wifi"></i> You\'re offline — your library and local files still work.');
+       const offline=()=>show('offline','<i class="fa-solid fa-wifi"></i> You\'re offline — your saved Aura library still works.');
       window.addEventListener('offline',offline);
       window.addEventListener('online',()=>show('ok','<i class="fa-solid fa-circle-check"></i> Back online',2600));
       const c=navigator.connection||navigator.mozConnection;
@@ -32,7 +32,8 @@ import { $, setHfTracks, state } from './core/state';
       if(session){
         const name = session.name || 'Listener';
         if(!getProfileUsername(session.email) && session.name) setProfileUsername(session.email, session.name);
-        $('displayUserName').textContent=$('profileName').textContent=name;
+        const displayName = $('displayUserName');
+        if(displayName) displayName.textContent=name;
         $('welcomeScreen').classList.add('hidden');
         localStorage.setItem('auraLastLogin', new Date().toISOString());
         if(!localStorage.getItem('auraUserName')) localStorage.setItem('auraUserName', name);
@@ -71,6 +72,6 @@ import { $, setHfTracks, state } from './core/state';
         state.catalogError = true;
         renderSongs(state.songs);
         if($('tabLibrary').classList.contains('active')) renderLibrary();
-        if(!state.hfSongs.length) toast('Could not load the Hugging Face catalog — showing local files only.','triangle-exclamation');
+         if(!state.hfSongs.length) toast('Could not load the Aura catalogue. Try again when your connection is stable.','triangle-exclamation');
       });
     })();

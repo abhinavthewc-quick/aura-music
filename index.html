@@ -30,7 +30,6 @@ body.light-theme #auraLoaderText{color:rgba(25,26,30,.78)}
   <link rel="icon" type="image/png" href="/aura-logo.png">
   <link rel="apple-touch-icon" href="/aura-logo.png">
   <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" media="print" onload="this.media='all';__aura.fire()" onerror="__aura.fire()"><noscript><link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css"></noscript>
-  <script src="https://cdnjs.cloudflare.com/ajax/libs/jsmediatags/3.9.5/jsmediatags.min.js" defer></script>
   <link rel="stylesheet" href="/src/styles/main.css">
 </head>
 <body>
@@ -116,7 +115,7 @@ body.light-theme #auraLoaderText{color:rgba(25,26,30,.78)}
     </div>
   </div>
 
-  <div class="name-modal playlist-modal" id="playlistModal" role="dialog" aria-modal="true" aria-hidden="true">
+  <div class="playlist-modal" id="playlistModal" role="dialog" aria-modal="true" aria-labelledby="playlistModalTitle" aria-hidden="true">
     <div class="playlist-modal-card">
       <h3 class="playlist-modal-title" id="playlistModalTitle">New playlist</h3>
       <label class="playlist-field"><span>Title</span>
@@ -124,13 +123,6 @@ body.light-theme #auraLoaderText{color:rgba(25,26,30,.78)}
       </label>
       <label class="playlist-field"><span>Description <small>(optional)</small></span>
         <input id="playlistDescInput" type="text" placeholder="Describe your playlist…" maxlength="140">
-      </label>
-      <label class="playlist-field"><span>Privacy</span>
-        <select id="playlistPrivacySelect">
-          <option>Public</option>
-          <option>Private</option>
-          <option>Unlisted</option>
-        </select>
       </label>
       <p class="playlist-error" id="playlistCreateError" hidden>A title is required.</p>
       <div class="playlist-modal-actions">
@@ -186,33 +178,12 @@ body.light-theme #auraLoaderText{color:rgba(25,26,30,.78)}
       </div>
       <div class="settings-section">
         <div class="settings-section-label">Playback</div>
-        <label class="settings-row"><div class="settings-row-main"><div class="settings-row-title">Autoplay next track</div><div class="settings-row-sub">Continue automatically when a track finishes, including YouTube results.</div></div><input class="settings-switch" id="settingAutoplayNext" type="checkbox"></label>
+        <label class="settings-row"><div class="settings-row-main"><div class="settings-row-title">Autoplay next track</div><div class="settings-row-sub">Continue through your Aura library when a track finishes.</div></div><input class="settings-switch" id="settingAutoplayNext" type="checkbox"></label>
         <label class="settings-row"><div class="settings-row-main"><div class="settings-row-title">Remember volume</div><div class="settings-row-sub">Keep your preferred player volume on this device.</div></div><input class="settings-switch" id="settingRememberVolume" type="checkbox"></label>
-      </div>
-      <div class="settings-section">
-        <div class="settings-section-label">Search</div>
-        <label class="settings-row"><div class="settings-row-main"><div class="settings-row-title">Search history</div><div class="settings-row-sub">Save recent searches so you can reuse them quickly.</div></div><input class="settings-switch" id="settingSearchHistory" type="checkbox" checked></label>
-        <label class="settings-row"><div class="settings-row-main"><div class="settings-row-title">YouTube Music results</div><div class="settings-row-sub">Show YouTube results below your local library search.</div></div><input class="settings-switch" id="settingYouTubeResults" type="checkbox" checked></label>
-        <div class="settings-row" style="flex-direction:column;align-items:stretch;gap:9px">
-          <div class="settings-row-main"><div class="settings-row-title">Advanced: your own YouTube key</div><div class="settings-row-sub">YouTube Music search already works for everyone by default. Only add a key here if you want your own personal search quota instead of the shared one.</div></div>
-          <div style="display:flex;gap:8px">
-            <input type="password" id="youtubeApiKeyInput" placeholder="Optional — paste your own API key…" style="flex:1;min-width:0;background:rgba(255,255,255,.05);border:1px solid var(--card-border);border-radius:10px;padding:9px 10px;color:var(--text);font-size:12px" aria-label="YouTube API key">
-            <button class="glass-btn" id="saveYoutubeApiKeyBtn" type="button" style="padding:0 14px;border-radius:10px;font-size:12px;white-space:nowrap">Save</button>
-          </div>
-        </div>
-        <div class="settings-row" style="flex-direction:column;align-items:stretch;gap:9px">
-          <div class="settings-row-main"><div class="settings-row-title">Jamendo (free, full songs)</div><div class="settings-row-sub">Adds full Creative Commons tracks to search results. Get a free client_id in about a minute at devportal.jamendo.com, then paste it here — no card or approval needed.</div></div>
-          <div style="display:flex;gap:8px">
-            <input type="password" id="jamendoClientIdInput" placeholder="Paste your free Jamendo client_id…" style="flex:1;min-width:0;background:rgba(255,255,255,.05);border:1px solid var(--card-border);border-radius:10px;padding:9px 10px;color:var(--text);font-size:12px" aria-label="Jamendo client ID">
-            <button class="glass-btn" id="saveJamendoClientIdBtn" type="button" style="padding:0 14px;border-radius:10px;font-size:12px;white-space:nowrap">Save</button>
-          </div>
-        </div>
-        <div class="settings-row"><div class="settings-row-main"><div class="settings-row-title">Internet Archive</div><div class="settings-row-sub">Full public-domain &amp; Creative Commons tracks — on by default, no key needed.</div></div></div>
       </div>
       <div class="settings-section">
         <div class="settings-section-label">Experience</div>
         <label class="settings-row"><div class="settings-row-main"><div class="settings-row-title">Reduce motion</div><div class="settings-row-sub">Tone down floating animations for a calmer interface.</div></div><input class="settings-switch" id="settingReduceMotion" type="checkbox"></label>
-        <button class="settings-row settings-action" id="clearSearchHistoryBtn" type="button"><div class="settings-row-main"><div class="settings-row-title">Clear recent searches</div><div class="settings-row-sub">Remove only your saved search terms.</div></div><i class="fa-solid fa-trash-can" style="color:#ff6b8a"></i></button>
         <button class="settings-row settings-action" id="resetPreferencesBtn" type="button"><div class="settings-row-main"><div class="settings-row-title">Reset preferences</div><div class="settings-row-sub">Restore Aura's settings to their default values.</div></div><i class="fa-solid fa-arrow-rotate-left" style="color:var(--accent)"></i></button>
       </div>
     </div>
@@ -333,8 +304,8 @@ body.light-theme #auraLoaderText{color:rgba(25,26,30,.78)}
       <button type="button" class="desktop-nav-btn active" data-tab="tabHome" onclick="navClick(this,'tabHome')"><i class="fa-solid fa-house"></i><span>Home</span></button>
       <button type="button" class="desktop-nav-btn" data-tab="tabSearch" onclick="navClick(this,'tabSearch')"><i class="fa-solid fa-magnifying-glass"></i><span>Search</span></button>
       <button type="button" class="desktop-nav-btn" data-tab="tabLibrary" onclick="navClick(this,'tabLibrary')"><i class="fa-solid fa-layer-group"></i><span>Library</span></button>
+      <button type="button" class="desktop-nav-btn" data-tab="tabPlaylists" onclick="navClick(this,'tabPlaylists')"><i class="fa-solid fa-bars-staggered"></i><span>Playlists</span></button>
       <button type="button" class="desktop-nav-btn" data-tab="tabRadio" onclick="navClick(this,'tabRadio')"><i class="fa-solid fa-radio"></i><span>Radio</span></button>
-      <button type="button" class="desktop-nav-btn" data-tab="tabProfile" onclick="navClick(this,'tabProfile')"><i class="fa-solid fa-plus"></i><span>Add music</span></button>
       <a class="desktop-nav-btn desktop-nav-link" href="/rooms"><i class="fa-solid fa-headphones"></i><span>Rooms</span></a>
 
       <button type="button" class="ytm-new-playlist-btn" onclick="openPlaylistModal()">
@@ -446,7 +417,6 @@ body.light-theme #auraLoaderText{color:rgba(25,26,30,.78)}
         <!-- Featured Artists Shelf (Always visible on home) -->
         <div class="ytm-section-head" style="margin-top:4px">
           <div>
-            <div class="ytm-listen-kicker" style="color:var(--text-sub);margin-bottom:4px">FEATURED IN YOUR MUSIC</div>
             <h2 class="ytm-section-title">Artists</h2>
           </div>
           <button type="button" class="ytm-section-link" onclick="openHomeArtistsTab()" style="background:none;border:none;color:var(--text-sub);font-size:13px;font-weight:600;cursor:pointer">See all</button>
@@ -455,7 +425,6 @@ body.light-theme #auraLoaderText{color:rgba(25,26,30,.78)}
 
         <div class="ytm-section-head" style="margin-top:20px">
           <div>
-            <div class="ytm-listen-kicker" style="color:var(--text-sub);margin-bottom:4px">START RADIO FROM A SONG</div>
             <h2 class="ytm-section-title">Quick picks</h2>
           </div>
           <div class="ytm-head-actions">
@@ -529,7 +498,7 @@ body.light-theme #auraLoaderText{color:rgba(25,26,30,.78)}
     <div class="tab-content" id="tabSearch">
       <div class="srch-head">
         <h3 class="srch-title">Search</h3>
-        <p class="srch-sub">Find tracks, artists, and stations.</p>
+        <p class="srch-sub">Find tracks, artists, and albums in your Aura library.</p>
       </div>
       <div class="srch-bar-row">
         <div class="search-bar srch-bar" id="searchBarWrap">
@@ -539,44 +508,15 @@ body.light-theme #auraLoaderText{color:rgba(25,26,30,.78)}
         </div>
         <button type="button" class="glass-btn ctrl-glass-btn srch-mic" id="voiceSearchBtn" title="Search by voice" aria-label="Search by voice"><i class="fa-solid fa-microphone"></i></button>
       </div>
-      <div class="srch-trending" id="searchTrending">
-        <span class="srch-trend-label">Trending</span>
-        <button type="button" onclick="runSearchChip(this)">Anirudh</button>
-        <button type="button" onclick="runSearchChip(this)">Arijit Singh</button>
-        <button type="button" onclick="runSearchChip(this)">Malayalam hits</button>
-        <button type="button" onclick="runSearchChip(this)">Lo-fi beats</button>
-        <button type="button" onclick="runSearchChip(this)">A. R. Rahman</button>
-        <button type="button" onclick="runSearchChip(this)">Sid Sriram</button>
-        <button type="button" onclick="runSearchChip(this)">Tamil love songs</button>
-      </div>
-
       <div class="browse-grid" id="browseGrid">
         <button type="button" class="browse-tile cat-all active" data-filter="all"><i class="fa-solid fa-music"></i>All tracks</button>
         <button type="button" class="browse-tile cat-favorites" data-filter="favorites"><i class="fa-solid fa-heart"></i>Favorites</button>
         <button type="button" class="browse-tile cat-recent" data-filter="recent"><i class="fa-solid fa-clock-rotate-left"></i>Recently played</button>
-        <button type="button" class="browse-tile cat-local" data-filter="local"><i class="fa-solid fa-file-audio"></i>Local files</button>
       </div>
 
       <p class="srch-section" id="searchResultsLabel">All tracks</p>
       <div class="song-list" id="searchResultsList"></div>
 
-      <div id="youtubeSearchSection" style="margin-top:24px;display:none">
-        <div style="display:flex;align-items:center;justify-content:space-between;gap:10px;margin-bottom:12px">
-          <p class="srch-section" style="margin:0">Search the web</p>
-          <span class="srch-hint">YouTube · Audius · Jamendo · Openverse · Archive</span>
-        </div>
-        <div id="youtubeSearchResults" class="song-list" style="margin-top:0"></div>
-
-        <p style="font-size:13px;font-weight:700;margin:18px 0 4px">Have a YouTube / Spotify / SoundCloud link?</p>
-        <div class="paste-link-row">
-          <input type="text" id="pasteLinkInput" placeholder="Paste a track or video link…" aria-label="Paste a track or video link">
-          <button type="button" class="glass-btn" id="pasteLinkBtn">Play here</button>
-        </div>
-        <div id="pasteLinkEmbedHost"></div>
-
-        <div class="multi-source-search" id="multiSourceSearchButtons"></div>
-        <div class="multi-source-note" id="multiSourceSearchNote">Choose a source to search.</div>
-      </div>
     </div>
 
     <div class="tab-content" id="tabLibrary">
@@ -598,10 +538,6 @@ body.light-theme #auraLoaderText{color:rgba(25,26,30,.78)}
           <div class="lib-menu-icon"><i class="fa-solid fa-heart"></i></div>
           <div class="lib-menu-label">Favorites</div>
         </div>
-        <div class="lib-menu-row" onclick="goToSearchCategory('local')">
-          <div class="lib-menu-icon"><i class="fa-solid fa-folder"></i></div>
-          <div class="lib-menu-label">Local music</div>
-        </div>
         <div class="lib-menu-row" onclick="document.getElementById('allTracksSection').scrollIntoView({behavior:'smooth'})">
           <div class="lib-menu-icon"><i class="fa-solid fa-bars-staggered"></i></div>
           <div class="lib-menu-label">All tracks</div>
@@ -612,6 +548,7 @@ body.light-theme #auraLoaderText{color:rgba(25,26,30,.78)}
         <div class="lib-menu-row" onclick="toggleStatsPanel()">
           <div class="lib-menu-icon"><i class="fa-solid fa-chart-line"></i></div>
           <div class="lib-menu-label">Listening stats</div>
+          <i class="fa-solid fa-chevron-right" id="statsChevron" aria-hidden="true"></i>
         </div>
         <div class="stats-grid" id="statsPanel" style="display:none"></div>
       </div>
@@ -679,58 +616,8 @@ body.light-theme #auraLoaderText{color:rgba(25,26,30,.78)}
       <div id="radioEffectsPane" style="display:none"></div>
     </div>
 
+    <div class="tab-content" id="tabPlaylists"></div>
     <div class="tab-content" id="tabPlaylist"></div>
-
-    <div class="tab-content" id="tabProfile">
-      <h3 style="margin-bottom:15px">Manage Music</h3>
-
-      <div class="glass-add-card" id="youtubeAddCard">
-        <div class="upload-card-head">
-          <span class="icon-badge"><i class="fa-brands fa-youtube"></i></span>
-          <h4>ADD FROM YOUTUBE LINK</h4>
-        </div>
-        <p class="upload-desc">Paste a YouTube video/song link and it's added to your library, playing through YouTube's own official embedded player — nothing is downloaded, ripped, or converted.</p>
-        <input type="text" id="ytAddInput" class="admin-input" placeholder="Paste a YouTube link…" style="margin-bottom:10px" aria-label="YouTube link">
-        <button type="button" class="admin-btn secondary-yt" id="ytAddBtn" style="width:100%" onclick="addYouTubeTrack()"><i class="fa-brands fa-youtube" style="margin-right:8px"></i>Add to Library</button>
-        <p class="yt-note">Plays via YouTube's official player inside AURA — no ripping, downloading, or file conversion involved.</p>
-      </div>
-
-      <div class="upload-card">
-        <div class="upload-card-head">
-          <span class="icon-badge"><i class="fa-solid fa-file-audio"></i></span>
-          <h4>ADD AUDIO FILES DIRECTLY</h4>
-        </div>
-        <p class="upload-desc">Pick songs from your phone storage or downloads folder to add them straight to your library, with automatic tag &amp; cover extraction where available.</p>
-        <div class="format-tags">
-          <span class="format-tag">MP3</span>
-          <span class="format-tag">FLAC</span>
-          <span class="format-tag">AAC</span>
-          <span class="format-tag">ALAC</span>
-          <span class="format-tag">WMA (Lossy)</span>
-          <span class="format-tag">WMA (Lossless)</span>
-        </div>
-        <div class="upload-dropzone" id="uploadDropzone" role="button" tabindex="0" aria-label="Drag and drop audio files or choose files">
-          <div class="upload-drop-icon"><i class="fa-solid fa-cloud-arrow-up"></i></div>
-          <strong>Drag &amp; Drop Audio Files</strong>
-          <span>Drop your songs here or tap to browse your phone</span>
-          <span>MP3 • FLAC • AAC • M4A • WMA • ALAC</span>
-        </div>
-        <input type="file" id="localFileInput" accept=".mp3,.wma,.flac,.aac,.m4a,.alac,audio/*" multiple style="display:none">
-        <div class="upload-file-list" id="uploadFileList"></div>
-      </div>
-
-      <div class="glass-add-card" style="max-width:400px">
-        <span id="profileName" style="display:none">User</span>
-        <div class="admin-section" style="background:transparent;border:none;padding:0">
-            <p style="font-size:13px; font-weight:bold; color:var(--accent)">ADD NEW TRACK</p>
-            <input type="text" id="newTitle" class="admin-input" placeholder="Track Name" aria-label="Track title">
-            <input type="text" id="newArtist" class="admin-input" placeholder="Artist Name" aria-label="Artist name">
-            <input type="text" id="newUrl" class="admin-input" placeholder="Music File Link (URL)" aria-label="Audio file URL">
-            <input type="text" id="newImg" class="admin-input" placeholder="Cover Image Link (URL)" aria-label="Cover image URL">
-            <button type="button" class="admin-btn" id="addTrackBtn" onclick="addNewTrack()">Save to Library</button>
-        </div>
-      </div>
-    </div>
 
     <div class="player-bar" id="miniPlayer">
       <input type="range" class="mini-seek desk-only" id="miniSeek" min="0" max="100" step="any" value="0" aria-label="Seek">
@@ -779,8 +666,8 @@ body.light-theme #auraLoaderText{color:rgba(25,26,30,.78)}
         <div class="nav-indicator" id="navIndicator" aria-hidden="true"></div>
         <button type="button" class="glass-btn nav-btn active" id="navHomeBtn" onclick="navClick(this,'tabHome')" aria-label="Home"><i class="fa-solid fa-house"></i><span class="nav-label">Home</span></button>
         <button type="button" class="glass-btn nav-btn" id="navLibraryBtn" onclick="navClick(this,'tabLibrary')" aria-label="Library"><i class="fa-solid fa-book-open"></i><span class="nav-label">Library</span></button>
+        <button type="button" class="glass-btn nav-btn" id="navPlaylistsBtn" onclick="navClick(this,'tabPlaylists')" aria-label="Playlists"><i class="fa-solid fa-bars-staggered"></i><span class="nav-label">Playlists</span></button>
         <button type="button" class="glass-btn nav-btn" id="navRadioBtn" onclick="navClick(this,'tabRadio')" aria-label="Radio"><i class="fa-solid fa-radio"></i><span class="nav-label">Radio</span></button>
-        <button type="button" class="glass-btn nav-btn" id="navAddBtn" onclick="navClick(this,'tabProfile')" aria-label="Add Music"><i class="fa-solid fa-plus"></i><span class="nav-label">Add</span></button>
       </div>
       <button type="button" class="glass-btn nav-fab" id="navSearchFab" onclick="navClick(this,'tabSearch')" aria-label="Search"><i class="fa-solid fa-magnifying-glass"></i></button>
     </div>

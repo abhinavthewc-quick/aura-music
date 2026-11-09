@@ -120,7 +120,7 @@ Open DevTools on the main app. These globals are intentionally available:
 | `songs` / `currentIndex` | Read-only accessors for inline inspection |
 | `$('id')` | `document.getElementById` |
 | `playSong(index)` | Start any track by index |
-| `goTab(tabId)` | Switch tabs (`tabHome`, `tabSearch`, `tabLibrary`, `tabRadio`, `tabProfile`) |
+| `goTab(tabId)` | Switch tabs (`tabHome`, `tabSearch`, `tabLibrary`, `tabPlaylists`, `tabRadio`) |
 | `AuraPresence.getState()` | Current presence snapshot, including extrapolated position |
 | `window.auraPresence` | Last published plain snapshot |
 | `document.getElementById('auraPresence').dataset` | Same data as text attributes |

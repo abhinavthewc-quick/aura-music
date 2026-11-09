@@ -13,6 +13,19 @@ import { $, persistLikedHistory, savedLikeMap, state } from '../core/state';
       return state.songs.find(s => String(s.id) === String(id));
     }
 
+    export function playTrackSequence(ids: Array<string | number>){
+      const sequence = ids
+        .map(id => findSongById(id))
+        .filter(Boolean)
+        .map(song => song.id);
+      if(!sequence.length) return;
+      const firstId = sequence.shift();
+      manualQueue = sequence;
+      renderUpNext();
+      const index = state.songs.findIndex(song => String(song.id) === String(firstId));
+      if(index !== -1) playSong(index);
+    }
+
     export function openTrackMenu(e, id){
       if(e) e.stopPropagation();
       const song = findSongById(id);
@@ -22,9 +35,8 @@ import { $, persistLikedHistory, savedLikeMap, state } from '../core/state';
       const canSaveOffline = !song.isYouTube && !!song.url;
 
       const rows = [];
-      rows.push(`<div role="button" tabindex="0" class="track-sheet-row" onclick="queueTrackAction('playNext')"><i class="fa-solid fa-list-ol"></i>Play Next</div>`);
-      rows.push(`<div role="button" tabindex="0" class="track-sheet-row" onclick="queueTrackAction('addQueue')"><i class="fa-solid fa-layer-group"></i>Add to Queue</div>`);
       rows.push(`<div role="button" tabindex="0" class="track-sheet-row${song.favorite?' active-row':''}" onclick="queueTrackAction('favorite')"><i class="fa-${song.favorite?'solid':'regular'} fa-heart"></i>${song.favorite?'Remove from Favorites':'Add to Favorites'}</div>`);
+      rows.push(`<div role="button" tabindex="0" class="track-sheet-row" onclick="queueTrackAction('playlist')"><i class="fa-solid fa-list"></i>Add to Playlist</div>`);
       if(isAdded){
         rows.push(`<div role="button" tabindex="0" class="track-sheet-row" onclick="queueTrackAction('edit')"><i class="fa-solid fa-pen"></i>Edit Track</div>`);
       }
@@ -76,6 +88,8 @@ import { $, persistLikedHistory, savedLikeMap, state } from '../core/state';
         toast(song.favorite ? 'Added to Favorites' : 'Removed from Favorites', 'circle-check');
       } else if(action === 'edit'){
         openEditModal(null, song.id);
+      } else if(action === 'playlist'){
+        (globalThis as any).openPlaylistPicker?.(song.id);
       } else if(action === 'delete'){
         deleteTrack(null, song.id);
       } else if(action === 'share'){

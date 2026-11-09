@@ -24,17 +24,17 @@
 Aura Music is a single-page music app built with plain TypeScript and Vite. It
 does not own a database of users or a streaming service: the library is a
 public [Hugging Face storage bucket](https://huggingface.co/buckets/Angelrider/sonora)
-maintained by a small admin pipeline, and everything personal (likes, local
-files, queue, settings) stays in your browser.
+maintained by a small admin pipeline, and everything personal (likes, playlists,
+queue, settings) stays in your browser.
 
 - **Your library** — tracks and cover art streamed from the bucket, with album,
   year and duration metadata from `manifest.json`.
-- **Local files** — drop MP3/FLAC/Opus/M4A files in; tags are read client-side and
-  audio is stored in IndexedDB.
-- **Search & add** — local search plus iTunes, Deezer, Audius, Jamendo,
-  Internet Archive, Openverse, ccMixter and YouTube; paste any YouTube,
-  Spotify or SoundCloud link.
-- **Player** — full player, queue, shuffle/repeat, media keys, art-derived
+- **Library search** — filters the Aura catalogue by title, artist, album,
+  film, favourites, and recent plays. It never mixes preview tracks from other
+  services into the library.
+- **Playlists** — create, edit, delete, play, and manage device-local playlists;
+  add any Aura track from its action menu.
+- **Player** — full player, playlist sequencing, shuffle/repeat, media keys, art-derived
   theming, YouTube's official embedded player for YouTube tracks.
 - **Live radio** — thousands of stations via radio-browser.info plus custom
   stream URLs.
@@ -43,9 +43,9 @@ files, queue, settings) stays in your browser.
 - **Discord presence** — a companion [PreMiD activity](premid/README.md) shows
   the current track, artist, cover art and progress, with a deep link back to
   the exact song.
-- **Admin pipeline** — a private panel queues YouTube URLs; GitHub Actions
-  downloads, tags, uploads to the bucket, writes `manifest.json` and chains
-  batches automatically.
+- **Submission pipeline** — AURA FARMER accepts YouTube links in Discord, while
+  the private admin panel moderates the queue and GitHub Actions downloads,
+  tags, uploads, and updates `manifest.json`.
 
 ## Stack
 
@@ -72,10 +72,8 @@ npm install
 npm run dev
 ```
 
-Open <http://localhost:5173>. The library and radio work with no configuration.
-Online YouTube search needs a key (Settings → advanced, or
-`AURA_YOUTUBE_API_KEY` in `src/core/config.ts`), but pasting a YouTube link works
-without one. Rooms need the worker running locally — see
+Open <http://localhost:5173>. The library, library search, playlists, and radio
+work with no provider keys. Rooms need the worker running locally — see
 [development](docs/development.md#rooms).
 
 ### Scripts

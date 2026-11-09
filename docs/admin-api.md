@@ -52,12 +52,11 @@ credential:
 
 - Enabled only when `BOT_SERVICE_TOKEN` is set in the Pages environment; the
   value is compared as a SHA-256 digest.
-- Allowed actions: `search`, `expand`, `dispatch`, `runs`, `runJobs`, `verify`.
+- Allowed actions: `search`, `expand`, `dispatch`, `runs`, `runJobs`, and
+  `libraryIds` (the minimal uploaded-video-id set used for bot dedupe).
   Anything else returns `403`, even with a valid token.
 - The resolved identity is `aura-farmer@service`; it is not an admin session and
   cannot be used for `library`, secrets or bucket mutations.
-- `verify` returns `{ ok: true, email }` so the bot can confirm the token before
-  queueing work.
 
 ### Failure responses
 

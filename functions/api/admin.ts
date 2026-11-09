@@ -40,7 +40,7 @@ interface Env {
 
 /* The Discord bot's Worker may only use these read/dispatch actions. It never
    gets a Google credential or an admin session. */
-const BOT_ACTIONS = new Set(['search', 'expand', 'dispatch', 'runs', 'runJobs']);
+const BOT_ACTIONS = new Set(['search', 'expand', 'dispatch', 'runs', 'runJobs', 'libraryIds']);
 
 interface BucketFile {
   path: string;
@@ -1167,6 +1167,13 @@ export const onRequestPost = async ({ request, env, ctx }: {
           manifest: m.tracks,
           artists: m.artists,
         });
+      }
+
+      /* Minimal service-token view used by AURA FARMER before accepting a
+         submission. The full library action remains admin-only. */
+      case 'libraryIds': {
+        const files = await bucketTree();
+        return json({ videoIds: [...uploadedVideoIds(files)] });
       }
 
       /* ----- bucket management (F6): rename & delete are direct batch

@@ -3,13 +3,13 @@ import { currentRadioQuery } from './features/radio';
 import { toast } from './core/dom';
 import { navClick, goTab, openMobileSearch, closeMobileSearch, mobileSearchOnInput, mobileSearchClear } from './ui/nav';
 import { playSong } from './features/player';
-import { queueTrackAction, openTrackMenu } from './features/queue';
+import { openTrackMenu, playTrackSequence, queueTrackAction } from './features/queue';
 import {
-  addNewTrack, addYouTubeTrack, closeEditModal, retryCatalog, saveEditedTrack,
+  closeEditModal, retryCatalog, saveEditedTrack,
   setLibView, toggleFavorite, toggleStatsPanel,
 } from './features/library';
 import {
-  goToSearchCategory, playOutsideResult, retryOnlineSearch, runSearchChip,
+  goToSearchCategory, runSearchChip,
 } from './features/search';
 import { renderAuraPicks, resumeLastPlayed, shuffleAll } from './features/home';
 import {
@@ -20,9 +20,10 @@ import {
 } from './features/ambience';
 import { openArtist, shuffleArtist } from './features/library';
 import {
-  addTrackToPlaylist, closePlaylistModal, drawerPlaylistTap, openPlaylistModal,
-  playlistPageMore, playlistPageShare, submitPlaylistModal, updatePlaylistCta,
-  openPlaylistPage,
+  addTrackToPlaylist, closePlaylistModal, closePlaylistPicker, deletePlaylist,
+  drawerPlaylistTap, openPlaylistModal, openPlaylistPage, openPlaylistPicker,
+  playPlaylist, playlistPageMore, playlistPageShare, removeTrackFromPlaylist,
+  renderPlaylistsPage, submitPlaylistModal, updatePlaylistCta,
 } from './features/playlists';
 import {
   closeRadioSheetThen, loadRadioStations, radioMenuCopy, radioMenuShare,
@@ -33,15 +34,16 @@ import {
 // object, so everything they reference must be exposed here.
 Object.assign(globalThis, {
   $, state, toast,
-  navClick, goTab, openPlaylistPage,
+  navClick, goTab, openPlaylistPage, renderPlaylistsPage,
   openMobileSearch, closeMobileSearch, mobileSearchOnInput, mobileSearchClear,
   openPlaylistModal, closePlaylistModal, submitPlaylistModal, updatePlaylistCta,
-  addTrackToPlaylist, playlistPageShare, playlistPageMore, drawerPlaylistTap,
+  addTrackToPlaylist, removeTrackFromPlaylist, playPlaylist, deletePlaylist,
+  openPlaylistPicker, closePlaylistPicker, playlistPageShare, playlistPageMore, drawerPlaylistTap,
   playSong,
-  queueTrackAction, openTrackMenu,
-  addNewTrack, addYouTubeTrack, closeEditModal, retryCatalog, saveEditedTrack,
+  queueTrackAction, openTrackMenu, playTrackSequence,
+  closeEditModal, retryCatalog, saveEditedTrack,
   setLibView, toggleFavorite, toggleStatsPanel,
-  goToSearchCategory, playOutsideResult, retryOnlineSearch, runSearchChip,
+  goToSearchCategory, runSearchChip,
   renderAuraPicks, resumeLastPlayed, shuffleAll,
   changeProfileName, closeHelp, logoutUser, openHelp, openSettings,
   openAbout, openEffects, openRadioEffectsTab, setRadioSegment, toggleAmbientLayer,

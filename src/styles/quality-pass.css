@@ -1,0 +1,99 @@
+/* Aura Music quality pass
+   One product shell: true black canvas, graphite surfaces, white hierarchy,
+   and brass reserved for intent. This file deliberately loads last. */
+
+:root {
+  --bg: #000 !important;
+  --text: #fff !important;
+  --text-sub: #a5a5a5 !important;
+  --accent: #e5a95e;
+  --card-bg: #101010 !important;
+  --card-border: rgba(255,255,255,.1) !important;
+  --card-hover: #171717 !important;
+  --surface-raised: #111 !important;
+  --surface-overlay: rgba(8,8,8,.97) !important;
+  --focus-ring: rgba(229,169,94,.62) !important;
+}
+
+body:not(.light-theme),
+body:not(.light-theme) .app-container,
+body:not(.light-theme) .tab-content { background: #000 !important; }
+
+/* Shared overlay treatment */
+body:not(.light-theme) :is(.modal-overlay,.effects-modal,.help-overlay,.name-modal,.track-sheet-overlay,.side-menu) {
+  background: rgba(0,0,0,.76) !important;
+  backdrop-filter: blur(10px) !important;
+  -webkit-backdrop-filter: blur(10px) !important;
+}
+
+body:not(.light-theme) :is(.settings-modal-card,.effects-card,.help-card,.name-modal-card,.profile-popover,.track-sheet,.side-menu-content) {
+  background: #0d0d0d !important;
+  border-color: rgba(255,255,255,.12) !important;
+  color: #fff !important;
+  box-shadow: 0 28px 90px rgba(0,0,0,.72) !important;
+}
+
+/* Settings: quiet rows instead of a second visual language */
+body:not(.light-theme) .settings-modal-card {
+  border-radius: 20px !important;
+  backdrop-filter: none !important;
+  -webkit-backdrop-filter: none !important;
+}
+body:not(.light-theme) .settings-modal-card::before { display: none; }
+body:not(.light-theme) .settings-icon {
+  background: rgba(229,169,94,.12) !important;
+  border-color: rgba(229,169,94,.3) !important;
+  color: var(--accent) !important;
+  box-shadow: none !important;
+}
+body:not(.light-theme) .settings-close {
+  border-color: rgba(255,255,255,.12) !important;
+  background: #171717 !important;
+}
+body:not(.light-theme) .settings-section-label {
+  margin: 0 0 8px 2px !important;
+  color: #9a9a9a !important;
+  font-size: 12px !important;
+  font-weight: 650 !important;
+  letter-spacing: 0 !important;
+  text-transform: none !important;
+}
+body:not(.light-theme) .settings-row {
+  border-color: rgba(255,255,255,.1) !important;
+  border-radius: 12px !important;
+  background: #141414 !important;
+  box-shadow: none !important;
+}
+body:not(.light-theme) .settings-row:hover { background: #181818 !important; }
+body:not(.light-theme) .settings-switch { background: #2a2a2a !important; border-color: rgba(255,255,255,.14) !important; }
+body:not(.light-theme) .settings-switch:checked { background: var(--accent) !important; border-color: var(--accent) !important; }
+body:not(.light-theme) .settings-switch:checked::after { background: #17100a !important; }
+
+/* Remaining utility surfaces */
+body:not(.light-theme) :is(.effects-control,.pomodoro-box,.profile-popover-row,.track-sheet-row) {
+  background: #141414 !important;
+  border-color: rgba(255,255,255,.09) !important;
+  box-shadow: none !important;
+}
+body:not(.light-theme) :is(.effects-choice,.pomodoro-btn,.name-modal-input) {
+  background: #151515 !important;
+  border-color: rgba(255,255,255,.12) !important;
+}
+body:not(.light-theme) .effects-choice.active {
+  background: rgba(229,169,94,.12) !important;
+  border-color: rgba(229,169,94,.42) !important;
+}
+body:not(.light-theme) :is(.effects-choice.active i,.effects-icon,.name-modal-icon) { color: var(--accent) !important; }
+
+/* Consistent action vocabulary */
+body:not(.light-theme) :is(.playlist-create-btn,.name-modal-save,.pomodoro-btn:not(.secondary)) {
+  border-color: var(--accent) !important;
+  background: var(--accent) !important;
+  color: #1a1007 !important;
+}
+
+@media (max-width: 700px) {
+  body:not(.light-theme) :is(.settings-modal-card,.effects-card,.help-card,.name-modal-card,.track-sheet) {
+    border-radius: 22px 22px 0 0 !important;
+  }
+}

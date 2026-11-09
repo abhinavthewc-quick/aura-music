@@ -27,10 +27,11 @@ Created in [`src/core/catalog.ts`](../src/core/catalog.ts):
 }
 ```
 
-### Added, local and preview tracks
+### Legacy added and local tracks
 
-These live in `state.addedSongs` (or are pushed temporarily for previews) and
-are merged after catalogue tracks by `rebuildSongs()`.
+Older clients could add URLs and local files. Their metadata remains supported
+in `state.addedSongs` so upgrades do not erase a user’s existing data, but the
+current product does not expose a public add-music surface.
 
 | Field | Applies to | Meaning |
 | --- | --- | --- |
@@ -40,7 +41,6 @@ are merged after catalogue tracks by `rebuildSongs()`.
 | `isLocal` | local files | Audio blob is stored in IndexedDB |
 | `isYouTube` | YouTube | Playback uses the official iframe player |
 | `videoId` | YouTube/catalogue | 11-char YouTube id |
-| `isOutsidePreview` | provider previews | Came from iTunes/Deezer/Audius/etc. |
 | `missing` | local | Blob lookup failed at load; the row is kept but can’t play |
 
 ### Identity and dedupe
@@ -141,16 +141,13 @@ The manifest is cached for 30 s in the admin Function and in the browser’s
 | `auraLocalAccounts_v1` | `local-auth.ts` | `{ [email]: { salt, hash, createdAt } }` (PBKDF2-SHA256, 150k) |
 | `auraUserName` | login/settings | display name |
 | `auraFirstLogin`, `auraLastLogin` | login/app | ISO timestamps for the profile popover |
-| `auraSettings_v1` | settings | `{autoplayNext, rememberVolume, searchHistory, youtubeResults, reduceMotion}` |
+| `auraSettings_v1` | settings | `{autoplayNext, rememberVolume, reduceMotion}` |
 | `auraTheme` | settings/bootstrap | `light` or `dark`; applied before first paint |
 | `auraVolume` | mini-player | `0..1` string |
-| `auraYoutubeApiKey` | settings | per-browser YouTube Data API key override |
-| `auraJamendoClientId` | settings | per-browser Jamendo client id |
-| `auraYtCache_v1` | search | `{ [query]: {t, items} }`, 12 h, max 40 entries |
-| `auraSearchHistory_v1` | settings only | **Legacy/vestigial:** only removed, never written in the current build |
 | `auraLikedSongs_v2` | state | `[{id,title,artist,img,videoId,url,isYouTube}]` |
 | `recentlyPlayed` | library | last 10 `{id,title,artist,img}` |
 | `addedTracks` | library | added/local track metadata (local `url` deliberately stripped) |
+| `auraPlaylists` | playlists | `[{id,title,description,privacy,createdAt,tracks:[trackKey]}]` |
 | `auraHfCatalog_v1` | catalog | `{tracks: [...], at: timestamp}` cache |
 | `auraRadioPlaybackState_v1` | radio | `{url, station, playing, savedAt}` for resume |
 | `auraRoomName_v1` | rooms | remembered listener name |

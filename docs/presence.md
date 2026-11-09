@@ -74,7 +74,7 @@ available.
 | `duration` / `position` | Seconds; `0` for live radio |
 | `playing` | Whether audio is progressing |
 | `live` | Radio/live stream (no meaningful duration) |
-| `tab` | `Home`, `Search`, `Library`, `Radio`, `Add Music` |
+| `tab` | `Home`, `Search`, `Library`, `Playlists`, `Radio` |
 | `updatedAt` | Epoch **milliseconds** of the last publish; used to extrapolate |
 
 `kind: 'idle'` is emitted even when nothing has ever played, so the activity can

@@ -17,6 +17,8 @@
    display/visibility), so geometry cannot be used to decide what is open —
    class/aria state is the source of truth. */
 const OVERLAY_PRIORITY = [
+  '#playlistPicker',
+  '#playlistModal',
   '#trackSheetOverlay',
   '#nameModal',
   '#editTrackModal',
@@ -31,6 +33,8 @@ const OVERLAY_PRIORITY = [
 ];
 
 const CLOSE_BUTTONS: Record<string, string> = {
+  '#playlistPicker': '[data-close-picker]',
+  '#playlistModal': '#playlistCancelBtn',
   '#fullPlayerOverlay': '#closeFullPlayerBtn',
   '#radioFullPlayerOverlay': '#closeRadioFullPlayerBtn',
   '#upNextSheet': '#upNextCloseBtn',

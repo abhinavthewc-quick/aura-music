@@ -134,12 +134,11 @@ Do not log secrets. The admin API never returns secret values — only names fro
 
 - No first-party analytics, telemetry or Sentry integration is present in the
   app source.
-- The browser calls third-party APIs directly (HF, iTunes, Deezer, Audius,
-  Jamendo, Archive.org, Openverse, ccMixter, YouTube, radio-browser). Those
-  providers see the user’s IP and query; Google Fonts/Font Awesome/jsmediatags
-  CDNs see page loads.
-- Local library metadata, likes, recent plays, local audio and room names stay in
-  the browser. There is no server-side user database.
+- The browser calls Hugging Face for the library, radio-browser for stations,
+  and Google for sign-in. Those providers see the user’s IP and relevant
+  request; Google Fonts and Font Awesome see page loads.
+- Likes, recent plays, playlists, settings, and room names stay in the browser.
+  There is no server-side user database.
 - The admin API sees Google ID tokens for verification but does not store them.
 - PreMiD is a separate extension with its own privacy policy; it receives only
   the presence fields documented in [presence.md](presence.md).

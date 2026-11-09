@@ -1,8 +1,8 @@
 /* ============================================================
    Bottom dock (mobile) — reference design:
-   one dark pill with 4 labeled tabs (Home/Library/Radio/Add)
+   one dark pill with 4 labeled tabs (Home/Library/Playlists/Radio)
    plus a separate round search button, and the mini player
-   resting above it in the same warm, glassy style.
+   resting above it in the same pitch-black Aura shell.
    Imported last in main.css so it wins the cascade.
    ============================================================ */
 
@@ -28,10 +28,9 @@
   flex:1;min-width:0;
   border-radius:39px;
   padding:6px;
-  background: #1c1612;
-  background: linear-gradient(165deg, rgba(36, 28, 20, 0.96), rgba(18, 14, 10, 0.98));
-  border: 1px solid rgba(230, 189, 146, 0.22);
-  box-shadow: 0 16px 40px rgba(0,0,0,0.7), inset 0 1px 0 rgba(255,236,210,0.16);
+  background:#0b0b0b;
+  border:1px solid rgba(255,255,255,.14);
+  box-shadow:0 16px 40px rgba(0,0,0,.72),inset 0 1px 0 rgba(255,255,255,.07);
   -webkit-backdrop-filter: blur(28px) saturate(180%);
   backdrop-filter: blur(28px) saturate(180%);
 }
@@ -42,12 +41,12 @@ body.light-theme .nav-bar{
   box-shadow: 0 12px 32px rgba(120, 85, 45, 0.18), inset 0 1px 0 rgba(255, 255, 255, 0.9);
 }
 
-/* active pill: warm bronze segment (JS positions/sizes it) */
+/* active pill follows the desktop navigation: white on black */
 .nav-indicator{
   width:72px;border-radius:30px;
-  background:linear-gradient(160deg,rgba(126,80,38,.58),rgba(76,49,24,.42));
-  border:1px solid rgba(230,170,105,.24);
-  box-shadow:0 6px 16px rgba(0,0,0,.25),inset 0 1px 0 rgba(255,220,170,.22);
+  background:#fff;
+  border:1px solid #fff;
+  box-shadow:0 6px 16px rgba(0,0,0,.3);
 }
 /* the old design drew a white shine along the indicator's top edge — reads as
    a stray hairline above the active tab; the reference has no such line */
@@ -64,32 +63,34 @@ body.light-theme .nav-indicator{
   gap:5px;
   height:64px;
   font-size:12px;font-weight:600;letter-spacing:.2px;
-  color:rgba(255,236,210,.62);
+  color:rgba(255,255,255,.64);
   transition:color .25s ease,transform .15s ease;
 }
 .nav-bar .nav-btn .nav-label{font-size:11px;font-weight:600;letter-spacing:.2px;line-height:1}
 .nav-bar .nav-btn i{width:18px;height:18px;font-size:18px}
+.nav-bar .nav-btn.active,
+.nav-bar .nav-btn.active i{color:#000!important}
 .nav-btn:active{transform:scale(.94)}
 body.light-theme .nav-bar .nav-btn{color:rgba(70,55,40,.78)}
 
 /* circular search button beside the pill */
 .nav-fab{
   flex:0 0 62px;width:62px;height:62px;border-radius:50%;
-  border:1px solid rgba(230,189,146,.22)!important;
-  background: #251c14 !important;
-  background: linear-gradient(165deg, rgba(50, 38, 26, 0.96), rgba(24, 18, 12, 0.98)) !important;
-  box-shadow: 0 16px 40px rgba(0,0,0,0.7), inset 0 1px 0 rgba(255,236,210,0.16);
+  border:1px solid rgba(255,255,255,.14)!important;
+  background:#0b0b0b!important;
+  box-shadow:0 16px 40px rgba(0,0,0,.72),inset 0 1px 0 rgba(255,255,255,.07);
   -webkit-backdrop-filter: blur(28px) saturate(180%);
   backdrop-filter: blur(28px) saturate(180%);
-  color:#e8b57e;font-size:19px;
+  color:#fff;font-size:19px;
   transition:transform .2s ease,background .25s ease,color .25s ease;
   cursor:pointer;
 }
-.nav-fab:hover{color:#f0cdA2}
+.nav-fab:hover{color:var(--accent)}
 .nav-fab:active{transform:scale(.93)}
 .nav-fab.active{
-  background:linear-gradient(160deg,rgba(160,105,48,.85),rgba(110,70,30,.88))!important;
-  border-color:rgba(230,170,105,.40)!important;
+  background:#fff!important;
+  border-color:#fff!important;
+  color:#000!important;
 }
 body.light-theme .nav-fab{
   background: #fdfaf6 !important;
@@ -111,10 +112,9 @@ body.light-theme .nav-fab.active{
   body.has-mini .tab-content{padding-bottom:calc(240px + var(--safe-bottom, 0px))!important}
   .player-bar,.radio-player-bar{
     bottom:calc(98px + var(--safe-bottom, 0px))!important;
-    background: #181513 !important;
-    background: linear-gradient(165deg, rgba(34, 28, 24, 0.96), rgba(18, 15, 13, 0.98)) !important;
-    border: 1px solid rgba(230, 189, 146, 0.22) !important;
-    box-shadow: 0 16px 45px rgba(0,0,0,0.75), 0 2px 10px rgba(0,0,0,0.5), inset 0 1px 0 rgba(255,236,210,0.16) !important;
+    background:#0b0b0b!important;
+    border:1px solid rgba(255,255,255,.14)!important;
+    box-shadow:0 16px 45px rgba(0,0,0,.78),0 2px 10px rgba(0,0,0,.5),inset 0 1px 0 rgba(255,255,255,.07)!important;
   }
   body.light-theme .player-bar,
   body.light-theme .radio-player-bar{

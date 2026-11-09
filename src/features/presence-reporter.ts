@@ -18,7 +18,7 @@ const TAB_NAMES: Record<string, string> = {
   tabSearch: 'Search',
   tabLibrary: 'Library',
   tabRadio: 'Radio',
-  tabProfile: 'Add Music',
+  tabPlaylists: 'Playlists',
 };
 
 const isHttp = (url: string) => /^https?:\/\//i.test(url || '');

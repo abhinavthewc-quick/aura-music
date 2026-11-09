@@ -36,7 +36,6 @@ import { goTab } from '../ui/nav';
       renderFeaturedArtistsShelf();
       const favCount = state.songs.filter(s=>s.favorite).length;
       const last = state.recentlyPlayed[0] ? state.songs.find(s=>s.id===state.recentlyPlayed[0].id) : null;
-      const localCount = state.songs.filter(s=>s.isLocal).length;
 
       const tiles = [
         `<div class="quick-tile" role="button" tabindex="0" onclick="goToSearchCategory('favorites')">
@@ -49,10 +48,6 @@ import { goTab } from '../ui/nav';
         </div>` : `<div class="quick-tile" role="button" tabindex="0" onclick="shuffleAll()">
           <div class="quick-tile-art cat-shuffle"><i class="fa-solid fa-shuffle"></i></div>
           <div class="quick-tile-text"><div class="qt-title">Shuffle all</div><div class="qt-sub">Random pick</div></div>
-        </div>`,
-        `<div class="quick-tile" role="button" tabindex="0" onclick="goToSearchCategory('local')">
-          <div class="quick-tile-art cat-local"><i class="fa-solid fa-file-audio"></i></div>
-          <div class="quick-tile-text"><div class="qt-title">Local files</div><div class="qt-sub">${localCount} added</div></div>
         </div>`,
         `<div class="quick-tile" role="button" tabindex="0" onclick="goToSearchCategory('recent')">
           <div class="quick-tile-art cat-recent"><i class="fa-solid fa-clock-rotate-left"></i></div>
@@ -484,7 +479,7 @@ import { goTab } from '../ui/nav';
       if(!state.songs.length){
         c.innerHTML = `<div class="aura-empty">
           <i class="fa-solid fa-compact-disc" aria-hidden="true"></i>
-          <div><b>No picks yet</b><span>Add or search for music and this space fills itself.</span></div>
+          <div><b>No picks yet</b><span>Your Aura library will appear here when the catalogue finishes loading.</span></div>
           <button type="button" class="aura-empty-btn" onclick="goTab('tabSearch')">Find music</button>
         </div>`;
         return;

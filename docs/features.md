@@ -71,40 +71,23 @@ catalogue is unreachable.
 
 ### Local search
 
-The search tab filters the whole library by title, artist or album. Category
-tiles (All, Favorites, Recently Played, Local Files) scope the results when the
+The search tab filters the whole library by title, artist, album, film, or genre.
+Category tiles (All, Favorites, Recently Played) scope the results when the
 query is empty. Before typing, the tab shows the selected category; typing
 switches to whole-library results.
 
-### Online search
+Search is deliberately library-only. New music enters through the Discord
+submission pipeline, is reviewed/downloaded, and then appears in the shared
+Aura catalogue; search never injects previews from third-party catalogues.
 
-Typing at least **two characters** starts a debounced (350 ms) fan-out to up to
-nine providers. Results are interleaved round-robin and capped at 30.
+## Playlists
 
-| Provider | Key? | Result | Playback |
-| --- | --- | --- | --- |
-| YouTube Music | YouTube Data API key (optional) | 8 videos, 12 h local cache | official YouTube IFrame player |
-| Pasted YouTube link | none | one video via oEmbed | official IFrame player |
-| iTunes | none (JSONP) | 30 s previews | HTML audio |
-| Deezer | none (JSONP) | 30 s previews | HTML audio |
-| Audius | none | full tracks | HTML audio |
-| Jamendo | free `client_id` (optional) | full Creative Commons tracks | HTML audio |
-| Internet Archive | none | full public-domain/CC tracks | HTML audio (resolves item metadata) |
-| Openverse | none | full CC audio | HTML audio |
-| ccMixter | none | full CC tracks | HTML audio |
-
-- YouTube results need a key in Settings or `AURA_YOUTUBE_API_KEY`; without one,
-  pasting a link still works and the other providers continue to return results.
-- Search is resilient: providers use `Promise.allSettled`; if every provider
-  fails, an error state with **Try again** is shown; offline shows an offline
-  state. A “Still searching…” state appears after 7 s.
-- Spotify/SoundCloud links open their public oEmbed widgets; YouTube links play
-  in the embedded player.
-- The “Find on …” buttons open the official YouTube Music, Spotify or SoundCloud
-  search pages for the current query.
-
-**Known gap:** the settings toggle “Search history” and “Clear recent searches”
-exist, but the current build does not persist or render a search-history list.
+- A dedicated Playlists tab is available on desktop and mobile.
+- Create, rename, describe, play, and delete playlists.
+- Add a track from any track action menu or from suggestions on a playlist page.
+- Remove tracks without removing them from the Aura library.
+- Playlist data stays in `localStorage` on the current device and updates across
+  browser tabs through the `storage` event.
 
 ## Player
 
@@ -113,8 +96,8 @@ exist, but the current build does not persist or render a search-history list.
 - **Full player** opens from the mini player or a song; background gradients and
   control colours are derived from the cover art, contrast-checked against white
   text. Paused artwork uses a spring animation.
-- **Queue / Up Next** — play next, add to queue, remove, reorder (drag), clear;
-  opens as a sheet on mobile and a docked panel on desktop.
+- **Playlist sequencing** — starting a playlist queues its remaining tracks so
+  next/autoplay follows the playlist order.
 - **Seek** — range slider plus the mobile bottom-edge progress line; seeks work
   for HTML audio and YouTube.
 - **Shuffle/repeat** — repeat-one and repeat-all, mirrored between full and mini
@@ -179,13 +162,8 @@ Stored in `auraSettings_v1` unless noted:
 | --- | --- | --- |
 | Autoplay next track | on | `ended` advances the queue |
 | Remember volume | on | stores `auraVolume` |
-| Search history | on | **Known gap:** no persistent list is rendered |
-| YouTube Music results | on | hides the online YouTube section when off |
 | Reduce motion | off | adds `.aura-reduce-motion` (also honours OS preference) |
-| YouTube API key | empty | local override for `AURA_YOUTUBE_API_KEY` |
-| Jamendo client id | empty | enables Jamendo results |
 | Theme | dark | persisted in `auraTheme`, applied before first paint |
-| Clear recent searches | — | removes `auraSearchHistory_v1` |
 | Reset preferences | — | restores defaults after confirmation |
 
 Other surfaces: Help & Support (mail/Discord), About, sidebar collapse

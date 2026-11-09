@@ -80,7 +80,7 @@ Because module evaluation order is significant (state is built at import time),
 
 | Module | Responsibility |
 | --- | --- |
-| `config.ts` | Site constants: Google client id, admin allow-list, optional YouTube/Jamendo defaults |
+| `config.ts` | Site constants: Google client id and admin allow-list |
 | `state.ts` | Single mutable `state` object, track identity/dedupe (`trackKey`), favourites, catalogue rebuild |
 | `catalog.ts` | Hugging Face tree + manifest fetch, filename parsing, title cleaning, cover pairing, cache |
 | `session.ts` | Google session, 7-day token exchange, per-email usernames |
@@ -95,8 +95,9 @@ Because module evaluation order is significant (state is built at import time),
 | --- | --- |
 | `player.ts` | HTML audio playback, YouTube IFrame player, seek/volume, dynamic colours, Media Session |
 | `queue.ts` | Up-next queue, play next/previous, track sheet actions, queue persistence in memory |
-| `library.ts` | Library/home song lists, local-file IndexedDB, add/edit/delete, likes, stats, catalogue retry |
-| `search.ts` | Local filtering, multi-provider online search, YouTube link handling, embeds |
+| `library.ts` | Library/home song lists, legacy saved-track hydration, likes, stats, catalogue retry |
+| `search.ts` | Aura catalogue filtering and search categories |
+| `playlists.ts` | Device-local playlist CRUD, overview/detail pages, add/remove picker |
 | `radio.ts` | radio-browser search, station playback, custom streams, radio sheet |
 | `home.ts` | Greeting, quick-access tiles, Aura Picks, artist spotlight |
 | `ambience.ts` | Web Audio ambient layers, spatial/muffle effects, focus timer |
@@ -218,7 +219,6 @@ documented in [presence.md](presence.md); the site-side implementation lives in
 | `huggingface.co/api/buckets/.../tree` | HF | catalogue listing |
 | `huggingface.co/buckets/.../resolve/...` | HF | audio/cover/manifest bytes |
 | `de1.api.radio-browser.info` | public API | radio directory |
-| provider APIs | iTunes/Deezer/Audius/Jamendo/Archive/Openverse/ccMixter/YouTube | search |
 
 Google sign-in verifies ID tokens twice: once in the browser against Google's
 JWKS ([`google-auth.ts`](../src/core/google-auth.ts)) and again in the Pages

@@ -6,7 +6,6 @@
 @import './nav.css';
 @import './full-player.css';
 @import './radio.css';
-@import './add-music.css';
 @import './track-sheet.css';
 @import './overlays.css';
 @import './library.css';
@@ -29,3 +28,4 @@
 @import './playlists.css';
 @import './design-polish.css';
 @import './ytm-aesthetic.css';
+@import './quality-pass.css';

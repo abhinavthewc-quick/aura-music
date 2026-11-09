@@ -4,9 +4,10 @@ import { filterSearchTab } from '../features/search';
 import { $ } from '../core/state';
 /* ===== 3073-3074 ===== */
     export function goTab(tabId: string){
-      const b = document.querySelector(`.desktop-nav-btn[data-tab="${tabId}"]`) ||
-                document.querySelector(`.nav-bar .nav-btn[onclick*="'${tabId}'"]`) ||
-                (tabId === 'tabSearch' ? document.getElementById('navSearchFab') : null);
+      const desktop = document.querySelector(`.desktop-nav-btn[data-tab="${tabId}"]`);
+      const mobile = document.querySelector(`.nav-bar .nav-btn[onclick*="'${tabId}'"]`) ||
+                     (tabId === 'tabSearch' ? document.getElementById('navSearchFab') : null);
+      const b = window.matchMedia('(max-width:899px)').matches ? (mobile || desktop) : (desktop || mobile);
       navClick(b, tabId);
     }
 
@@ -14,7 +15,15 @@ import { $ } from '../core/state';
     export function showPlaylistTab(tabId: string){
       document.querySelectorAll('.tab-content').forEach(t=>t.classList.remove('active'));
       $(tabId).classList.add('active');
-      document.querySelectorAll('.desktop-nav-btn[data-tab]').forEach(b=>b.classList.remove('active'));
+      document.querySelectorAll('.desktop-nav-btn[data-tab], .nav-bar .nav-btn, .nav-fab').forEach(b=>{
+        const on = (b as HTMLElement).dataset.tab === 'tabPlaylists' || (b as HTMLElement).id === 'navPlaylistsBtn';
+        b.classList.toggle('active', on);
+        if(on) b.setAttribute('aria-current','page'); else b.removeAttribute('aria-current');
+      });
+      const mobilePlaylists = document.getElementById('navPlaylistsBtn');
+      const indicator = document.getElementById('navIndicator');
+      if(indicator) indicator.style.opacity = '1';
+      if(mobilePlaylists && window.matchMedia('(max-width:899px)').matches) moveNavIndicator(mobilePlaylists, true);
     }
 
 /* Mobile expandable search bar in the top header (desktop keeps the normal box) */
@@ -98,6 +107,7 @@ import { $ } from '../core/state';
       $(tabId).classList.add('active');
       document.body.classList.toggle('tab-search-active', tabId==='tabSearch');
       if(tabId==='tabLibrary')renderLibrary();
+      if(tabId==='tabPlaylists') (globalThis as any).renderPlaylistsPage?.();
       if(tabId==='tabHome')flushPlaybackHomeRefresh();
       if(tabId==='tabSearch'){
         filterSearchTab();
@@ -123,4 +133,3 @@ document.addEventListener('keydown',e=>{
   const bar=document.getElementById('mobileSearchBar');
   if(e.key==='Escape' && bar && bar.classList.contains('open')) bar.classList.remove('open');
 });
-

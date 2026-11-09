@@ -146,31 +146,18 @@ there. This guide is ordered by symptom.
 
 ## Search
 
-### Online results don’t appear
+### A track does not appear in search
 
-1. The query must be **at least 2 characters**; shorter queries intentionally do
-   not fan out to providers.
-2. Open the Network tab: if all provider requests fail, the error state with
-   **Try again** appears. Check offline status and provider availability.
-3. YouTube results specifically need a key: Settings → advanced → YouTube key, or
-   `AURA_YOUTUBE_API_KEY`. Pasting a YouTube link works without a key.
-4. Jamendo needs a free `client_id` (Settings or `AURA_JAMENDO_CLIENT_ID`).
-5. Deezer previews are geo-restricted in some countries; iTunes still returns.
+Search only filters music already available in the Aura catalogue. Check the
+title, artist, album, or film spelling. To request new music, submit it through
+the configured AURA FARMER Discord channel and wait for the download batch to
+finish.
 
-### Only 30-second clips
+### A playlist is missing
 
-- That is iTunes/Deezer by design. Audius/Jamendo/Archive/Openverse/ccMixter
-  return full tracks. YouTube uses its own player.
-
-### “Couldn’t reach the music sources”
-
-- All providers rejected. Check the console/network; retry. The app deliberately
-  keeps working with the local library and other features.
-
-### Search history control does nothing
-
-- **Known gap:** the current build only removes `auraSearchHistory_v1`; it does
-  not persist/render a history list. The setting exists for a future feature.
+Playlists are stored on the current browser/device in `auraPlaylists`; they do
+not sync between devices. Confirm the same browser profile is in use and that
+site storage was not cleared or blocked.
 
 ## Radio
 

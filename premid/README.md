@@ -46,7 +46,7 @@ The hidden element looks like this while a library track plays:
 - `duration` / `position`: seconds; `0` for live radio
 - `updatedAt`: epoch **milliseconds** of the last publish (the activity uses it
   to extrapolate the position between one-second ticks)
-- `tab`: the active section (`Home`, `Search`, `Library`, `Radio`, `Add Music`)
+- `tab`: the active section (`Home`, `Search`, `Library`, `Playlists`, `Radio`)
 - `cover`: absolute `http(s)` URL, or empty when the art is a placeholder
 - `link`: deep link that opens and plays this exact item in Aura — used by the
   activity's button and clickable title

@@ -13,13 +13,8 @@ are listed explicitly because a fork must update each copy.
 
 | Constant | Current value | Purpose |
 | --- | --- | --- |
-| `AURA_YOUTUBE_API_KEY` | `''` | Optional shared YouTube Data API key for in-app YouTube search. Empty = YouTube results come only from pasted links. Users can override locally in Settings. |
-| `AURA_JAMENDO_CLIENT_ID` | `''` | Optional shared Jamendo `client_id` for full-length CC tracks. Users can override locally. |
 | `GOOGLE_CLIENT_ID` | `563051437889-…apps.googleusercontent.com` | Google OAuth Web client used by GIS and verified server-side. |
 | `ADMIN_EMAILS` | two Gmail addresses | Client-side hint for the admin gate; the server has its own copy. |
-
-The YouTube/Jamendo keys are optional. Leaving them blank keeps the app usable;
-those providers simply return nothing.
 
 ### Google OAuth setup
 
@@ -51,7 +46,7 @@ Production (and Preview if used):
 | `ROOMS_WORKER_URL` | for rooms | `functions/api/rooms.ts` | Public URL of `rooms-worker`, e.g. `https://aura-rooms.<sub>.workers.dev`. Without it `/api/rooms` returns 503. |
 | `BOT_WORKER_URL` | for the Discord tab | `functions/api/bot.ts` | Base URL of the Aura Farmer Worker, e.g. `https://aura-farmer.<sub>.workers.dev`. |
 | `BOT_ADMIN_TOKEN` | for the Discord tab | `functions/api/bot.ts` | Shared secret the Worker expects on `/v1/admin` (the Worker's `BOT_ADMIN_TOKEN`). |
-| `BOT_SERVICE_TOKEN` | for Discord dispatch | `/api/admin` | Shared secret the Worker presents on `/api/admin`, limited to `search`, `expand`, `dispatch`, `runs`, `runJobs`. Must match the Worker's `AURA_SERVICE_TOKEN`. |
+| `BOT_SERVICE_TOKEN` | for Discord dispatch | `/api/admin` | Shared secret the Worker presents on `/api/admin`, limited to `search`, `expand`, `dispatch`, `runs`, `runJobs`, and `libraryIds`. Must match the Worker's `AURA_SERVICE_TOKEN`. |
 
 `GH_TOKEN` must not be exposed to the browser. The admin panel never receives
 it: it sends either a Google ID token or a `v1.<exp>.<hmac>` session token, and
@@ -115,11 +110,10 @@ Stored in the browser, not in the repo:
 
 | Key | Purpose |
 | --- | --- |
-| `auraYoutubeApiKey` | Per-browser YouTube key (overrides `AURA_YOUTUBE_API_KEY`). |
-| `auraJamendoClientId` | Per-browser Jamendo client id. |
 | `auraTheme` | `light` or `dark`; applied before first paint. |
-| `auraSettings_v1` | Autoplay, volume memory, search history flag, YouTube results, reduce motion. |
+| `auraSettings_v1` | Autoplay, volume memory, and reduced-motion preference. |
 | `auraVolume` | Last volume (when remember-volume is on). |
+| `auraPlaylists` | Device-local playlists and stable track keys. |
 
 ## 6. Custom domain checklist
 

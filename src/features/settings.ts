@@ -3,7 +3,6 @@ import {
   clearSession, getSession, getProfileUsername, isValidUsername, normalizeUsername,
   setProfileUsername, setSession,
 } from '../core/session';
-import { searchYouTubePro } from './search';
 import { $, state } from '../core/state';
 /* ===== 4216-4287 ===== */
     export function resetApp() {
@@ -49,43 +48,22 @@ import { $, state } from '../core/state';
 
     /* Interactive Settings */
     export const AURA_SETTINGS_KEY='auraSettings_v1';
-    export const defaultAuraSettings={autoplayNext:true,rememberVolume:true,searchHistory:true,youtubeResults:true,reduceMotion:false};
+    export const defaultAuraSettings={autoplayNext:true,rememberVolume:true,reduceMotion:false};
     export let auraSettings={...defaultAuraSettings};
     try{ auraSettings={...defaultAuraSettings,...JSON.parse(localStorage.getItem(AURA_SETTINGS_KEY)||'{}')}; }catch(e){}
     export function saveAuraSettings(){ localStorage.setItem(AURA_SETTINGS_KEY,JSON.stringify(auraSettings)); }
     export function applyAuraSettings(){
       $('settingAutoplayNext').checked=!!auraSettings.autoplayNext;
       $('settingRememberVolume').checked=!!auraSettings.rememberVolume;
-      $('settingSearchHistory').checked=!!auraSettings.searchHistory;
-      $('settingYouTubeResults').checked=!!auraSettings.youtubeResults;
       $('settingReduceMotion').checked=!!auraSettings.reduceMotion;
       document.body.classList.toggle('aura-reduce-motion',!!auraSettings.reduceMotion);
-      if(!auraSettings.searchHistory){ localStorage.removeItem('auraSearchHistory_v1'); }
-      const y=$('youtubeSearchSection'); if(y && !auraSettings.youtubeResults) y.style.display='none';
-      $('youtubeApiKeyInput').value = localStorage.getItem('auraYoutubeApiKey') || '';
-      $('jamendoClientIdInput').value = localStorage.getItem('auraJamendoClientId') || '';
     }
     export function openSettings(){ $('sideMenu').style.display='none'; $('settingsModal').classList.add('active'); $('settingsModal').setAttribute('aria-hidden','false'); applyAuraSettings(); }
     export function closeSettings(){ $('settingsModal').classList.remove('active'); $('settingsModal').setAttribute('aria-hidden','true'); }
     $('openSettingsBtn').onclick=openSettings;
     $('settingsCloseBtn').onclick=closeSettings;
     $('settingsModal').onclick=e=>{if(e.target===$('settingsModal'))closeSettings();};
-    [['settingAutoplayNext','autoplayNext'],['settingRememberVolume','rememberVolume'],['settingSearchHistory','searchHistory'],['settingYouTubeResults','youtubeResults'],['settingReduceMotion','reduceMotion']].forEach(([id,key])=>{ $(id).onchange=e=>{auraSettings[key]=e.target.checked;saveAuraSettings();applyAuraSettings();toast(e.target.checked?'Setting enabled':'Setting disabled','circle-check');}; });
-    $('saveYoutubeApiKeyBtn').onclick=()=>{
-      const key=$('youtubeApiKeyInput').value.trim();
-      if(key){ localStorage.setItem('auraYoutubeApiKey',key); toast('YouTube Music search enabled','circle-check'); }
-      else { localStorage.removeItem('auraYoutubeApiKey'); toast('YouTube Music key removed','circle-check'); }
-      const q=$('searchTabInput') && $('searchTabInput').value.trim();
-      if(q) searchYouTubePro(q);
-    };
-    $('saveJamendoClientIdBtn').onclick=()=>{
-      const key=$('jamendoClientIdInput').value.trim();
-      if(key){ localStorage.setItem('auraJamendoClientId',key); toast('Jamendo full-song search enabled','circle-check'); }
-      else { localStorage.removeItem('auraJamendoClientId'); toast('Jamendo client_id removed','circle-check'); }
-      const q=$('searchTabInput') && $('searchTabInput').value.trim();
-      if(q) searchYouTubePro(q);
-    };
-    $('clearSearchHistoryBtn').onclick=()=>{localStorage.removeItem('auraSearchHistory_v1');if(typeof (window as any).renderSearchHistory==='function')(window as any).renderSearchHistory();toast('Recent searches cleared','trash-can');};
+    [['settingAutoplayNext','autoplayNext'],['settingRememberVolume','rememberVolume'],['settingReduceMotion','reduceMotion']].forEach(([id,key])=>{ $(id).onchange=e=>{auraSettings[key]=e.target.checked;saveAuraSettings();applyAuraSettings();toast(e.target.checked?'Setting enabled':'Setting disabled','circle-check');}; });
     $('resetPreferencesBtn').onclick=()=>{if(confirm('Reset Aura Music preferences?')){auraSettings={...defaultAuraSettings};saveAuraSettings();applyAuraSettings();toast('Preferences restored','circle-check');}};
     applyAuraSettings();
 
@@ -156,7 +134,7 @@ import { $, state } from '../core/state';
     }
 
     export function updateProfilePopup(){
-      const name = getSavedUserName() || $('profileName').textContent || 'User';
+      const name = getSavedUserName() || $('displayUserName')?.textContent || 'User';
       const firstLogin = localStorage.getItem('auraFirstLogin');
       const lastLogin = localStorage.getItem('auraLastLogin');
       $('popupProfileName').textContent = name;
@@ -171,7 +149,7 @@ import { $, state } from '../core/state';
     }
 
     export function openNameModal(){
-      const currentName = getSavedUserName() || $('profileName').textContent || '';
+      const currentName = getSavedUserName() || $('displayUserName')?.textContent || '';
       $('nameModalInput').value = currentName;
       $('nameModal').classList.add('active');
       $('nameModal').setAttribute('aria-hidden','false');
@@ -213,10 +191,8 @@ import { $, state } from '../core/state';
         setProfileUsername(s.email, n);
       }
       $('displayUserName').textContent = n;
-      $('profileName').textContent = n;
       $('popupProfileName').textContent = n;
       updateProfilePopup();
       closeNameModal();
       toast('Username updated', 'circle-check');
     };
-

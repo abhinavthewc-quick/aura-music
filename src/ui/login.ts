@@ -26,7 +26,8 @@ import { $ } from '../core/state';
       if(!localStorage.getItem('auraFirstLogin')) localStorage.setItem('auraFirstLogin', now);
       localStorage.setItem('auraLastLogin', now);
       localStorage.setItem('auraUserName', n);
-      $('displayUserName').textContent=$('profileName').textContent=n;
+      const displayName = $('displayUserName');
+      if(displayName) displayName.textContent=n;
       $('welcomeScreen').classList.add('hidden');
       updateProfilePopup();
     }
