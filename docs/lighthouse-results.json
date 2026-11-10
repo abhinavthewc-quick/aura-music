@@ -1,0 +1,121 @@
+{
+  "date": "2026-11-10",
+  "origin": "https://aura-music-01g.pages.dev",
+  "scope": "Public signed-out home, admin and rooms entry pages",
+  "lighthouseVersion": "13.6.0",
+  "chromeVersion": "157.0.0.0",
+  "throttlingMethod": "simulate",
+  "scoreScale": 100,
+  "metricUnits": {
+    "first-contentful-paint": "ms",
+    "largest-contentful-paint": "ms",
+    "speed-index": "ms",
+    "total-blocking-time": "ms",
+    "cumulative-layout-shift": "unitless",
+    "total-byte-weight": "bytes"
+  },
+  "audits": [
+    {
+      "page": "home",
+      "device": "mobile",
+      "auditedCommit": "bb4a213caed0b2fe10bea1a2d9cc18f041e099a9",
+      "fetchedAt": "2026-11-10T16:00:47.589Z",
+      "scores": { "performance": 100, "accessibility": 100, "best-practices": 100, "seo": 100 },
+      "metrics": {
+        "first-contentful-paint": 1277.6535,
+        "largest-contentful-paint": 1277.6535,
+        "speed-index": 1714.654416156684,
+        "total-blocking-time": 38,
+        "cumulative-layout-shift": 0,
+        "total-byte-weight": 95433
+      },
+      "warnings": [],
+      "report": "live-home-mobile.report.html"
+    },
+    {
+      "page": "home",
+      "device": "desktop",
+      "auditedCommit": "bb4a213caed0b2fe10bea1a2d9cc18f041e099a9",
+      "fetchedAt": "2026-11-10T16:01:31.047Z",
+      "scores": { "performance": 100, "accessibility": 100, "best-practices": 100, "seo": 100 },
+      "metrics": {
+        "first-contentful-paint": 256.03700000000003,
+        "largest-contentful-paint": 256.03700000000003,
+        "speed-index": 342.8914502468496,
+        "total-blocking-time": 0,
+        "cumulative-layout-shift": 0,
+        "total-byte-weight": 95403
+      },
+      "warnings": [],
+      "report": "live-home-desktop.report.html"
+    },
+    {
+      "page": "admin",
+      "device": "mobile",
+      "auditedCommit": "bb4a213caed0b2fe10bea1a2d9cc18f041e099a9",
+      "fetchedAt": "2026-11-10T16:01:02.302Z",
+      "scores": { "performance": 100, "accessibility": 100, "best-practices": 100, "seo": 100 },
+      "metrics": {
+        "first-contentful-paint": 930,
+        "largest-contentful-paint": 930,
+        "speed-index": 2048.8390911634715,
+        "total-blocking-time": 15,
+        "cumulative-layout-shift": 0,
+        "total-byte-weight": 114091
+      },
+      "warnings": [],
+      "report": "live-admin-mobile.report.html"
+    },
+    {
+      "page": "admin",
+      "device": "desktop",
+      "auditedCommit": "bb4a213caed0b2fe10bea1a2d9cc18f041e099a9",
+      "fetchedAt": "2026-11-10T16:01:42.031Z",
+      "scores": { "performance": 100, "accessibility": 100, "best-practices": 100, "seo": 100 },
+      "metrics": {
+        "first-contentful-paint": 271.045,
+        "largest-contentful-paint": 271.045,
+        "speed-index": 356.61319050162655,
+        "total-blocking-time": 0,
+        "cumulative-layout-shift": 0,
+        "total-byte-weight": 114043
+      },
+      "warnings": [],
+      "report": "live-admin-desktop.report.html"
+    },
+    {
+      "page": "rooms",
+      "device": "mobile",
+      "auditedCommit": "41958b9a47277406efa7f116735a94e25dda901e",
+      "fetchedAt": "2026-11-10T16:14:14.421Z",
+      "scores": { "performance": 100, "accessibility": 100, "best-practices": 100, "seo": 100 },
+      "metrics": {
+        "first-contentful-paint": 798.146,
+        "largest-contentful-paint": 798.146,
+        "speed-index": 1184.3616172400439,
+        "total-blocking-time": 12,
+        "cumulative-layout-shift": 0,
+        "total-byte-weight": 93977
+      },
+      "warnings": [],
+      "report": "live-rooms-mobile.report.html"
+    },
+    {
+      "page": "rooms",
+      "device": "desktop",
+      "auditedCommit": "41958b9a47277406efa7f116735a94e25dda901e",
+      "fetchedAt": "2026-11-10T16:14:25.750Z",
+      "scores": { "performance": 100, "accessibility": 100, "best-practices": 100, "seo": 100 },
+      "metrics": {
+        "first-contentful-paint": 315.88800000000003,
+        "largest-contentful-paint": 315.88800000000003,
+        "speed-index": 392.3719666695456,
+        "total-blocking-time": 0,
+        "cumulative-layout-shift": 0,
+        "total-byte-weight": 93971
+      },
+      "warnings": [],
+      "report": "live-rooms-desktop.report.html"
+    }
+  ]
+}

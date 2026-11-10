@@ -19,6 +19,38 @@ Production: `https://aura-music-01g.pages.dev`, release `48fd480`.
 The mobile homepage transferred 19.4 MiB, spent 5,162 ms blocking the main
 thread, and had a cumulative layout shift of 0.503.
 
+## Verified production results — 10 November 2026
+
+| Page | Device | Performance | Accessibility | Best practices | SEO |
+| --- | --- | ---: | ---: | ---: | ---: |
+| Home | Mobile | 100 | 100 | 100 | 100 |
+| Home | Desktop | 100 | 100 | 100 | 100 |
+| Admin | Mobile | 100 | 100 | 100 | 100 |
+| Admin | Desktop | 100 | 100 | 100 | 100 |
+| Rooms | Mobile | 100 | 100 | 100 | 100 |
+| Rooms | Desktop | 100 | 100 | 100 | 100 |
+
+Home and admin were audited on `bb4a213` at 16:00–16:01 UTC; rooms were
+audited on `41958b9` at 16:14 UTC. The rooms release retained the exact
+previously audited home/admin asset hashes. All six runs completed without
+Lighthouse warnings. These scores measure the public signed-out entry pages.
+
+| Mobile page | FCP / LCP | Blocking time | Layout shift | Transferred |
+| --- | ---: | ---: | ---: | ---: |
+| Home | 1.28 s | 38 ms | 0 | 93 KiB |
+| Admin | 0.93 s | 15 ms | 0 | 111 KiB |
+| Rooms | 0.80 s | 12 ms | 0 | 92 KiB |
+
+The mobile homepage transfers **99.5% fewer bytes** than the baseline.
+Desktop blocking time and layout shift are zero on all three pages.
+The rooms follow-up removed the idle catalogue download, reducing its entry
+transfer from 5.76 MiB to 92 KiB.
+
+Exact measurements, timestamps and audited commits are recorded in
+[`lighthouse-results.json`](lighthouse-results.json). The accompanying
+`aura-lighthouse-2026-11-10.zip` evidence export contains the original HTML/JSON
+reports and validation results.
+
 ## Changes
 
 - Render the complete black sign-in screen immediately, with accessible
@@ -69,6 +101,18 @@ cover returning sessions, sign-in, local audio, stable playlist and artist
 identity, playback continuity, admin editing, and room permissions. All
 292 assertions across fourteen mobile/desktop suites passed for this change;
 the 18 storage/client tests, typecheck, lint and production build also passed.
+
+Production smoke checks passed **110 assertions** across six mobile/desktop
+runs. They exercised browser-local sign-in, returning sessions, the live
+catalogue and artist portraits, library-only search, playlist deduplication,
+streamed audio, playback-safe refreshes, full-player controls, and the admin
+and rooms entry screens. Google sign-in, authenticated admin editing and room
+mutations are covered by the isolated regression suites.
+
+Release verification matched all 13 deployed JavaScript/CSS bundles to the
+local build, checked their immutable caching, and compared Cloudflare
+configuration with the pre-release snapshot. The live artist directory
+retained revision 18 and all 18 profiles from that snapshot.
 
 Refresh pinned font/icon assets with `node scripts/vendor-ui-assets.mjs` after
 adding icons. Font and icon licenses are in [`licenses/`](licenses/).

@@ -23,6 +23,7 @@ maintaining this deployment, not for end users.
 | 11 | [Security](security.md) | What are the trust boundaries, secrets, XSS rules and known limitations? |
 | 12 | [Troubleshooting](troubleshooting.md) | Why is X broken, and what should I check first? |
 | 13 | [Contributing](contributing.md) | What is the definition of done for a change? |
+| 14 | [Lighthouse](lighthouse.md) | What are the measured mobile/desktop scores, startup optimizations and audit commands? |
 
 ## Other sources of truth
 
