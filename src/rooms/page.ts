@@ -261,9 +261,12 @@ async function join(roomId: string, adminKey: string | null, isHost: boolean) {
   banner('');
   const name = $('nameInput').value.trim() || rememberedName() || randomName();
 
-  // The catalogue may still be in flight; waiting avoids "not available"
-  // on the very first track a room plays.
+  // Fetch only when joining a room. The idle join screen needs no catalogue;
+  // waiting here still makes the room's first shared track resolvable.
+  rebuildSongs();
   await ensureCatalog(6000);
+  rebuildLibIndex();
+  renderResults('');
 
   let wsBase = '';
   try {
@@ -318,6 +321,7 @@ async function join(roomId: string, adminKey: string | null, isHost: boolean) {
   buildPills();
   startLiveLoop();
   render(client.view());
+  wireCatalogRefresh();
 
   // Autoplay policy: the join click is the gesture. If it is ever missed we
   // pick audio up on the next interaction rather than sitting silent.
@@ -707,18 +711,26 @@ async function refreshLibrary() {
 
 function startCatalogKeepAlive() {
   if (catalogTimer !== null) return;
+  const room = client;
   const tick = async () => {
+    if (!room || client !== room) return;
     if (document.visibilityState === 'visible') await refreshLibrary();
-    catalogTimer = window.setTimeout(tick, 30_000);
+    if (client === room) catalogTimer = window.setTimeout(tick, 30_000);
   };
   catalogTimer = window.setTimeout(tick, 30_000);
 }
 
 function wireCatalogRefresh(): void {
+  if (catalogUnsub) return;
   // Pick up newly uploaded tracks without reloading: when the tab comes back
   // into view, on focus, on a timer while the room is open, and whenever any
   // other tab (the admin uploader, say) refreshes the catalogue.
-  catalogUnsub = onCatalogRefreshed(() => { void refreshLibrary(); });
+  catalogUnsub = onCatalogRefreshed(() => {
+    if (!client) return;
+    rebuildLibIndex();
+    maybeRenderResults();
+    render(client.view());
+  });
 
   // The admin page announces a finished refresh on this channel. Listen for
   // it so a song uploaded while a room is open appears immediately; the poll
@@ -744,21 +756,12 @@ function wireCatalogRefresh(): void {
 
 /* ---------------- boot ---------------- */
 
-async function boot() {
+function boot() {
   wireJoin();
   wireRoom();
   wireSeek();
   buildPills();
   showJoin();
-
-  // The shared catalogue: paint from cache immediately, refresh from the
-  // bucket, and keep refreshing so newly uploaded tracks show up live.
-  rebuildSongs();
-  await ensureCatalog(6000);
-  rebuildLibIndex();
-  renderResults('');
-
-  wireCatalogRefresh();
 
   // Deep link: /rooms?r=CODE&k=KEY
   const q = new URLSearchParams(location.search);

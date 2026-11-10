@@ -1,9 +1,8 @@
 /* Waits for the shared catalogue to be present, and keeps it fresh.
  *
- * The library is fetched in the background after page load, so a listener who
- * joins a room in the first seconds can legitimately be asked for a track that
- * has not arrived yet. Without this, the room would report "not in your
- * library" for a track that is about to appear.
+ * Joining requests the library; an idle join screen never downloads it. A
+ * room can still request a track while that fetch is in flight. Waiting avoids
+ * reporting "not in your library" for a track that is about to appear.
  *
  * `refreshCatalog()` re-fetches the bucket (bounded by a minimum interval so
  * the focus/visibility poll can't hammer Hugging Face) and notifies

@@ -80,8 +80,9 @@ changes browser history to `/rooms`. On a fresh room fixture, run:
 (await import('/tests/artists/browser-room-regressions.js')).runRoomRegressions()
 ```
 
-The 20 room checks also cover promotion/demotion with an unchanged queue and stale
-admin button handlers. Repeat on both viewports. For actual
+The 24 room checks also cover idle startup, cold joining, cached rejoining,
+refresh cleanup, promotion/demotion with an unchanged queue, and stale admin
+button handlers. Repeat on both viewports. For actual
 cross-tab storage events, open `/tests/artists/browser-peer.html` in the same
 browser profile and publish a synthetic `auraCloudArtists_v1` snapshot there.
 An already-open admin editor must retain its fields, portrait and captured

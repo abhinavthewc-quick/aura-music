@@ -27,6 +27,8 @@ thread, and had a cumulative layout shift of 0.503.
   sign-in or when restoring a saved session. Preserve local tracks, playlists,
   artist refreshes and playback. Transfer keyboard focus after startup and
   show retry feedback if loading fails.
+- Download the rooms catalogue only when joining. Start live refreshes with
+  the room and stop them when leaving, including after a cached rejoin.
 - Self-host the existing font families and language subsets; preload the
   two Latin fonts. Use selected local SVG-mask icons, shared between the
   music and admin interfaces and loaded when those interfaces open.
@@ -65,7 +67,7 @@ conditions; the measured browser was Chrome 157.0.0.0.
 The isolated [browser regressions](artist-storage.md#concurrency-and-tests)
 cover returning sessions, sign-in, local audio, stable playlist and artist
 identity, playback continuity, admin editing, and room permissions. All
-284 assertions across fourteen mobile/desktop suites passed for this change;
+292 assertions across fourteen mobile/desktop suites passed for this change;
 the 18 storage/client tests, typecheck, lint and production build also passed.
 
 Refresh pinned font/icon assets with `node scripts/vendor-ui-assets.mjs` after
