@@ -4,6 +4,7 @@
    glance what the room is doing without anyone having to explain it. */
 
 @import '../styles/tokens.css';
+@import '../styles/fonts.css';
 
 :root {
   --panel: var(--surface-1);

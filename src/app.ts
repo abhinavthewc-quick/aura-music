@@ -64,14 +64,13 @@ import { $, setHfTracks, state } from './core/state';
     })();
 
 /* ===== 6274-6287 ===== */
-    (async function init(){
+    export const ready = (async function init(){
       const session = getSession();
       if(session){
         const name = session.name || 'Listener';
         if(!getProfileUsername(session.email) && session.name) setProfileUsername(session.email, session.name);
         const displayName = $('displayUserName');
         if(displayName) displayName.textContent=name;
-        $('welcomeScreen').classList.add('hidden');
         localStorage.setItem('auraLastLogin', new Date().toISOString());
         if(!localStorage.getItem('auraUserName')) localStorage.setItem('auraUserName', name);
       }

@@ -127,6 +127,20 @@ import { $, state } from '../core/state';
       $('profileFavoriteCount').textContent = `${favs} ${favs===1?'song':'songs'}`;
     }
 
+    $('profileBtn').onclick=(e)=>{
+      e.stopPropagation();
+      const open=$('profilePopover').classList.toggle('active');
+      $('profileBtn').setAttribute('aria-expanded', String(open));
+      if(open) updateProfilePopup();
+    };
+
+    document.addEventListener('click',(e)=>{
+      if(!(e.target as Element).closest('#profileWrap')){
+        $('profilePopover').classList.remove('active');
+        $('profileBtn').setAttribute('aria-expanded','false');
+      }
+    });
+
     export function openNameModal(){
       const currentName = getSavedUserName() || $('displayUserName')?.textContent || '';
       $('nameModalInput').value = currentName;

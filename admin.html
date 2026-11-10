@@ -4,13 +4,16 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Aura Admin — Music Uploader</title>
-  <link rel="preconnect" href="https://fonts.googleapis.com">
-  <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;700&family=Cormorant+Garamond:wght@600&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+  <meta name="description" content="Sign in to manage the Aura Music library, artist profiles, artwork and download queue.">
+  <meta name="theme-color" content="#000000">
+  <link rel="canonical" href="https://aura-music-01g.pages.dev/admin">
+  <link rel="icon" type="image/png" sizes="96x96" href="/src/assets/favicon.png">
+  <link rel="preload" href="/src/assets/fonts/dm-sans-latin.woff2" as="font" type="font/woff2" crossorigin>
+  <link rel="preload" href="/src/assets/fonts/cormorant-garamond-latin.woff2" as="font" type="font/woff2" crossorigin>
 </head>
 <body>
   <header class="adm-header">
-    <a class="adm-back" href="./index.html">&larr; Aura Music</a>
+    <a class="adm-back" href="/">&larr; Aura Music</a>
     <h1>AURA <span>Admin</span></h1>
     <p class="adm-sub">Sign in &rarr; search or paste YouTube links &rarr; they land in your library automatically.</p>
   </header>
@@ -21,14 +24,14 @@
     <section class="adm-card adm-span2 adm-gate" id="gateCard">
       <h2>Sign in to manage downloads</h2>
       <p class="adm-hint">Only <b>vivekpereiraalbert@gmail.com</b> and <b>abhinavthewc@gmail.com</b> have access. Sign in with Google, or use the password fallback below.</p>
-      <div id="adminGoogleBtn" class="adm-google"></div>
+      <div id="adminGoogleBtn" class="adm-google"><button type="button" class="adm-btn" id="adminGoogleStart"><svg class="adm-google-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M20 7a9 9 0 1 0 1 9v-5h-9v4h5"/></svg>Sign in with Google</button><div id="adminGoogleNative" hidden></div></div>
       <div class="adm-or"><span>or use email &amp; password</span></div>
       <div class="adm-emailauth">
         <input class="adm-input" id="admEmailInput" type="email" placeholder="Email address" autocomplete="email" aria-label="Email address">
         <input class="adm-input" id="admPasswordInput" type="password" placeholder="Password" autocomplete="current-password" aria-label="Password">
         <button type="button" class="adm-btn primary" id="admPasswordBtn">Sign in</button>
       </div>
-      <div class="adm-status" id="gateStatus"></div>
+      <div class="adm-status" id="gateStatus" role="status" aria-live="polite"></div>
     </section>
 
     <!-- Signed-in bar (only visible while signed in) -->
@@ -63,7 +66,7 @@
       <div class="adm-status" id="searchStatus"></div>
 
       <div class="adm-or"><span>or paste links</span></div>
-        <textarea id="urlsInput" class="adm-input adm-textarea" rows="2" spellcheck="false" placeholder="https://music.youtube.com/watch?v=…&#10;or a /playlist?list=… / album link — it expands into individual tracks&#10;valid lines move into the queue automatically"></textarea>
+        <textarea id="urlsInput" class="adm-input adm-textarea" rows="2" spellcheck="false" aria-label="YouTube links to queue" placeholder="https://music.youtube.com/watch?v=…&#10;or a /playlist?list=… / album link — it expands into individual tracks&#10;valid lines move into the queue automatically"></textarea>
 
       <div class="adm-queuehead">
         <span class="adm-queuetitle">Queue <span class="adm-count" id="urlCount"></span></span>
@@ -390,7 +393,7 @@
     <div class="adm-audio-ctrls">
       <button type="button" class="adm-audio-btn" id="admAudioPlayBtn" title="Play/Pause"><i class="fa-solid fa-play" id="admAudioPlayIcon"></i></button>
       <span class="adm-audio-time" id="admAudioCurTime">0:00</span>
-      <input type="range" class="adm-audio-seek" id="admAudioSeek" min="0" max="100" value="0" step="0.1">
+      <input type="range" class="adm-audio-seek" id="admAudioSeek" min="0" max="100" value="0" step="0.1" aria-label="Seek preview audio">
       <span class="adm-audio-time" id="admAudioTotalTime">0:00</span>
       <button type="button" class="adm-audio-btn small" id="admAudioMuteBtn" title="Mute"><i class="fa-solid fa-volume-high" id="admAudioMuteIcon"></i></button>
     </div>

@@ -1,12 +1,5 @@
-import './ui/loader';
-import './app';
-import './expose';
-import './ui/login';
-import './ui/mini-player';
-import './ui/marquee';
-import './features/playlists';
-import './ui/a11y';
-import './features/presence-reporter';
-import { installCoverFallback } from './core/dom';
+import { playLoginAnimation } from './ui/login';
+import { getSession } from './core/session';
 
-installCoverFallback();
+const session = getSession();
+if (session) void playLoginAnimation(session.name || 'Listener');

@@ -65,7 +65,7 @@ Run this in the console of each freshly loaded page:
 (await import('/tests/artists/browser-regressions.js')).runBrowserRegressions()
 ```
 
-The main page runs 34 assertions; admin runs 18. Repeat on desktop (1440×960)
+The main page runs 36 assertions; admin runs 18. Repeat on desktop (1440×960)
 and mobile (390×844), reloading first because the checks change the synthetic
 directory. The fixtures use mocked APIs, generated audio, a real IndexedDB
 audio blob and test-only HF image/media redirection. They never submit songs,
@@ -86,3 +86,15 @@ cross-tab storage events, open `/tests/artists/browser-peer.html` in the same
 browser profile and publish a synthetic `auraCloudArtists_v1` snapshot there.
 An already-open admin editor must retain its fields, portrait and captured
 version while the artist list refreshes.
+
+For lazy startup and sign-in regressions, load a fresh `?signed-out` fixture
+or `?page=admin&signed-out`, then run:
+
+```js
+(await import('/tests/artists/browser-login-regressions.js')).runLoginRegressions()
+```
+
+Reload and repeat with `{ method: 'google' }`. These checks cover SDK failure
+and retry, credential verification, the admin allowlist, local/password
+fallbacks, username selection and the authenticated runtime. Google UI, signing
+keys and server authentication responses are synthetic; no real login occurs.

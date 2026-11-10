@@ -94,13 +94,15 @@ export async function runBrowserRegressions() {
     document.getElementById('aemCancelBtn').click();
     check(!fixture.requests.some((request) => ['dispatch', 'bucketUpload', 'setSecret'].includes(request.action)), 'browser checks never submit downloads or change integrations');
   } else {
+    await until(() => !document.getElementById('musicApp').hidden, 'saved session opens the music runtime', 10000);
+    check(document.getElementById('welcomeScreen').inert && !document.getElementById('musicApp').inert, 'returning session transfers interaction from sign-in to the library');
+    check(!document.querySelector('script[src*="accounts.google.com"]'), 'returning listeners do not load Google sign-in');
     const { state, trackKey } = await import('/src/core/state.ts');
     const home = await import('/src/features/home.ts');
     const library = await import('/src/features/library.ts');
     const playlists = await import('/src/features/playlists.ts');
     const player = await import('/src/features/player.ts');
     const { goTab } = await import('/src/ui/nav.ts');
-    await until(() => !document.getElementById('auraLoader'), 'intro loader dismissal', 10000);
     await until(() => !state.catalogLoading && state.songs.some((song) => song.isLocal && song.url?.startsWith('blob:')), 'catalog and IndexedDB hydration');
     check(catalog.getCachedArtistDirectory().revision === 0, 'artist pages start before cloud profiles load');
     const handUpload = state.songs.find((song) => song.title === 'Hand upload');

@@ -1234,7 +1234,7 @@ export function cycleLyricsFontSize() {
 export function toggleLyricsAlign() {
   alignMode = alignMode === 'left' ? 'center' : 'left';
   const btn = $('blAlignBtn');
-  if (btn) btn.innerHTML = `<i class="fa-solid fa-align-${alignMode}"></i>`;
+  if (btn) btn.innerHTML = `<i class="fa-solid ${alignMode === 'left' ? 'fa-align-left' : 'fa-align-center'}"></i>`;
   const scrollEl = $('blLyricsScroll');
   if (scrollEl) {
     scrollEl.classList.remove('align-left', 'align-center');

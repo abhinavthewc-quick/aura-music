@@ -861,7 +861,7 @@ import { fetchLyricsForTrack, renderLyrics, updateLyricsProgress, prepareLyricsF
             </div>
             <div class="ytm-rel-artist-tags">
               <span class="ytm-rel-tag"><i class="fa-solid fa-compact-disc"></i> Studio Track</span>
-              <span class="ytm-rel-tag"><i class="fa-solid fa-sparkles"></i> High Fidelity</span>
+              <span class="ytm-rel-tag"><i class="fa-solid fa-wand-magic-sparkles"></i> High Fidelity</span>
               <span class="ytm-rel-tag"><i class="fa-solid fa-headphones"></i> Immersive</span>
             </div>
           </div>

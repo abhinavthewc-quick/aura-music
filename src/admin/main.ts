@@ -3,6 +3,7 @@ import { ADMIN_EMAILS, GOOGLE_CLIENT_ID } from '../core/config';
 import { cleanArtist, cleanTitle, cacheArtistDirectory, fetchArtistDirectory, getCachedArtistDirectory, ArtistMeta, type ArtistDirectory } from '../core/catalog';
 import { artistTrackId, normalizeArtistKey } from '../../lib/artistProfiles';
 import { verifyGoogleCredential } from '../core/google-auth';
+import { loadGoogleIdentity } from '../core/google-identity';
 import { clearSession, exchangeGoogleToken, getSession, setSession } from '../core/session';
 
 const SECRET_NAMES = ['HF_TOKEN', 'HF_BUCKET_ID', 'YOUTUBE_COOKIES'] as const;
@@ -19,6 +20,8 @@ const $ = <T extends HTMLElement = HTMLElement>(id: string): T => {
 const gateCard = $('gateCard');
 const gateStatus = $('gateStatus');
 const gBtnBox = $('adminGoogleBtn');
+const gStart = $<HTMLButtonElement>('adminGoogleStart');
+const gNative = $('adminGoogleNative');
 const urlsInput = $<HTMLTextAreaElement>('urlsInput');
 const cookiesInput = $<HTMLTextAreaElement>('cookiesInput');
 const secretsStatus = $('secretsStatus');
@@ -83,7 +86,8 @@ async function adminApi<T = any>(action: string, payload: Record<string, unknown
 /* ---------- Google gate ---------- */
 let gisInitialized = false;
 
-function renderGisButton() {
+async function renderGisButton() {
+  if (gStart.disabled) return;
   if (!GOOGLE_CLIENT_ID) {
     setStatus(gateStatus, 'Google sign-in unavailable — use email & password below.', 'err');
     return;
@@ -103,49 +107,54 @@ function renderGisButton() {
       setSession(swapped
         ? { email: p.email, name: p.name, picture: p.picture, exp: swapped.exp, token: swapped.token }
         : { email: p.email, name: p.name, picture: p.picture, exp: p.exp, token: resp.credential });
-      unlock();
+      await unlock();
     } catch (e) {
       setStatus(gateStatus, 'Sign-in failed — ' + ((e as Error).message || 'try again'), 'err');
     }
   };
 
-  if (!document.getElementById('auraGsiScript')) {
-    const s = document.createElement('script');
-    s.id = 'auraGsiScript';
-    s.src = 'https://accounts.google.com/gsi/client';
-    s.async = true;
-    s.defer = true;
-    s.onload = () => {
-      gisInitialized = true;
-      try {
-        w.google.accounts.id.initialize({
-          client_id: GOOGLE_CLIENT_ID,
-          callback: handleResp,
-        });
-        w.google.accounts.id.renderButton(gBtnBox, {
-          theme: 'filled_black', size: 'large', shape: 'pill', text: 'signin_with',
-          width: Math.max(240, Math.min(420, gBtnBox.clientWidth || 420)),
-        });
-      } catch {
-        setStatus(gateStatus, 'Could not initialise Google sign-in.', 'err');
-      }
-    };
-    s.onerror = () => setStatus(gateStatus, 'Could not load Google sign-in — check your connection.', 'err');
-    document.head.appendChild(s);
-  } else if (gisInitialized) {
-    try {
-      w.google.accounts.id.renderButton(gBtnBox, {
-        theme: 'filled_black', size: 'large', shape: 'pill', text: 'signin_with',
-        width: Math.max(240, Math.min(420, gBtnBox.clientWidth || 420)),
+  gStart.disabled = true;
+  gStart.setAttribute('aria-busy', 'true');
+  setStatus(gateStatus, 'Loading Google sign-in…');
+  try {
+    await loadGoogleIdentity();
+    if (gateCard.hidden) return;
+    if (!gisInitialized) {
+      w.google.accounts.id.initialize({
+        client_id: GOOGLE_CLIENT_ID,
+        callback: handleResp,
       });
-    } catch { /* ignore */ }
+      gisInitialized = true;
+    }
+    gStart.hidden = true;
+    gNative.hidden = false;
+    gNative.replaceChildren();
+    w.google.accounts.id.renderButton(gNative, {
+      theme: 'filled_black', size: 'large', shape: 'pill', text: 'signin_with',
+      width: Math.max(200, Math.min(360, gBtnBox.clientWidth - 40)),
+    });
+    setStatus(gateStatus, 'Use the Google button to choose your admin account.');
+  } catch (error) {
+    gNative.replaceChildren();
+    gNative.hidden = true;
+    gStart.hidden = false;
+    setStatus(gateStatus, (error as Error).message || 'Could not load Google sign-in — try again or use email & password.', 'err');
+  } finally {
+    gStart.disabled = false;
+    gStart.removeAttribute('aria-busy');
   }
-  setStatus(gateStatus, 'Waiting for Google sign-in…');
 }
+gStart.addEventListener('click', () => void renderGisButton());
 
-function unlock() {
+async function unlock() {
   const session = getSession();
   if (!session) return lock();
+  try {
+    await import('../styles/icons.css');
+  } catch {
+    setStatus(gateStatus, 'Could not load the admin interface. Check your connection and sign in again.', 'err');
+    return;
+  }
   gateCard.hidden = true;
   const bar = $('sessionBar');
   bar.hidden = false;
@@ -168,10 +177,11 @@ function lock(msg?: string) {
     const el = document.getElementById(id);
     if (el) el.hidden = true;
   });
-  gBtnBox.innerHTML = '';
+  gNative.replaceChildren();
+  gNative.hidden = true;
+  gStart.hidden = !GOOGLE_CLIENT_ID;
   gateCard.hidden = false;
-  renderGisButton();
-  if (msg) setStatus(gateStatus, msg, 'err');
+  setStatus(gateStatus, msg || '', msg ? 'err' : '');
 }
 
 /* ---------- top-level tabs ---------- */
@@ -220,7 +230,7 @@ async function passwordLogin() {
   }
   ($('admPasswordInput') as HTMLInputElement).value = '';
   setSession({ email: data.email, name: data.email, picture: '', exp: data.exp, token: data.token });
-  unlock();
+  await unlock();
 }
 
 /* ---------- repository config status ---------- */
@@ -2888,5 +2898,5 @@ window.addEventListener('online', refreshArtists);
 document.addEventListener('visibilitychange', refreshArtists);
 setInterval(refreshArtists, 60000);
 renderQueue();
-if (getSession()) unlock();
+if (getSession()) void unlock();
 else lock();
