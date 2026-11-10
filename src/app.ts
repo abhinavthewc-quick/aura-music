@@ -1,13 +1,50 @@
 import { toast } from './core/dom';
-import { fetchHfCatalog } from './core/catalog';
+import { applyArtistTrackOverrides, fetchArtistDirectory, fetchHfCatalog } from './core/catalog';
 import { getProfileUsername, getSession, setProfileUsername } from './core/session';
-import { renderQuickPicks, setGreeting, setupHeaderSearch, setupMoodChips } from './features/home';
+import { refreshArtistViews, renderQuickPicks, setGreeting, setupHeaderSearch, setupMoodChips } from './features/home';
 import { applyPlayDeepLink } from './features/deeplink';
 import { hydrateLocalTracks, renderLibrary, renderRecent, renderSongs, updateLibCount } from './features/library';
-import { auraYTPlayer, auraYTVideoId, lastPlayRequestAt, loadSong } from './features/player';
+import { auraYTPlayer, auraYTVideoId, lastPlayRequestAt, loadSong, updateMainMediaSession } from './features/player';
 import { updateProfilePopup } from './features/settings';
+import { filterSearchTab } from './features/search';
+import { renderUpNext } from './features/queue';
+import { refreshPlaylistViews } from './features/playlists';
 import { $, setHfTracks, state } from './core/state';
 /* ===== 4669-4686 ===== */
+
+    let artistPaint = 0;
+    window.addEventListener('aura:artists-updated', () => {
+      if(artistPaint) return;
+      artistPaint = requestAnimationFrame(() => {
+        artistPaint = 0;
+        /* Reconcile metadata without reloading audio, seeking, or replacing
+           browser-local playlists. The current track keeps its stable ID. */
+        setHfTracks(applyArtistTrackOverrides(state.hfSongs));
+        renderSongs(state.songs);
+        renderRecent();
+        refreshArtistViews();
+        refreshPlaylistViews();
+        if($('tabLibrary')?.classList.contains('active')) renderLibrary();
+        if($('tabSearch')?.classList.contains('active')) filterSearchTab();
+        if($('upNextSheet')?.classList.contains('active')) renderUpNext();
+        const song = state.songs[state.currentIndex];
+        if(song){
+          for(const id of ['currentArtist', 'fullArtist']) if($(id)) $(id).textContent = song.artist;
+          updateMainMediaSession();
+        }
+      });
+    });
+
+    let lastArtistRefresh = 0;
+    const refreshArtists = () => {
+      if(document.visibilityState === 'hidden' || Date.now() - lastArtistRefresh < 15000) return;
+      lastArtistRefresh = Date.now();
+      void fetchArtistDirectory();
+    };
+    window.addEventListener('focus', refreshArtists);
+    window.addEventListener('online', refreshArtists);
+    document.addEventListener('visibilitychange', refreshArtists);
+    setInterval(refreshArtists, 60000);
 
     /* Network + playback error states */
     (function(){
@@ -63,7 +100,14 @@ import { $, setHfTracks, state } from './core/state';
         renderSongs(state.songs);
         renderRecent();
         renderQuickPicks();
+        refreshArtistViews();
+        refreshPlaylistViews();
         updateLibCount();
+        const song = state.songs[state.currentIndex];
+        if(song){
+          for(const id of ['currentArtist', 'fullArtist']) if($(id)) $(id).textContent = song.artist;
+          updateMainMediaSession();
+        }
         if(!hadSongs && state.songs.length) loadSong(state.currentIndex);
         if($('tabLibrary').classList.contains('active')) renderLibrary();
         applyPlayDeepLink();

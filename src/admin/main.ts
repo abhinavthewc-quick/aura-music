@@ -1,6 +1,7 @@
 import './admin.css';
 import { ADMIN_EMAILS, GOOGLE_CLIENT_ID } from '../core/config';
-import { cleanArtist, cleanTitle, ArtistMeta } from '../core/catalog';
+import { cleanArtist, cleanTitle, cacheArtistDirectory, fetchArtistDirectory, getCachedArtistDirectory, ArtistMeta, type ArtistDirectory } from '../core/catalog';
+import { artistTrackId, normalizeArtistKey } from '../../lib/artistProfiles';
 import { verifyGoogleCredential } from '../core/google-auth';
 import { clearSession, exchangeGoogleToken, getSession, setSession } from '../core/session';
 
@@ -739,6 +740,8 @@ interface LibraryResponse {
   bucketId?: string;
   manifest?: Record<string, LibMeta>;
   artists?: Record<string, ArtistMeta>;
+  trackArtists?: Record<string, string>;
+  revision?: number;
 }
 interface LibEntry {
   path: string; stem: string; ext: string; vid: string;
@@ -751,6 +754,21 @@ let libFiles: LibFile[] = [];
 let libCovers = new Map<string, string>(); // audio stem -> cover path
 let libManifest: Record<string, LibMeta> = {};
 let libArtists: Record<string, ArtistMeta> = {};
+let libTrackArtists: Record<string, string> = {};
+let libArtistRevision = -1;
+
+function ingestArtistDirectory(data: Partial<ArtistDirectory>): void {
+  if (!data.artists || !data.trackArtists || !Number.isInteger(data.revision)) return;
+  const cached = getCachedArtistDirectory();
+  const directory = data.revision < cached.revision ? cached : data as ArtistDirectory;
+  if (directory.revision < libArtistRevision) return;
+  libArtists = directory.artists;
+  libTrackArtists = directory.trackArtists;
+  libArtistRevision = directory.revision;
+  libArtistsCache = null;
+  libEntriesCache = null;
+  cacheArtistDirectory(directory);
+}
 
 interface AdminArtist {
   name: string;
@@ -801,7 +819,7 @@ function hfLibUrl(path: string): string {
 function ingestLibraryData(data: LibraryResponse): void {
   if (data.bucketId) libBucketId = data.bucketId;
   if (data.manifest) libManifest = data.manifest;
-  if (data.artists && typeof data.artists === 'object') libArtists = data.artists;
+  ingestArtistDirectory(data);
   const files = Array.isArray(data.files) ? data.files : [];
   libFiles = files.filter((f) => f && AUDIO_FILE_RE.test(f.path));
   libCovers = new Map();
@@ -840,6 +858,7 @@ function buildLibEntries(): LibEntry[] {
       if (typeof m.d === 'number') duration = m.d;
       if (m.g) genre = m.g;
     }
+    artist = libTrackArtists[artistTrackId(vid, f.path)] || artist;
     const coverPath = libCovers.get(stem);
     return {
       path: f.path, stem, ext, vid,
@@ -1096,7 +1115,7 @@ async function openEditTrackModal(path: string): Promise<void> {
         <div class="adm-field-full">
           ${entry.vid ? `
             <div class="adm-modal-file" style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:6px;">
-              <span>YouTube ID: <a href="https://www.youtube.com/watch?v=${escHtml(entry.vid)}" target="_blank" rel="noopener noreferrer" style="color:var(--gold);text-decoration:underline;"><b>${escHtml(entry.vid)}</b> <i class="fa-solid fa-arrow-up-right-from-square" style="font-size:10px"></i></a></span>
+              <span>YouTube ID: <a href="https://www.youtube.com/watch?v=${escHtml(entry.vid)}" target="_blank" rel="noopener noreferrer" style="color:var(--text);text-decoration:underline;"><b>${escHtml(entry.vid)}</b> <i class="fa-solid fa-arrow-up-right-from-square" style="font-size:10px"></i></a></span>
               <button type="button" class="adm-btn ghost small" id="etmFetchYtBtn" style="padding:2px 8px;font-size:11px;">Fetch YouTube Meta</button>
             </div>
           ` : `
@@ -1264,7 +1283,8 @@ async function openEditTrackModal(path: string): Promise<void> {
         if (durSec > 0) payload.duration = durSec;
         if (genre) payload.genre = genre;
         try {
-          await adminApi('bucketManifestSet', payload);
+          const saved = await adminApi<Partial<ArtistDirectory>>('bucketManifestSet', payload);
+          ingestArtistDirectory(saved);
           synced = true;
         } catch (e) {
           if (!/not in manifest/i.test((e as Error).message)) throw e;
@@ -1486,7 +1506,8 @@ function buildAdminArtists(): AdminArtist[] {
 
   for (const e of entries) {
     const rawArtist = (e.artist || '').trim() || 'Unknown Artist';
-    const norm = rawArtist.toLowerCase();
+    const profile = libArtists[normalizeArtistKey(rawArtist)];
+    const norm = profile?.key || normalizeArtistKey(rawArtist);
     let g = map.get(norm);
     if (!g) {
       g = { name: rawArtist, tracks: [], albums: new Set() };
@@ -1498,7 +1519,7 @@ function buildAdminArtists(): AdminArtist[] {
 
   const result: AdminArtist[] = [];
   for (const [norm, g] of map.entries()) {
-    const custom = libArtists[norm] || Object.values(libArtists).find((a) => (a.name || '').toLowerCase() === norm);
+    const custom = libArtists[norm] || Object.values(libArtists).find((a) => normalizeArtistKey(a.name || '') === norm);
     const name = custom?.name || g.name;
     const sampleCover = g.tracks.find((t) => t.coverUrl)?.coverUrl || '';
     const img = custom?.img || sampleCover;
@@ -1521,10 +1542,12 @@ function buildAdminArtists(): AdminArtist[] {
     });
   }
 
-  // Include custom artists from manifest with 0 tracks
+  // Include saved profiles with 0 tracks once, not once for every old-name alias.
+  const included = new Set(result.map(a => a.normKey));
   for (const [norm, meta] of Object.entries(libArtists)) {
-    const k = norm.toLowerCase();
-    if (!map.has(k) && meta) {
+    const k = meta?.key || normalizeArtistKey(norm);
+    if (!included.has(k) && meta) {
+      included.add(k);
       result.push({
         name: meta.name || norm,
         normKey: k,
@@ -1638,6 +1661,7 @@ function renderArtistsGrid(): void {
 async function loadArtistsManager(force = false): Promise<void> {
   const statusEl = $('artistStatus');
   if (force) setStatus(statusEl, 'Loading artists…');
+  void fetchArtistDirectory();
   try {
     if (!libFiles.length || force) {
       const data = await adminApi<LibraryResponse>('library');
@@ -1666,6 +1690,12 @@ function openEditArtistModal(artistName: string): void {
     toast('Artist not found', 'err');
     return;
   }
+
+  /* Capture the version when the editor opens, not when Save is clicked.
+     Refreshes in another tab must never silently upgrade a stale draft. */
+  const profile = libArtists[artist.normKey] || Object.values(libArtists).find((a) => normalizeArtistKey(a.name || '') === normalizeArtistKey(artist.name));
+  const openedArtistKey = profile?.key || artist.normKey;
+  const openedVersion = profile?.version || 0;
 
   let chosenImg = artist.hasCustomImg ? artist.img : '';
   const albumCovers = Array.from(new Set(artist.tracks.map((t) => t.coverUrl).filter(Boolean)));
@@ -1699,7 +1729,7 @@ function openEditArtistModal(artistName: string): void {
     <div class="adm-modal-head">
       <div>
         <h3 class="adm-modal-title"><i class="fa-solid fa-user-pen"></i> Edit Artist: ${escHtml(artist.name)}</h3>
-        <p class="adm-modal-sub">Customize artist portrait, biography, and genres, or batch rename artist across all tracks.</p>
+        <p class="adm-modal-sub">Changes are saved permanently to Cloudflare and appear immediately. Uploaded portraits stay with the profile; image URLs remain external.</p>
       </div>
     </div>
 
@@ -1725,7 +1755,7 @@ function openEditArtistModal(artistName: string): void {
 
         <div class="adm-field-full">
           <label class="adm-label" for="aemImgUrl">Picture URL <small style="color:var(--dim)">(direct image link)</small></label>
-          <input class="adm-input" id="aemImgUrl" type="url" placeholder="https://..." value="${artist.hasCustomImg ? escHtml(artist.img) : ''}">
+          <input class="adm-input" id="aemImgUrl" type="url" placeholder="https://..." value="${artist.hasCustomImg && artist.img.startsWith('https://') ? escHtml(artist.img) : ''}">
         </div>
 
         <div class="adm-field-full">
@@ -1739,7 +1769,7 @@ function openEditArtistModal(artistName: string): void {
 
         <div class="adm-field-full">
           <label class="adm-label" for="aemBio">Bio / Description</label>
-          <textarea class="adm-input" id="aemBio" rows="3" maxlength="600" placeholder="Short biography of the artist...">${escHtml(artist.bio)}</textarea>
+          <textarea class="adm-input" id="aemBio" rows="3" maxlength="2000" placeholder="Short biography of the artist...">${escHtml(artist.bio)}</textarea>
         </div>
 
         <div class="adm-field-full">
@@ -1786,6 +1816,10 @@ function openEditArtistModal(artistName: string): void {
   fileInput.addEventListener('change', () => {
     const file = fileInput.files?.[0];
     if (!file) return;
+    if (!['image/jpeg', 'image/png', 'image/webp'].includes(file.type)) {
+      setStatus(statusEl, 'Upload a JPEG, PNG or WebP portrait.', 'err');
+      return;
+    }
     if (file.size > MAX_COVER_BYTES) {
       setStatus(statusEl, '✗ Image file too large (max 1.5 MB)', 'err');
       return;
@@ -1803,7 +1837,7 @@ function openEditArtistModal(artistName: string): void {
   imgUrlInput.addEventListener('input', () => {
     const url = imgUrlInput.value.trim();
     chosenImg = url;
-    updateAvatarPreview(url || artist.img);
+    updateAvatarPreview(url);
   });
 
   $('aemClearPicBtn').addEventListener('click', () => {
@@ -1858,8 +1892,10 @@ function openEditArtistModal(artistName: string): void {
     setStatus(statusEl, 'Saving artist profile…');
 
     try {
-      const res = await adminApi<{ ok: boolean; renamedTrackCount?: number }>('artistSet', {
+      const res = await adminApi<ArtistDirectory & { ok: boolean; persisted: boolean; artist: ArtistMeta; renamedTrackCount?: number }>('artistSet', {
         artist: artist.name,
+        artistKey: openedArtistKey,
+        version: openedVersion,
         name: newName,
         img: chosenImg,
         bio,
@@ -1868,26 +1904,8 @@ function openEditArtistModal(artistName: string): void {
         renameTracks,
       });
 
-      libArtists[artist.normKey] = {
-        name: newName,
-        img: chosenImg,
-        bio,
-        genres,
-        social,
-        updated: Date.now(),
-      };
-      if (newName.toLowerCase() !== artist.normKey) {
-        libArtists[newName.toLowerCase()] = libArtists[artist.normKey];
-      }
-
-      if (renameTracks && newName !== artist.name) {
-        for (const t of artist.tracks) {
-          t.artist = newName;
-        }
-      }
-
-      libArtistsCache = null;
-      libEntriesCache = null;
+      if (!res.persisted || !res.artist?.version) throw new Error('The server did not confirm a saved profile. Reload and try again.');
+      ingestArtistDirectory(res);
 
       closeModal();
       toast(res.renamedTrackCount ? `Artist saved & renamed across ${res.renamedTrackCount} tracks` : 'Artist profile saved', 'ok');
@@ -2132,11 +2150,11 @@ async function loadDiscordOverview(silent = false): Promise<void> {
     gateway.textContent = online
       ? (bot.botUser || 'connected') + ' · ' + (bot.latencyMs == null ? '—' : bot.latencyMs + ' ms')
       : bot.lastSeen ? 'last seen ' + fmtAgo(bot.lastSeen) : 'not connected yet';
-    gateway.className = 'v ' + (online ? 'ok' : 'err');
+    gateway.className = 'adm-dstat-value ' + (online ? 'ok' : 'err');
 
     const queued = Number(counts.queued || 0);
     $('discordQueueState').textContent = queued + ' / ' + (settings.threshold ?? '—');
-    $('discordQueueState').className = 'v gold';
+    $('discordQueueState').className = 'adm-dstat-value accent';
     $('discordActiveBatch').textContent = data.activeBatch
       ? '#' + data.activeBatch.id + ' · ' + data.activeBatch.status + ' · ' + data.activeBatch.trackCount + ' tracks'
       : 'none';
@@ -2509,7 +2527,7 @@ const DISCORD_SECTIONS: Array<{ id: DiscordSection; el: string; load: () => Prom
 function setDiscordSection(section: DiscordSection): void {
   discordSection = section;
   try { localStorage.setItem(DISCORD_STATE_KEY, section); } catch { /* ignore */ }
-  document.querySelectorAll<HTMLElement>('#discordSubnav .adm-seg-btn').forEach((btn) => {
+  document.querySelectorAll<HTMLElement>('#discordSubnav .adm-dsubnav-btn').forEach((btn) => {
     btn.classList.toggle('active', btn.dataset.dsec === section);
   });
   for (const item of DISCORD_SECTIONS) $(item.el).hidden = item.id !== section;
@@ -2845,6 +2863,30 @@ try {
 } catch { /* ignore */ }
 
 bind();
+/* Repaint directory changes, never an open editor. Its fields, portrait and
+   captured version belong to the draft until it is closed and reopened. */
+ingestArtistDirectory(getCachedArtistDirectory());
+window.addEventListener('aura:artists-updated', () => {
+  const directory = getCachedArtistDirectory();
+  if (directory.revision <= libArtistRevision) return;
+  ingestArtistDirectory(directory);
+  renderArtistsGrid();
+  renderLibGrid();
+  if (currentPlayingPath) {
+    const entry = buildLibEntries().find((item) => item.path === currentPlayingPath);
+    if (entry) $('admAudioArtist').textContent = entry.artist;
+  }
+});
+let lastArtistRefresh = 0;
+const refreshArtists = () => {
+  if (!getSession() || document.visibilityState === 'hidden' || Date.now() - lastArtistRefresh < 15000) return;
+  lastArtistRefresh = Date.now();
+  void fetchArtistDirectory();
+};
+window.addEventListener('focus', refreshArtists);
+window.addEventListener('online', refreshArtists);
+document.addEventListener('visibilitychange', refreshArtists);
+setInterval(refreshArtists, 60000);
 renderQueue();
 if (getSession()) unlock();
 else lock();

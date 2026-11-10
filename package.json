@@ -7,6 +7,10 @@
     "dev": "vite",
     "build": "vite build",
     "preview": "vite preview",
+    "test:artists": "node --import tsx --test tests/artists/*.test.ts",
+    "test:artists:browser": "vite --config tests/artists/vite.config.ts",
+    "artists:migrate": "node --import tsx scripts/migrate-artists.ts",
+    "artists:bind": "node --import tsx scripts/bind-artist-storage.ts",
     "typecheck": "tsc --noEmit",
     "lint": "node scripts/lint.mjs"
   },
@@ -14,8 +18,9 @@
     "@types/react": "^19.3.0",
     "@types/react-dom": "^19.3.0",
     "libsodium-wrappers": "^0.8.4",
+    "tsx": "^4.23.15",
     "typescript": "^5.9.3",
-    "vite": "^7.1.12"
+    "vite": "^7.3.8"
   },
   "dependencies": {
     "@noble/hashes": "^2.4.0",

@@ -25,27 +25,6 @@ import { $, state } from '../core/state';
       }, 1500);
     }
 
-    /* Theme Toggle — persisted so a reload keeps the chosen theme. The tiny
-       inline script at the top of <body> applies the class before first paint
-       (no dark flash); this keeps both labels/icons in sync afterwards. */
-    export const THEME_KEY = 'auraTheme';
-    export function applyTheme(isLight, persist = true){
-      document.body.classList.toggle('light-theme', !!isLight);
-      const icon = isLight ? 'fa-solid fa-moon' : 'fa-solid fa-sun';
-      const label = isLight ? 'Dark Mode' : 'Light Mode';
-      const mi = $('themeIcon'), ml = $('themeLabel');
-      if(mi) mi.className = icon;
-      if(ml) ml.textContent = label;
-      const dIcon = $('desktopThemeIcon'), dLabel = $('desktopThemeLabel');
-      if(dIcon) dIcon.className = icon;
-      if(dLabel) dLabel.textContent = label;
-      $('themeToggleBtn')?.setAttribute('aria-pressed', isLight ? 'true' : 'false');
-      if(persist){ try{ localStorage.setItem(THEME_KEY, isLight ? 'light' : 'dark'); }catch(e){} }
-    }
-    $('themeToggleBtn').onclick = () => applyTheme(!document.body.classList.contains('light-theme'));
-    applyTheme(document.body.classList.contains('light-theme'), false);
-
-
     /* Interactive Settings */
     export const AURA_SETTINGS_KEY='auraSettings_v1';
     export const defaultAuraSettings={autoplayNext:true,rememberVolume:true,reduceMotion:false};

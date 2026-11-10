@@ -1,4 +1,4 @@
-import { state, $, trackKey } from '../core/state';
+import { state, $, trackKey, trackMatchesKey } from '../core/state';
 import { toast, getSavedUserName } from '../core/dom';
 import { goTab, showPlaylistTab } from '../ui/nav';
 import { playSong } from './player';
@@ -67,7 +67,7 @@ function savePlaylists(playlists: Playlist[]): boolean {
 }
 
 function resolveSong(key: string): { song: any; index: number } | null {
-  const index = state.songs.findIndex((song: any) => trackKey(song) === key);
+  const index = state.songs.findIndex((song: any) => trackMatchesKey(song, key));
   return index < 0 ? null : { song: state.songs[index], index };
 }
 
@@ -381,10 +381,20 @@ function renderPlaylistPage(): void {
   });
 }
 
+/* Read-only repaint: cloud metadata must never normalize or rewrite storage. */
+export function refreshPlaylistViews(): void {
+  renderPlaylistsPage();
+  if ($('tabPlaylist')?.classList.contains('active')) renderPlaylistPage();
+}
+
+function playlistHasSong(playlist: Playlist, song: any): boolean {
+  return playlist.tracks.some((key) => trackMatchesKey(song, key));
+}
+
 function renderSuggestions(playlist: Playlist): string {
   const suggestions = state.songs
     .map((song: any, index: number) => ({ song, index }))
-    .filter(({ song }) => !playlist.tracks.includes(trackKey(song)))
+    .filter(({ song }) => !playlistHasSong(playlist, song))
     .slice(0, 10);
   if (!suggestions.length) return '';
   return `<section class="pl-content-section pl-suggestions">
@@ -414,7 +424,7 @@ export function addTrackToPlaylist(playlistId: string, index: number): void {
   const song = state.songs[index];
   if (!playlist || !song) return;
   const key = trackKey(song);
-  if (playlist.tracks.includes(key)) return toast('Already in this playlist.', 'circle-info');
+  if (playlistHasSong(playlist, song)) return toast('Already in this playlist.', 'circle-info');
   playlist.tracks.push(key);
   if (!savePlaylists(playlists)) return;
   renderSidebarPlaylists();
@@ -470,7 +480,7 @@ export function openPlaylistPicker(songId: string | number): void {
   const list = overlay.querySelector<HTMLElement>('[data-picker-list]')!;
   const playlists = loadPlaylists();
   list.innerHTML = `${playlists.map((playlist) => {
-    const alreadyAdded = playlist.tracks.includes(pendingTrackKey!);
+    const alreadyAdded = playlistHasSong(playlist, song);
     return `<button type="button" class="playlist-picker-option" data-picker-id="${esc(playlist.id)}" ${alreadyAdded ? 'disabled' : ''}>${coversMarkup(playlist, 'playlist-picker-cover')}<span><b>${esc(playlist.title)}</b><small>${alreadyAdded ? 'Already added' : `${playlist.tracks.length} track${playlist.tracks.length === 1 ? '' : 's'}`}</small></span><i class="fa-solid ${alreadyAdded ? 'fa-check' : 'fa-plus'}"></i></button>`;
   }).join('')}<button type="button" class="playlist-picker-new" data-picker-new><i class="fa-solid fa-plus"></i><span>Create a new playlist</span></button>`;
   list.querySelectorAll<HTMLElement>('[data-picker-id]').forEach((button) => {
@@ -489,7 +499,8 @@ function addPendingTrack(playlistId: string): void {
   if (!pendingTrackKey) return;
   const playlists = loadPlaylists();
   const playlist = playlists.find((item) => item.id === playlistId);
-  if (!playlist || playlist.tracks.includes(pendingTrackKey)) return;
+  const pending = resolveSong(pendingTrackKey);
+  if (!playlist || !pending || playlistHasSong(playlist, pending.song)) return;
   playlist.tracks.push(pendingTrackKey);
   if (!savePlaylists(playlists)) return;
   const title = playlist.title;

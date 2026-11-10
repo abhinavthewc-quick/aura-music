@@ -1,31 +1,20 @@
-/* Aura Music — stylesheets. @import order mirrors the original cascade order. */
+/* Aura's black listening room. Each component owns its active and responsive
+   states; there is no late override layer or alternate theme. */
+@import './tokens.css';
 @import './base.css';
+@import './shell.css';
+@import './nav.css';
+@import './profile.css';
 @import './login.css';
+@import './home.css';
+@import './library.css';
 @import './search.css';
 @import './player-bar.css';
-@import './nav.css';
 @import './full-player.css';
+@import './lyrics.css';
 @import './radio.css';
-@import './track-sheet.css';
 @import './overlays.css';
-@import './library.css';
+@import './track-sheet.css';
 @import './settings.css';
 @import './effects.css';
-@import './layout-desktop.css';
-@import './overrides-1.css';
-@import './overrides-2.css';
-@import './overrides-3.css';
-@import './search-premium.css';
-@import './overrides-4.css';
-@import './hide-nav-names.css';
-@import './profile-initial.css';
-@import './desktop-player.css';
-@import './hero-and-orb.css';
-@import './vinyl-tail.css';
-@import './rooms.css';
-@import './mobile-dock.css';
-@import './updates-oct24.css';
 @import './playlists.css';
-@import './design-polish.css';
-@import './ytm-aesthetic.css';
-@import './quality-pass.css';

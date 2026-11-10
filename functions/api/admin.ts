@@ -6,6 +6,8 @@
    The email must match the allow-list before any GitHub API call is made. */
 
 import { sealBox, fromBase64, toBase64 } from '../../lib/sealedBox.js';
+import { artistTrackId } from '../../lib/artistProfiles.js';
+import { readArtistDirectory, saveArtistProfile, saveTrackArtistEdits, ArtistStoreError, type ArtistEnv } from '../lib/artistStore.js';
 
 const REPO = 'abhinavthewc-quick/aura-music';
 const WORKFLOW_FILE = 'upload-music.yml';
@@ -29,7 +31,7 @@ const AUDIO_EXT_RE = /\.(opus|mp3|ogg|m4a|webm)$/i;
 const IMAGE_EXT_RE = /\.(webp|jpe?g|png)$/i;
 const MAX_COVER_B64 = Math.ceil(1.5 * 1024 * 1024) * 4 / 3 + 64; // ~1.5 MB image
 
-interface Env {
+interface Env extends ArtistEnv {
   GH_TOKEN: string;
   GOOGLE_CLIENT_ID: string;
   ADMIN_PASSWORD?: string; // optional — enables the email+password login
@@ -1158,14 +1160,13 @@ export const onRequestPost = async ({ request, env, ctx }: {
       }
 
       case 'library': {
-        const files = await bucketTree();
-        const m = await hfManifest(env);
+        const [files, m, directory] = await Promise.all([bucketTree(), hfManifest(env), readArtistDirectory(env)]);
         return json({
           files,
           videoIds: [...uploadedVideoIds(files)],
           bucketId: hfBucketId(env),
           manifest: m.tracks,
-          artists: m.artists,
+          ...directory,
         });
       }
 
@@ -1325,91 +1326,50 @@ export const onRequestPost = async ({ request, env, ctx }: {
           throw e;
         }
         manifestMem = { data: manifest, at: Date.now() };
-        return json({ ok: true, dispatched: true, target: 'manifest.json' });
+        const directory = fields.a ? await saveTrackArtistEdits(env, [{ id: 'vid:' + vid, artist: String(fields.a) }]) : undefined;
+        return json({ ok: true, dispatched: true, target: 'manifest.json', ...directory });
       }
 
-      /* ----- Artist Profile Management: update image, bio, genres, or batch-rename artist ----- */
+      /* Artist writes never stage a manifest or dispatch a download workflow. */
       case 'artistSet': {
-        const artist = String(body.artist || '').trim();
-        if (!artist) return json({ error: 'artist name required' }, 400);
-        const m = await hfManifest(env);
-        const artists: Record<string, Record<string, unknown>> = { ...(m.artists || {}) };
-        const tracks: Record<string, Record<string, unknown>> = { ...(m.tracks || {}) };
-
-        const artistKey = artist.toLowerCase();
-        const existing = (artists[artistKey] as Record<string, unknown>) || { name: artist };
-        const profile: Record<string, unknown> = { ...existing };
-
-        if (body.name) profile.name = String(body.name).trim();
-        if (body.img !== undefined) profile.img = String(body.img).trim();
-        if (body.bio !== undefined) profile.bio = String(body.bio).trim();
-        if (body.genres && Array.isArray(body.genres)) profile.genres = body.genres.map(String);
-        if (body.social !== undefined) profile.social = String(body.social).trim();
-        profile.updated = Date.now();
-
-        artists[artistKey] = profile;
-
-        let renamedTrackCount = 0;
-        const newName = body.renameTracks ? String(body.name || artist).trim() : null;
-        if (newName && newName !== artist) {
-          const oldNorm = artist.toLowerCase();
-          for (const [vid, entry] of Object.entries(tracks)) {
-            const a = String((entry as any).a || '').trim();
-            if (a.toLowerCase() === oldNorm || a === artist) {
-              (tracks[vid] as any).a = newName;
-              renamedTrackCount++;
-            }
+        const candidates: Array<{ id: string; artist: string }> = [];
+        let revision: number | undefined;
+        if (body.renameTracks === true) {
+          const [files, m, directory] = await Promise.all([bucketTree(), hfManifest(env), readArtistDirectory(env)]);
+          revision = directory.revision;
+          for (const file of files.filter((f) => AUDIO_EXT_RE.test(f.path))) {
+            const stem = file.path.replace(/\.[^.]+$/, '');
+            const vid = VIDEO_ID_SUFFIX_RE.exec(stem)?.[1] || '';
+            const parsed = /^(.+?)\s+-\s+(.+)$/.exec(stem.replace(VIDEO_ID_SUFFIX_RE, '').replace(/\s*-\s*Topic\s*-\s*/i, ' - '));
+            const id = artistTrackId(vid, file.path);
+            const artist = directory.trackArtists[id] || String(m.tracks[vid]?.a || parsed?.[1] || 'Unknown Artist').trim();
+            candidates.push({ id, artist });
           }
-          delete artists[artistKey];
-          artists[newName.toLowerCase()] = { ...profile, name: newName };
         }
-
-        const manifest = { v: 1, tracks, artists };
-        const stagedPath = `${STAGING_DIR}/manifest-${Date.now().toString(36)}.json`;
-        try {
-          await gh(env, `/repos/${REPO}/contents/${stagedPath}`, {
-            method: 'PUT',
-            body: JSON.stringify({
-              message: `chore: update artist metadata for ${artist}`,
-              content: toB64Utf8(JSON.stringify(manifest, null, 1)),
-              branch: 'main',
-            }),
-          });
-        } catch (e) {
-          throw new Error('could not stage manifest in repo — ' + (e as Error).message);
-        }
-        try {
-          await gh(env, `/repos/${REPO}/actions/workflows/${MANAGE_WORKFLOW_FILE}/dispatches`, {
-            method: 'POST',
-            body: JSON.stringify({
-              ref: 'main',
-              inputs: { op: 'manifest', staged_path: stagedPath, target_path: 'manifest.json' },
-            }),
-          });
-        } catch (e) {
-          await cleanupStaged(env, stagedPath);
-          throw e;
-        }
-        manifestMem = { data: manifest, at: Date.now() };
-        return json({ ok: true, dispatched: true, renamedTrackCount, artist: profile });
+        const saved = await saveArtistProfile(env, body, candidates, revision);
+        return json({ ok: true, persisted: true, artist: saved.artist, renamedTrackCount: saved.renamedTrackCount, ...saved.directory });
       }
 
       /* ----- Batch manifest metadata updates (batch artist/album edit) ----- */
       case 'batchManifestSet': {
         const updates = body.updates;
-        if (!Array.isArray(updates) || !updates.length) {
-          return json({ error: 'updates array required' }, 400);
+        if (!Array.isArray(updates) || !updates.length || updates.length > 500) {
+          return json({ error: 'provide 1–500 track updates' }, 400);
         }
         const m = await hfManifest(env);
         const tracks: Record<string, Record<string, unknown>> = { ...(m.tracks || {}) };
         let count = 0;
+        const artistEdits: Array<{ id: string; artist: string }> = [];
         for (const item of updates) {
           const vid = String(item.id || '');
-          if (!vid) continue;
+          if (!/^[A-Za-z0-9_-]{11}$/.test(vid)) return json({ error: 'bad video ID' }, 400);
           const existing = tracks[vid] || {};
           const fields: Record<string, unknown> = {};
           if (item.title) fields.t = String(item.title).trim();
-          if (item.artist) fields.a = String(item.artist).trim();
+          if (item.artist) {
+            fields.a = String(item.artist).trim().slice(0, 200);
+            if (fields.a) artistEdits.push({ id: 'vid:' + vid, artist: String(fields.a) });
+          }
           if (item.album) fields.al = String(item.album).trim();
           if (item.year) fields.y = String(item.year).trim();
           if (item.genre) fields.g = String(item.genre).trim();
@@ -1443,7 +1403,8 @@ export const onRequestPost = async ({ request, env, ctx }: {
           throw e;
         }
         manifestMem = { data: manifest, at: Date.now() };
-        return json({ ok: true, dispatched: true, count });
+        const directory = artistEdits.length ? await saveTrackArtistEdits(env, artistEdits) : undefined;
+        return json({ ok: true, dispatched: true, count, ...directory });
       }
 
       case 'expand': {
@@ -1723,6 +1684,7 @@ export const onRequestPost = async ({ request, env, ctx }: {
         return json({ error: 'unknown action' }, 400);
     }
   } catch (e) {
+    if (e instanceof ArtistStoreError) return json({ error: e.message }, e.status);
     return json({ error: (e as Error).message || 'server error' }, 502);
   }
 };

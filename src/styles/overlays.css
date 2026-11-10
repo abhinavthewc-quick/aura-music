@@ -1,60 +1,49 @@
-/* Modal overlays, the About card, the Edit-Track dialog and the responsive
-   app-width clamps.
+/* Dialog geometry and utility surfaces. Features own their interior rows. */
+.modal-overlay, .help-overlay, .name-modal { position: fixed; z-index: 1300; inset: 0; display: none; align-items: center; justify-content: center; padding: 24px; background: var(--overlay-scrim); }
+.modal-overlay.active, .help-overlay.open, .name-modal.active { display: flex; }
+.about-card, .help-card, .name-modal-card, .glass-box { position: relative; width: min(430px, 100%); max-height: calc(100dvh - 48px - var(--safe-top) - var(--safe-bottom)); overflow-y: auto; padding: 24px; border: 1px solid var(--line-strong); border-radius: var(--radius-md); background: var(--surface-2); color: var(--text); box-shadow: var(--shadow-overlay); }
+.about-card { max-width: 390px; text-align: center; }
+.about-close, .help-close { position: absolute; top: 12px; right: 12px; display: grid; place-items: center; width: var(--tap); height: var(--tap); padding: 0; border: 0; border-radius: 50%; background: transparent; color: var(--text-sub); font-size: 17px; }
+.about-close:hover, .help-close:hover { background: var(--hover); color: var(--text); }
+.about-logo { display: grid; place-items: center; width: 72px; height: 72px; overflow: hidden; margin: 4px auto 16px; border-radius: var(--radius-md); background: var(--bg); }
+.about-logo img { display: block; width: 100%; height: 100%; object-fit: cover; }
+.about-card h3 { font: 600 26px/1.15 var(--font-brand); }
+.about-version { margin: 6px 0 16px; color: var(--text-sub); font-size: 12px; }
+.about-desc { margin-bottom: 20px; color: var(--text-sub); font-size: 13px; line-height: 1.6; }
+.about-list { display: flex; flex-direction: column; gap: 8px; margin-bottom: 20px; text-align: left; }
+.about-row { display: flex; align-items: center; gap: 10px; padding: 12px; border: 1px solid var(--line); border-radius: var(--radius-xs); background: var(--surface-1); font-size: 12px; }
+.about-row i { color: var(--accent); }
+.about-footer { color: var(--text-sub); font-size: 12px; }
+.help-icon, .name-modal-icon { display: grid; place-items: center; width: 48px; height: 48px; margin-bottom: 16px; border-radius: var(--radius-sm); background: var(--accent-soft); color: var(--accent); font-size: 20px; }
+.help-card h3, .name-modal-title { margin: 0 40px 8px 0; font-size: 24px; font-weight: 600; letter-spacing: -.025em; }
+.help-sub, .name-modal-subtitle { margin-bottom: 20px; color: var(--text-sub); font-size: 13px; line-height: 1.55; }
+.help-row { display: flex; align-items: center; gap: 12px; min-height: 64px; margin-bottom: 8px; padding: 12px; border: 1px solid var(--line); border-radius: var(--radius-sm); background: var(--surface-1); color: var(--text); text-decoration: none; }
+.help-row:hover { border-color: var(--accent); }
+.help-row-icon { display: grid; place-items: center; flex: 0 0 36px; width: 36px; height: 36px; border-radius: var(--radius-xs); background: var(--surface-3); color: var(--text-sub); font-size: 18px; }
+.help-row-text { flex: 1; min-width: 0; }
+.help-row-text b { display: block; font-size: 14px; font-weight: 600; }
+.help-row-text small { display: block; overflow: hidden; margin-top: 3px; color: var(--text-sub); font-size: 12px; text-overflow: ellipsis; }
+.help-row-go { color: var(--text-dim); font-size: 12px; }
+.name-modal-input, .admin-input { width: 100%; min-height: 48px; padding: 12px; border: 1px solid var(--line-strong); border-radius: var(--radius-xs); background: var(--surface-1); color: var(--text); font-size: 15px; }
+.name-modal-input:focus, .admin-input:focus { border-color: var(--accent); }
+.name-modal-actions { display: flex; gap: 8px; margin-top: 20px; }
+.name-modal-btn, .admin-btn { display: inline-flex; align-items: center; justify-content: center; flex: 1; gap: 8px; min-height: var(--tap); padding: 10px 16px; border: 1px solid var(--line); border-radius: var(--radius-xs); background: var(--surface-1); color: var(--text); font-size: 13px; font-weight: 600; }
+.name-modal-save, .admin-btn:not(.secondary-btn) { border-color: var(--accent); background: var(--accent); color: var(--accent-ink); }
+.secondary-btn { border-color: var(--line); background: var(--surface-1); color: var(--text); }
+.glass-box.edit-box { display: flex; flex-direction: column; gap: 12px; text-align: left; }
+.edit-box h3 { margin-bottom: 8px; font-size: 24px; font-weight: 600; }
+.edit-field-label { color: var(--text-sub); font-size: 12px; font-weight: 500; }
+.edit-cover-row { display: flex; align-items: center; gap: 12px; }
+.edit-cover-row img { width: 56px; height: 56px; flex: 0 0 56px; border: 1px solid var(--line); border-radius: var(--radius-xs); object-fit: cover; }
+.edit-cover-fields { display: flex; flex-direction: column; flex: 1; min-width: 0; gap: 8px; }
 
-   These rules used to ride inside the Beeboo stylesheet, which doubled as a
-   junk drawer for app-wide styling. When Beeboo was removed its stylesheet
-   went with it — including these, which had nothing to do with Beeboo — and
-   every modal overlay in the app dropped its position:fixed/display:none and
-   rendered as static blocks stacked at the top of the page, pushing the whole
-   document below them (the deployed site's "all content gone, cards half off
-   screen" state). They are rescued here, byte-for-byte from the deleted
-   beeboo.css (lines 49-98), and belong at the same cascade position so the
-   newer files after them still win wherever they overlap. */
-
-/* Edit Track Modal + About card */
-.modal-overlay{position:fixed;inset:0;background:rgba(6,8,14,.85);backdrop-filter:blur(16px);display:none;justify-content:center;align-items:center;z-index:1000;padding:20px}
-.modal-overlay.active{display:flex}
-.about-card{position:relative;width:100%;max-width:340px;background:linear-gradient(150deg,rgba(30,40,64,.75),rgba(10,14,26,.6));border:1px solid rgba(255,255,255,.16);border-radius:22px;padding:30px 24px 24px;text-align:center;box-shadow:0 24px 60px rgba(0,0,0,.5),inset 0 1px 0 rgba(255,255,255,.14);backdrop-filter:blur(30px) saturate(180%)}
-.about-close{position:absolute;top:12px;right:12px;background:none;border:none;color:var(--text-sub);font-size:16px;cursor:pointer;padding:6px}
-.about-logo{width:56px;height:56px;border-radius:16px;background:var(--accent);color:#04222a;display:flex;align-items:center;justify-content:center;font-size:24px;margin:0 auto 14px}
-.about-card h3{font-size:19px;margin-bottom:2px}
-.about-version{font-size:11px;color:var(--text-sub);margin-bottom:14px}
-.about-desc{font-size:12.5px;color:var(--text-sub);line-height:1.55;margin-bottom:18px}
-.about-list{display:flex;flex-direction:column;gap:9px;text-align:left;margin-bottom:18px}
-.about-row{display:flex;align-items:center;gap:9px;font-size:12px;background:rgba(255,255,255,.05);border:1px solid rgba(255,255,255,.08);border-radius:10px;padding:9px 11px}
-.about-row i{color:var(--accent);font-size:11px}
-.about-footer{font-size:10.5px;color:var(--text-sub);font-style:italic}
-.glass-box.edit-box{max-width:340px;text-align:left;gap:10px}
-.glass-box.edit-box h3{text-align:center;margin-bottom:4px}
-.edit-field-label{font-size:11px;color:var(--text-sub);font-weight:600;margin-bottom:-4px}
-.edit-cover-row{display:flex;align-items:center;gap:10px}
-.edit-cover-row img{width:56px;height:56px;border-radius:10px;object-fit:cover;flex-shrink:0;border:1px solid var(--card-border)}
-.edit-cover-row .edit-cover-fields{flex:1;display:flex;flex-direction:column;gap:6px}
-.secondary-btn{background:var(--card-bg)!important;border:1px solid var(--card-border)!important;color:var(--text)!important}
-
-/* Radio/mobile alignment: keep the entire tab locked to the app width */
-@media (max-width: 899px){
-  .app-container{width:100%;max-width:100%;padding-left:16px;padding-right:16px;}
-  #tabRadio{width:100%;max-width:100%;}
-  .radio-hero,.radio-search,.radio-presets,.radio-list,.radio-custom{width:100%;max-width:100%;margin-left:0;margin-right:0;}
-  .radio-search{min-width:0;}
-  .radio-search input{min-width:0;width:0;}
-  .radio-presets{overflow-x:auto;overscroll-behavior-x:contain;}
-  .radio-list{overflow:hidden;}
-}
-
-/* RESPONSIVE MEDIA QUERIES */
-@media (min-width: 600px) {
-  .song-list{grid-template-columns:repeat(2, 1fr);}
-}
-
-@media (min-width: 900px) {
-  .app-container{padding-bottom:120px}
-  .song-list{grid-template-columns:repeat(3, 1fr);}
-  .radio-full-overlay{inset:auto;top:50%;left:50%;transform:translate(-50%,-50%) scale(.9);width:420px;height:620px;border-radius:24px;border:1px solid var(--card-border);box-shadow:0 25px 50px rgba(0,0,0,.4);opacity:0}
-  .radio-full-overlay.active{transform:translate(-50%,-50%) scale(1);opacity:1}
-  .nav-bar{bottom:20px;right:30px;left:auto;transform:none;width:auto;gap:10px;background:none;border:none;backdrop-filter:none}
-
-  .full-player-overlay{inset:auto;top:50%;left:50%;transform:translate(-50%, -50%) scale(0.9);opacity:0;pointer-events:none;width:420px;height:620px;border-radius:24px;border:1px solid var(--card-border);box-shadow:0 25px 50px rgba(0,0,0,0.4)}
-  .full-player-overlay.active{transform:translate(-50%, -50%) scale(1);opacity:1;pointer-events:all}
+.toast-container { position: fixed; z-index: 12000; right: 20px; bottom: calc(104px + var(--safe-bottom)); display: flex; flex-direction: column; align-items: flex-end; gap: 8px; width: min(420px, calc(100vw - 40px)); pointer-events: none; }
+.toast { display: flex; align-items: center; gap: 10px; max-width: 100%; padding: 12px 16px; border: 1px solid var(--line-strong); border-radius: var(--radius-sm); background: var(--surface-2); color: var(--text); box-shadow: var(--shadow-overlay); font-size: 13px; line-height: 1.5; opacity: 0; transform: translateY(6px); transition: opacity var(--dur-fast), transform var(--dur-fast); }
+.toast.show { opacity: 1; transform: none; }
+.toast i { flex: 0 0 auto; color: var(--accent); }
+@media (max-width: 700px) {
+  .modal-overlay, .help-overlay, .name-modal { align-items: flex-end; padding: 0; }
+  .about-card, .help-card, .name-modal-card, .glass-box { width: 100%; max-width: 100%; max-height: calc(90dvh - var(--safe-top)); padding: 24px 20px calc(24px + var(--safe-bottom)); border-right: 0; border-bottom: 0; border-left: 0; border-radius: var(--radius-md) var(--radius-md) 0 0; }
+  .toast-container { right: 12px; bottom: calc(184px + var(--safe-bottom)); width: calc(100vw - 24px); }
+  .toast { font-size: 12px; }
 }

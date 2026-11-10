@@ -1,0 +1,14 @@
+{
+  "$schema": "node_modules/wrangler/config-schema.json",
+  "name": "aura-artist-storage",
+  "account_id": "78b14a211589525aa3b866632a83d155",
+  "compatibility_date": "2026-09-22",
+  "d1_databases": [
+    {
+      "binding": "ARTIST_DB",
+      "database_name": "aura-artists",
+      "database_id": "5b8d01eb-7c0d-4470-8c38-45465e5fb3bb",
+      "migrations_dir": "migrations/artists"
+    }
+  ]
+}

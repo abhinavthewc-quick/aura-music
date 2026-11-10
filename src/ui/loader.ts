@@ -9,11 +9,11 @@
     var n=o.count||520, pts=[], i;
     for(i=0;i<n;i++){
       var y=1-(i+.5)/n*2, r=Math.sqrt(1-y*y), th=GA*i;
-      pts.push({x:Math.cos(th)*r,y:y,z:Math.sin(th)*r,s:.5+Math.pow(Math.random(),2.3)*2.3,w:Math.random()*TAU,warm:Math.random()<.14});
+      pts.push({x:Math.cos(th)*r,y:y,z:Math.sin(th)*r,s:.5+Math.pow(Math.random(),2.3)*2.3,w:Math.random()*TAU});
     }
     var dpr=Math.min(window.devicePixelRatio||1,2), cw=0, ch=0, rot=Math.random()*TAU;
     var tilt=o.tilt==null?.38:o.tilt, speed=(o.speed||.9)*(reduce?.25:1);
-    var col=o.color||[255,255,255], warm=o.warm||[240,206,164];
+    var col=o.color||[255,255,255];
     var zoom=0, alive=true, last=0, t=0, raf=0;
 
     function fit(){
@@ -47,7 +47,7 @@
         var a=(.1+.9*Math.pow(depth,1.5))*(.86+.14*Math.sin(t*1.6+p.w))*fade;
         if(a<.02) continue;
         var sz=p.s*unit*(.5+.9*depth)*k;
-        var cc=p.warm?warm:col;
+        var cc=col;
         ctx.strokeStyle='rgba('+cc[0]+','+cc[1]+','+cc[2]+','+a.toFixed(3)+')';
         ctx.lineWidth=sz>minW?sz:minW;
         ctx.beginPath(); ctx.moveTo(sx0,sy0); ctx.lineTo(sx+.01,sy); ctx.stroke();
@@ -67,11 +67,9 @@
 
   function mountAll(){
     var list=document.querySelectorAll('canvas.aura-orb-mini:not([data-orb])');
-    var light=document.body && document.body.classList.contains('light-theme');
     for(var i=0;i<list.length;i++){
       list[i].setAttribute('data-orb','1');
-      create(list[i],{count:150,radius:.46,dot:2.6,speed:1.4,tilt:.4,stopWhenDetached:true,
-        color:light?[120,72,30]:[255,255,255], warm:light?[168,100,42]:[240,206,164]});
+      create(list[i],{count:150,radius:.46,dot:2.6,speed:1.4,tilt:.4,stopWhenDetached:true});
     }
   }
   window.AuraOrb={create:create,mountAll:mountAll,reduce:reduce};
@@ -112,7 +110,6 @@ import {
 
     if(canvas){
       try {
-        var isLight = document.body && document.body.classList.contains('light-theme');
         var tuning = normalizeLiquidGlassLogo({
           ...liquidGlassLogoDefaults,
           logo: '/aura-vinyl-logo.png',
@@ -128,7 +125,7 @@ import {
           innerWallFocus: 0.15,
           speed: 0.45,
           loopDelay: 2.4,
-          background: isLight ? '#e2e2e5' : '#000000',
+          background: '#000000',
         });
         liquidRenderer = createLiquidGlassLogoRenderer(canvas, tuning, function(){
           if(el) el.setAttribute('data-ready', '1');

@@ -1,4 +1,6 @@
 import { readCatalogCache } from './catalog';
+import { trackKey } from './trackIdentity';
+export { trackKey, trackMatchesKey } from './trackIdentity';
 
 // Mutable shared store. Every cross-module-reassigned top-level `let` from the
 // original single-file app lives here so feature modules can read/write it.
@@ -77,15 +79,6 @@ function applyFavorites(list: any[]) {
   list.forEach((s: any) => {
     s.favorite = !!savedLikeMap[String(s.id)] || likedKeySet.has(likeKey(s.title, s.artist));
   });
-}
-
-/* One song = one entry, no matter how it arrived (bucket catalog, manual add,
-   YouTube link, local file). Video ID is the strongest identity; otherwise
-   title+artist decides. Cross-source duplicates collapse onto the HF entry
-   and carry their favorite flag over. */
-export function trackKey(s: any): string {
-  if (s?.videoId) return 'vid:' + s.videoId;
-  return 'lk:' + String(s?.title || '').toLowerCase().trim() + '|' + String(s?.artist || '').toLowerCase().trim();
 }
 
 export function rebuildSongs() {

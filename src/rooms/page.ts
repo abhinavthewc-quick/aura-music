@@ -186,10 +186,11 @@ function renderResults(q: string): void {
       btn.title = 'Only admins can change the queue';
     } else {
       btn.onclick = () => {
-        client?.queueAdd(t.key);
+        if (!client?.isAdmin) return;
+        client.queueAdd(t.key);
         btn.textContent = 'Added';
         btn.disabled = true;
-        setTimeout(() => { btn.textContent = 'Add'; btn.disabled = false; }, 1100);
+        setTimeout(() => { btn.textContent = 'Add'; btn.disabled = !client?.isAdmin; }, 1100);
       };
     }
     li.appendChild(btn);
@@ -445,7 +446,7 @@ function peopleSig(v: RoomView): string {
 }
 
 function queueSig(v: RoomView): string {
-  return `${v.playback.trackKey ?? ''}¬${v.queue.join('¬')}`;
+  return `${v.role}¬${v.playback.trackKey ?? ''}¬${v.queue.join('¬')}`;
 }
 
 /** Refresh the search results only when the query or the role/lib changed. */
@@ -493,7 +494,7 @@ function render(v: RoomView) {
   const art = $('artImg') as HTMLImageElement;
   art.src = track?.img || DEFAULT_COVER;
 
-  // Queue: rebuild only when it actually changed.
+  // Queue rows also depend on the current listener's permissions.
   if (queueSig(v) !== lastQueueSig) {
     lastQueueSig = queueSig(v);
     const q = $('queueList');
@@ -520,7 +521,7 @@ function render(v: RoomView) {
         rm.className = 'promo';
         rm.textContent = '✕';
         rm.title = 'Remove from queue';
-        rm.onclick = () => client?.queueRemove(key);
+        rm.onclick = () => { if (client?.isAdmin) client.queueRemove(key); };
         li.appendChild(rm);
       }
       q.appendChild(li);

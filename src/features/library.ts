@@ -1,5 +1,6 @@
-import { artistMergeKey, escapeHtml, stateHTML, toast } from '../core/dom';
-import { DEFAULT_COVER, fetchHfCatalog } from '../core/catalog';
+import { escapeHtml, stateHTML, toast } from '../core/dom';
+import { buildArtistGroups, resolveArtistSelection, selectArtist, type ArtistGroup, type ArtistSelection } from '../core/artistGroups';
+import { DEFAULT_COVER, fetchHfCatalog, readArtistsCache, type ArtistMeta } from '../core/catalog';
 import { renderArtistSpotlight, renderAuraPicks, renderQuickAccess } from './home';
 import { filterSongs, loadSong, playSong, resetFullPlayerArtToImage, stopAuraYouTube, updatePlayState } from './player';
 import { filterSearchTab } from './search';
@@ -313,7 +314,7 @@ import { $, getPlayCount, persistLikedHistory, rebuildSongs, recordPlayCount, sa
           return;
         }
         if(!state.songs.length){
-          c.innerHTML = stateHTML('empty','Your library is empty','Add a track or search online to get started.','Search music',"goTab('tabSearch')");
+          c.innerHTML = stateHTML('empty','Your library is empty','Your saved music will appear here after the catalogue refreshes.','Refresh library','retryCatalog()');
           return;
         }
         c.innerHTML = stateHTML('noresults','No tracks found','Try a different spelling or another filter.');
@@ -334,7 +335,7 @@ import { $, getPlayCount, persistLikedHistory, rebuildSongs, recordPlayCount, sa
 
     export function setLibView(v){
       libView = v === 'artists' || v === 'albums' || v === 'films' ? v : 'tracks';
-      currentArtistKey = null;   // any explicit view switch leaves artist pages
+      currentArtist = null;   // any explicit view switch leaves artist pages
       document.querySelectorAll('#libViewSeg .lib-seg-btn').forEach(b => {
         b.classList.toggle('active', (b as HTMLElement).dataset.view === libView);
       });
@@ -350,43 +351,37 @@ import { $, getPlayCount, persistLikedHistory, rebuildSongs, recordPlayCount, sa
        One source of truth for Home (scrolling row) and Library (grid tab):
        groups merge artist variants via artistMergeKey, label each group with
        the spelling most tracks use, sort busiest-first, and use the first
-       available cover as the avatar. */
+        available cover as the avatar unless an admin portrait is set. */
     export function getArtistGroups(){
-      const keys: string[] = [];
-      const groups: any[] = [];
-      state.songs.forEach(s => {
-        const a = (s.artist || '').trim();
-        if(!a || a === 'Unknown Artist') return;
-        const k = artistMergeKey(keys, a);
-        let g = groups.find(x => x.key === k);
-        if(!g){ g = { key:k, name:'', names:new Map(), songs:[], cover:'' }; groups.push(g); }
-        g.songs.push(s);
-        g.names.set(a, (g.names.get(a) || 0) + 1);
-        if(!g.cover && s.img) g.cover = s.img;
-      });
-      groups.forEach(g => {
-        g.name = [...g.names.entries()].sort((x, y) => y[1] - x[1] || y[0].length - x[0].length)[0][0];
-      });
-      groups.sort((a, b) => b.songs.length - a.songs.length || a.name.localeCompare(b.name));
-      return groups;
+      return buildArtistGroups(state.songs, readArtistsCache());
     }
 
     function artistInitial(name){ return String(name || '').trim().charAt(0) || '#'; }
-    function artistFallbackColor(name){
-      let h = 0; const s = String(name || '');
-      for(let i = 0; i < s.length; i++) h = (h * 31 + s.charCodeAt(i)) % 360;
-      return `hsl(${h},42%,38%)`;
-    }
     function artistAvatarHTML(g, cls){
       if(g.cover) return `<img class="artist-avatar ${cls || ''}" src="${escapeHtml(g.cover)}" alt="">`;
-      return `<span class="artist-avatar artist-avatar-fallback ${cls || ''}" style="background:${artistFallbackColor(g.name)}">${escapeHtml(artistInitial(g.name))}</span>`;
+      return `<span class="artist-avatar artist-avatar-fallback ${cls || ''}">${escapeHtml(artistInitial(g.name))}</span>`;
+    }
+
+    export function artistProfileDetailsHTML(profile?: ArtistMeta): string {
+      if(!profile) return '';
+      const bio = profile.bio ? `<p class="artist-bio">${escapeHtml(profile.bio)}</p>` : '';
+      const genres = Array.isArray(profile.genres) && profile.genres.length
+        ? `<div class="artist-genres">${profile.genres.map(g => `<span>${escapeHtml(String(g))}</span>`).join('')}</div>` : '';
+      let social = '';
+      try{
+        const url = new URL(profile.social || '');
+        if(url.protocol === 'https:' && !url.username && !url.password){
+          social = `<a class="artist-social-link" href="${escapeHtml(url.href)}" target="_blank" rel="noopener noreferrer">Artist website <i class="fa-solid fa-arrow-up-right-from-square" aria-hidden="true"></i></a>`;
+        }
+      }catch{ /* no external link */ }
+      return bio || genres || social ? `<div class="artist-profile-details">${bio}${genres}${social}</div>` : '';
     }
     export function artistTileHTML(g, i){
       return `<button type="button" class="artist-tile" onclick="openArtist(${i})">${artistAvatarHTML(g, '')}<span class="artist-name">${escapeHtml(g.name)}</span></button>`;
     }
 
-    let currentArtistKey: any = null;
-    let artistGroupsCache: any[] = [];
+    let currentArtist: ArtistSelection | null = null;
+    let artistGroupsCache: ArtistGroup[] = [];
 
     function renderLibraryArtists(){
       const c = $('librarySongList');
@@ -398,10 +393,11 @@ import { $, getPlayCount, persistLikedHistory, rebuildSongs, recordPlayCount, sa
         return;
       }
       if(heading){ heading.style.display = ''; heading.textContent = 'Artists'; }
-      if(currentArtistKey != null){
-        const gi = artistGroupsCache.findIndex(g => g.key === currentArtistKey);
-        const g = gi >= 0 ? artistGroupsCache[gi] : null;
+      if(currentArtist != null){
+        const g = resolveArtistSelection(artistGroupsCache, currentArtist);
+        const gi = g ? artistGroupsCache.indexOf(g) : -1;
         if(g){
+          currentArtist = selectArtist(g);
           const n = g.songs.length;
           c.innerHTML = `<div class="artist-page">
             <button type="button" class="artist-page-back" onclick="setLibView('artists')"><i class="fa-solid fa-arrow-left"></i> Artists</button>
@@ -413,11 +409,12 @@ import { $, getPlayCount, persistLikedHistory, rebuildSongs, recordPlayCount, sa
                 <button type="button" onclick="shuffleArtist(${gi})"><i class="fa-solid fa-shuffle"></i> Shuffle</button>
               </div>
             </div>
+            ${artistProfileDetailsHTML(g.profile)}
             <div class="song-list">${g.songs.map(songItemHTML).join('')}</div>
           </div>`;
           return;
         }
-        currentArtistKey = null;
+        currentArtist = null;
       }
       c.innerHTML = `<div class="artist-tiles">${artistGroupsCache.map((g, i) => artistTileHTML(g, i)).join('')}</div>`;
     }
@@ -425,7 +422,7 @@ import { $, getPlayCount, persistLikedHistory, rebuildSongs, recordPlayCount, sa
     export function openArtist(i){
       const groups = artistGroupsCache.length ? artistGroupsCache : getArtistGroups();
       artistGroupsCache = groups;
-      currentArtistKey = groups[i] ? groups[i].key : null;
+      currentArtist = groups[i] ? selectArtist(groups[i]) : null;
       libView = 'artists';
       document.querySelectorAll('#libViewSeg .lib-seg-btn').forEach(b => {
         b.classList.toggle('active', (b as HTMLElement).dataset.view === 'artists');
@@ -464,24 +461,7 @@ import { $, getPlayCount, persistLikedHistory, rebuildSongs, recordPlayCount, sa
         if(!g){ g = {name, songs: []}; groups.set(key, g); }
         g.songs.push(s);
       };
-      if(view === 'artists'){
-        const keys: string[] = [];
-        const names = new Map<string, Map<string, number>>();
-        state.songs.forEach(s => {
-          const a = (s.artist||'').trim();
-          if(!a || a === 'Unknown Artist') return;
-          const k = artistMergeKey(keys, a);
-          if(!groups.has(k)){ keys.push(k); names.set(k, new Map()); }
-          const tally = names.get(k)!;
-          tally.set(a, (tally.get(a) || 0) + 1);
-          push(k, a, s);
-        });
-        /* label each merged group with the spelling most tracks use */
-        for(const [k, tally] of names){
-          const g = groups.get(k);
-          if(g) g.name = [...tally.entries()].sort((x, y) => y[1] - x[1] || y[0].length - x[0].length)[0][0];
-        }
-      }else if(view === 'albums'){
+      if(view === 'albums'){
         state.songs.forEach(s => {
           const al = (s.album||'').trim();
           push(al ? 'album:'+al : 'album:', al || 'Singles & extras', s);
@@ -534,7 +514,7 @@ import { $, getPlayCount, persistLikedHistory, rebuildSongs, recordPlayCount, sa
       if(!state.songs.length){
         if(state.catalogLoading) c.innerHTML = skeletonRows(8);
         else if(state.catalogError) c.innerHTML = stateHTML('error','Couldn\'t load your library','The remote catalogue is unreachable. Check your connection and try again.','Try again','retryCatalog()');
-        else c.innerHTML=stateHTML('empty','Your library is empty','Add your own songs or search online to get started.','Search music',"goTab('tabSearch')");
+        else c.innerHTML=stateHTML('empty','Your library is empty','Your saved music will appear here after the catalogue refreshes.','Refresh library','retryCatalog()');
       }else if(libView==='tracks'){
         // Sort most played songs at the top, rest downwards
         const sorted = [...state.songs].sort((a, b) => {

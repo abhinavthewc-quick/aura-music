@@ -4,7 +4,6 @@
 <style id="aura-loader-css">
 html.aura-loading,html.aura-loading body{overflow:hidden}
 #auraLoader{position:fixed;inset:0;z-index:2147483000;background:#000000;display:flex;align-items:center;justify-content:center;overflow:hidden;will-change:opacity,transform;animation:auraLoaderFailsafe 0s linear 8s forwards;transition:opacity .45s cubic-bezier(.16,1,.3,1),transform .45s cubic-bezier(.16,1,.3,1)}
-body.light-theme #auraLoader{background:#e2e2e5}
 #auraLoader.leaving{opacity:0;transform:scale(1.05);pointer-events:none}
 .aura-startup-stage{display:flex;flex-direction:column;align-items:center;justify-content:center;width:100%;max-width:540px;height:100%;max-height:540px;position:relative;user-select:none}
 .aura-startup-art{position:relative;width:min(90vw,480px);height:min(90vw,480px);display:flex;align-items:center;justify-content:center}
@@ -13,7 +12,6 @@ body.light-theme #auraLoader{background:#e2e2e5}
 #auraLoader:not([data-ready]) .aura-startup-fallback{display:flex}
 #auraLoader[data-ready] .aura-startup-fallback{display:none}
 #auraLoaderText{margin-top:14px;text-align:center;color:rgba(255,255,255,.78);font:700 11px/1.4 "DM Sans",system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;letter-spacing:.24em;text-transform:uppercase;pointer-events:none;animation:auraLoaderTextIn .7s ease .2s backwards;transition:opacity .3s ease,transform .3s ease}
-body.light-theme #auraLoaderText{color:rgba(25,26,30,.78)}
 #auraLoaderText.leaving{opacity:0;transform:translateY(8px);animation:none}
 #auraLoaderText .d{display:inline-block;opacity:.25;animation:auraDot 1.2s ease-in-out infinite}
 #auraLoaderText .d:nth-child(2){animation-delay:.2s}
@@ -33,7 +31,6 @@ body.light-theme #auraLoaderText{color:rgba(25,26,30,.78)}
   <link rel="stylesheet" href="/src/styles/main.css">
 </head>
 <body>
-<script>try{if(localStorage.getItem('auraTheme')==='light')document.body.classList.add('light-theme');}catch(e){}</script>
 <div id="auraLoader" role="status" aria-live="polite" aria-label="Loading Aura Music"><div class="aura-startup-stage"><div class="aura-startup-art"><canvas id="auraLiquidCanvas" class="aura-liquid-canvas" aria-hidden="true"></canvas><div class="aura-startup-fallback"><img src="/aura-vinyl-logo.png" alt="" width="240" height="240"></div></div><div id="auraLoaderText">Aura Music<span class="d">.</span><span class="d">.</span><span class="d">.</span></div></div></div>
   <div class="net-banner" id="netBanner" role="status" aria-live="polite"></div>
   <div class="welcome-screen" id="welcomeScreen">
@@ -41,9 +38,7 @@ body.light-theme #auraLoaderText{color:rgba(25,26,30,.78)}
     <div class="welcome-info-panel" id="welcomeInfoPanel" role="note"><strong>Why sign in with Google?</strong>Any Google account can enter — Google verifies it’s really you, then you pick a username that becomes yours inside Aura. Your name and preferences stay on this device.</div>
     <div class="lg-shell">
       <div class="lg-stage" aria-hidden="true">
-        <span class="lg-aura"></span>
         <span class="lg-vinyl"><span class="lg-label"><span class="lg-mono">A</span></span></span>
-        <span class="lg-sheen"></span>
         <span class="lg-arm"></span>
         <span class="lg-pivot"></span>
       </div>
@@ -89,9 +84,7 @@ body.light-theme #auraLoaderText{color:rgba(25,26,30,.78)}
 
   <div class="login-overlay" id="loginOverlay" aria-hidden="true">
     <div class="lo-mark">
-      <svg viewBox="0 0 120 120" aria-hidden="true"><defs><linearGradient id="loGold" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#fdf0d2"/><stop offset=".55" stop-color="#e6bd92"/><stop offset="1" stop-color="#b98249"/></linearGradient></defs><circle class="lo-track" cx="60" cy="60" r="52"/><circle class="lo-draw" cx="60" cy="60" r="52"/></svg>
-      <span class="lo-ripple"></span>
-      <span class="lo-ripple lo-ripple-2"></span>
+      <svg viewBox="0 0 120 120" aria-hidden="true"><circle class="lo-track" cx="60" cy="60" r="52"/><circle class="lo-draw" cx="60" cy="60" r="52"/></svg>
       <span class="lo-disc"></span>
       <span class="lo-needle"></span>
     </div>
@@ -173,7 +166,7 @@ body.light-theme #auraLoaderText{color:rgba(25,26,30,.78)}
   <div class="modal-overlay" id="settingsModal" role="dialog" aria-modal="true" aria-labelledby="settingsTitle" aria-hidden="true">
     <div class="settings-modal-card">
       <div class="settings-head">
-        <div class="settings-title-wrap"><div class="settings-icon"><i class="fa-solid fa-sliders"></i></div><div><h3 id="settingsTitle" style="margin:0;font-size:18px">Settings</h3><p style="margin:3px 0 0;color:var(--text-sub);font-size:10px">Make Aura Music work your way</p></div></div>
+        <div class="settings-title-wrap"><div class="settings-icon"><i class="fa-solid fa-sliders"></i></div><div><h3 id="settingsTitle">Settings</h3><p>Make Aura Music work your way</p></div></div>
         <button class="settings-close" id="settingsCloseBtn" type="button" aria-label="Close settings"><i class="fa-solid fa-xmark"></i></button>
       </div>
       <div class="settings-section">
@@ -213,7 +206,6 @@ body.light-theme #auraLoaderText{color:rgba(25,26,30,.78)}
   <div class="side-menu" id="sideMenu" onclick="if(event.target.id==='sideMenu')this.style.display='none'">
     <div class="side-menu-content">
       <h3 style="color:var(--accent);margin-bottom:20px">Menu</h3>
-      <p id="themeToggleBtn" class="menu-item" role="button" tabindex="0"><i class="fa-solid fa-sun" id="themeIcon"></i> <span id="themeLabel">Light Mode</span></p>
       <a class="menu-item menu-item-link" id="roomsMenuLink" href="/rooms">
         <i class="fa-solid fa-headphones"></i> Listen together
         <span class="room-link-dot" aria-hidden="true"></span>
@@ -247,8 +239,6 @@ body.light-theme #auraLoaderText{color:rgba(25,26,30,.78)}
 
   <div class="logout-overlay" id="logoutOverlay" aria-hidden="true">
     <div class="logout-scene">
-      <span class="logout-ring"></span>
-      <span class="logout-ring logout-ring-2"></span>
       <span class="logout-disc"></span>
       <span class="logout-needle"></span>
     </div>
@@ -259,7 +249,7 @@ body.light-theme #auraLoaderText{color:rgba(25,26,30,.78)}
   <div class="effects-modal" id="effectsModal" role="dialog" aria-modal="true" aria-label="Ambient effects" aria-hidden="true">
     <div class="effects-card">
       <div class="effects-head">
-        <div class="effects-title-wrap"><div class="effects-icon"><i class="fa-solid fa-wand-magic-sparkles"></i></div><div><h3 style="margin:0;font-size:18px">Ambient Effects</h3><p class="effects-sub">Mix multiple ambience layers underneath your music or radio — each with its own volume.</p></div></div>
+        <div class="effects-title-wrap"><div class="effects-icon"><i class="fa-solid fa-wand-magic-sparkles"></i></div><div><h3>Ambient Effects</h3><p class="effects-sub">Mix multiple ambience layers underneath your music or radio — each with its own volume.</p></div></div>
         <button class="effects-close" id="effectsCloseBtn" type="button" aria-label="Close effects"><i class="fa-solid fa-xmark"></i></button>
       </div>
 
@@ -341,7 +331,6 @@ body.light-theme #auraLoaderText{color:rgba(25,26,30,.78)}
 
       <div class="desktop-nav-label desktop-nav-label-lower">Preferences</div>
       <div class="desktop-settings-group" aria-label="App menu">
-        <button class="desktop-nav-btn" type="button" onclick="document.getElementById('themeToggleBtn').click()"><i class="fa-solid fa-sun" id="desktopThemeIcon"></i><span id="desktopThemeLabel">Light mode</span></button>
         <button class="desktop-nav-btn" type="button" onclick="openSettings()"><i class="fa-solid fa-sliders"></i><span>Settings</span></button>
         <button class="desktop-nav-btn" type="button" onclick="openEffects()"><i class="fa-solid fa-wand-magic-sparkles"></i><span>Effects</span></button>
         <button class="desktop-nav-btn" type="button" onclick="openAbout()"><i class="fa-solid fa-circle-info"></i><span>About</span></button>
@@ -349,8 +338,6 @@ body.light-theme #auraLoaderText{color:rgba(25,26,30,.78)}
         <button class="desktop-nav-btn danger" type="button" onclick="logoutUser()"><i class="fa-solid fa-right-from-bracket"></i><span>Log out</span></button>
       </div>
       <div class="desktop-sidebar-note">
-        <i class="fa-solid fa-leaf sb-leaf-big" aria-hidden="true"></i>
-        <i class="fa-solid fa-leaf sb-leaf-small" aria-hidden="true"></i>
         <div class="sb-ready"><span class="desktop-status-dot"></span>Audio engine ready</div>
       </div>
     </aside>
@@ -362,12 +349,12 @@ body.light-theme #auraLoaderText{color:rgba(25,26,30,.78)}
           <path d="M7 15H13" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
         </svg>
       </button> 
-      <span style="font-weight:800;letter-spacing:1px;margin-right:12px">AURA MUSIC</span>
+      <span>Aura Music</span>
 
       <div class="ytm-top-search-wrap">
         <div class="ytm-top-search">
           <i class="fa-solid fa-magnifying-glass"></i>
-          <input type="text" id="headerSearchInput" placeholder="Search songs, albums, artists, podcasts" autocomplete="off" aria-label="Search">
+          <input type="text" id="headerSearchInput" placeholder="Search your library" autocomplete="off" aria-label="Search your library">
         </div>
       </div>
 
@@ -463,7 +450,7 @@ body.light-theme #auraLoaderText{color:rgba(25,26,30,.78)}
         <div class="song-list" id="songList"></div>
         <div class="more-songs-note">
           <i class="fa-solid fa-magnifying-glass"></i>
-          <span>Looking for more? Head to the <strong onclick="goTab('tabSearch')" style="cursor:pointer">Search</strong> tab for way more songs.</span>
+          <span>Find songs, artists and albums in your library with <button type="button" onclick="goTab('tabSearch')">Search</button>.</span>
         </div>
       </div>
 
@@ -471,7 +458,6 @@ body.light-theme #auraLoaderText{color:rgba(25,26,30,.78)}
       <div id="homeArtistsView" style="display:none">
         <div class="ytm-section-head" style="margin-bottom:18px">
           <div>
-            <div class="ytm-listen-kicker" style="color:var(--text-sub);margin-bottom:4px">LIBRARY &amp; DISCOVERY</div>
             <h2 class="ytm-section-title">Artists in your music</h2>
           </div>
         </div>
@@ -677,7 +663,7 @@ body.light-theme #auraLoaderText{color:rgba(25,26,30,.78)}
     <div class="fp-bg" aria-hidden="true"><div class="fp-bg-layer" id="fpBgA"></div><div class="fp-bg-layer" id="fpBgB"></div></div>
     <div class="full-player-header">
       <i class="fa-solid fa-chevron-down" id="closeFullPlayerBtn" role="button" tabindex="0" aria-label="Close player" style="font-size:20px;cursor:pointer"></i>
-      <span id="fullHeaderTitle" style="font-weight:600;max-width:200px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">Track</span>
+      <span id="fullHeaderTitle">Track</span>
       <i class="fa-solid fa-ellipsis" id="fullHeaderMenuBtn" role="button" tabindex="0" aria-label="More options"></i>
     </div>
     <div class="full-player-art" id="fullPlayerArt">
@@ -691,7 +677,7 @@ body.light-theme #auraLoaderText{color:rgba(25,26,30,.78)}
     <div class="youtube-mode-badge" id="youtubeModeBadge">Official YouTube player • playing inside AURA</div>
     <div class="full-player-body">
       <div class="full-player-meta">
-        <div><div id="fullTitle" style="font-size:18px;font-weight:700">Track</div><div id="fullArtist" style="font-size:13px;color:var(--text-sub)">Artist</div></div>
+        <div><div id="fullTitle">Track</div><div id="fullArtist">Artist</div></div>
         <button class="like-btn" id="fullLikeBtn" type="button" aria-label="Like current song" aria-pressed="false"><i class="fa-regular fa-heart"></i></button>
       </div>
       <div class="full-seek-slider-wrap">

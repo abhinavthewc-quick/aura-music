@@ -6,6 +6,8 @@ export default defineConfig({
     proxy: {
       // Local dev: forward admin API calls to the deployed Pages function.
       '/api/admin': 'https://aura-music-01g.pages.dev',
+      '/api/artists': { target: 'https://aura-music-01g.pages.dev', changeOrigin: true },
+      '/api/artist-image': { target: 'https://aura-music-01g.pages.dev', changeOrigin: true },
       // Local dev: forward audio edge proxy to deployed Pages function
       '/api/audio': {
         target: 'https://aura-music-01g.pages.dev',

@@ -18,7 +18,7 @@ import {
 import {
   openAbout, openEffects, openRadioEffectsTab, setRadioSegment, toggleAmbientLayer,
 } from './features/ambience';
-import { openArtist, shuffleArtist } from './features/library';
+import { openArtist, playArtist, shuffleArtist } from './features/library';
 import {
   addTrackToPlaylist, closePlaylistModal, closePlaylistPicker, deletePlaylist,
   drawerPlaylistTap, openPlaylistModal, openPlaylistPage, openPlaylistPicker,
@@ -47,7 +47,7 @@ Object.assign(globalThis, {
   renderAuraPicks, resumeLastPlayed, shuffleAll,
   changeProfileName, closeHelp, logoutUser, openHelp, openSettings,
   openAbout, openEffects, openRadioEffectsTab, setRadioSegment, toggleAmbientLayer,
-  openArtist, shuffleArtist,
+   openArtist, playArtist, shuffleArtist,
   closeRadioSheetThen, loadRadioStations, radioMenuCopy, radioMenuShare,
   radioMenuSite, stopRadio, toggleRadioPlay,
 });

@@ -1,9 +1,10 @@
-import { timeGreeting, toast, artistMergeKey } from '../core/dom';
+import { timeGreeting, toast } from '../core/dom';
+import { resolveArtistSelection, selectArtist, type ArtistSelection } from '../core/artistGroups';
 import { playSong } from './player';
 import { escapeHtml } from './radio';
-import { DEFAULT_COVER, getArtistMeta } from '../core/catalog';
+import { DEFAULT_COVER } from '../core/catalog';
 import { $, state } from '../core/state';
-import { getArtistGroups, artistTileHTML } from './library';
+import { getArtistGroups, artistProfileDetailsHTML } from './library';
 import { goTab } from '../ui/nav';
 /* ===== 3075-3096 ===== */
     export function setGreeting(){
@@ -149,6 +150,7 @@ import { goTab } from '../ui/nav';
     }
 
     export interface ArtistDirectoryEntry {
+      key: string;
       name: string;
       img: string;
       count: number;
@@ -156,34 +158,10 @@ import { goTab } from '../ui/nav';
     }
 
     export function getAllArtists(): ArtistDirectoryEntry[] {
-      const groups: Record<string, { name: string; names: Record<string, number>; songs: any[] }> = {};
-      const keys: string[] = [];
-
-      state.songs.forEach(s => {
-        const artist = (s.artist || '').trim();
-        if (!artist || artist.toLowerCase() === 'unknown artist') return;
-        const k = artistMergeKey(keys, artist);
-        if (!groups[k]) {
-          groups[k] = { name: artist, names: {}, songs: [] };
-          keys.push(k);
-        }
-        groups[k].names[artist] = (groups[k].names[artist] || 0) + 1;
-        groups[k].songs.push(s);
-      });
-
-      const result: ArtistDirectoryEntry[] = Object.values(groups).map(g => {
-        const bestName = Object.entries(g.names).sort((a, b) => b[1] - a[1] || b[0].length - a[0].length)[0][0];
-        const custom = getArtistMeta(bestName);
-        const sample = g.songs.find(s => s.img && !s.img.includes('default') && !s.img.includes('data:image')) || g.songs[0];
-        return {
-          name: custom?.name || bestName,
-          img: custom?.img || sample?.img || DEFAULT_COVER,
-          count: g.songs.length,
-          songs: g.songs
-        };
-      });
-
-      return result.sort((a, b) => b.count - a.count);
+      return getArtistGroups().map(g => ({
+        key: g.key, name: g.name, img: g.cover || DEFAULT_COVER,
+        count: g.songs.length, songs: g.songs,
+      }));
     }
 
     export function renderFeaturedArtistsShelf() {
@@ -197,7 +175,7 @@ import { goTab } from '../ui/nav';
 
       const topArtists = artists.slice(0, 16);
       shelf.innerHTML = topArtists.map(a => `
-        <div class="ytm-artist-card" role="button" tabindex="0" onclick="openArtistDetail('${escapeHtml(a.name)}')" title="${escapeHtml(a.name)}">
+        <div class="ytm-artist-card" role="button" tabindex="0" data-artist-open="${escapeHtml(a.key)}" title="${escapeHtml(a.name)}">
           <div class="ytm-artist-art-wrap">
             <img class="ytm-artist-avatar" src="${escapeHtml(a.img)}" alt="${escapeHtml(a.name)}" loading="lazy" decoding="async">
             <div class="ytm-artist-play-overlay"><i class="fa-solid fa-play"></i></div>
@@ -218,7 +196,7 @@ import { goTab } from '../ui/nav';
       }
 
       grid.innerHTML = artists.map(a => `
-        <div class="ytm-artist-card grid-card" role="button" tabindex="0" onclick="openArtistDetail('${escapeHtml(a.name)}')" title="${escapeHtml(a.name)}">
+        <div class="ytm-artist-card grid-card" role="button" tabindex="0" data-artist-open="${escapeHtml(a.key)}" title="${escapeHtml(a.name)}">
           <div class="ytm-artist-art-wrap">
             <img class="ytm-artist-avatar" src="${escapeHtml(a.img)}" alt="${escapeHtml(a.name)}" loading="lazy" decoding="async">
             <div class="ytm-artist-play-overlay"><i class="fa-solid fa-play"></i></div>
@@ -258,14 +236,17 @@ import { goTab } from '../ui/nav';
       if (mainView) mainView.style.display = 'block';
     }
 
-    export function openArtistDetail(artistName: string) {
-      const artists = getAllArtists();
-      const artist = artists.find(a => a.name.toLowerCase() === artistName.toLowerCase()) || {
-        name: artistName,
-        img: DEFAULT_COVER,
-        count: 0,
-        songs: state.songs.filter(s => (s.artist || '').toLowerCase().includes(artistName.toLowerCase()))
-      };
+    let openArtistSelection: ArtistSelection | null = null;
+    export function openArtistDetail(artistName: string | ArtistSelection, scroll = true) {
+      const group = resolveArtistSelection(getArtistGroups(), artistName);
+      if(!group) {
+        if(typeof artistName !== 'string') { closeArtistDetail(); return; }
+        toast('That artist is no longer in your library.', 'circle-info');
+        return;
+      }
+      openArtistSelection = selectArtist(group);
+      const artist = { ...group, img: group.cover || DEFAULT_COVER };
+      const profile = group.profile;
 
       const mainView = $('homeMainView');
       const artistsView = $('homeArtistsView');
@@ -278,13 +259,13 @@ import { goTab } from '../ui/nav';
       const heroCard = $('artistHeroCard');
       if (heroCard) {
         heroCard.innerHTML = `
-          <div class="artist-hero-backdrop" style="background-image:url('${escapeHtml(artist.img)}')"></div>
+          <div class="artist-hero-backdrop"></div>
           <div class="artist-hero-content">
             <img class="artist-hero-img" src="${escapeHtml(artist.img)}" alt="${escapeHtml(artist.name)}" loading="lazy">
             <div class="artist-hero-meta">
-              <span class="artist-hero-badge"><i class="fa-solid fa-circle-check"></i> Featured Artist</span>
               <h1 class="artist-hero-name">${escapeHtml(artist.name)}</h1>
               <p class="artist-hero-count">${artist.songs.length} song${artist.songs.length !== 1 ? 's' : ''} in your music</p>
+              ${artistProfileDetailsHTML(profile)}
             </div>
           </div>
         `;
@@ -293,11 +274,11 @@ import { goTab } from '../ui/nav';
       // Setup play all / shuffle buttons
       const playAllBtn = $('artistPlayAllBtn');
       if (playAllBtn) {
-        playAllBtn.onclick = () => playArtistSongs(artist.name, false);
+        playAllBtn.onclick = () => playArtistSongs(artist.key, false);
       }
       const shuffleBtn = $('artistShuffleBtn');
       if (shuffleBtn) {
-        shuffleBtn.onclick = () => playArtistSongs(artist.name, true);
+        shuffleBtn.onclick = () => playArtistSongs(artist.key, true);
       }
 
       // Render song rows
@@ -325,10 +306,23 @@ import { goTab } from '../ui/nav';
         }).join('');
       }
 
-      window.scrollTo({ top: 0, behavior: 'smooth' });
+      if(scroll) window.scrollTo({ top: 0, behavior: 'smooth' });
     }
 
+    export function refreshArtistViews() {
+      renderFeaturedArtistsShelf();
+      renderArtistSpotlight();
+      if($('homeArtistsView')?.style.display === 'block') renderArtistsFullGrid();
+      if(openArtistSelection && $('homeArtistDetailView')?.style.display === 'block') openArtistDetail(openArtistSelection, false);
+    }
+
+    document.addEventListener('click', event => {
+      const card = (event.target as HTMLElement).closest<HTMLElement>('[data-artist-open]');
+      if(card?.dataset.artistOpen) openArtistDetail(card.dataset.artistOpen);
+    });
+
     export function closeArtistDetail() {
+      openArtistSelection = null;
       const activeChip = document.querySelector('#ytmMoodChips .ytm-chip.active') as HTMLElement | null;
       const mood = activeChip?.dataset.mood || 'all';
 
@@ -340,8 +334,7 @@ import { goTab } from '../ui/nav';
     }
 
     export function playArtistSongs(artistName: string, shuffle = false) {
-      const artists = getAllArtists();
-      const artist = artists.find(a => a.name.toLowerCase() === artistName.toLowerCase());
+      const artist = resolveArtistSelection(getArtistGroups(), artistName);
       if (!artist || !artist.songs.length) return;
 
       const songsToPlay = [...artist.songs];
@@ -435,21 +428,7 @@ import { goTab } from '../ui/nav';
        most-tracks-first — variants ("A. R. Rahman" / "A.R. Rahman" /
        "… - Topic") merge into one bucket via artistKey. */
     export function renderArtistSpotlight(){
-      const groups:any = {};
-      const keys:string[] = [];
-      state.songs.forEach(s=>{
-        if(!s.artist || s.artist==='Unknown Artist') return;
-        const k = artistMergeKey(keys, s.artist);
-        if(!groups[k]){ groups[k] = {count:0, names:{}, songs:[]}; keys.push(k); }
-        groups[k].count++;
-        groups[k].names[s.artist]=(groups[k].names[s.artist]||0)+1;
-        groups[k].songs.push(s);
-      });
-      /* show the spelling most of the library actually uses */
-      Object.values(groups).forEach((g:any)=>{
-        g.name = Object.entries(g.names).sort((a:any,b:any)=>b[1]-a[1] || b[0].length-a[0].length)[0][0];
-      });
-      const artists = Object.values(groups).filter((g:any)=>g.count>=2).sort((a:any,b:any)=>b.count-a.count);
+      const artists = getArtistGroups().filter(g => g.songs.length >= 2);
       const container = $('artistSpotlightContainer');
 
       if(!artists.length){ container.innerHTML=''; return; }
@@ -464,8 +443,8 @@ import { goTab } from '../ui/nav';
         }).join('');
         return `<div class="artist-spotlight-block" style="margin-bottom:24px">
           <div class="spotlight-header">
-            <img class="spotlight-avatar" src="${escapeHtml(g.songs[0].img||DEFAULT_COVER)}" alt="" loading="lazy" decoding="async">
-            <div><p style="font-size:11px;color:var(--text-sub)">More from</p><p style="font-size:16px;font-weight:800">${escapeHtml(g.name)}</p></div>
+            <img class="spotlight-avatar" src="${escapeHtml(g.cover || DEFAULT_COVER)}" alt="" loading="lazy" decoding="async">
+            <div><p>More from</p><p>${escapeHtml(g.name)}</p></div>
           </div>
           <div class="recent-scroll">${cards}</div>
         </div>`;

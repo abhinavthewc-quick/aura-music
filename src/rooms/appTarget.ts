@@ -8,7 +8,7 @@
  * room should not trigger on every correction.
  */
 
-import { state, trackKey } from '../core/state';
+import { state, trackMatchesKey } from '../core/state';
 import { ensureCatalog } from './catalogReady';
 import { roomModeActive, setRoomActive } from './roomFlag';
 import type { SyncTarget } from './syncEngine';
@@ -17,7 +17,7 @@ import type { ResolvedTrack } from './audioTarget';
 
 /** Resolve a broadcast track key to something playable, or null if unavailable. */
 export function resolveTrack(key: string): ResolvedTrack | null {
-  const song = state.songs.find((s: any) => trackKey(s) === key);
+  const song = state.songs.find((s: any) => trackMatchesKey(s, key));
   if (!song) return null;
 
   // Rooms only ever play tracks that exist in the shared catalogue. Locally
@@ -56,7 +56,7 @@ export function createAppTarget(onError?: (m: string) => void): SyncTarget {
       // so give the fetch a moment before deciding it is unavailable.
       if (!resolveTrack(key)) await ensureCatalog();
 
-      const song = state.songs.find((s: any) => trackKey(s) === key);
+      const song = state.songs.find((s: any) => trackMatchesKey(s, key));
       const track = resolveTrack(key);
       if (!song || !track) throw new Error('that track is not in the shared library');
 

@@ -3,18 +3,15 @@
    and chat below. Deliberately sparse; the point is that everyone can see at a
    glance what the room is doing without anyone having to explain it. */
 
+@import '../styles/tokens.css';
+
 :root {
-  --bg: #100d09;
-  --panel: #191410;
-  --panel-2: #211b15;
-  --line: #2e2519;
-  --text: #ece2d1;
-  --dim: #9a8b74;
-  --dimmer: #6b5f4f;
-  --gold: #b98249;
-  --gold-soft: rgba(185, 130, 73, .18);
-  --ok: #7fb069;
-  --warn: #d9a441;
+  --panel: var(--surface-1);
+  --panel-2: var(--surface-2);
+  --dim: var(--text-sub);
+  --dimmer: var(--text-dim);
+  --ok: var(--success);
+  --warn: var(--warning);
   --radius: 14px;
   --tap: 44px;
 }
@@ -41,10 +38,10 @@ body { overscroll-behavior-y: none; }
 
 button { font: inherit; color: inherit; cursor: pointer; }
 button:disabled { cursor: not-allowed; opacity: .4; }
-button:focus-visible, input:focus-visible { outline: 2px solid var(--gold); outline-offset: 2px; }
+button:focus-visible, input:focus-visible, a:focus-visible, [tabindex]:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
 
 .primary {
-  background: var(--gold); color: #150f09; border: none; font-weight: 700;
+  background: var(--accent); color: var(--accent-ink); border: none; font-weight: 700;
   border-radius: 10px; transition: filter .15s, transform .08s;
 }
 .primary:hover:not(:disabled) { filter: brightness(1.08); }
@@ -55,7 +52,7 @@ button:focus-visible, input:focus-visible { outline: 2px solid var(--gold); outl
   border: 1px solid var(--line); border-radius: 10px;
   transition: background .15s, border-color .15s;
 }
-.ghost:hover:not(:disabled) { background: var(--panel-2); border-color: #453628; }
+.ghost:hover:not(:disabled) { background: var(--panel-2); border-color: var(--line-strong); }
 
 .big { width: 100%; padding: 13px; font-size: 15px; }
 .sm { padding: 7px 12px; font-size: 13px; border-radius: 8px; }
@@ -73,7 +70,7 @@ button:focus-visible, input:focus-visible { outline: 2px solid var(--gold); outl
   color: var(--dim); transition: background .15s, color .15s;
 }
 .icon-btn:hover { background: var(--panel-2); color: var(--text); }
-.icon-btn.solid { background: var(--gold); border-color: var(--gold); color: #150f09; width: 40px; height: 40px; }
+.icon-btn.solid { background: var(--accent); border-color: var(--accent); color: var(--accent-ink); }
 .icon-btn.done { color: var(--ok); border-color: var(--ok); }
 
 /* ---------------- join ---------------- */
@@ -86,7 +83,7 @@ button:focus-visible, input:focus-visible { outline: 2px solid var(--gold); outl
 .brand { display: flex; align-items: baseline; gap: 9px; margin-bottom: 34px; }
 .brand-mark {
   font-family: 'Cormorant Garamond', serif; font-size: 27px;
-  letter-spacing: .16em; color: var(--gold);
+  letter-spacing: .16em; color: var(--accent);
 }
 .brand-sub { font-size: 12px; letter-spacing: .16em; text-transform: uppercase; color: var(--dimmer); }
 
@@ -95,15 +92,15 @@ button:focus-visible, input:focus-visible { outline: 2px solid var(--gold); outl
 
 .field { display: block; margin-bottom: 17px; position: relative; }
 .field-label {
-  display: block; font-size: 11px; letter-spacing: .11em; text-transform: uppercase;
-  color: var(--dimmer); margin-bottom: 7px;
+  display: block; font-size: 13px;
+  color: var(--dim); margin-bottom: 7px;
 }
 .field-input {
   width: 100%; background: var(--panel); border: 1px solid var(--line);
   border-radius: 10px; padding: 12px 13px; color: var(--text); font: inherit;
   transition: border-color .15s;
 }
-.field-input:focus { border-color: var(--gold); outline: none; }
+.field-input:focus { border-color: var(--accent); }
 .field-input.code {
   font-family: ui-monospace, 'SF Mono', Menlo, monospace;
   font-size: 21px; letter-spacing: .22em; text-transform: lowercase;
@@ -134,8 +131,7 @@ button:focus-visible, input:focus-visible { outline: 2px solid var(--gold); outl
 .topbar-left, .topbar-right { display: flex; align-items: center; gap: 10px; }
 
 .dot {
-  width: 8px; height: 8px; border-radius: 50%; background: var(--gold);
-  box-shadow: 0 0 0 3px var(--gold-soft);
+  width: 8px; height: 8px; border-radius: 50%; background: var(--accent);
 }
 .dot.pulse { animation: pulse 1.9s ease-in-out infinite; }
 @keyframes pulse { 50% { opacity: .35 } }
@@ -150,7 +146,7 @@ button:focus-visible, input:focus-visible { outline: 2px solid var(--gold); outl
   padding: 4px 10px; border-radius: 999px;
   background: var(--panel); border: 1px solid var(--line); color: var(--dim);
 }
-.role-pill.admin { background: var(--gold-soft); border-color: var(--gold); color: var(--gold); }
+.role-pill.admin { background: var(--accent-soft); border-color: var(--line-strong); color: var(--accent); }
 
 /* ---------------- sync bar (the "we're together" signal) ---------------- */
 
@@ -170,7 +166,7 @@ button:focus-visible, input:focus-visible { outline: 2px solid var(--gold); outl
 .syncmeta.warn { color: var(--warn); }
 
 .banner {
-  background: var(--gold-soft); border: 1px solid var(--gold); color: #f0dcc0;
+  background: var(--accent-soft); border: 1px solid var(--line-strong); color: var(--text);
   padding: 10px 13px; border-radius: 10px; font-size: 13px; margin-bottom: 18px;
 }
 
@@ -194,7 +190,7 @@ button:focus-visible, input:focus-visible { outline: 2px solid var(--gold); outl
   height: 4px; background: var(--panel-2); border-radius: 999px;
   position: relative; overflow: visible;
 }
-.fill { height: 100%; width: 0; background: var(--gold); border-radius: 999px; }
+.fill { height: 100%; width: 0; background: var(--accent); border-radius: 999px; }
 .bar.seekable { cursor: pointer; padding: 9px 0; height: 22px; background: none; }
 .bar.seekable::before {
   content: ''; position: absolute; left: 0; right: 0; top: 9px;
@@ -208,7 +204,7 @@ button:focus-visible, input:focus-visible { outline: 2px solid var(--gold); outl
 .knob::after {
   content: ''; position: absolute; left: 50%; top: 50%;
   width: 11px; height: 11px; margin: -5.5px 0 0 -5.5px; border-radius: 50%;
-  background: var(--gold); opacity: 0;
+   background: var(--accent); opacity: 0;
   transition: opacity .15s;
 }
 .bar.seekable:hover .knob::after, .bar.seekable:focus-visible .knob::after { opacity: 1; }
@@ -225,11 +221,11 @@ button:focus-visible, input:focus-visible { outline: 2px solid var(--gold); outl
   display: grid; place-items: center; font-size: 17px;
   transition: background .15s, transform .08s, border-color .15s;
 }
-.ctl:hover:not(:disabled) { background: var(--panel-2); border-color: #4a3a28; }
+.ctl:hover:not(:disabled) { background: var(--panel-2); border-color: var(--line-strong); }
 .ctl:active:not(:disabled) { transform: scale(.95); }
 .ctl.big {
-  width: 64px; height: 64px; background: var(--gold); border-color: var(--gold);
-  color: #150f09;
+  width: 64px; height: 64px; background: var(--accent); border-color: var(--accent);
+  color: var(--accent-ink);
 }
 .ctl.big:hover:not(:disabled) { filter: brightness(1.08); }
 .ctl.big .ic { width: 25px; height: 25px; }
@@ -249,7 +245,7 @@ button:focus-visible, input:focus-visible { outline: 2px solid var(--gold); outl
   font-size: 54px;
   font-weight: 700;
   line-height: 1;
-  color: var(--gold);
+  color: var(--accent);
   font-variant-numeric: tabular-nums;
   animation: cd-pulse 1s ease-in-out infinite;
 }
@@ -257,7 +253,7 @@ button:focus-visible, input:focus-visible { outline: 2px solid var(--gold); outl
   font-size: 11px;
   letter-spacing: .16em;
   text-transform: uppercase;
-  color: var(--muted);
+  color: var(--dim);
 }
 @keyframes cd-pulse {
   0%, 100% { opacity: 1; transform: scale(1); }
@@ -279,8 +275,8 @@ button:focus-visible, input:focus-visible { outline: 2px solid var(--gold); outl
   margin-bottom: 11px;
 }
 .col-head h3 {
-  margin: 0; font-size: 11px; letter-spacing: .12em; text-transform: uppercase;
-  color: var(--dimmer); font-weight: 700;
+  margin: 0; font-size: 14px;
+  color: var(--text); font-weight: 600;
 }
 .chat-head { margin-top: 20px; }
 .count { font-size: 12px; color: var(--dimmer); font-variant-numeric: tabular-nums; }
@@ -288,7 +284,7 @@ button:focus-visible, input:focus-visible { outline: 2px solid var(--gold); outl
 .list { list-style: none; margin: 0; padding: 0; max-height: 280px; overflow-y: auto; }
 .list li {
   display: flex; align-items: center; gap: 10px;
-  padding: 8px 0; border-bottom: 1px solid rgba(46, 37, 25, .55); font-size: 13.5px;
+  padding: 8px 0; border-bottom: 1px solid var(--line); font-size: 13.5px;
 }
 .list li:last-child { border-bottom: none; }
 .list .idx { color: var(--dimmer); font-size: 11px; width: 15px; font-variant-numeric: tabular-nums; }
@@ -296,7 +292,7 @@ button:focus-visible, input:focus-visible { outline: 2px solid var(--gold); outl
 .list .empty-row { color: var(--dimmer); font-style: italic; justify-content: flex-start; }
 
 .people .who { display: flex; align-items: center; gap: 7px; flex: 1; min-width: 0; }
-.star { color: var(--gold); width: 13px; height: 13px; fill: var(--gold); flex: none; }
+.star { color: var(--accent); width: 13px; height: 13px; fill: var(--accent); flex: none; }
 .me-tag { font-size: 10.5px; color: var(--dimmer); letter-spacing: .06em; }
 .promo {
   background: transparent; border: 1px solid var(--line); color: var(--dim);
@@ -315,14 +311,14 @@ button:focus-visible, input:focus-visible { outline: 2px solid var(--gold); outl
 }
 .chatlog .empty { color: var(--dimmer); font-style: italic; font-size: 12.5px; }
 .chatlog .m { font-size: 13px; word-break: break-word; }
-.chatlog .m b { color: var(--gold); margin-right: 6px; font-weight: 500; }
+.chatlog .m b { color: var(--accent); margin-right: 6px; font-weight: 500; }
 
 .chatbar { display: flex; gap: 8px; margin-top: 10px; }
 .chatbar input {
   flex: 1; min-width: 0; background: var(--bg); border: 1px solid var(--line);
   border-radius: 9px; padding: 10px 12px; color: var(--text); font: inherit;
 }
-.chatbar input:focus { border-color: var(--gold); outline: none; }
+.chatbar input:focus { border-color: var(--accent); }
 
 /* Audio thumbs/speaker hint keeps Bluetooth users honest */
 @media (prefers-reduced-motion: reduce) {
@@ -335,7 +331,7 @@ button:focus-visible, input:focus-visible { outline: 2px solid var(--gold); outl
   border-radius: 9px; padding: 10px 12px; color: var(--text); font: inherit;
   transition: border-color .15s;
 }
-.lib-search:focus { border-color: var(--gold); outline: none; }
+.lib-search:focus { border-color: var(--accent); }
 .lib-search::placeholder { color: var(--dimmer); }
 
 .results-hint { font-size: 11.5px; color: var(--dimmer); line-height: 1.5; margin: 9px 0 4px; }
@@ -349,16 +345,15 @@ button:focus-visible, input:focus-visible { outline: 2px solid var(--gold); outl
 .list.results .txt { flex: 1; min-width: 0; }
 .list.results .t { display: block; font-size: 13px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .list.results .a { display: block; font-size: 11px; color: var(--dimmer); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-.list.results .mark { color: var(--gold); }
+.list.results .mark { color: var(--accent); }
 
 .add-btn {
-  background: var(--gold); color: #150f09; border: none; border-radius: 7px;
+  background: var(--accent); color: var(--accent-ink); border: none; border-radius: 7px;
   padding: 5px 11px; font-size: 12px; font-weight: 700; flex: none;
   transition: filter .15s, transform .08s;
 }
 .add-btn:hover { filter: brightness(1.08); }
 .add-btn:active { transform: scale(.95); }
-.add-btn:disabled { background: var(--ok); cursor: default; opacity: .9; }
+.add-btn:disabled { background: var(--surface-3); color: var(--dim); cursor: not-allowed; opacity: .6; }
 
 .lib-empty { color: var(--dimmer); font-style: italic; font-size: 12.5px; padding: 8px 0; }
-

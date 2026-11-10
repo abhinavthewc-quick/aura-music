@@ -3,7 +3,10 @@
    Result is cached in localStorage so the library paints instantly and
    still works offline; a background refresh keeps it in sync.
    Optional extras (album / year / duration) come from the bucket's
-   manifest.json, written by the upload workflow and keyed by video ID. */
+   manifest.json, written by the upload workflow and keyed by video ID.
+   Editable artist profiles and name overrides live independently in D1. */
+
+import { artistTrackId, normalizeArtistKey, type ArtistProfile, type ArtistDirectory } from '../../lib/artistProfiles';
 
 export const HF_BUCKET_ID = 'Angelrider/sonora';
 const HF_TREE_URL = `https://huggingface.co/api/buckets/${HF_BUCKET_ID}/tree?recursive=true`;
@@ -41,7 +44,7 @@ const isHiddenTrack = (path: string, artist = '', title = '') =>
 export const DEFAULT_COVER =
   'data:image/svg+xml;utf8,' +
   encodeURIComponent(
-    '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 200 200"><rect width="200" height="200" rx="18" fill="#241a12"/><circle cx="100" cy="100" r="62" fill="#111" stroke="#b98249" stroke-width="3"/><circle cx="100" cy="100" r="16" fill="#b98249"/><path d="M138 52v50.5a20 20 0 1 0 10 17V62z" fill="#e6bd92"/></svg>'
+    '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 200 200"><rect width="200" height="200" rx="18" fill="#121212"/><circle cx="100" cy="100" r="62" fill="#080808" stroke="#454545" stroke-width="3"/><circle cx="100" cy="100" r="16" fill="#454545"/><path d="M138 52v50.5a20 20 0 1 0 10 17V62z" fill="#dedede"/></svg>'
   );
 
 export function hfFileUrl(path: string): string {
@@ -123,23 +126,17 @@ export function readCatalogCache(): any[] {
     const parsed = JSON.parse(raw);
     if (!Array.isArray(parsed?.tracks)) return [];
     // Drop hidden/pruned tracks even from the cache so removal is instant.
-    return parsed.tracks.filter((t: any) => {
+    return applyArtistTrackOverrides(parsed.tracks.filter((t: any) => {
       const path = typeof t?.id === 'string' && t.id.startsWith('hf:') ? t.id.slice(3) : '';
       return !isHiddenTrack(path, t?.artist || '', t?.title || '');
-    });
+    }));
   } catch {
     return [];
   }
 }
 
-export interface ArtistMeta {
-  name?: string;
-  img?: string;
-  bio?: string;
-  genres?: string[];
-  social?: string;
-  updated?: number;
-}
+export type ArtistMeta = ArtistProfile;
+export type { ArtistDirectory };
 
 export interface ManifestEntry {
   t?: string;
@@ -157,27 +154,99 @@ export type Manifest = {
 };
 
 export const ARTISTS_CACHE_KEY = 'auraHfArtists_v1';
+export const CLOUD_ARTISTS_CACHE_KEY = 'auraCloudArtists_v1';
+
+export function readCloudArtistsCache(): ArtistDirectory {
+  try {
+    const data = JSON.parse(localStorage.getItem(CLOUD_ARTISTS_CACHE_KEY) || 'null');
+    if (data && typeof data.artists === 'object' && data.artists && !Array.isArray(data.artists) &&
+      typeof data.trackArtists === 'object' && data.trackArtists && !Array.isArray(data.trackArtists)) {
+      return { artists: data.artists, trackArtists: data.trackArtists, revision: Number(data.revision) || 0 };
+    }
+  } catch { /* offline cache is optional */ }
+  return { artists: {}, trackArtists: {}, revision: 0 };
+}
+
+let cloudArtistsMemory: ArtistDirectory | undefined;
+function cloudArtists(): ArtistDirectory {
+  return cloudArtistsMemory || (cloudArtistsMemory = readCloudArtistsCache());
+}
+
+/* Subscribers must read the accepted in-memory snapshot, not a stale storage
+   value left by an older tab or response. */
+export function getCachedArtistDirectory(): ArtistDirectory {
+  return cloudArtists();
+}
+
+export function cacheArtistDirectory(directory: ArtistDirectory): boolean {
+  if (!directory?.artists || Array.isArray(directory.artists) || !directory.trackArtists || Array.isArray(directory.trackArtists) ||
+    !Number.isInteger(directory.revision) || directory.revision < 0) return false;
+  const current = cloudArtists();
+  /* Overlapping catalog/admin requests must not repaint an older snapshot. */
+  if (directory.revision < current.revision) return false;
+  const changed = JSON.stringify(current) !== JSON.stringify(directory);
+  cloudArtistsMemory = directory;
+  try { localStorage.setItem(CLOUD_ARTISTS_CACHE_KEY, JSON.stringify(directory)); } catch { /* quota */ }
+  if (changed && typeof window !== 'undefined') window.dispatchEvent(new Event('aura:artists-updated'));
+  return changed;
+}
+
+let artistFetch: Promise<ArtistDirectory> | undefined;
+export function fetchArtistDirectory(): Promise<ArtistDirectory> {
+  if (artistFetch) return artistFetch;
+  artistFetch = (async () => {
+    try {
+      const response = await fetch('/api/artists', { cache: 'no-store', signal: AbortSignal.timeout(6000) });
+      if (response.ok) cacheArtistDirectory(await response.json());
+    } catch { /* keep independent cloud overrides during a network outage */ }
+    return cloudArtists();
+  })().finally(() => { artistFetch = undefined; });
+  return artistFetch;
+}
+
+export function applyArtistTrackOverrides(tracks: any[]): any[] {
+  const overrides = cloudArtists().trackArtists;
+  return tracks.map((track) => {
+    const path = track.hfPath || (String(track.id || '').startsWith('hf:') ? String(track.id).slice(3) : '');
+    if (!path) return track;
+    const baseArtist = track.catalogArtist ?? track.artist;
+    const name = overrides[artistTrackId(track.videoId || extractVideoId(path), path)];
+    return { ...track, catalogArtist: baseArtist, artist: name || baseArtist };
+  });
+}
+
+if (typeof window !== 'undefined') {
+  window.addEventListener('storage', (event) => {
+    if (event.key !== CLOUD_ARTISTS_CACHE_KEY) return;
+    const directory = readCloudArtistsCache();
+    if (directory.revision < cloudArtists().revision) return;
+    cloudArtistsMemory = directory;
+    window.dispatchEvent(new Event('aura:artists-updated'));
+  });
+}
 
 export function readArtistsCache(): Record<string, ArtistMeta> {
   try {
     const raw = localStorage.getItem(ARTISTS_CACHE_KEY);
-    if (!raw) return {};
+    if (!raw) return cloudArtists().artists;
     const parsed = JSON.parse(raw);
-    return parsed && typeof parsed === 'object' ? parsed : {};
+    return { ...(parsed && typeof parsed === 'object' && !Array.isArray(parsed) ? parsed : {}), ...cloudArtists().artists };
   } catch {
-    return {};
+    return cloudArtists().artists;
   }
 }
 
 export function getArtistMeta(artistName: string): ArtistMeta | undefined {
   if (!artistName) return undefined;
   const artists = readArtistsCache();
-  const k = artistName.toLowerCase().trim();
-  return artists[k] || Object.values(artists).find((a) => (a.name || '').toLowerCase().trim() === k);
+  const k = normalizeArtistKey(artistName);
+  return artists[k] || Object.values(artists).find((a) => normalizeArtistKey(a.name || '') === k);
 }
 
 export async function fetchHfCatalog(): Promise<any[]> {
-  const [treeRes, manifestRes] = await Promise.allSettled([fetch(HF_TREE_URL), fetch(hfFileUrl('manifest.json'))]);
+  const [treeRes, manifestRes] = await Promise.allSettled([
+    fetch(HF_TREE_URL), fetch(hfFileUrl('manifest.json')), fetchArtistDirectory(),
+  ]);
 
   if (treeRes.status !== 'fulfilled') throw treeRes.reason;
 
@@ -276,9 +345,9 @@ export async function fetchHfCatalog(): Promise<any[]> {
     }
     if (!prev.videoId && t.videoId) bySong.set(k, t);
   }
-  const finalTracks = [...bySong.values()].filter(
+  const finalTracks = applyArtistTrackOverrides([...bySong.values()].filter(
     (t) => !isHiddenTrack(t.hfPath || '', t.artist || '', t.title || '')
-  );
+  ));
 
   try {
     localStorage.setItem(CACHE_KEY, JSON.stringify({ tracks: finalTracks, at: Date.now() }));
