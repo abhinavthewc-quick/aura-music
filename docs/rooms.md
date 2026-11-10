@@ -1,6 +1,6 @@
 # Listen Together (rooms)
 
-A room is one shared playback session. One admin controls the transport; every
+A room is one shared playback session. Admins control the transport; every
 listener hears the same audio at the same moment, sees the same queue, and can
 chat. The room survives brief disconnects and closes on its own when nobody
 comes back.
@@ -27,34 +27,51 @@ sequenceDiagram
   DO-->>Worker: ok
   Worker-->>Pages: {roomId, adminKey, wsBase}
   Pages-->>Page: + shareUrl/adminUrl (/rooms?r=…)
-  Page->>Page: join(roomId, adminKey) → /rooms?r=…&k=…
+  Page->>Page: remember admin key on this device
   Page->>Worker: WebSocket /?room=…&client=…&name=…&k=…
   Friend->>Page: /rooms?r=<id>
   Page->>Pages: POST {action:exists, roomId}
   Pages-->>Page: {wsBase}
   Page->>Worker: WebSocket /?room=…&client=…&name=…
   DO-->>Friend: welcome(snapshot)
+  Page->>Page: show room at /rooms?r=… (no admin key)
 ```
 
 - **Create** mints a 6-character room id (`abcdefghjkmnpqrstuvwxyz23456789`) and
   a 32-hex-character admin key. The key is the authority; whoever presents it
   becomes admin.
-- **Share**: `/rooms?r=<roomId>`; the creator’s URL also carries `&k=<adminKey>`.
-  Treat the admin URL as a password — anyone with it can control playback.
+- **Share**: Invite friends opens a listener-only `/rooms?r=<roomId>` link,
+  with copy feedback and a selectable fallback. Existing admin links with
+  `&k=<adminKey>` still work; the key is remembered locally and removed from the
+  address bar after joining. Anyone with that key can control playback.
 - **Join**: the page asks `/api/rooms` (action `exists`) for the worker’s
   `wsBase`, then opens a WebSocket with a name and client id.
+- **Entry feedback**: paste a code, current invite, or legacy invite; choose a
+  name and join. Pending creation/joining can be cancelled. Invalid, closed,
+  offline and timed-out rooms show inline recovery messages. The shared library
+  loads after the room existence check, and background refresh starts on join.
+- **Listen**: the record stage shows the current track and real timing state.
+  Queue, library, people and chat sit beside it on desktop and stack on mobile,
+  with jump links. Your volume affects only your device. If browser autoplay
+  blocks sound, an explicit Turn on sound button resumes it.
+- **Queue**: admins choose tracks; listeners can browse. Queued tracks show
+  **Queued**, and repeat requests are acknowledged without duplicating entries
+  or restarting playback. Queue, library, people and chat can be scrolled with
+  the keyboard, including when the listener's action buttons are disabled.
 - **Leave**: closing the tab/socket removes the participant; an empty room
-  starts a 3-minute grace countdown.
+  starts a 3-minute grace countdown. Pending loads, decodes, listeners and timers
+  are retired with that session. A disconnected room offers Reconnect.
 
 ## Topology
 
 | Layer | File | Role |
 | --- | --- | --- |
-| Page | `rooms.html`, `src/rooms/page.ts` | join/room UI, chat, queue, pills, share, live loop |
+| Page | `rooms.html`, `src/rooms/page.ts`, `src/rooms/presentation.ts` | entry/session lifecycle, room UI, chat, queue, invites, live status |
 | Client | `src/rooms/roomClient.ts` | high-level verbs, refuses admin-only actions locally (server re-checks) |
 | Transport | `src/rooms/wsTransport.ts` | WebSocket + heartbeat/reconnect |
 | Sync | `src/rooms/syncEngine.ts` | clock-based expectation, schedule, drift correction |
 | Audio | `src/rooms/audioEngine.ts` | Web Audio target (whole-track decode, schedule, latency) |
+| Session audio | `src/rooms/sessionAudio.ts` | fences late unlock/decode work after leaving or changing tracks |
 | Clock | `src/rooms/clock.ts` | ping/pong offset estimation |
 | Protocol | `src/rooms/protocol.ts` | shared messages/state/constants |
 | Referee | `src/rooms/referee.ts` | authoritative rules, shared by browser and Worker |
@@ -67,8 +84,8 @@ through the Pages Function. The Function only creates/existence-checks rooms.
 
 ## Authority model
 
-Only admins may change playback or the queue, so there is never more than one
-controller and no conflict resolution when two people press play.
+Only admins may change playback or the queue. One authoritative referee orders
+their requests and broadcasts the same resulting state to every client.
 
 - The creator’s **admin key** is stored by the DO and bound to whichever client
   presents it last, so reconnecting from a new tab keeps control.
@@ -81,6 +98,8 @@ controller and no conflict resolution when two people press play.
   promoted to admin. If nobody claims it, the room closes.
 - If everyone leaves, the room survives for **3 minutes** (`GRACE_MS`) and is
   then closed/deleted.
+- A created room that nobody joins uses the same three-minute grace period,
+  enforced by the alarm backstop. Replayed creates cannot renew that deadline.
 - Chat is capped at 500 characters, 200 messages of history, 5 messages per 5 s
   per connection. A reconnect gets a new client id, so the rate window resets.
 
@@ -182,6 +201,8 @@ Rooms use **Web Audio**, not `<audio>`:
 
 ```text
 create ──► active ──► everyone leaves ──► grace 3 min ──► closed/deleted
+   │
+   └──► nobody joins ──► grace 3 min + next alarm ──► closed/deleted
               │
               └──► last admin leaves, listeners remain
                         └── rescue 30 s ──► listener claims ──► active
@@ -190,8 +211,10 @@ create ──► active ──► everyone leaves ──► grace 3 min ──�
 
 - The Durable Object stores `{schema, state, idleSince}` under `room` and uses a
   30-second alarm as a backstop for evictions (`GRACE_MS` timers only live in
-  memory).
-- Closing deletes storage (`deleteAll`) so the platform can reclaim the object.
+  memory). The start of an empty period is stable across writes and eviction;
+  joining cancels it, and the final departure starts a new period.
+- Closing deletes storage (`deleteAll`) and the alarm (`deleteAlarm`) so the
+  platform can reclaim the object without recurring wake-ups.
 - The page shows the remaining room lifetime/expiry from `expiresAt`.
 - There is no persistence beyond the grace period: rooms are ephemeral.
 
@@ -209,12 +232,20 @@ Two modes:
 The Worker e2e test uses two real WebSocket clients:
 
 ```bash
+node --import tsx --test tests/artists/room-presentation.test.ts rooms-worker/test/lifecycle.test.ts
 node rooms-worker/test/e2e.mjs ws://localhost:8799
 ```
 
-It checks role enforcement, queue/playback broadcasts, clock pongs, room
-isolation and admin-key behavior. Run it before/after touching `referee.ts`,
+The unit checks cover invite parsing, status/authority, retired audio work and
+expiry through writes, eviction, rejoin and cleanup. The Worker e2e checks role
+enforcement, idempotent queue acknowledgements, playback broadcasts, clock pongs,
+room isolation and admin-key behavior. Run it before/after touching `referee.ts`,
 `room.ts`, `roomClient.ts` or the protocol.
+
+The local browser fixture's `runRoomRegressions()` in
+`tests/artists/browser-room-regressions.js` covers entry recovery, stale session
+work, live role changes, seek/queue/chat controls, duplicate adds, keyboard list
+focus, and leaving/rejoining. See [browser setup](artist-storage.md#concurrency-and-tests).
 
 `/sync-test.html` is a separate diagnostic: it builds two audio pipelines in one
 tab and measures their distance, rather than each client vs the server.

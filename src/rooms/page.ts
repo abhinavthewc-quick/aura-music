@@ -1,781 +1,1002 @@
-/* AURA — listen together: page controller.
- *
- * Owns the two screens (join, then room) and the room's lifetime. Playback is
- * driven entirely by the room: this device downloads the track straight from
- * the shared catalogue and converges on the server's clock, exactly like every
- * other listener's.
- */
-
-import { RoomClient } from './roomClient';
+/* AURA listening rooms. The server owns the music; this page owns one room
+ * lifetime, its local sound, and the join / listening / disconnected views. */
+import { RoomClient, type RoomView } from './roomClient';
 import { WebSocketTransport } from './wsTransport';
 import { resolveTrack } from './appTarget';
-import { WebAudioTarget } from './audioEngine';
+import { SessionAudioTarget } from './sessionAudio';
 import { setRoomActive } from './roomFlag';
 import { ensureCatalog, refreshCatalog, onCatalogRefreshed } from './catalogReady';
 import { state, trackKey, rebuildSongs } from '../core/state';
-import { DEFAULT_COVER } from '../core/catalog';
-import type { RoomView } from './roomClient';
-import type { ChatMessage } from './protocol';
+import { CHAT_HISTORY, CHAT_RATE_COUNT, CHAT_RATE_WINDOW_MS, type ChatMessage } from './protocol';
+import { canManageRoom, formatTime, listenerInvite, listeningStatus, parseRoomInvite, type RoomInvite } from './presentation';
 
 const NAME_KEY = 'auraRoomName_v1';
 const ROOM_KEY = 'auraRecentRooms_v1';
-const PILL_COUNT = 8;
-const SWEEP_MS = 2000;
-
+const NAMES = ['Night owl', 'Daydreamer', 'Quiet one', 'Blue hour', 'Side B', 'Sunday listener'];
 const $ = <T extends HTMLElement = HTMLElement>(id: string) => document.getElementById(id) as T;
+const input = (id: string) => $<HTMLInputElement>(id);
+const button = (id: string) => $<HTMLButtonElement>(id);
+const reducedMotion = window.matchMedia('(prefers-reduced-motion: reduce)');
 
-const NAMES = ['listener', 'guest', 'sunny', 'quiet one', 'night owl', 'roadtrip'];
+interface Session {
+  roomId: string;
+  adminKey: string | null;
+  name: string;
+  abort: AbortController;
+  audio: SessionAudioTarget | null;
+  room: RoomClient | null;
+  transport: WebSocketTransport | null;
+  pending: boolean;
+  stopped: boolean;
+  cleanup: Set<() => void>;
+  refresh: Promise<void> | null;
+  audioError: string;
+  chatTimes: number[];
+}
 
-let client: RoomClient | null = null;
-let transport: WebSocketTransport | null = null;
-let audio: WebAudioTarget | null = null;
-let unsub: (() => void) | null = null;
-let liveTimer: number | null = null;
-let catalogTimer: number | null = null;
-let sweepRaf = 0;
-let pills: HTMLElement[] = [];
+interface LibraryTrack { key: string; title: string; artist: string; img: string }
+interface AddRequest { room: RoomClient; title: string; first: boolean; timer: number }
+interface Scrub { room: RoomClient; key: string; pointerId: number; ms: number }
 
-/* Render diffing: the room view re-paints on every server message, and
-   messages used to arrive constantly (pings, queue broadcasts). Rebuild only
-   the sub-views whose inputs actually changed. */
-let lastQueueSig = '';
-let lastPeopleSig = '';
-let lastRenderRole = '';
-let lastLibQuery = '';
+let session: Session | null = null;
+let deepInvite: RoomInvite | null = null;
+let library: LibraryTrack[] = [];
+let libraryVersion = 0;
+let lastQueue = '';
+let lastPeople = '';
+let lastResults = '';
+let lastArt = '';
 let lastUnresolvedRefresh = 0;
-let scrubbing = false;
-let scrubPreviewMs = 0;
+let searchTimer = 0;
+let copyTimer = 0;
+let scrub: Scrub | null = null;
+let unreadMessages = 0;
+const pendingAdds = new Map<string, AddRequest>();
+const chatIds = new Set<string>();
+let chatEmpty: Node;
 
-/* ---------------- small helpers ---------------- */
+function text(id: string, value: string): void {
+  const element = $(id);
+  if (element.textContent !== value) element.textContent = value;
+}
 
-function fmt(ms: number): string {
-  if (!Number.isFinite(ms) || ms < 0) ms = 0;
-  const s = Math.round(ms / 1000);
-  return `${Math.floor(s / 60)}:${String(s % 60).padStart(2, '0')}`;
+function element<K extends keyof HTMLElementTagNameMap>(tag: K, className = '', content = ''): HTMLElementTagNameMap[K] {
+  const node = document.createElement(tag);
+  node.className = className;
+  node.textContent = content;
+  return node;
+}
+
+function icon(name: string): SVGSVGElement {
+  const svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+  svg.setAttribute('class', 'ic');
+  svg.setAttribute('aria-hidden', 'true');
+  const use = document.createElementNS('http://www.w3.org/2000/svg', 'use');
+  use.setAttribute('href', `#i-${name}`);
+  svg.appendChild(use);
+  return svg;
 }
 
 function rememberedName(): string {
-  return localStorage.getItem(NAME_KEY) || '';
+  try { return (localStorage.getItem(NAME_KEY) || '').slice(0, 20); }
+  catch { return ''; }
 }
 
-function rememberRoom(id: string, key?: string) {
+function rememberName(name: string): void {
+  try { localStorage.setItem(NAME_KEY, name); } catch { /* A name still works without storage. */ }
+}
+
+function rememberRoom(id: string, key: string | null): void {
+  if (!key) return;
   try {
-    const map = JSON.parse(localStorage.getItem(ROOM_KEY) || '{}');
-    if (key) map[id] = key;
-    localStorage.setItem(ROOM_KEY, JSON.stringify(map));
-  } catch { /* storage unavailable */ }
+    const saved = JSON.parse(localStorage.getItem(ROOM_KEY) || '{}');
+    const rooms = saved && typeof saved === 'object' && !Array.isArray(saved) ? saved : {};
+    rooms[id] = key;
+    localStorage.setItem(ROOM_KEY, JSON.stringify(rooms));
+  } catch { /* The active session retains the key. */ }
 }
 
 function rememberedKey(id: string): string | null {
-  try { return (JSON.parse(localStorage.getItem(ROOM_KEY) || '{}'))[id] || null; }
-  catch { return null; }
-}
-
-function setPlayIcon(playing: boolean) {
-  const icon = document.getElementById('playIcon');
-  if (icon) icon.setAttribute('href', playing ? '#i-pause' : '#i-play');
-}
-
-function banner(text: string) {
-  const el = $('banner');
-  el.textContent = text;
-  el.hidden = !text;
-}
-
-function buildPills() {
-  const wrap = $('pills');
-  wrap.innerHTML = '';
-  pills = [];
-  for (let i = 0; i < PILL_COUNT; i++) {
-    const el = document.createElement('i');
-    wrap.appendChild(el);
-    pills.push(el);
-  }
-}
-
-
-/* ---------------- library explorer ----------------
- * Search runs entirely on this device against the catalogue already in memory,
- * so results are instant and cost nothing. Filtering happens through
- * resolveTrack(), so anything listed here is guaranteed to be playable by
- * every listener — no "not in your library" dead ends. */
-
-const MAX_RESULTS = 60;
-let libIndex: { key: string; title: string; artist: string; img: string }[] = [];
-
-function rebuildLibIndex(): void {
-  libIndex = [];
-  const seen = new Set<string>();
-  for (const song of state.songs) {
-    const key = trackKey(song);
-    if (seen.has(key)) continue;
-    if (!resolveTrack(key)) continue;   // must be shareable
-    seen.add(key);
-    libIndex.push({
-      key,
-      title: String(song.title || 'Unknown'),
-      artist: String(song.artist || 'Unknown artist'),
-      img: String(song.img || ''),
-    });
-  }
-  const el = $('libTotal');
-  if (el) el.textContent = libIndex.length ? String(libIndex.length) : '';
-}
-
-/** Split on the query so we can highlight the matched part without innerHTML. */
-function matches(title: string, artist: string, q: string): boolean {
-  return title.toLowerCase().includes(q) || artist.toLowerCase().includes(q);
-}
-
-function renderResults(q: string): void {
-  const ul = $('libResults');
-  ul.innerHTML = '';
-  const query = q.trim().toLowerCase();
-
-  if (!query) {
-    const li = document.createElement('li');
-    li.className = 'lib-empty';
-    li.textContent = 'Type to search. Results update as you type.';
-    ul.appendChild(li);
-    return;
-  }
-
-  const hits = libIndex.filter((t) => matches(t.title, t.artist, query)).slice(0, MAX_RESULTS);
-
-  if (!hits.length) {
-    const li = document.createElement('li');
-    li.className = 'lib-empty';
-    li.textContent = `Nothing in the library matches “${q.trim()}”.`;
-    ul.appendChild(li);
-    return;
-  }
-
-  const isAdmin = client?.isAdmin ?? false;
-
-  for (const t of hits) {
-    const li = document.createElement('li');
-
-    if (t.img) {
-      const img = document.createElement('img');
-      img.className = 'art-sm';
-      img.src = t.img;
-      img.alt = '';
-      img.loading = 'lazy';
-      img.decoding = 'async';
-      li.appendChild(img);
-    }
-
-    const txt = document.createElement('span');
-    txt.className = 'txt';
-    const t1 = document.createElement('span');
-    t1.className = 't';
-    t1.textContent = t.title;
-    const t2 = document.createElement('span');
-    t2.className = 'a';
-    t2.textContent = t.artist;
-    txt.appendChild(t1);
-    txt.appendChild(t2);
-    li.appendChild(txt);
-
-    const btn = document.createElement('button');
-    btn.className = 'add-btn';
-    btn.textContent = 'Add';
-    // Listeners can browse but not change the queue.
-    if (!isAdmin) {
-      btn.disabled = true;
-      btn.title = 'Only admins can change the queue';
-    } else {
-      btn.onclick = () => {
-        if (!client?.isAdmin) return;
-        client.queueAdd(t.key);
-        btn.textContent = 'Added';
-        btn.disabled = true;
-        setTimeout(() => { btn.textContent = 'Add'; btn.disabled = !client?.isAdmin; }, 1100);
-      };
-    }
-    li.appendChild(btn);
-    ul.appendChild(li);
-  }
-}
-
-/* ---------------- join screen ---------------- */
-
-function showJoin() {
-  $('joinView').hidden = false;
-  $('roomView').hidden = true;
-  $('codeInput').value = '';
+  try {
+    const value = JSON.parse(localStorage.getItem(ROOM_KEY) || '{}')?.[id];
+    return typeof value === 'string' ? value : null;
+  } catch { return null; }
 }
 
 function randomName(): string {
-  return NAMES[Math.floor(Math.random() * NAMES.length)] + Math.floor(Math.random() * 90 + 10);
+  return `${NAMES[Math.floor(Math.random() * NAMES.length)]} ${Math.floor(Math.random() * 90 + 10)}`;
 }
 
-function wireJoin() {
-  $('nameInput').value = rememberedName();
-  $('shuffleName').onclick = () => { $('nameInput').value = randomName(); $('nameInput').focus(); };
-
-  $('codeInput').addEventListener('input', () => {
-    $('codeInput').value = $('codeInput').value.toLowerCase().replace(/[^a-z0-9]/g, '');
-  });
-  $('codeInput').addEventListener('keydown', (e) => { if (e.key === 'Enter') $('joinBtn').click(); });
-
-  $('joinBtn').onclick = () => {
-    const code = $('codeInput').value.trim();
-    const name = $('nameInput').value.trim();
-    if (!code) { $('codeInput').focus(); return; }
-    if (!name) { $('nameInput').focus(); return; }
-    localStorage.setItem(NAME_KEY, name);
-    void join(code, rememberedKey(code), false);
-  };
-
-  $('createBtn').onclick = () => {
-    const name = $('nameInput').value.trim() || rememberedName() || randomName();
-    localStorage.setItem(NAME_KEY, name);
-    void create(name);
-  };
+function currentRoom(): RoomClient | null {
+  const s = session;
+  const view = s?.room?.view();
+  return s && !s.stopped && !s.pending && view?.you && !view.closed ? s.room : null;
 }
 
-async function create(name: string) {
-  banner('');
-  $('createBtn').disabled = true;
-  try {
-    const res = await fetch('/api/rooms', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ action: 'create' }),
-    });
-    if (!res.ok) throw new Error(`could not create a room (${res.status})`);
-    const info = await res.json();
-    rememberRoom(info.roomId, info.adminKey);
-    await join(info.roomId, info.adminKey, true);
-  } catch (err) {
-    banner((err as Error).message);
-  } finally {
-    $('createBtn').disabled = false;
+/** Re-check both the role and the room identity when an old DOM handler runs. */
+function manages(room: RoomClient | null): boolean {
+  return Boolean(room && currentRoom() === room && canManageRoom(room.view()));
+}
+
+function showJoinError(message: string, field?: string): void {
+  text('joinError', message);
+  $('joinError').hidden = !message;
+  for (const id of ['codeInput', 'nameInput']) input(id).removeAttribute('aria-invalid');
+  if (field) {
+    input(field).setAttribute('aria-invalid', 'true');
+    input(field).focus();
   }
 }
 
-/* ---------------- joining ---------------- */
+function banner(message: string, reconnect = false): void {
+  text('bannerText', message);
+  $('banner').hidden = !message;
+  button('reconnectBtn').hidden = !reconnect;
+}
 
-async function join(roomId: string, adminKey: string | null, isHost: boolean) {
-  banner('');
-  const name = $('nameInput').value.trim() || rememberedName() || randomName();
+function entryBusy(mode: 'join' | 'create' | null): void {
+  for (const id of ['joinBtn', 'createBtn', 'shuffleName']) button(id).disabled = Boolean(mode);
+  input('codeInput').disabled = Boolean(mode);
+  input('nameInput').disabled = Boolean(mode);
+  $('joinForm').setAttribute('aria-busy', String(Boolean(mode)));
+  $('joinProgress').hidden = !mode;
+  text('joinBtn', mode === 'join' ? 'Joining…' : 'Join room');
+  text('createLabel', mode === 'create' ? 'Starting your room…' : 'Start a room');
+  if (!mode) text('joinStatus', '');
+}
 
-  // Fetch only when joining a room. The idle join screen needs no catalogue;
-  // waiting here still makes the room's first shared track resolvable.
-  rebuildSongs();
-  await ensureCatalog(6000);
-  rebuildLibIndex();
-  renderResults('');
+function showJoin(focus = false): void {
+  $('joinView').hidden = false;
+  $('roomView').hidden = true;
+  if (focus) input('codeInput').focus({ preventScroll: true });
+}
 
-  let wsBase = '';
+/** Settle aborted and timed-out entry work, even if a socket/fetch never replies. */
+function bounded<T>(s: Session, task: Promise<T>, milliseconds: number, message: string): Promise<T> {
+  return new Promise<T>((resolve, reject) => {
+    let settled = false;
+    const finish = (action: () => void) => {
+      if (settled) return;
+      settled = true;
+      window.clearTimeout(timer);
+      s.abort.signal.removeEventListener('abort', cancel);
+      action();
+    };
+    const cancel = () => finish(() => reject(new DOMException('Entry cancelled', 'AbortError')));
+    const timer = window.setTimeout(() => finish(() => reject(new Error(message))), milliseconds);
+    s.abort.signal.addEventListener('abort', cancel, { once: true });
+    task.then((value) => finish(() => resolve(value)), (error) => finish(() => reject(error)));
+    if (s.abort.signal.aborted) cancel();
+  });
+}
+
+async function roomRequest(s: Session, body: Record<string, string>): Promise<Record<string, unknown>> {
+  const response = await bounded(s, fetch('/api/rooms', {
+    method: 'POST', headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(body), signal: s.abort.signal,
+  }), 12000, 'The room server took too long to respond. Try again.');
+  if (!response.ok) throw new Error('Rooms are unavailable right now. Try again in a moment.');
+  return bounded(s, response.json(), 4000, 'The room server sent an incomplete reply. Try again.');
+}
+
+function welcome(s: Session, room: RoomClient): Promise<void> {
+  const waiting = new Promise<void>((resolve, reject) => {
+    let off = () => {};
+    const check = (view: RoomView) => {
+      if (view.closed) { off(); reject(new Error('This room closed before you could join. Check the code or start a room.')); }
+      else if (view.you) { off(); resolve(); }
+    };
+    off = room.subscribe(check);
+    s.cleanup.add(off);
+    check(room.view());
+  });
+  return bounded(s, waiting, 12000, 'The room didn’t finish connecting. Check your connection and try again.');
+}
+
+async function enter(mode: 'join' | 'create', invite: RoomInvite | null, name: string): Promise<void> {
+  if (session?.pending) return;
+  if (session) stopSession(session);
+  const s: Session = {
+    roomId: invite?.roomId || '', adminKey: invite?.adminKey || null, name,
+    abort: new AbortController(), audio: null, room: null, transport: null,
+    pending: true, stopped: false, cleanup: new Set(), refresh: null, audioError: '', chatTimes: [],
+  };
+  session = s;
+  resetRoomUI();
+  showJoin();
+  showJoinError('');
+  entryBusy(mode);
+  rememberName(name);
+  input('nameInput').value = name;
+
   try {
-    const res = await fetch('/api/rooms', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ action: 'exists', roomId }),
+    // This happens inside the join/create gesture, before any network await.
+    // It preserves the browser's audio permission without starting any music.
+    s.audio = new SessionAudioTarget({
+      resolve: resolveTrack,
+      onEnded: () => { if (manages(s.room)) s.room.trackEnded(); },
+      onError: (message) => {
+        if (session !== s || s.stopped) return;
+        s.audioError = message;
+        if (!s.pending) {
+          banner(`This device couldn’t load the track: ${message}. Reconnect to try again.`, true);
+          live(s);
+        }
+      },
+      onTrackChanged: () => {
+        if (session !== s || s.stopped) return;
+        s.audioError = '';
+        if (!s.pending) banner('');
+      },
     });
-    wsBase = (await res.json()).wsBase || '';
-  } catch { /* reported below */ }
+    s.audio.setVolume(Number(input('volumeInput').value) / 100);
+    void s.audio.unlock();
 
-  if (!wsBase) { banner('Rooms are unavailable right now. Try again in a moment.'); return; }
+    if (mode === 'create') {
+      text('joinStatus', 'Making a place for your people…');
+      const created = await roomRequest(s, { action: 'create' });
+      const code = typeof created.roomId === 'string' ? parseRoomInvite(created.roomId) : null;
+      if (!code || typeof created.adminKey !== 'string') throw new Error('The room could not be created. Try again.');
+      s.roomId = code.roomId;
+      s.adminKey = created.adminKey;
+      // If connecting fails, the created room is still available to retry.
+      input('codeInput').value = s.roomId;
+      rememberRoom(s.roomId, s.adminKey);
+      deepInvite = { roomId: s.roomId, adminKey: s.adminKey };
+    }
 
-  const clientId = 'c' + Math.random().toString(36).slice(2, 10) + Date.now().toString(36);
-  transport = new WebSocketTransport({
-    baseUrl: wsBase, roomId, clientId, name,
-    ...(adminKey ? { adminKey } : {}),
-  });
+    text('joinStatus', 'Finding your room…');
+    const info = await roomRequest(s, { action: 'exists', roomId: s.roomId });
+    if (info.exists === false) throw new Error('That room has closed or doesn’t exist. Check the code, or start a room.');
+    if (typeof info.wsBase !== 'string' || !/^wss?:\/\//.test(info.wsBase)) {
+      throw new Error('Rooms are unavailable right now. Try again in a moment.');
+    }
 
-  // Room playback runs on Web Audio rather than an <audio> element, so that
-  // the playhead is computed from a high-resolution clock and corrected for
-  // this device's own output latency. Everything the app needs is read back
-  // through the client's view, so nothing else has to touch the engine.
-  audio = new WebAudioTarget({
-    resolve: resolveTrack,
-    onEnded: () => client?.trackEnded(),
-    onError: (message) => banner(message),
-  });
+    // Idle gates and invalid invites don't request the catalogue.
+    text('joinStatus', 'Getting the shared library ready…');
+    rebuildSongs();
+    await bounded(s, ensureCatalog(6000), 6500, 'The library took too long to load. Try joining again.');
+    if (session !== s || s.stopped) return;
+    rebuildLibrary();
 
-  client = new RoomClient(
-    { roomId, ...(adminKey ? { ownerKey: adminKey } : {}) },
-    transport, clientId, audio,
-  );
-  client.onChat = pushChat;
+    text('joinStatus', 'Connecting you to the room…');
+    const clientId = 'c' + Math.random().toString(36).slice(2, 10) + Date.now().toString(36);
+    s.transport = new WebSocketTransport({ baseUrl: info.wsBase, roomId: s.roomId, clientId, name, ...(s.adminKey ? { adminKey: s.adminKey } : {}) });
+    const room = s.room = new RoomClient({ roomId: s.roomId, ...(s.adminKey ? { ownerKey: s.adminKey } : {}) }, s.transport, clientId, s.audio);
+    room.onChat = (message) => { if (session === s && !s.stopped) pushChat(message); };
+    await bounded(s, s.transport.connect(), 12000, 'Couldn’t connect to the room. Check your connection and try again.');
+    if (session !== s || s.stopped) return;
+    const ready = welcome(s, room);
+    room.join(name);
+    await ready;
+    if (session !== s || s.stopped) return;
 
-  try {
-    await transport.connect();
-  } catch (err) {
-    banner((err as Error).message);
-    client = null; transport = null;
+    s.pending = false;
+    entryBusy(null);
+    rememberRoom(s.roomId, s.adminKey);
+    // Keep the owner key out of the address bar and every listener invite.
+    history.replaceState(null, '', `/rooms?r=${encodeURIComponent(s.roomId)}`);
+    $('joinView').hidden = true;
+    $('roomView').hidden = false;
+    input('inviteLink').value = listenerInvite(location.origin, s.roomId);
+    setRoomActive(true);
+    s.cleanup.add(room.subscribe((view) => { if (session === s) render(s, view); }));
+    if (s.stopped) return;
+    startLive(s);
+    watchCatalogue(s);
+    $('nowTitle').focus({ preventScroll: true });
+    window.scrollTo({ top: 0, behavior: 'instant' });
+  } catch (error) {
+    if (session !== s || s.stopped) return;
+    stopSession(s);
+    session = null;
+    entryBusy(null);
+    const message = error instanceof TypeError ? 'Couldn’t reach the room. Check your connection and try again.'
+      : error instanceof SyntaxError ? 'The room server sent an incomplete reply. Try again.'
+      : error instanceof Error ? error.message : 'Couldn’t join the room. Check your connection and try again.';
+    showJoinError(message);
+    button(mode === 'create' && !s.roomId ? 'createBtn' : 'joinBtn').focus({ preventScroll: true });
+  }
+}
+
+function wireJoin(): void {
+  input('nameInput').value = rememberedName();
+  button('shuffleName').onclick = () => { input('nameInput').value = randomName(); showJoinError(''); input('nameInput').focus(); };
+  for (const id of ['nameInput', 'codeInput']) input(id).addEventListener('input', () => showJoinError(''));
+
+  $('joinForm').onsubmit = (event) => {
+    event.preventDefault();
+    if (session?.pending) return;
+    const invite = parseRoomInvite(input('codeInput').value);
+    if (!invite) { showJoinError('Enter the room code or paste the invite link a friend shared.', 'codeInput'); return; }
+    const name = input('nameInput').value.trim().slice(0, 20);
+    if (!name) { showJoinError('Choose a name so friends know it’s you.', 'nameInput'); return; }
+    input('codeInput').value = invite.roomId;
+    invite.adminKey ||= (deepInvite?.roomId === invite.roomId ? deepInvite.adminKey : null) || rememberedKey(invite.roomId);
+    void enter('join', invite, name);
+  };
+  button('createBtn').onclick = () => {
+    const name = input('nameInput').value.trim().slice(0, 20) || rememberedName() || randomName();
+    void enter('create', null, name);
+  };
+  button('cancelJoinBtn').onclick = () => leave(false);
+}
+
+/* ---------------- lifetime ---------------- */
+
+function stopSession(s: Session): void {
+  if (s.stopped) return;
+  s.stopped = true;
+  s.pending = false;
+  s.abort.abort();
+  s.cleanup.forEach((off) => off());
+  s.cleanup.clear();
+  if (s.room) { s.room.onChat = null; s.room.leave(); }
+  else s.transport?.close();
+  s.audio?.dispose();
+  for (const [key, request] of pendingAdds) {
+    if (request.room === s.room) { window.clearTimeout(request.timer); pendingAdds.delete(key); }
+  }
+  if (session === s) {
+    window.clearTimeout(searchTimer);
+    window.clearTimeout(copyTimer);
+    cancelScrub();
+    setRoomActive(false);
+  }
+}
+
+function resetRoomUI(): void {
+  lastQueue = lastPeople = lastResults = lastArt = '';
+  lastUnresolvedRefresh = 0;
+  chatIds.clear();
+  unreadMessages = 0;
+  input('libSearch').value = '';
+  input('chatInput').value = '';
+  $('chatLog').replaceChildren(chatEmpty.cloneNode(true));
+  $('newMessagesBtn').hidden = true;
+  $('invitePanel').hidden = true;
+  const art = $<HTMLImageElement>('artImg');
+  art.hidden = true;
+  art.removeAttribute('src');
+  button('inviteBtn').setAttribute('aria-expanded', 'false');
+  text('copyLabel', 'Copy link');
+  text('inviteStatus', '');
+  text('trackFeedback', '');
+  text('chatStatus', 'Only people in this room can see your messages.');
+  banner('');
+}
+
+function leave(clearCode = true): void {
+  if (session) stopSession(session);
+  session = null;
+  entryBusy(null);
+  resetRoomUI();
+  showJoinError('');
+  if (clearCode) { input('codeInput').value = ''; deepInvite = null; }
+  try { history.replaceState(null, '', '/rooms'); } catch { /* Detached page. */ }
+  showJoin(true);
+  window.scrollTo({ top: 0, behavior: 'instant' });
+}
+
+function reconnect(): void {
+  const s = session;
+  if (!s || s.pending) return;
+  input('codeInput').value = s.roomId;
+  void enter('join', { roomId: s.roomId, adminKey: s.adminKey }, s.name);
+}
+
+/* ---------------- library and queue ---------------- */
+
+function rebuildLibrary(): void {
+  const seen = new Set<string>();
+  library = [];
+  for (const song of state.songs) {
+    const key = trackKey(song);
+    if (seen.has(key)) continue;
+    const track = resolveTrack(key);
+    if (!track) continue;
+    seen.add(key);
+    library.push({ key, title: track.title, artist: track.artist, img: track.img || '' });
+  }
+  libraryVersion++;
+  text('libTotal', library.length ? `${library.length} tracks` : '');
+}
+
+function thumbnail(source: string): HTMLElement {
+  const fallback = () => {
+    const empty = element('span', 'track-art track-art-placeholder');
+    empty.setAttribute('aria-hidden', 'true');
+    empty.appendChild(icon('headphone'));
+    return empty;
+  };
+  if (!source) return fallback();
+  const img = element('img', 'track-art');
+  img.width = img.height = 43;
+  img.alt = '';
+  img.loading = 'lazy';
+  img.decoding = 'async';
+  img.onerror = () => img.replaceWith(fallback());
+  img.src = source;
+  return img;
+}
+
+function trackCopy(title: string, artist: string): HTMLElement {
+  const copy = element('span', 'track-copy');
+  const name = element('span', 'track-name', title);
+  name.title = title;
+  copy.append(name, element('span', 'track-artist', artist));
+  return copy;
+}
+
+function focusLibrary(): void {
+  input('libSearch').focus({ preventScroll: true });
+  $('librarySection').scrollIntoView({ block: 'start', behavior: reducedMotion.matches ? 'instant' : 'smooth' });
+}
+
+function updateAddButtons(): void {
+  const room = currentRoom();
+  const view = session?.room?.view();
+  const first = !view?.playback.trackKey;
+  const starting = [...pendingAdds.values()].some((request) => request.room === room && request.first);
+  for (const btn of $('libResults').querySelectorAll<HTMLButtonElement>('button[data-track-key]')) {
+    const key = btn.dataset.trackKey;
+    const pending = pendingAdds.get(key);
+    const title = btn.dataset.trackTitle;
+    const queued = !first && view.queue.includes(key);
+    btn.disabled = !manages(room) || Boolean(pending) || starting || queued;
+    btn.textContent = pending ? (pending.first ? 'Starting…' : 'Adding…') : first ? 'Play first' : queued ? 'Queued' : 'Add';
+    btn.setAttribute('aria-label', pending ? `Waiting for ${title}` : first ? `Play ${title} for everyone` : queued ? `${title} is already in the queue` : `Add ${title} to the queue`);
+    btn.title = !manages(room) ? 'Admins choose the music. You can share a request in chat.' : '';
+  }
+}
+
+function requestTrack(room: RoomClient, track: LibraryTrack): void {
+  if (!manages(room) || pendingAdds.has(track.key)) return;
+  if ([...pendingAdds.values()].some((request) => request.room === room && request.first)) return;
+  const view = room.view();
+  if (view.playback.trackKey && view.queue.includes(track.key)) {
+    text('trackFeedback', `“${track.title}” is already in the queue.`);
+    updateAddButtons();
     return;
   }
-
-  client.join(name);
-  unsub = client.subscribe(render);
-  setRoomActive(true);
-  history.replaceState(null, '', `/rooms?r=${roomId}${adminKey ? '&k=' + adminKey : ''}`);
-
-  $('joinView').hidden = true;
-  $('roomView').hidden = false;
-  $('roomCode').textContent = roomId;
-  buildPills();
-  startLiveLoop();
-  render(client.view());
-  wireCatalogRefresh();
-
-  // Autoplay policy: the join click is the gesture. If it is ever missed we
-  // pick audio up on the next interaction rather than sitting silent.
-  armAutoplay();
-}
-
-function armAutoplay() {
-  // The context stays suspended until the browser sees a real gesture. If the
-  // join click did not count (or the user came back later), pick audio up on
-  // the next interaction rather than sitting silent.
-  const resume = () => client?.resumeIfBlocked();
-  for (const ev of ['pointerdown', 'keydown', 'touchstart']) {
-    document.addEventListener(ev, resume, { passive: true });
-  }
-}
-
-/* ---------------- leaving ---------------- */
-
-let catalogUnsub: (() => void) | null = null;
-const catalogKeepers = new Array<() => void>();
-
-function leave() {
-  cancelAnimationFrame(sweepRaf);
-  if (liveTimer !== null) { clearInterval(liveTimer); liveTimer = null; }
-  if (catalogTimer !== null) { clearTimeout(catalogTimer); catalogTimer = null; }
-  catalogUnsub?.(); catalogUnsub = null;
-  catalogKeepers.forEach((off) => off());
-  catalogKeepers.length = 0;
-  unsub?.(); unsub = null;
-  client?.leave(); client = null; transport = null;
-  audio?.dispose(); audio = null;
-  // Forget per-room render signatures so rejoining repaints every panel.
-  lastQueueSig = '';
-  lastPeopleSig = '';
-  lastRenderRole = '';
-  lastLibQuery = '';
-  vRoleDirty = true;
-  setRoomActive(false);
-  try { history.replaceState(null, '', '/rooms'); } catch { /* ignore */ }
-  showJoin();
-}
-
-/* ---------------- live readouts ---------------- */
-
-function startLiveLoop() {
-  if (liveTimer !== null) clearInterval(liveTimer);
-  liveTimer = window.setInterval(live, 500);
-  live();
-  cancelAnimationFrame(sweepRaf);
-  const sweep = () => {
-    stepSweep();
-    sweepRaf = requestAnimationFrame(sweep);
+  const request: AddRequest = {
+    room, title: track.title, first: !view.playback.trackKey,
+    timer: window.setTimeout(() => {
+      if (pendingAdds.get(track.key) !== request) return;
+      pendingAdds.delete(track.key);
+      if (currentRoom() === room) {
+        text('trackFeedback', `The room hasn’t confirmed “${track.title}”. Try again.`);
+        updateAddButtons();
+      }
+    }, 6000),
   };
-  sweepRaf = requestAnimationFrame(sweep);
+  pendingAdds.set(track.key, request);
+  text('trackFeedback', request.first ? `Starting “${track.title}” for everyone…` : `Adding “${track.title}” to the queue…`);
+  updateAddButtons();
+  room.queueAdd(track.key);
 }
 
-/**
- * The sweep is driven by SERVER time, not local time. That is the whole point:
- * every device lights the same pill at the same instant, so the bar is a shared
- * "we are together" signal rather than a local animation.
- */
-function stepSweep() {
-  const v = client?.view();
-  if (!v || !v.inSync || !v.clockReady) return;
-  const phase = v.serverNow % SWEEP_MS;
-  const idx = Math.floor((phase / SWEEP_MS) * PILL_COUNT);
-  for (let i = 0; i < pills.length; i++) pills[i].classList.toggle('on', i === idx);
+function confirmTrackRequests(view: RoomView): void {
+  for (const [key, request] of pendingAdds) {
+    if (request.room !== session?.room) continue;
+    const confirmed = request.first ? view.playback.trackKey === key : view.queue.includes(key);
+    if (!confirmed) continue;
+    window.clearTimeout(request.timer);
+    pendingAdds.delete(key);
+    text('trackFeedback', request.first ? `“${request.title}” is the room’s next record.` : `“${request.title}” added to the queue.`);
+  }
+  updateAddButtons();
 }
 
-function live() {
-  const v = client?.view();
-  if (!v) return;
-
-  const pos = v.positionMs;
-  const dur = v.durationMs;
-  if (!scrubbing) {
-    $('tCur').textContent = fmt(pos);
-    const pct = dur ? Math.max(0, Math.min(100, (pos / dur) * 100)) : 0;
-    ($('fill') as HTMLElement).style.width = pct + '%';
-    ($('knob') as HTMLElement).style.left = pct + '%';
+function renderResults(view: RoomView): void {
+  const query = input('libSearch').value.trim();
+  const signature = JSON.stringify([query, libraryVersion, view.role, Boolean(view.closed), Boolean(view.playback.trackKey)]);
+  if (signature === lastResults) return;
+  lastResults = signature;
+  const room = session.room;
+  const list = $('libResults');
+  const focusedKey = list.contains(document.activeElement) ? (document.activeElement as HTMLElement).dataset.trackKey : null;
+  const words = query.toLocaleLowerCase().split(/\s+/).filter(Boolean);
+  const matches = query ? library.filter((track) => words.every((word) => `${track.title} ${track.artist}`.toLocaleLowerCase().includes(word))) : library;
+  const hits = matches.slice(0, query ? 30 : 6);
+  const fragment = document.createDocumentFragment();
+  text('libResultsStatus', !library.length ? '' : query ? `${matches.length} ${matches.length === 1 ? 'match' : 'matches'}${matches.length > 30 ? ' · Showing 30' : ''}` : 'A few records to get you started');
+  button('clearSearchBtn').hidden = !query;
+  button('retryLibraryBtn').hidden = Boolean(library.length);
+  if (!hits.length) {
+    fragment.appendChild(element('li', 'lib-empty', library.length ? `No songs match “${query}”. Try a title or a different artist.` : 'The shared library hasn’t loaded. Reload it to find a record for the room.'));
   }
-  $('tDur').textContent = dur ? fmt(dur) : '–:––';
-  const seekBar = $('seekBar');
-  const pct = dur ? Math.max(0, Math.min(100, (pos / dur) * 100)) : 0;
-  seekBar.setAttribute('aria-valuenow', String(Math.round(pct)));
-  seekBar.setAttribute('aria-valuetext', fmt(pos));
-
-  // A device whose audio is blocked by autoplay policy is the one case where
-  // nothing we do server-side can help, so ask for a gesture instead.
-  const blocked = v.playback.playing && v.blocked;
-  $('listenHint').hidden = !blocked;
-  $('loadHint').hidden = !v.loading;
-
-  // Countdown to the one moment everyone agreed to begin.
-  const starting = v.startInMs != null;
-  $('countdown').hidden = !starting;
-  if (starting) {
-    // Round up so it reads 4,3,2,1 and hits GO exactly on the agreed instant
-    // rather than a frame early.
-    $('countdownNum').textContent = String(Math.max(1, Math.ceil((v.startInMs ?? 0) / 1000)));
+  for (const track of hits) {
+    const li = element('li');
+    li.append(thumbnail(track.img), trackCopy(track.title, track.artist));
+    const add = element('button', 'add-btn');
+    add.type = 'button';
+    add.dataset.trackKey = track.key;
+    add.dataset.trackTitle = track.title;
+    add.onclick = () => requestTrack(room, track);
+    li.appendChild(add);
+    fragment.appendChild(li);
   }
-
-  const bar = $('syncbar');
-  bar.hidden = !v.clockReady || starting;
-  const meta = $('driftLabel').parentElement!;
-  if (starting) {
-    $('syncLabel').textContent = 'waiting for everyone';
-    $('driftLabel').textContent = v.loading ? 'loading' : 'ready';
-    meta.className = 'syncmeta ok';
-  } else if (blocked) {
-    $('syncLabel').textContent = 'waiting for you';
-    $('driftLabel').textContent = '';
-    meta.className = 'syncmeta warn';
-  } else {
-    $('syncLabel').textContent = v.nudging ? 'gently correcting' : 'in sync';
-    $('driftLabel').textContent =
-      `${v.driftMs} ms${v.outputLatencyMs != null ? ` · ${v.outputLatencyMs} ms out` : ''}`;
-    meta.className = v.inSync ? 'syncmeta ok' : 'syncmeta warn';
+  list.replaceChildren(fragment);
+  updateAddButtons();
+  if (focusedKey) {
+    const restored = [...list.querySelectorAll<HTMLButtonElement>('button')].find((btn) => btn.dataset.trackKey === focusedKey && !btn.disabled);
+    (restored || input('libSearch')).focus({ preventScroll: true });
   }
 }
 
-/* ---------------- rendering ---------------- */
-
-function peopleSig(v: RoomView): string {
-  return v.participants.map((p) => `${p.id}:${p.role}`).join('¬');
-}
-
-function queueSig(v: RoomView): string {
-  return `${v.role}¬${v.playback.trackKey ?? ''}¬${v.queue.join('¬')}`;
-}
-
-/** Refresh the search results only when the query or the role/lib changed. */
-function maybeRenderResults(): void {
-  const input = $('libSearch') as HTMLInputElement;
-  const query = input.value;
-  if (vRoleDirty || query !== lastLibQuery) {
-    vRoleDirty = false;
-    lastLibQuery = query;
-    renderResults(query);
-  }
-}
-
-let vRoleDirty = false;
-
-function render(v: RoomView) {
-  const isAdmin = v.role === 'admin';
-
-  $('roomCode').textContent = v.roomId;
-  const pill = $('rolePill');
-  if (v.role !== lastRenderRole) {
-    lastRenderRole = v.role;
-    pill.textContent = v.role;
-    pill.className = 'role-pill' + (isAdmin ? ' admin' : '');
-    vRoleDirty = true; // Add buttons depend on role
-  }
-
-  $('liveDot').classList.toggle('pulse', !v.closed);
-  setPlayIcon(v.playback.playing);
-
-  // Controls: admins drive. Listeners still see them so the screen does not
-  // change shape between people, but they are inert.
-  for (const id of ['playBtn', 'nextBtn', 'prevBtn', 'seekBar']) {
-    ($(id) as HTMLButtonElement).disabled = !isAdmin;
-  }
-
-  const track = v.playback.trackKey ? resolveTrack(v.playback.trackKey) : null;
-  if (track) {
-    $('nowTitle').textContent = track.title;
-    $('nowArtist').textContent = track.artist;
-  } else {
-    $('nowTitle').textContent = 'Nothing playing';
-    $('nowArtist').textContent = isAdmin ? 'Queue a track to start' : 'Waiting for the host';
-  }
-  const art = $('artImg') as HTMLImageElement;
-  art.src = track?.img || DEFAULT_COVER;
-
-  // Queue rows also depend on the current listener's permissions.
-  if (queueSig(v) !== lastQueueSig) {
-    lastQueueSig = queueSig(v);
-    const q = $('queueList');
-    q.innerHTML = '';
-    $('qCount').textContent = String(v.queue.length);
-    if (!v.queue.length) {
-      const li = document.createElement('li');
-      li.className = 'empty-row';
-      li.textContent = isAdmin ? 'Nothing queued — add what you are playing' : 'Nothing queued yet';
-      q.appendChild(li);
+function renderQueue(view: RoomView): void {
+  text('qCount', `${view.queue.length} ${view.queue.length === 1 ? 'track' : 'tracks'}`);
+  text('queueNavCount', String(view.queue.length));
+  const signature = JSON.stringify([view.role, view.closed, view.playback.trackKey, view.queue, libraryVersion]);
+  if (signature === lastQueue) return;
+  lastQueue = signature;
+  const room = session.room;
+  const admin = canManageRoom(view);
+  const list = $('queueList');
+  const hadFocus = document.activeElement !== list && list.contains(document.activeElement);
+  const oldKey = hadFocus ? (document.activeElement as HTMLElement).dataset.trackKey : null;
+  const fragment = document.createDocumentFragment();
+  if (!view.queue.length) {
+    const empty = element('li', 'empty-row');
+    empty.append(element('strong', '', 'Leave room for another record.'), element('p', '', admin ? 'Pick the first track below, or line up what comes next.' : 'An admin can add the next track. Share a pick in chat.'));
+    if (admin) {
+      const find = element('button', 'linkish', 'Find a track');
+      find.type = 'button';
+      find.onclick = focusLibrary;
+      empty.appendChild(find);
     }
-    v.queue.forEach((key, i) => {
-      const t = resolveTrack(key);
-      const li = document.createElement('li');
-      const idx = document.createElement('span');
-      idx.className = 'idx';
-      idx.textContent = String(i + 1);
-      const nm = document.createElement('span');
-      nm.className = 'nm';
-      nm.textContent = t ? `${t.title} — ${t.artist}` : 'not in your library';
-      li.appendChild(idx); li.appendChild(nm);
-      if (isAdmin) {
-        const rm = document.createElement('button');
-        rm.className = 'promo';
-        rm.textContent = '✕';
-        rm.title = 'Remove from queue';
-        rm.onclick = () => { if (client?.isAdmin) client.queueRemove(key); };
-        li.appendChild(rm);
-      }
-      q.appendChild(li);
-    });
-
-    // A just-uploaded track can resolve late: if anything in the room still
-    // shows "not in your library", pick up the fresh catalogue.
-    const unresolved = v.queue.some((key) => !resolveTrack(key));
-    if (unresolved && Date.now() - lastUnresolvedRefresh > 20_000) {
-      lastUnresolvedRefresh = Date.now();
-      void refreshLibrary();
+    fragment.appendChild(empty);
+  }
+  view.queue.forEach((key, index) => {
+    const track = resolveTrack(key);
+    const li = element('li');
+    li.append(element('span', 'idx', String(index + 1)), thumbnail(track?.img || ''), trackCopy(track?.title || 'Track unavailable', track?.artist || 'Try reloading the shared library.'));
+    if (admin) {
+      const remove = element('button', 'icon-btn remove-track');
+      remove.type = 'button';
+      remove.dataset.trackKey = key;
+      remove.title = 'Remove from queue';
+      remove.setAttribute('aria-label', `Remove ${track?.title || 'unavailable track'} from queue`);
+      remove.appendChild(icon('x'));
+      remove.onclick = () => { if (manages(room)) room.queueRemove(key); };
+      li.appendChild(remove);
     }
-  } else {
-    $('qCount').textContent = String(v.queue.length);
+    fragment.appendChild(li);
+  });
+  list.replaceChildren(fragment);
+  if (hadFocus) {
+    const restored = [...list.querySelectorAll<HTMLButtonElement>('button')].find((btn) => btn.dataset.trackKey === oldKey);
+    (restored || $('queueSection')).focus({ preventScroll: true });
   }
-
-  // People: rebuild only when the roster changed.
-  if (peopleSig(v) !== lastPeopleSig) {
-    lastPeopleSig = peopleSig(v);
-    const pl = $('peopleList');
-    pl.innerHTML = '';
-    $('pCount').textContent = String(v.participants.length);
-    for (const p of v.participants) {
-      const li = document.createElement('li');
-      const who = document.createElement('span');
-      who.className = 'who';
-      if (p.role === 'admin') {
-        const s = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
-        s.setAttribute('class', 'star');
-        const use = document.createElementNS('http://www.w3.org/2000/svg', 'use');
-        use.setAttribute('href', '#i-star');
-        s.appendChild(use);
-        who.appendChild(s);
-      }
-      const nm = document.createElement('span');
-      nm.textContent = p.name;
-      who.appendChild(nm);
-      if (v.you && p.id === v.you.id) {
-        const me = document.createElement('span');
-        me.className = 'me-tag';
-        me.textContent = 'you';
-        who.appendChild(me);
-      }
-      li.appendChild(who);
-      if (isAdmin && v.you && p.id !== v.you.id) {
-        const b = document.createElement('button');
-        b.className = 'promo';
-        b.textContent = p.role === 'admin' ? 'remove admin' : 'make admin';
-        b.onclick = () => (p.role === 'admin' ? client?.demote(p.id) : client?.promote(p.id));
-        li.appendChild(b);
-      }
-      pl.appendChild(li);
-    }
-  } else {
-    $('pCount').textContent = String(v.participants.length);
-  }
-
-  maybeRenderResults();
-
-  if (v.closed) banner(`This room has closed — ${v.closed}`);
-
-  // A track the room is playing that nobody can resolve yet: the catalogue
-  // may have been updated since this device joined.
-  if (v.playback.trackKey && !track && Date.now() - lastUnresolvedRefresh > 20_000) {
-    lastUnresolvedRefresh = Date.now();
-    void refreshLibrary();
-  }
-
-  live();
 }
 
-function pushChat(m: ChatMessage) {
+/* ---------------- people and conversation ---------------- */
+
+function renderPeople(view: RoomView): void {
+  const count = view.participants.length;
+  text('pCount', String(count));
+  text('peopleNavCount', String(count));
+  text('peopleSummary', view.closed ? 'The room is disconnected.' : count > 1 ? `${count} people sharing this moment.` : 'Just you for now. Invite someone to listen.');
+  const signature = JSON.stringify([view.you?.id, view.role, view.closed, view.participants.map((person) => [person.id, person.name, person.role])]);
+  if (signature === lastPeople) return;
+  lastPeople = signature;
+  const room = session.room;
+  const list = $('peopleList');
+  const hadFocus = document.activeElement !== list && list.contains(document.activeElement);
+  const oldId = hadFocus ? (document.activeElement as HTMLElement).dataset.personId : null;
+  const fragment = document.createDocumentFragment();
+  for (const person of view.participants) {
+    const li = element('li');
+    const initials = person.name.trim().split(/\s+/).slice(0, 2).map((part) => Array.from(part)[0] || '').join('').toLocaleUpperCase();
+    const avatar = element('span', `avatar${person.role === 'admin' ? ' admin' : ''}`, initials);
+    avatar.setAttribute('aria-hidden', 'true');
+    const copy = element('div', 'person-copy');
+    const name = element('div', 'person-name');
+    name.appendChild(element('span', 'name', person.name));
+    if (person.id === view.you?.id) name.appendChild(element('span', 'me-tag', 'you'));
+    copy.append(name, element('div', 'person-role', person.role === 'admin' ? 'Admin' : 'Listener'));
+    li.append(avatar, copy);
+    if (canManageRoom(view) && person.id !== view.you?.id) {
+      const action = element('button', 'promo', person.role === 'admin' ? 'Remove admin' : 'Make admin');
+      action.type = 'button';
+      action.dataset.personId = person.id;
+      action.setAttribute('aria-label', person.role === 'admin' ? `Remove admin controls from ${person.name}` : `Make ${person.name} an admin`);
+      action.onclick = () => {
+        if (!manages(room)) return;
+        const current = room.view().participants.find((participant) => participant.id === person.id);
+        if (!current || current.role !== person.role) return;
+        if (current.role === 'admin') room.demote(person.id); else room.promote(person.id);
+      };
+      li.appendChild(action);
+    }
+    fragment.appendChild(li);
+  }
+  list.replaceChildren(fragment);
+  if (hadFocus) {
+    const restored = [...list.querySelectorAll<HTMLButtonElement>('button')].find((btn) => btn.dataset.personId === oldId);
+    (restored || $('peopleSection')).focus({ preventScroll: true });
+  }
+}
+
+function chatAtBottom(): boolean {
   const log = $('chatLog');
-  const empty = log.querySelector('.empty');
-  if (empty) empty.remove();
-  const div = document.createElement('div');
-  div.className = 'm';
-  const b = document.createElement('b');
-  b.textContent = m.name;
-  const span = document.createElement('span');
-  span.textContent = m.text;
-  div.appendChild(b);
-  div.appendChild(span);
-  log.appendChild(div);
+  return log.scrollHeight - log.scrollTop - log.clientHeight < 45;
+}
+
+function scrollChat(): void {
+  const log = $('chatLog');
   log.scrollTop = log.scrollHeight;
+  unreadMessages = 0;
+  $('newMessagesBtn').hidden = true;
 }
 
-
-/* ---------------- seeking ---------------- */
-
-function renderScrub(ms: number): void {
-  const dur = client?.view().durationMs ?? 0;
-  if (!dur) return;
-  const pct = Math.max(0, Math.min(100, (ms / dur) * 100));
-  ($('fill') as HTMLElement).style.width = pct + '%';
-  ($('knob') as HTMLElement).style.left = pct + '%';
-  $('tCur').textContent = fmt(ms);
+function pushChat(message: ChatMessage): void {
+  if (chatIds.has(message.id)) return;
+  chatIds.add(message.id);
+  const log = $('chatLog');
+  const nearBottom = chatAtBottom();
+  log.querySelector('.chat-empty')?.remove();
+  const row = element('div', 'message');
+  row.dataset.messageId = message.id;
+  const meta = element('div', 'message-meta');
+  meta.appendChild(element('b', '', message.name));
+  const date = new Date(message.at);
+  if (Number.isFinite(date.getTime())) {
+    const time = element('time', '', date.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' }));
+    time.dateTime = date.toISOString();
+    meta.appendChild(time);
+  }
+  row.append(meta, element('p', '', message.text));
+  log.appendChild(row);
+  while (log.children.length > CHAT_HISTORY) {
+    const first = log.firstElementChild as HTMLElement;
+    const height = first.offsetHeight;
+    chatIds.delete(first.dataset.messageId);
+    first.remove();
+    if (!nearBottom) log.scrollTop = Math.max(0, log.scrollTop - height);
+  }
+  if (nearBottom) scrollChat();
+  else {
+    unreadMessages++;
+    text('newMessagesBtn', `${unreadMessages} new ${unreadMessages === 1 ? 'message' : 'messages'}`);
+    $('newMessagesBtn').hidden = false;
+  }
 }
 
-function seekFromEvent(e: PointerEvent | MouseEvent): void {
-  const bar = $('seekBar');
-  const dur = client?.view().durationMs ?? 0;
-  if (!dur || !client?.isAdmin) return;
-  const r = bar.getBoundingClientRect();
-  const ratio = Math.max(0, Math.min(1, (e.clientX - r.left) / r.width));
-  scrubPreviewMs = Math.round(ratio * dur);
-  renderScrub(scrubPreviewMs);
+function updateChatControls(): void {
+  const connected = Boolean(currentRoom());
+  input('chatInput').disabled = !connected;
+  button('sendBtn').disabled = !connected || !input('chatInput').value.trim();
+}
+
+/* ---------------- live listening state ---------------- */
+
+function render(s: Session, view: RoomView): void {
+  const admin = canManageRoom(view);
+  text('roomCode', view.roomId);
+  text('rolePill', view.role === 'admin' ? 'Admin' : 'Listener');
+  $('rolePill').classList.toggle('admin', admin);
+  text('roleDescription', admin ? 'Choose music and share the controls.' : 'Listen, browse, and chat.');
+  text('permissionHint', view.closed ? 'Reconnect to use the room controls.' : admin ? 'You control playback for everyone in the room.' : 'Admins control the music. Your volume is just for you.');
+  text('libHint', view.closed ? 'Reconnect before adding tracks to the room.' : admin ? (view.playback.trackKey ? 'Add a record to the shared queue.' : 'Your first pick starts playing for everyone.') : 'Browse the records. Ask an admin to add your pick.');
+  text('connectionLabel', view.closed ? 'Disconnected' : 'Connected');
+  $('liveDot').classList.toggle('connected', !view.closed && Boolean(view.you));
+  button('inviteBtn').disabled = Boolean(view.closed);
+  button('copyBtn').disabled = Boolean(view.closed);
+
+  const track = view.playback.trackKey ? resolveTrack(view.playback.trackKey) : null;
+  text('nowTitle', track?.title || (view.playback.trackKey ? 'Finding this record…' : admin ? 'Choose the first record.' : 'Waiting for a record.'));
+  text('nowArtist', track?.artist || (view.playback.trackKey ? 'Checking the shared library.' : admin ? 'Find a track to bring the room to life.' : 'An admin will choose what plays next.'));
+  const image = $<HTMLImageElement>('artImg');
+  const source = track?.img || '';
+  if (source !== lastArt) {
+    lastArt = source;
+    image.hidden = !source;
+    if (source) image.src = source; else image.removeAttribute('src');
+  }
+  button('chooseTrackBtn').hidden = !admin || Boolean(view.playback.trackKey);
+  renderQueue(view);
+  renderPeople(view);
+  renderResults(view);
+  confirmTrackRequests(view);
+  updateChatControls();
+
+  if (view.closed) {
+    banner(`Disconnected: ${view.closed}. Reconnect to return, or leave this room.`, true);
+    text('chatStatus', 'Reconnect to send messages.');
+    stopSession(s);
+    text('trackFeedback', '');
+    updateAddButtons();
+    $('invitePanel').hidden = true;
+    button('inviteBtn').setAttribute('aria-expanded', 'false');
+  } else if (s.audioError) {
+    banner(`This device couldn’t load the track: ${s.audioError}. Reconnect to try again.`, true);
+  }
+  live(s, view);
+
+  const unresolved = (view.playback.trackKey && !track) || view.queue.some((key) => !resolveTrack(key));
+  if (!s.stopped && unresolved && Date.now() - lastUnresolvedRefresh > 20000) {
+    lastUnresolvedRefresh = Date.now();
+    void refreshLibrary(s);
+  }
+}
+
+function live(s: Session, suppliedView?: RoomView): void {
+  if (session !== s || (!suppliedView && s.stopped)) return;
+  const view = suppliedView || s.room?.view();
+  if (!view) return;
+  const status = listeningStatus(view, s.audioError);
+  text('syncLabel', status.label);
+  text('syncDetail', status.detail);
+  $('syncbar').dataset.state = status.state;
+  $('art').dataset.state = status.state;
+  text('stageCaption', view.closed ? 'The room is disconnected' : !view.playback.trackKey ? 'A record for everyone' : view.playback.playing ? 'On the record, together' : 'A moment between notes');
+  const diagnostics = status.state === 'live' || status.state === 'correcting';
+  text('driftLabel', diagnostics ? `${Math.abs(view.driftMs)} ms` : '');
+  $('driftLabel').title = diagnostics ? `Difference from the room: ${view.driftMs} milliseconds${view.outputLatencyMs !== null ? `. Device output delay: ${view.outputLatencyMs} milliseconds` : ''}` : '';
+  if (status.state === 'live' && !reducedMotion.matches && document.visibilityState !== 'hidden') {
+    // Eight shared-clock positions, four updates a second. No idle RAF loop.
+    $('recordMarker').style.setProperty('--sync-angle', `${Math.floor((view.serverNow % 2000) / 250) * 45}deg`);
+  }
+  const starting = !view.closed && view.startInMs !== null && status.state !== 'blocked' && status.state !== 'error';
+  $('countdown').hidden = !starting;
+  if (starting) text('countdownNum', String(Math.max(1, Math.ceil(view.startInMs / 1000))));
+  $('listenHint').hidden = status.state !== 'blocked';
+  $('loadHint').hidden = status.state !== 'loading';
+
+  const admin = canManageRoom(view) && !s.stopped;
+  const hasTrack = Boolean(view.playback.trackKey);
+  const seekable = admin && hasTrack && view.durationMs > 0 && !view.loading && !s.audioError;
+  button('playBtn').disabled = !admin || Boolean(s.audioError) || (!hasTrack && !view.queue.length);
+  button('prevBtn').disabled = !seekable;
+  button('nextBtn').disabled = !admin || !view.queue.length;
+  button('playBtn').setAttribute('aria-label', view.playback.playing ? 'Pause for everyone' : 'Play for everyone');
+  document.getElementById('playIcon').setAttribute('href', view.playback.playing ? '#i-pause' : '#i-play');
+  $('seekBar').setAttribute('aria-disabled', String(!seekable));
+  $('seekBar').tabIndex = seekable ? 0 : -1;
+  if (scrub && (!seekable || scrub.room !== s.room || scrub.key !== view.playback.trackKey)) cancelScrub();
+  const positionReady = hasTrack && !view.loading && !s.audioError;
+  renderPosition(scrub?.ms ?? (positionReady ? view.positionMs : 0), positionReady ? view.durationMs : 0);
+}
+
+function renderPosition(position: number, duration: number): void {
+  const pct = duration > 0 ? Math.max(0, Math.min(100, position / duration * 100)) : 0;
+  $('fill').style.width = `${pct}%`;
+  $('knob').style.left = `${pct}%`;
+  text('tCur', formatTime(position));
+  text('tDur', duration > 0 ? formatTime(duration) : '0:00');
+  $('seekBar').setAttribute('aria-valuenow', String(Math.round(pct)));
+  $('seekBar').setAttribute('aria-valuetext', duration ? `${formatTime(position)} of ${formatTime(duration)}` : 'No track loaded');
+}
+
+function startLive(s: Session): void {
+  const timer = window.setInterval(() => { if (document.visibilityState !== 'hidden') live(s); }, 250);
+  s.cleanup.add(() => window.clearInterval(timer));
+  // Listeners explicitly unlock their local sound. This listener exists only
+  // for this session and never resumes a closed room on an unrelated gesture.
+  const resume = () => {
+    if (currentRoom() === s.room && s.room.view().blocked) s.room.resumeIfBlocked();
+  };
+  document.addEventListener('pointerdown', resume, { passive: true });
+  document.addEventListener('keydown', resume);
+  s.cleanup.add(() => {
+    document.removeEventListener('pointerdown', resume);
+    document.removeEventListener('keydown', resume);
+  });
+}
+
+/* ---------------- seeking and controls ---------------- */
+
+function cancelScrub(): void {
+  const previous = scrub;
+  scrub = null;
+  $('seekBar').classList.remove('scrubbing');
+  if (previous) try { $('seekBar').releasePointerCapture(previous.pointerId); } catch { /* Pointer already released. */ }
+}
+
+function seekPreview(event: PointerEvent): void {
+  if (!scrub || !manages(scrub.room)) return;
+  const view = scrub.room.view();
+  const rect = $('seekBar').getBoundingClientRect();
+  if (!view.durationMs || !rect.width) return;
+  scrub.ms = Math.round(Math.max(0, Math.min(1, (event.clientX - rect.left) / rect.width)) * view.durationMs);
+  renderPosition(scrub.ms, view.durationMs);
 }
 
 function wireSeek(): void {
   const bar = $('seekBar');
-
-  bar.addEventListener('pointerdown', (e) => {
-    if (!client?.isAdmin) return;
-    scrubbing = true;
-    bar.setPointerCapture(e.pointerId);
-    seekFromEvent(e);
+  bar.addEventListener('pointerdown', (event) => {
+    const room = currentRoom();
+    const view = room?.view();
+    if (!manages(room) || !view.durationMs || view.loading || session.audioError || !view.playback.trackKey || event.button !== 0) return;
+    scrub = { room, key: view.playback.trackKey, pointerId: event.pointerId, ms: view.positionMs };
+    bar.classList.add('scrubbing');
+    try { bar.setPointerCapture(event.pointerId); } catch { /* Synthetic pointer or unavailable capture. */ }
+    seekPreview(event);
   });
-  bar.addEventListener('pointermove', (e) => { if (scrubbing) seekFromEvent(e); });
-  bar.addEventListener('pointerup', (e) => {
-    scrubbing = false;
-    try { bar.releasePointerCapture(e.pointerId); } catch { /* already released */ }
-    if (client?.isAdmin) client.seek(scrubPreviewMs);
+  bar.addEventListener('pointermove', (event) => { if (scrub?.pointerId === event.pointerId) seekPreview(event); });
+  bar.addEventListener('pointerup', (event) => {
+    if (!scrub || scrub.pointerId !== event.pointerId) return;
+    const previous = scrub;
+    cancelScrub();
+    if (manages(previous.room) && previous.room.view().playback.trackKey === previous.key) previous.room.seek(previous.ms);
   });
-  bar.addEventListener('pointercancel', () => { scrubbing = false; });
-
-  bar.addEventListener('keydown', (e) => {
-    if (!client?.isAdmin) return;
-    const v = client.view();
-    if (!v.durationMs) return;
-    const step = e.shiftKey ? 10_000 : 5_000;
-    if (e.key === 'ArrowRight') { e.preventDefault(); client.seek(Math.min(v.durationMs, v.positionMs + step)); }
-    if (e.key === 'ArrowLeft') { e.preventDefault(); client.seek(Math.max(0, v.positionMs - step)); }
+  bar.addEventListener('pointercancel', cancelScrub);
+  bar.addEventListener('lostpointercapture', cancelScrub);
+  bar.addEventListener('keydown', (event) => {
+    const room = currentRoom();
+    const view = room?.view();
+    if (!manages(room) || !view.durationMs || view.loading || session.audioError || !view.playback.trackKey) return;
+    const step = event.shiftKey ? 10000 : 5000;
+    let position: number;
+    if (event.key === 'ArrowRight' || event.key === 'ArrowUp') position = view.positionMs + step;
+    else if (event.key === 'ArrowLeft' || event.key === 'ArrowDown') position = view.positionMs - step;
+    else if (event.key === 'Home') position = 0;
+    else if (event.key === 'End') position = view.durationMs;
+    else return;
+    event.preventDefault();
+    room.seek(Math.max(0, Math.min(view.durationMs, position)));
   });
 }
 
-/* ---------------- controls ---------------- */
+function toggleInvite(open: boolean): void {
+  if (!currentRoom()) return;
+  $('invitePanel').hidden = !open;
+  button('inviteBtn').setAttribute('aria-expanded', String(open));
+  if (open) {
+    input('inviteLink').value = listenerInvite(location.origin, currentRoom().view().roomId);
+    input('inviteLink').focus();
+    input('inviteLink').select();
+  } else button('inviteBtn').focus({ preventScroll: true });
+}
 
-function wireRoom() {
-  $('playBtn').onclick = () => client?.toggle();
-  $('nextBtn').onclick = () => client?.queueNext();
-  $('prevBtn').onclick = () => {
-    // Restart the current track — the simplest thing that is never wrong.
-    if (client) client.seek(0);
-  };
-  $('leaveBtn').onclick = leave;
-
-  $('copyBtn').onclick = async () => {
-    const url = `${location.origin}/rooms?r=${client?.view().roomId ?? ''}`;
+function wireRoom(): void {
+  button('playBtn').onclick = () => { const room = currentRoom(); if (manages(room) && !session.audioError) room.toggle(); };
+  button('nextBtn').onclick = () => { const room = currentRoom(); if (manages(room) && room.view().queue.length) room.queueNext(); };
+  button('prevBtn').onclick = () => { const room = currentRoom(); if (manages(room) && room.view().durationMs && !room.view().loading && !session.audioError) room.seek(0); };
+  button('leaveBtn').onclick = () => leave();
+  button('reconnectBtn').onclick = reconnect;
+  button('chooseTrackBtn').onclick = focusLibrary;
+  button('listenBtn').onclick = () => currentRoom()?.resumeIfBlocked();
+  button('retryLibraryBtn').onclick = () => { if (session) void refreshLibrary(session); };
+  button('inviteBtn').onclick = () => toggleInvite($('invitePanel').hidden);
+  button('inviteCloseBtn').onclick = () => toggleInvite(false);
+  $('invitePanel').addEventListener('keydown', (event) => { if (event.key === 'Escape') toggleInvite(false); });
+  input('inviteLink').onclick = () => input('inviteLink').select();
+  button('copyBtn').onclick = async () => {
+    const room = currentRoom();
+    if (!room) return;
+    const url = listenerInvite(location.origin, room.view().roomId);
     try {
       await navigator.clipboard.writeText(url);
-      const b = $('copyBtn');
-      b.classList.add('done');
-      setTimeout(() => b.classList.remove('done'), 1400);
-    } catch { banner('Could not copy — the link is in the address bar.'); }
+      if (currentRoom() !== room) return;
+      text('copyLabel', 'Copied');
+      text('inviteStatus', 'Link copied. Send it to a friend.');
+      window.clearTimeout(copyTimer);
+      copyTimer = window.setTimeout(() => { if (currentRoom() === room) text('copyLabel', 'Copy link'); }, 2500);
+    } catch {
+      if (currentRoom() !== room) return;
+      input('inviteLink').value = url;
+      input('inviteLink').focus();
+      input('inviteLink').select();
+      text('inviteStatus', 'Copy the selected link, then send it to a friend.');
+    }
   };
-
-  const libSearch = $('libSearch') as HTMLInputElement;
-  let libTimer: number | undefined;
-  libSearch.addEventListener('input', () => {
-    window.clearTimeout(libTimer);
-    // Cheap enough to feel live, but coalesce fast typing so a 576-track
-    // scan does not run once per keystroke.
-    libTimer = window.setTimeout(() => renderResults(libSearch.value), 90);
+  input('volumeInput').addEventListener('input', () => {
+    const volume = Number(input('volumeInput').value);
+    input('volumeInput').setAttribute('aria-valuetext', `${volume} percent`);
+    session?.audio?.setVolume(volume / 100);
   });
-
-  $('chatForm').onsubmit = (e) => {
-    e.preventDefault();
-    const input = $('chatInput') as HTMLInputElement;
-    const text = input.value.trim();
-    if (!text || !client) return;
-    client.say(text);
-    input.value = '';
-  };
-}
-
-async function refreshLibrary() {
-  await refreshCatalog();
-  rebuildLibIndex();
-  maybeRenderResults();
-  if (client) render(client.view());
-}
-
-function startCatalogKeepAlive() {
-  if (catalogTimer !== null) return;
-  const room = client;
-  const tick = async () => {
-    if (!room || client !== room) return;
-    if (document.visibilityState === 'visible') await refreshLibrary();
-    if (client === room) catalogTimer = window.setTimeout(tick, 30_000);
-  };
-  catalogTimer = window.setTimeout(tick, 30_000);
-}
-
-function wireCatalogRefresh(): void {
-  if (catalogUnsub) return;
-  // Pick up newly uploaded tracks without reloading: when the tab comes back
-  // into view, on focus, on a timer while the room is open, and whenever any
-  // other tab (the admin uploader, say) refreshes the catalogue.
-  catalogUnsub = onCatalogRefreshed(() => {
-    if (!client) return;
-    rebuildLibIndex();
-    maybeRenderResults();
-    render(client.view());
+  input('libSearch').addEventListener('input', () => {
+    window.clearTimeout(searchTimer);
+    const room = currentRoom();
+    searchTimer = window.setTimeout(() => { if (currentRoom() === room && room) renderResults(room.view()); }, 90);
   });
+  button('clearSearchBtn').onclick = () => {
+    input('libSearch').value = '';
+    const room = currentRoom();
+    if (room) renderResults(room.view());
+    input('libSearch').focus();
+  };
+  input('chatInput').addEventListener('input', updateChatControls);
+  $('chatForm').onsubmit = (event) => {
+    event.preventDefault();
+    const room = currentRoom();
+    const message = input('chatInput').value.trim();
+    if (!room || !message) return;
+    const now = Date.now();
+    session.chatTimes = session.chatTimes.filter((time) => now - time < CHAT_RATE_WINDOW_MS);
+    if (session.chatTimes.length >= CHAT_RATE_COUNT) {
+      text('chatStatus', 'Give the conversation a moment. Try again in a few seconds.');
+      return;
+    }
+    session.chatTimes.push(now);
+    room.say(message);
+    input('chatInput').value = '';
+    text('chatStatus', 'Only people in this room can see your messages.');
+    updateChatControls();
+    scrollChat();
+  };
+  button('newMessagesBtn').onclick = () => { scrollChat(); $('chatLog').focus({ preventScroll: true }); };
+  $('chatLog').addEventListener('scroll', () => { if (chatAtBottom()) { unreadMessages = 0; $('newMessagesBtn').hidden = true; } });
+  $<HTMLImageElement>('artImg').onerror = () => { $('artImg').hidden = true; };
+}
 
-  // The admin page announces a finished refresh on this channel. Listen for
-  // it so a song uploaded while a room is open appears immediately; the poll
-  // above still covers browsers without BroadcastChannel.
+/* ---------------- catalogue freshness ---------------- */
+
+async function refreshLibrary(s: Session): Promise<void> {
+  if (session !== s || s.stopped || s.pending) return;
+  if (s.refresh) return s.refresh;
+  button('retryLibraryBtn').disabled = true;
+  text('retryLibraryBtn', 'Loading library…');
+  s.refresh = (async () => {
+    try {
+      await refreshCatalog();
+      if (session !== s || s.stopped) return;
+      rebuildLibrary();
+      render(s, s.room.view());
+    } finally {
+      s.refresh = null;
+      if (session === s && !s.stopped) {
+        button('retryLibraryBtn').disabled = false;
+        text('retryLibraryBtn', 'Reload library');
+      }
+    }
+  })();
+  return s.refresh;
+}
+
+function watchCatalogue(s: Session): void {
+  const refreshLocal = () => {
+    if (session !== s || s.stopped) return;
+    rebuildLibrary();
+    render(s, s.room.view());
+  };
+  s.cleanup.add(onCatalogRefreshed(refreshLocal));
+  // ensureCatalog's entry deadline can precede the underlying fetch. Pick up
+  // that late result without waiting for the next 30-second refresh.
+  if (!library.length) void ensureCatalog(30000).then(refreshLocal);
   try {
     const channel = new BroadcastChannel('aura-catalog');
-    channel.onmessage = (e) => {
-      if (e.data?.t === 'refresh') void refreshLibrary();
-    };
-    catalogKeepers.push(() => channel.close());
-  } catch { /* unsupported: the poll is enough */ }
-
-  const onVisible = () => { if (document.visibilityState === 'visible') void refreshLibrary(); };
-  const onFocus = () => void refreshLibrary();
-  window.addEventListener('visibilitychange', onVisible);
-  window.addEventListener('focus', onFocus);
-  catalogKeepers.push(
-    () => window.removeEventListener('visibilitychange', onVisible),
-    () => window.removeEventListener('focus', onFocus),
-  );
-  startCatalogKeepAlive();
+    channel.onmessage = (event) => { if (event.data?.t === 'refresh') void refreshLibrary(s); };
+    s.cleanup.add(() => channel.close());
+  } catch { /* Focus and the periodic refresh cover unsupported browsers. */ }
+  const visible = () => { if (document.visibilityState !== 'hidden') { live(s); void refreshLibrary(s); } };
+  const focus = () => void refreshLibrary(s);
+  document.addEventListener('visibilitychange', visible);
+  window.addEventListener('focus', focus);
+  s.cleanup.add(() => document.removeEventListener('visibilitychange', visible));
+  s.cleanup.add(() => window.removeEventListener('focus', focus));
+  let timer = 0;
+  const tick = async () => {
+    if (session !== s || s.stopped) return;
+    if (document.visibilityState !== 'hidden') await refreshLibrary(s);
+    if (session === s && !s.stopped) timer = window.setTimeout(tick, 30000);
+  };
+  timer = window.setTimeout(tick, 30000);
+  s.cleanup.add(() => window.clearTimeout(timer));
 }
 
-/* ---------------- boot ---------------- */
+/* ---------------- boot: no catalogue, socket, context, or animation ---------------- */
 
-function boot() {
+function boot(): void {
+  chatEmpty = $('chatLog').firstElementChild.cloneNode(true);
   wireJoin();
   wireRoom();
   wireSeek();
-  buildPills();
   showJoin();
-
-  // Deep link: /rooms?r=CODE&k=KEY
-  const q = new URLSearchParams(location.search);
-  const roomId = (q.get('r') || (location.hash.match(/^#\/room\/([a-z0-9]+)/i)?.[1] ?? '')).toLowerCase();
-  if (roomId) {
-    $('codeInput').value = roomId;
-    const key = q.get('k') || rememberedKey(roomId);
-    if (key) {
-      const name = rememberedName();
-      if (name) $('nameInput').value = name;
-      void join(roomId, key, true);
-    }
+  deepInvite = parseRoomInvite(location.href);
+  if (deepInvite) {
+    input('codeInput').value = deepInvite.roomId;
+    text('joinSub', 'Your invite is ready. Choose a name and join your people.');
   }
+  window.addEventListener('pagehide', () => {
+    if (session) stopSession(session);
+    session = null;
+    entryBusy(null);
+    showJoin();
+  });
 }
 
-void boot();
-// UNIQUE_STRING_1793388547
+boot();

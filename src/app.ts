@@ -3,7 +3,7 @@ import { applyArtistTrackOverrides, fetchArtistDirectory, fetchHfCatalog } from 
 import { getProfileUsername, getSession, setProfileUsername } from './core/session';
 import { refreshArtistViews, renderQuickPicks, setGreeting, setupHeaderSearch, setupMoodChips } from './features/home';
 import { applyPlayDeepLink } from './features/deeplink';
-import { hydrateLocalTracks, renderLibrary, renderRecent, renderSongs, updateLibCount } from './features/library';
+import { hydrateLocalTracks, reconcileCatalog, renderLibrary, renderRecent, renderSongs, updateLibCount } from './features/library';
 import { auraYTPlayer, auraYTVideoId, lastPlayRequestAt, loadSong, updateMainMediaSession } from './features/player';
 import { updateProfilePopup } from './features/settings';
 import { filterSearchTab } from './features/search';
@@ -91,26 +91,7 @@ import { $, setHfTracks, state } from './core/state';
 
       /* Catalog lives in the Hugging Face bucket — refresh it in the background
          (the list is painted instantly from localStorage cache, if any). */
-      fetchHfCatalog().then((tracks)=>{
-        state.catalogLoading = false;
-        state.catalogError = false;
-        const hadSongs = state.songs.length > 0;
-        setHfTracks(tracks);
-        renderSongs(state.songs);
-        renderRecent();
-        renderQuickPicks();
-        refreshArtistViews();
-        refreshPlaylistViews();
-        updateLibCount();
-        const song = state.songs[state.currentIndex];
-        if(song){
-          for(const id of ['currentArtist', 'fullArtist']) if($(id)) $(id).textContent = song.artist;
-          updateMainMediaSession();
-        }
-        if(!hadSongs && state.songs.length) loadSong(state.currentIndex);
-        if($('tabLibrary').classList.contains('active')) renderLibrary();
-        applyPlayDeepLink();
-      }).catch(()=>{
+      fetchHfCatalog().then(reconcileCatalog).catch(()=>{
         state.catalogLoading = false;
         state.catalogError = true;
         renderSongs(state.songs);

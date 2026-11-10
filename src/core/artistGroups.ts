@@ -1,47 +1,22 @@
 import { normalizeArtistKey, type ArtistProfile } from '../../lib/artistProfiles';
+import {
+  artistDisplayName, artistKey, artistNamesMatch, compareArtistText,
+  createArtistIdentityResolver, type ArtistIdentityOptions,
+} from './artistIdentity';
+export { artistKey, artistNamesMatch } from './artistIdentity';
 
-/* Display grouping is intentionally more forgiving than D1 ownership. A typo
-   may join one managed artist, but must never merge two managed profiles. */
-export function artistKey(name: string): string {
-  return normalizeArtistKey(String(name || '').replace(/\s*-\s*Topic$/i, '')
-    .replace(/＜[^＞]*＞/g, '').replace(/\.\s*/g, '.'));
-}
-
-function editWithin(a: string, b: string, max: number): number {
-  if (a === b) return 0;
-  if (Math.abs(a.length - b.length) > max) return max + 1;
-  let prev = Array.from({ length: b.length + 1 }, (_, i) => i);
-  for (let i = 1; i <= a.length; i++) {
-    const cur = [i];
-    let best = i;
-    for (let j = 1; j <= b.length; j++) {
-      const value = Math.min(prev[j] + 1, cur[j - 1] + 1, prev[j - 1] + (a[i - 1] === b[j - 1] ? 0 : 1));
-      cur.push(value);
-      best = Math.min(best, value);
-    }
-    if (best > max) return max + 1;
-    prev = cur;
-  }
-  return prev[b.length];
-}
-
-export function artistNamesMatch(a: string, b: string): boolean {
-  const first = artistKey(a).replace(/^the\s+/, '');
-  const second = artistKey(b).replace(/^the\s+/, '');
-  if (!first || !second) return false;
-  if (first === second) return true;
-  return first.length >= 6 && second.length >= 6 && first.slice(0, 3) === second.slice(0, 3) && editWithin(first, second, 3) <= 3;
-}
-
+/* Compatibility for callers of the old display helper. Group construction no
+   longer does greedy, order-dependent pairwise merges. */
 export function artistMergeKey(existing: string[], name: string): string {
-  const key = artistKey(name);
-  return existing.find((other) => artistNamesMatch(other, key)) || key;
+  const matches = [...new Set(existing.filter((other) => artistNamesMatch(other, name)))];
+  return matches.length === 1 ? matches[0] : artistKey(name);
 }
 
 export interface ArtistGroup {
   key: string;
   name: string;
   aliases: string[];
+  profileKeys?: string[];
   songs: any[];
   cover: string;
   profile?: ArtistProfile;
@@ -51,67 +26,93 @@ export interface ArtistSelection {
   key: string;
   name: string;
   aliases: string[];
+  profileKeys?: string[];
 }
 
 export function selectArtist(group: ArtistGroup): ArtistSelection {
-  return { key: group.key, name: group.name, aliases: [...group.aliases] };
+  return { key: group.key, name: group.name, aliases: [...group.aliases], profileKeys: [...(group.profileKeys || [])] };
 }
+
+/* Keep raw-name navigation in the same ownership context as grouping. A D1
+   owner with no loaded tracks still blocks an alias from opening somebody
+   else's page. Weak keys allow old catalogue snapshots to be collected. */
+const groupResolvers = new WeakMap<ArtistGroup[], ReturnType<typeof createArtistIdentityResolver>>();
 
 export function resolveArtistSelection(groups: ArtistGroup[], selection: ArtistSelection | string): ArtistGroup | undefined {
   const key = typeof selection === 'string' ? selection : selection.key;
   const direct = groups.find((group) => group.key === key);
   if (direct) return direct;
+  const owners = typeof selection === 'string' ? [] : [...(selection.profileKeys || [])];
+  if (key.startsWith('profile:')) owners.push(key.slice('profile:'.length));
+  const owned = groups.filter((group) => (group.profileKeys || []).some((owner) => owners.includes(owner)));
+  if (owners.length) return owned.length === 1 ? owned[0] : undefined;
   const names = typeof selection === 'string' ? [selection] : [selection.name, ...selection.aliases];
-  const normalized = new Set(names.map(artistKey));
-  const exact = groups.filter((group) => [group.name, ...group.aliases].some((name) => normalized.has(artistKey(name))));
-  if (exact.length === 1) return exact[0];
-  if (exact.length > 1) return undefined;
-  const variants = groups.filter((group) => group.aliases.some((alias) => names.some((name) => artistNamesMatch(alias, name))));
+  const resolver = groupResolvers.get(groups);
+  if (resolver) {
+    const identities = new Set(names.map((name) => resolver.resolve(name)?.key).filter(Boolean));
+    const matches = groups.filter((group) => identities.has(group.key));
+    return matches.length === 1 ? matches[0] : undefined;
+  }
+  // A literal cloud alias beats typography when two intentionally distinct
+  // owners have similarly formatted names. Never choose the first fuzzy hit.
+  const normalized = new Set(names.map(normalizeArtistKey));
+  const exact = groups.filter((group) => [group.name, ...group.aliases].some((name) => normalized.has(normalizeArtistKey(name))));
+  if (exact.length) return exact.length === 1 ? exact[0] : undefined;
+  const variants = groups.filter((group) => [group.name, ...group.aliases].some((alias) => names.some((name) => artistNamesMatch(alias, name))));
   return variants.length === 1 ? variants[0] : undefined;
 }
 
-export function buildArtistGroups(songs: any[], profiles: Record<string, ArtistProfile>): ArtistGroup[] {
-  const managed = new Map<string, { key: string; profile: ArtistProfile; aliases: Set<string>; identities: Set<string> }>();
-  for (const [alias, profile] of Object.entries(profiles)) {
-    if (!profile || typeof profile !== 'object') continue;
-    const key = profile.key ? 'profile:' + profile.key : artistKey(profile.name || alias);
-    let entry = managed.get(key);
-    if (!entry) { entry = { key, profile, aliases: new Set(), identities: new Set() }; managed.set(key, entry); }
-    entry.aliases.add(artistKey(alias));
-    entry.identities.add(normalizeArtistKey(alias));
-    if (profile.name) {
-      entry.aliases.add(artistKey(profile.name));
-      entry.identities.add(normalizeArtistKey(profile.name));
-    }
-  }
-  const profileNames = [...managed.values()];
-  const groups = new Map<string, ArtistGroup & { tally: Map<string, number> }>();
+function preferredLabel(tally: Map<string, number>): string {
+  // Stable tie breaking: avoid an all-lowercase or SHOUTING uploader spelling
+  // when an equally common mixed-case label exists. No locale-dependent keys.
+  const mixedCase = (name: string) => Number(name !== name.toLowerCase() && name !== name.toUpperCase());
+  return [...tally].sort(([a, ac], [b, bc]) => bc - ac || mixedCase(b) - mixedCase(a) || compareArtistText(a, b))[0]?.[0] || '';
+}
+
+export function buildArtistGroups(
+  songs: any[], profiles: Record<string, ArtistProfile>,
+  options: Pick<ArtistIdentityOptions, 'authoritativeNames' | 'authoritativeProfiles'> = {},
+): ArtistGroup[] {
+  const resolver = createArtistIdentityResolver({ ...options, profiles, names: songs.map((song) => song?.artist) });
+  const groups = new Map<string, ArtistGroup & {
+    tally: Map<string, number>; seen: Set<unknown>; preferredName: boolean; coverId: string;
+  }>();
   for (const song of songs) {
-    const name = String(song.artist || '').trim();
-    const displayName = name.replace(/\s*-\s*Topic$/i, '').trim();
-    const normalized = artistKey(name);
-    if (!normalized || normalized === 'unknown artist') continue;
-    /* Prefer explicit aliases. Infer spelling only when exactly one profile
-       matches, independent of song order or whether its tracks loaded first. */
-    const owned = profileNames.filter((entry) => entry.identities.has(normalizeArtistKey(name)));
-    const exact = owned.length ? owned : profileNames.filter((entry) => entry.identities.has(normalizeArtistKey(displayName)));
-    const matches = exact.length ? exact : profileNames.filter((entry) => [...entry.aliases].some((alias) => artistNamesMatch(alias, name)));
-    const managedArtist = matches.length === 1 ? matches[0] : undefined;
-    const unmanagedKeys = [...groups.values()].filter((group) => !group.profile).map((group) => group.key);
-    const key = managedArtist?.key || artistMergeKey(unmanagedKeys, name);
-    let group = groups.get(key);
-    if (!group) {
-      group = { key, name: '', aliases: managedArtist ? [...managedArtist.aliases] : [], songs: [], cover: '', profile: managedArtist?.profile, tally: new Map() };
-      groups.set(key, group);
+    if (!song || typeof song.artist !== 'string') continue;
+    const credited = new Set<string>();
+    for (const credit of resolver.splitCredits(song.artist)) {
+      const identity = resolver.resolve(credit);
+      if (!identity || credited.has(identity.key)) continue;
+      credited.add(identity.key);
+      let group = groups.get(identity.key);
+      if (!group) {
+        group = { key: identity.key, name: identity.name, aliases: [...identity.aliases], profileKeys: identity.profileKeys,
+          songs: [], cover: '', profile: identity.profile, tally: new Map(), seen: new Set(),
+          preferredName: identity.preferredName, coverId: '' };
+        groups.set(identity.key, group);
+      }
+      for (const alias of [credit, identity.name]) if (!group.aliases.includes(alias)) group.aliases.push(alias);
+      // One track may credit multiple artists (or the same artist twice), but
+      // keeps its original object, ID, attribution, playback index and keys.
+      const id = song.id == null ? song : String(song.id);
+      if (group.seen.has(id)) continue;
+      group.seen.add(id);
+      group.songs.push(song);
+      const label = artistDisplayName(identity.name);
+      group.tally.set(label, (group.tally.get(label) || 0) + 1);
+      const coverId = String(song.id ?? song.videoId ?? '') + '\n' + String(song.img || '');
+      if (song.img && (!group.cover || compareArtistText(coverId, group.coverId) < 0)) {
+        group.cover = song.img;
+        group.coverId = coverId;
+      }
     }
-    group.songs.push(song);
-    if (!group.aliases.includes(normalized)) group.aliases.push(normalized);
-    group.tally.set(displayName, (group.tally.get(displayName) || 0) + 1);
-    if (!group.cover && song.img) group.cover = song.img;
   }
-  return [...groups.values()].map(({ tally, ...group }) => ({
+  const result = [...groups.values()].map(({ tally, seen, preferredName, coverId, ...group }) => ({
     ...group,
-    name: group.profile?.name || [...tally].sort((a, b) => b[1] - a[1] || b[0].length - a[0].length || a[0].localeCompare(b[0]))[0][0],
+    aliases: group.aliases.sort(compareArtistText),
+    name: preferredName ? group.name : preferredLabel(tally),
     cover: group.profile?.img || group.cover,
-  })).sort((a, b) => b.songs.length - a.songs.length || a.name.localeCompare(b.name));
+  })).sort((a, b) => b.songs.length - a.songs.length || compareArtistText(a.name.toLowerCase(), b.name.toLowerCase()) || compareArtistText(a.key, b.key));
+  groupResolvers.set(result, resolver);
+  return result;
 }

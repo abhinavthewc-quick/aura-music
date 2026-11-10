@@ -5,6 +5,29 @@
   <title>Aura Music</title>
   <meta name="description" content="Your personal space for music. Enjoy your library, playlists, live radio and ambient soundscapes, or listen together with friends on Aura Music.">
   <meta name="theme-color" content="#000000">
+  <script>
+    /* Paint hint only: keep these checks in sync with core/session.getSession.
+       Tokens are opaque here, including device-local and extended site sessions. */
+    (() => {
+      try {
+        const session = JSON.parse(localStorage.getItem('auraSession_v2') || 'null');
+        if (!session ||
+          typeof session.email !== 'string' || !session.email.trim() ||
+          typeof session.token !== 'string' || !session.token.trim() ||
+          typeof session.exp !== 'number' || !Number.isFinite(session.exp) || session.exp * 1000 <= Date.now()) return;
+        document.documentElement.dataset.auraEntry = 'restoring';
+        // This fallback also works when the entry module never downloads.
+        setTimeout(() => {
+          if (document.documentElement.dataset.auraEntry !== 'restoring') return;
+          document.documentElement.dataset.auraEntry = 'failed';
+          const status = document.getElementById('loginStatus');
+          if (status) status.textContent = 'Aura is taking longer than expected. Reload to try again.';
+          const retry = document.getElementById('loginRetry');
+          if (retry) retry.hidden = false;
+        }, 15000);
+      } catch { /* Unavailable storage or malformed data leaves sign-in visible. */ }
+    })();
+  </script>
   <link rel="canonical" href="https://aura-music-01g.pages.dev/">
   <link rel="preload" href="/src/assets/fonts/dm-sans-latin.woff2" as="font" type="font/woff2" crossorigin>
   <link rel="preload" href="/src/assets/fonts/cormorant-garamond-latin.woff2" as="font" type="font/woff2" crossorigin>
@@ -14,7 +37,7 @@
 </head>
 <body>
   <div class="net-banner" id="netBanner" role="status" aria-live="polite"></div>
-  <main class="welcome-screen" id="welcomeScreen" aria-label="Welcome to Aura Music">
+  <main class="welcome-screen" id="welcomeScreen" aria-label="Welcome to Aura Music" tabindex="-1">
     <button class="welcome-info" id="welcomeInfo" type="button" aria-label="Why AURA Music asks you to sign in" aria-expanded="false"><svg class="login-icon" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M12 11v6m0-10v.01"/></svg></button>
     <div class="welcome-info-panel" id="welcomeInfoPanel" role="note"><strong>Why sign in with Google?</strong>Any Google account can enter — Google verifies it’s really you, then you pick a username that becomes yours inside Aura. Your name and preferences stay on this device.</div>
     <div class="lg-shell">
@@ -63,15 +86,15 @@
     </div>
   </main>
 
-  <div class="login-overlay" id="loginOverlay" aria-hidden="true">
+  <div class="login-overlay" id="loginOverlay" role="region" aria-label="Loading Aura Music" tabindex="-1">
     <div class="lo-mark">
       <svg viewBox="0 0 120 120" aria-hidden="true"><circle class="lo-track" cx="60" cy="60" r="52"/><circle class="lo-draw" cx="60" cy="60" r="52"/></svg>
       <span class="lo-disc"></span>
       <span class="lo-needle"></span>
     </div>
-    <div class="login-caption" id="loginWelcomeName">Welcome</div>
-    <div class="login-subcaption" id="loginStatus" role="status" aria-live="polite">Getting your music ready…</div>
-    <button type="button" class="aura-state-btn login-retry" id="loginRetry" hidden>Reload library</button>
+    <div class="login-caption" id="loginWelcomeName">Aura Music</div>
+    <div class="login-subcaption" id="loginStatus" role="status" aria-live="polite">Restoring your session…</div>
+    <a class="aura-state-btn login-retry" id="loginRetry" href="" hidden>Reload Aura</a>
   </div>
 
   <div class="toast-container" id="toastContainer" role="status" aria-live="polite" aria-atomic="true"></div>
@@ -187,7 +210,7 @@
   </div>
 
   <div class="side-menu" id="sideMenu" onclick="if(event.target.id==='sideMenu')this.style.display='none'">
-    <div class="side-menu-content">
+    <div class="side-menu-content" role="dialog" aria-modal="true" aria-label="Menu">
       <h3 style="color:var(--accent);margin-bottom:20px">Menu</h3>
       <a class="menu-item menu-item-link" id="roomsMenuLink" href="/rooms">
         <i class="fa-solid fa-headphones"></i> Listen together
@@ -204,11 +227,11 @@
     </div>
   </div>
 
-  <div class="modal-overlay" id="aboutModal" role="dialog" aria-modal="true" aria-hidden="true">
+  <div class="modal-overlay" id="aboutModal" role="dialog" aria-modal="true" aria-labelledby="aboutTitle" aria-hidden="true">
     <div class="about-card">
       <button class="about-close" id="aboutCloseBtn" type="button" aria-label="Close"><i class="fa-solid fa-xmark"></i></button>
       <div class="about-logo"><img src="./src/assets/about-logo.jpg" alt="Aura Music logo" width="260" height="260" loading="lazy" decoding="async"></div>
-      <h3>AURA Music</h3>
+      <h3 id="aboutTitle">AURA Music</h3>
       <p class="about-version">Personal build · v1.0</p>
       <p class="about-desc">A personal music player and library — bring your own tracks, browse live radio, and layer ambient sound.</p>
       <div class="about-list">
@@ -238,12 +261,12 @@
 
       <div class="effects-toggle-row">
         <div class="effects-toggle-item">
-          <div><b>Vibe</b><span id="spatialModeLabel">Stereo</span></div>
-          <label class="effects-switch"><input type="checkbox" id="spatialToggle"><span class="effects-switch-track"></span></label>
+          <div><b id="spatialToggleLabel">Vibe</b><span id="spatialModeLabel">Stereo</span></div>
+          <label class="effects-switch"><input type="checkbox" id="spatialToggle" aria-labelledby="spatialToggleLabel" aria-describedby="spatialModeLabel"><span class="effects-switch-track"></span></label>
         </div>
         <div class="effects-toggle-item">
-          <div><b>Muffle</b><span id="muffleModeLabel">Clear</span></div>
-          <label class="effects-switch"><input type="checkbox" id="muffleToggle"><span class="effects-switch-track"></span></label>
+          <div><b id="muffleToggleLabel">Muffle</b><span id="muffleModeLabel">Clear</span></div>
+          <label class="effects-switch"><input type="checkbox" id="muffleToggle" aria-labelledby="muffleToggleLabel" aria-describedby="muffleModeLabel"><span class="effects-switch-track"></span></label>
         </div>
       </div>
 
@@ -271,6 +294,7 @@
   </div>
 
   <div class="app-container" role="main" aria-label="Music library" tabindex="-1">
+    <h1 class="visually-hidden">Aura Music</h1>
     <aside class="desktop-sidebar" id="desktopSidebar" aria-label="Desktop navigation">
       <div class="desktop-brand"><button class="sidebar-toggle" id="sidebarToggle" type="button" aria-label="Toggle menu" title="Menu"><i class="fa-solid fa-bars"></i></button><div class="desktop-brand-mark"><img src="./src/assets/brand-logo.webp" alt="Aura Music vinyl logo" width="512" height="512" loading="lazy" decoding="async"></div><div><strong>AURA</strong><span>MUSIC</span></div></div>
       <div class="desktop-nav-label">Menu</div>
@@ -466,7 +490,7 @@
 
     <div class="tab-content" id="tabSearch">
       <div class="srch-head">
-        <h3 class="srch-title">Search</h3>
+        <h2 class="srch-title">Search</h2>
         <p class="srch-sub">Find tracks, artists, and albums in your Aura library.</p>
       </div>
       <div class="srch-bar-row">
@@ -489,10 +513,10 @@
     </div>
 
     <div class="tab-content" id="tabLibrary">
-      <h3 style="margin-bottom:15px">Library</h3>
+      <h2 style="margin-bottom:15px">Library</h2>
 
       <div class="lib-menu-group">
-        <div class="lib-menu-row" onclick="if(songs.length && !songs[currentIndex].missing){$('fullPlayerOverlay').classList.add('active')}else{toast('Nothing playing right now','circle-info')}">
+        <div class="lib-menu-row" onclick="if(songs[currentIndex] && !songs[currentIndex].missing){$('fullPlayerOverlay').classList.add('active')}else{toast('Nothing playing right now','circle-info')}">
           <div class="lib-menu-icon"><i class="fa-solid fa-music"></i></div>
           <div class="lib-menu-label">Now playing<div class="lib-menu-sub" id="libNowPlayingSub">Nothing playing</div></div>
         </div>
@@ -538,7 +562,7 @@
         <div class="radio-tea-hero-fade"></div>
         <div class="radio-live-badge"><span class="radio-live-dot"></span><span id="radioLiveText">Live</span></div>
         <div class="radio-tea-hero-content">
-          <h3>Radio</h3>
+          <h2>Radio</h2>
           <p class="radio-tea-sub">Warm cups, Kerala evenings and a gentle stream from somewhere just around the corner. Find a station, then shape the room around it.</p>
         </div>
       </div>
@@ -574,7 +598,7 @@
       </div>
 
       <div class="radio-custom">
-        <h4>Play a station URL</h4>
+        <h3>Play a station URL</h3>
         <p>Paste a direct audio stream URL if you already have a radio station stream. MP3/AAC streams and browser-supported HLS streams work best.</p>
         <div class="radio-custom-row">
           <input id="customRadioUrl" type="url" placeholder="https://example.com/radio.mp3" aria-label="Custom radio stream URL">
@@ -590,10 +614,11 @@
 
     <div class="player-bar" id="miniPlayer">
       <input type="range" class="mini-seek desk-only" id="miniSeek" min="0" max="100" step="any" value="0" aria-label="Seek">
-      <div class="song-info">
+      <button class="song-info" id="miniTrackOpenBtn" type="button" aria-labelledby="miniOpenLabel currentTitle currentArtist" aria-controls="fullPlayerOverlay" aria-expanded="false">
+        <span class="visually-hidden" id="miniOpenLabel">Open full player:</span>
         <img id="currentImg" src="" alt="" decoding="async">
-        <div><div id="currentTitle" class="song-title">Select Track</div><div id="currentArtist" class="song-artist">--</div><div class="mini-np">Now playing</div></div>
-      </div>
+        <span class="song-meta"><span id="currentTitle" class="song-title">Select Track</span><span id="currentArtist" class="song-artist">--</span><span class="mini-np">Now playing</span></span>
+      </button>
       <div class="mini-controls">
         <button class="glass-btn ctrl-glass-btn desk-only" id="miniPrevBtn" type="button" aria-label="Previous track"><i class="fa-solid fa-backward-step"></i></button>
         <button type="button" class="glass-btn ctrl-glass-btn play-primary" id="playPauseBtn" aria-label="Play"><i class="fa-solid fa-play" id="playIcon"></i></button>
@@ -608,7 +633,7 @@
           <button class="mini-icon-btn" id="miniVolBtn" type="button" aria-label="Mute"><i class="fa-solid fa-volume-high" id="miniVolIcon"></i></button>
           <input type="range" class="mini-volume" id="miniVolume" min="0" max="100" value="80" aria-label="Volume">
         </div>
-        <button class="mini-icon-btn mini-expand" id="miniExpandBtn" type="button" aria-label="Open full player"><i class="fa-solid fa-chevron-up"></i></button>
+        <button class="mini-icon-btn mini-expand" id="miniExpandBtn" type="button" aria-label="Open full player" aria-controls="fullPlayerOverlay" aria-expanded="false"><i class="fa-solid fa-chevron-up"></i></button>
       </div>
       <div class="mini-progress-track">
         <div class="mini-progress-fill" id="progressFill"></div>
@@ -619,11 +644,12 @@
 
     <div class="radio-player-bar" id="radioMiniPlayer">
       <div class="radio-mini-art" id="radioMiniArt"><i class="fa-solid fa-radio"></i></div>
-      <div class="radio-mini-info">
-        <div class="radio-mini-label">Live radio</div>
-        <div class="radio-mini-name" id="radioMiniName">Nothing playing</div>
-        <div class="radio-mini-meta" id="radioMiniMeta">Live station</div>
-      </div>
+      <button class="radio-mini-info" id="radioMiniOpenBtn" type="button" aria-labelledby="radioMiniOpenLabel radioMiniName" aria-controls="radioFullPlayerOverlay" aria-expanded="false">
+        <span class="visually-hidden" id="radioMiniOpenLabel">Open radio player:</span>
+        <span class="radio-mini-label">Live radio</span>
+        <span class="radio-mini-name" id="radioMiniName">Nothing playing</span>
+        <span class="radio-mini-meta" id="radioMiniMeta">Live station</span>
+      </button>
       <div class="radio-mini-controls">
         <button class="radio-mini-btn primary" id="radioMiniPlayBtn" type="button" aria-label="Pause radio"><i class="fa-solid fa-pause"></i></button>
         <button class="radio-mini-btn" id="radioMiniStopBtn" type="button" aria-label="Stop radio"><i class="fa-solid fa-stop"></i></button>
@@ -652,9 +678,9 @@
     <div class="full-player-art" id="fullPlayerArt">
       <img id="fullImg" src="" alt="" decoding="async">
       <div class="ytm-art-overlay-tools">
-        <button type="button" class="ytm-art-tool-btn" id="artInfoBtn" title="Song info" onclick="openTrackSheet ? openTrackSheet(state.currentIndex) : null"><i class="fa-solid fa-circle-info"></i></button>
+        <button type="button" class="ytm-art-tool-btn" id="artInfoBtn" title="Track options"><i class="fa-solid fa-circle-info"></i></button>
         <button type="button" class="ytm-art-tool-btn" id="artLikeBtn" title="Like song" onclick="document.getElementById('fullLikeBtn').click()"><i class="fa-regular fa-heart" id="artLikeIcon"></i></button>
-        <button type="button" class="ytm-art-tool-btn" id="artShareBtn" title="Share" onclick="copyShareLink ? copyShareLink() : null"><i class="fa-solid fa-share-nodes"></i></button>
+        <button type="button" class="ytm-art-tool-btn" id="artShareBtn" title="Share track"><i class="fa-solid fa-share-nodes"></i></button>
       </div>
     </div>
     <div class="youtube-mode-badge" id="youtubeModeBadge">Official YouTube player • playing inside AURA</div>

@@ -76,15 +76,16 @@
 .ytm-rel-play-overlay { position: absolute; inset: 0; display: grid; place-items: center; background: rgba(0,0,0,.3); color: #fff; opacity: 0; transition: opacity var(--dur-fast); }
 .ytm-rel-card:hover .ytm-rel-play-overlay, .ytm-rel-card:focus-visible .ytm-rel-play-overlay { opacity: 1; }
 .ytm-rel-info { min-width: 0; padding-top: 8px; }
-.ytm-rel-title, .ytm-rel-row-title { overflow: hidden; color: var(--text); font-size: 13px; font-weight: 600; line-height: 1.35; white-space: nowrap; text-overflow: ellipsis; }
-.ytm-rel-artist, .ytm-rel-row-sub { overflow: hidden; margin-top: 3px; color: var(--text-sub); font-size: 12px; white-space: nowrap; text-overflow: ellipsis; }
+.ytm-rel-title, .ytm-rel-row-title { display: block; overflow: hidden; color: var(--text); font-size: 13px; font-weight: 600; line-height: 1.35; white-space: nowrap; text-overflow: ellipsis; }
+.ytm-rel-artist, .ytm-rel-row-sub { display: block; overflow: hidden; margin-top: 3px; color: var(--text-sub); font-size: 12px; white-space: nowrap; text-overflow: ellipsis; }
 .ytm-rel-list { display: flex; flex-direction: column; gap: 4px; }
-.ytm-rel-row { display: flex; align-items: center; gap: 12px; min-height: 64px; padding: 8px; border-radius: var(--radius-xs); cursor: pointer; }
-.ytm-rel-row:hover { background: var(--hover); }
+.ytm-rel-row { display: flex; align-items: center; gap: 12px; width: 100%; min-width: 0; min-height: 64px; padding: 8px; border: 0; border-radius: var(--radius-xs); appearance: none; background: transparent; text-align: left; cursor: pointer; }
+.ytm-rel-row:hover:not(:disabled) { background: var(--hover); }
+.ytm-rel-row:disabled { cursor: not-allowed; }
 .ytm-rel-row-img { width: 44px; height: 44px; flex: 0 0 44px; border-radius: var(--radius-xs); background: var(--surface-2); object-fit: cover; }
 .ytm-rel-row-meta { flex: 1; min-width: 0; }
 .ytm-rel-row-play { display: grid; place-items: center; flex: 0 0 var(--tap); width: var(--tap); height: var(--tap); padding: 0; border: 0; border-radius: 50%; background: transparent; color: var(--text-sub); }
-.ytm-rel-row-play:hover { background: var(--hover); color: var(--text); }
+.ytm-rel-row:not(:disabled) .ytm-rel-row-play:hover { background: var(--hover); color: var(--text); }
 .ytm-rel-artist-tags { display: flex; align-items: center; flex-wrap: wrap; gap: 8px; }
 .ytm-rel-tag { display: inline-flex; align-items: center; gap: 6px; padding: 5px 8px; border: 1px solid var(--line); border-radius: var(--radius-xs); color: var(--text-sub); font-size: 11px; }
 .ytm-rel-artist-card { padding: 16px 0; border-top: 1px solid var(--line); }

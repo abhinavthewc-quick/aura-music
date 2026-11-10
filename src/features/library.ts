@@ -1,9 +1,14 @@
 import { escapeHtml, stateHTML, toast } from '../core/dom';
 import { buildArtistGroups, resolveArtistSelection, selectArtist, type ArtistGroup, type ArtistSelection } from '../core/artistGroups';
-import { DEFAULT_COVER, fetchHfCatalog, readArtistsCache, type ArtistMeta } from '../core/catalog';
-import { renderArtistSpotlight, renderAuraPicks, renderQuickAccess } from './home';
-import { filterSongs, loadSong, playSong, resetFullPlayerArtToImage, stopAuraYouTube, updatePlayState } from './player';
+import { DEFAULT_COVER, fetchHfCatalog, getCachedArtistDirectory, readArtistsCache, type ArtistMeta } from '../core/catalog';
+import { beginPlaybackIntent } from '../core/playbackIntent';
+import { refreshArtistViews, renderAuraPicks, renderQuickAccess, renderQuickPicks } from './home';
+import { filterSongs, loadSong, playSong, resetFullPlayerArtToImage, stopAuraYouTube, updateMainMediaSession, updatePlayState } from './player';
 import { filterSearchTab } from './search';
+import { applyPlayDeepLink } from './deeplink';
+import { refreshPlaylistViews } from './playlists';
+import { renderUpNext } from './queue';
+import { currentRadioStation } from './radio';
 import { goTab } from '../ui/nav';
 import { $, getPlayCount, persistLikedHistory, rebuildSongs, recordPlayCount, savedLikeMap, setHfTracks, state, trackKey } from '../core/state';
 /* ===== 3006-3012 ===== */
@@ -15,7 +20,7 @@ import { $, getPlayCount, persistLikedHistory, rebuildSongs, recordPlayCount, sa
       if(homeSectionsRaf) return;
       homeSectionsRaf = requestAnimationFrame(() => {
         homeSectionsRaf = 0;
-        try{ renderArtistSpotlight(); renderQuickAccess(); }catch(e){}
+        try{ renderQuickAccess(); refreshArtistViews(); }catch(e){}
       });
     }
     export function updateLibCount(){
@@ -201,6 +206,7 @@ import { $, getPlayCount, persistLikedHistory, rebuildSongs, recordPlayCount, sa
       if($('tabSearch').classList.contains('active')) filterSearchTab();
       if(state.songs[state.currentIndex] && state.songs[state.currentIndex].id === song.id) loadSong(state.currentIndex);
       renderRecent();
+      scheduleHomeSections();
       toast('Track updated', 'circle-check');
       closeEditModal();
     }
@@ -208,32 +214,43 @@ import { $, getPlayCount, persistLikedHistory, rebuildSongs, recordPlayCount, sa
     /* Delete track */
     export async function deleteTrack(e, id){
       if(e) e.stopPropagation();
-      const song = state.addedSongs.find(s => s.id === id);
+      const song = state.addedSongs.find(s => String(s.id) === String(id));
       if(!song) return;
       if(!confirm(`Remove "${song.title}" from your library?`)) return;
 
-      const currentSongId = state.songs[state.currentIndex] ? state.songs[state.currentIndex].id : null;
-      const wasPlaying = currentSongId === id;
-
       if(song.isLocal && hasIndexedDB){
-        try{ await deleteLocalBlob(id); }catch(err){ /* best effort */ }
+        try{ await deleteLocalBlob(song.id); }catch(err){ /* best effort */ }
       }
 
-      state.addedSongs = state.addedSongs.filter(s => s.id !== id);
+      // IndexedDB can finish after another track has been selected. Reconcile
+      // against the live identity, never the index captured before the await.
+      const removedCurrent = String(state.songs[state.currentIndex]?.id) === String(song.id);
+      const removedMainPlayback = removedCurrent && !currentRadioStation;
+      if(removedCurrent){
+        if(removedMainPlayback) beginPlaybackIntent();
+        state.audio.pause();
+        state.audio.onerror = null;
+        state.audio.removeAttribute('src');
+        state.audio.load();
+        state.isPlaying = false;
+        state.currentIndex = -1;
+        if(removedMainPlayback) stopAuraYouTube();
+      }
+      state.addedSongs = state.addedSongs.filter(s => String(s.id) !== String(song.id));
       rebuildSongs();
-      state.recentlyPlayed = state.recentlyPlayed.filter(s => s.id !== id);
+      state.recentlyPlayed = state.recentlyPlayed.filter(s => String(s.id) !== String(song.id));
       localStorage.setItem('recentlyPlayed', JSON.stringify(state.recentlyPlayed));
       persistAddedSongs();
+      if(song.isLocal && song.url?.startsWith('blob:')) URL.revokeObjectURL(song.url);
 
-      if(wasPlaying){
-        state.audio.pause(); state.audio.src=''; state.isPlaying=false; state.currentIndex=0;
-        stopAuraYouTube(); resetFullPlayerArtToImage('');
+      if(removedCurrent){
+        resetFullPlayerArtToImage('');
         $('currentImg').src=''; $('currentTitle').textContent='Select Track'; $('currentArtist').textContent='--';
         $('fullPlayerOverlay').classList.remove('active');
+        $('upNextSheet').classList.remove('active');
+        $('miniPlayer').classList.remove('active');
+        if(removedMainPlayback && 'mediaSession' in navigator){ navigator.mediaSession.metadata = null; navigator.mediaSession.playbackState = 'none'; }
         updatePlayState();
-      } else if(currentSongId !== null){
-        const newIdx = state.songs.findIndex(s => s.id === currentSongId);
-        if(newIdx !== -1) state.currentIndex = newIdx;
       }
 
       filterSongs();
@@ -241,6 +258,8 @@ import { $, getPlayCount, persistLikedHistory, rebuildSongs, recordPlayCount, sa
       if($('tabSearch').classList.contains('active')) filterSearchTab();
       updateLibCount();
       renderRecent();
+      renderUpNext();
+      refreshPlaylistViews();
       toast('Track removed from your library', 'circle-check');
     }
 
@@ -249,6 +268,10 @@ import { $, getPlayCount, persistLikedHistory, rebuildSongs, recordPlayCount, sa
       if(e) e.stopPropagation();
       const song = typeof id === 'number' ? state.songs[id] : state.songs.find(s => String(s.id) === String(id));
       if(!song) return;
+      const focused = document.activeElement as HTMLElement | null;
+      const focusList = focused?.matches('.song-item-like')
+        ? focused.closest<HTMLElement>('#songList, #librarySongList, #searchResultsList') : null;
+      const focusIndex = focusList ? [...focusList.querySelectorAll('.song-item-like')].indexOf(focused) : -1;
       song.favorite = !song.favorite;
       if(song.favorite) savedLikeMap[String(song.id)]=true; else delete savedLikeMap[String(song.id)];
       persistLikedHistory();
@@ -263,6 +286,13 @@ import { $, getPlayCount, persistLikedHistory, rebuildSongs, recordPlayCount, sa
       renderQuickAccess();
       if($('tabLibrary').classList.contains('active')) renderLibrary();
       if($('tabSearch').classList.contains('active')) filterSearchTab();
+      if(focusList){
+        const rows = [...focusList.querySelectorAll<HTMLElement>('.song-item')];
+        const sameTrack = rows.find(row => row.dataset.songId === String(song.id));
+        const next = (sameTrack || rows[Math.min(focusIndex, rows.length - 1)])?.querySelector<HTMLElement>('.song-item-like');
+        if(next) next.focus({preventScroll:true});
+        else { focusList.tabIndex = -1; focusList.focus({preventScroll:true}); }
+      }
     }
 
     export function songIndexById(){
@@ -295,9 +325,11 @@ import { $, getPlayCount, persistLikedHistory, rebuildSongs, recordPlayCount, sa
       const title = escapeHtml(s.title || 'Untitled');
       const artist = escapeHtml(s.artist || 'Unknown Artist');
       const cover = escapeHtml(s.img || DEFAULT_COVER);
-      const favTarget = index >= 0 ? index : `'${escapeHtml(String(s.id))}'`;
-      return `<div class="song-item ${index >= 0 && index===state.currentIndex?'active':''}" role="button" tabindex="0" aria-label="Play ${title} by ${artist}" onclick="playSong(${index})">
-          <div class="song-info"><img src="${cover}" alt="" loading="lazy" decoding="async"><div><div class="song-title">${title}</div><div class="song-artist">${artist}</div></div></div>
+      const favTarget = index >= 0 ? index : escapeHtml(JSON.stringify(String(s.id)));
+      return `<div class="song-item ${index >= 0 && index===state.currentIndex?'active':''}" data-song-id="${escapeHtml(String(s.id))}">
+          <button type="button" class="song-item-play" aria-label="Play ${title} by ${artist}" onclick="playSong(${index})" ${index < 0 ? 'disabled' : ''}>
+            <span class="song-info"><img src="${cover}" alt="" loading="lazy" decoding="async"><span class="song-meta"><span class="song-title">${title}</span><span class="song-artist">${artist}</span></span></span>
+          </button>
           <div class="song-item-actions">
             <button type="button" class="song-item-like ${s.favorite?'active':''}" aria-label="${s.favorite?'Unlike':'Like'} ${title}" aria-pressed="${s.favorite?'true':'false'}" onclick="toggleFavorite(event, ${favTarget})"><i class="fa-${s.favorite?'solid':'regular'} fa-heart" aria-hidden="true"></i></button>
             <button type="button" class="song-item-menu-btn" data-song-menu="${escapeHtml(String(s.id))}" aria-label="More options for ${title}"><i class="fa-solid fa-ellipsis" aria-hidden="true"></i></button>
@@ -349,11 +381,30 @@ import { $, getPlayCount, persistLikedHistory, rebuildSongs, recordPlayCount, sa
 
     /* ---------- Artists: library-wide grouping, circle tiles, detail page ----------
        One source of truth for Home (scrolling row) and Library (grid tab):
-       groups merge artist variants via artistMergeKey, label each group with
-       the spelling most tracks use, sort busiest-first, and use the first
-        available cover as the avatar unless an admin portrait is set. */
+       verified aliases, conservative credit parsing and cloud ownership all
+       resolve before grouping. The catalogue's attribution stays untouched. */
+    let artistGroupingSnapshot: {
+      profiles: Record<string, ArtistMeta>;
+      directory: ReturnType<typeof getCachedArtistDirectory>;
+      inputs: { song: any; id: any; artist: any; img: any }[];
+      groups: ArtistGroup[];
+    } | undefined;
     export function getArtistGroups(){
-      return buildArtistGroups(state.songs, readArtistsCache());
+      const profiles = readArtistsCache(), directory = getCachedArtistDirectory();
+      const previous = artistGroupingSnapshot;
+      // Home's shelf, grid, spotlight, stats and both detail views often paint
+      // together. Reuse their snapshot; also notice in-place local metadata edits.
+      if(previous && previous.profiles === profiles && previous.directory === directory &&
+        previous.inputs.length === state.songs.length && state.songs.every((song, i) => {
+          const before = previous.inputs[i];
+          return before.song === song && before.id === song?.id && before.artist === song?.artist && before.img === song?.img;
+        })) return previous.groups;
+      const groups = buildArtistGroups(state.songs, profiles, {
+        authoritativeProfiles: directory.artists, authoritativeNames: Object.values(directory.trackArtists),
+      });
+      artistGroupingSnapshot = { profiles, directory, groups,
+        inputs: state.songs.map(song => ({ song, id: song?.id, artist: song?.artist, img: song?.img })) };
+      return groups;
     }
 
     function artistInitial(name){ return String(name || '').trim().charAt(0) || '#'; }
@@ -550,12 +601,37 @@ import { $, getPlayCount, persistLikedHistory, rebuildSongs, recordPlayCount, sa
     export function renderStatsPanel(){
       const favCount = state.songs.filter(s=>s.favorite).length;
       const albumCount = new Set(state.songs.map(s=>String(s.album||'').trim()).filter(Boolean)).size;
-      const artistCount = new Set(state.songs.map(s=>s.artist).filter(a=>a && a!=='Unknown Artist')).size;
+      const artistCount = getArtistGroups().length;
       $('statsPanel').innerHTML = `
         <div class="stats-cell"><div class="stat-num">${state.songs.length}</div><div class="stat-label">Total Tracks</div></div>
         <div class="stats-cell"><div class="stat-num">${favCount}</div><div class="stat-label">Favorites</div></div>
         <div class="stats-cell"><div class="stat-num">${albumCount}</div><div class="stat-label">Albums</div></div>
         <div class="stats-cell"><div class="stat-num">${artistCount}</div><div class="stat-label">Artists</div></div>`;
+    }
+
+    /* First load and an explicit retry must finish through the same path, so
+       artist/playlist views and still-pending track links all recover together. */
+    export function reconcileCatalog(tracks: any[]){
+      state.catalogLoading = false;
+      state.catalogError = false;
+      const hadSongs = state.songs.length > 0;
+      setHfTracks(tracks);
+      renderSongs(state.songs);
+      renderRecent();
+      renderQuickPicks();
+      refreshArtistViews();
+      refreshPlaylistViews();
+      updateLibCount();
+      const song = state.songs[state.currentIndex];
+      if(song){
+        for(const id of ['currentArtist', 'fullArtist']) if($(id)) $(id).textContent = song.artist;
+        updateMainMediaSession();
+      }
+      if(!hadSongs && state.songs.length) loadSong(state.currentIndex);
+      if($('tabLibrary').classList.contains('active')) renderLibrary();
+      if($('tabSearch').classList.contains('active')) filterSearchTab();
+      if($('fullPlayerOverlay').classList.contains('active') || $('upNextSheet').classList.contains('active')) renderUpNext();
+      applyPlayDeepLink();
     }
 
     /* Retry the remote catalogue from the error state's button. */
@@ -566,15 +642,11 @@ import { $, getPlayCount, persistLikedHistory, rebuildSongs, recordPlayCount, sa
       renderSongs(state.songs);
       if($('tabLibrary').classList.contains('active')) renderLibrary();
       try{
-        const tracks = await fetchHfCatalog();
-        setHfTracks(tracks);
-        renderRecent();
-        updateLibCount();
+        reconcileCatalog(await fetchHfCatalog());
       }catch(e){
+        state.catalogLoading = false;
         state.catalogError = true;
         toast('Could not refresh the Aura catalogue. Showing the last saved library.','triangle-exclamation');
-      }finally{
-        state.catalogLoading = false;
         renderSongs(state.songs);
         if($('tabLibrary').classList.contains('active')) renderLibrary();
       }

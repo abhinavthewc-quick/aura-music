@@ -1,8 +1,14 @@
 import { state, $, trackKey, trackMatchesKey } from '../core/state';
 import { toast, getSavedUserName } from '../core/dom';
 import { goTab, showPlaylistTab } from '../ui/nav';
+import { activeDialogOwnsFocus } from '../ui/a11y';
 import { playSong } from './player';
 import { goToSearchCategory } from './search';
+import {
+  createPlaylistShare, isPlaylistTrackAvailable, matchSharedPlaylist, PLAYLIST_SHARE_PREFIX,
+  PlaylistShareError, playlistShareUrl, validateSharedPlaylist,
+  type SharedPlaylist,
+} from '../core/playlist-sharing';
 
 const PLAYLISTS_KEY = 'auraPlaylists';
 
@@ -15,12 +21,23 @@ type Playlist = {
   year: number | string;
   createdAt: number;
   tracks: string[];
+  shared?: SharedPlaylist;
 };
 
 let currentPlaylistId: string | null = null;
 let editingPlaylistId: string | null = null;
 let pendingTrackKey: string | null = null;
 let lastTab = 'tabPlaylists';
+let sharedPreview: { playlist: SharedPlaylist } | { error: string } | null = null;
+type SharePanel = {
+  playlistId: string;
+  playlist: SharedPlaylist;
+  url: string;
+  status: string;
+  tone: 'neutral' | 'success' | 'error';
+  busy: boolean;
+};
+let sharePanel: SharePanel | null = null;
 
 function esc(value: unknown): string {
   return String(value ?? '').replace(/[&<>"']/g, (character) => ({
@@ -35,14 +52,19 @@ function normalizePlaylist(raw: any): Playlist | null {
   const privacy: Privacy = ['Public', 'Private', 'Unlisted'].includes(raw.privacy)
     ? raw.privacy
     : 'Private';
+  let shared: SharedPlaylist | undefined;
+  if (raw.shared) {
+    try { shared = validateSharedPlaylist(raw.shared); } catch { /* Ignore invalid saved preview metadata. */ }
+  }
   return {
     id: String(raw.id),
-    title: title.slice(0, 60),
-    description: String(raw.description || '').trim().slice(0, 140),
+    title: Array.from(title).slice(0, 60).join(''),
+    description: Array.from(String(raw.description || '').trim()).slice(0, 140).join(''),
     privacy,
     year: raw.year || new Date(Number(raw.createdAt) || Date.now()).getFullYear(),
     createdAt: Number(raw.createdAt) || Date.now(),
     tracks: Array.from(new Set(Array.isArray(raw.tracks) ? raw.tracks.map(String) : [])),
+    ...(shared ? { shared } : {}),
   };
 }
 
@@ -93,13 +115,19 @@ function durationLabel(totalSeconds: number): string {
   return `${Math.max(1, minutes)} min`;
 }
 
+function playlistTrackEntries(playlist: Playlist): Array<{ key: string; song: any; index: number; available: boolean }> {
+  const seen = new Set<string>();
+  return playlist.tracks.flatMap((key) => {
+    const resolved = resolveSong(key);
+    const identity = resolved ? trackKey(resolved.song) : key;
+    if (seen.has(identity)) return [];
+    seen.add(identity);
+    return [{ key, song: resolved?.song || null, index: resolved?.index ?? -1, available: isPlaylistTrackAvailable(resolved?.song) }];
+  });
+}
+
 function playlistSongs(playlist: Playlist): Array<{ key: string; song: any; index: number }> {
-  return playlist.tracks
-    .map((key) => {
-      const resolved = resolveSong(key);
-      return resolved ? { key, ...resolved } : null;
-    })
-    .filter((entry): entry is { key: string; song: any; index: number } => Boolean(entry));
+  return playlistTrackEntries(playlist).filter((entry) => entry.available);
 }
 
 function coversMarkup(playlist: Playlist, className: string): string {
@@ -132,19 +160,20 @@ export function renderPlaylistsPage(): void {
         <h2>Playlists</h2>
         <p>Collections saved on this device.</p>
       </div>
-      <button class="playlist-create-btn" type="button" data-create-playlist>
+      <button class="playlist-create-btn" type="button" data-create-playlist aria-label="New playlist">
         <i class="fa-solid fa-plus"></i><span>New playlist</span>
       </button>
     </div>
     ${playlists.length ? `
       <div class="playlists-grid">
         ${playlists.map((playlist) => {
-          const available = playlistSongs(playlist).length;
-          return `<article class="playlist-card" role="button" tabindex="0" data-playlist-id="${esc(playlist.id)}" aria-label="Open ${esc(playlist.title)}">
+          const entries = playlistTrackEntries(playlist);
+          const available = entries.filter((entry) => entry.available).length;
+          return `<article class="playlist-card" data-playlist-id="${esc(playlist.id)}">
             ${coversMarkup(playlist, 'playlist-card-cover')}
             <div class="playlist-card-copy">
-              <h3>${esc(playlist.title)}</h3>
-              <p>${available} track${available === 1 ? '' : 's'} · On this device</p>
+              <h3><button class="playlist-card-open" type="button" data-open-playlist="${esc(playlist.id)}" aria-label="Open ${esc(playlist.title)}">${esc(playlist.title)}</button></h3>
+              <p>${entries.length} track${entries.length === 1 ? '' : 's'} · ${available < entries.length ? `${available} available` : 'On this device'}</p>
             </div>
             <button class="playlist-card-menu" type="button" data-edit-playlist="${esc(playlist.id)}" aria-label="Edit ${esc(playlist.title)}">
               <i class="fa-solid fa-ellipsis"></i>
@@ -163,15 +192,8 @@ export function renderPlaylistsPage(): void {
   host.querySelectorAll<HTMLElement>('[data-create-playlist]').forEach((button) => {
     button.onclick = () => openPlaylistModal();
   });
-  host.querySelectorAll<HTMLElement>('[data-playlist-id]').forEach((card) => {
-    const open = () => openPlaylistPage(card.dataset.playlistId || '');
-    card.onclick = (event) => {
-      if ((event.target as HTMLElement).closest('[data-edit-playlist]')) return;
-      open();
-    };
-    card.onkeydown = (event) => {
-      if (event.key === 'Enter' || event.key === ' ') { event.preventDefault(); open(); }
-    };
+  host.querySelectorAll<HTMLButtonElement>('[data-open-playlist]').forEach((button) => {
+    button.onclick = () => openPlaylistPage(button.dataset.openPlaylist || '');
   });
   host.querySelectorAll<HTMLElement>('[data-edit-playlist]').forEach((button) => {
     button.onclick = (event) => {
@@ -244,7 +266,8 @@ export function openPlaylistModal(id?: string): void {
   modal.classList.add('active');
   modal.setAttribute('aria-hidden', 'false');
   document.body.classList.add('modal-open');
-  window.setTimeout(() => titleInput.focus(), 70);
+  // The shared dialog manager captures the opener before focusing this field.
+  // A separate timer could run first on a busy frame and lose that opener.
 }
 
 export function closePlaylistModal(): void {
@@ -315,6 +338,8 @@ export function openPlaylistPage(id: string): void {
   }
   const active = document.querySelector<HTMLElement>('.tab-content.active');
   if (active && active.id !== 'tabPlaylist') lastTab = active.id;
+  if (sharedPreview) clearSharedPlaylistLink();
+  sharedPreview = null;
   currentPlaylistId = id;
   renderPlaylistPage();
   showPlaylistTab('tabPlaylist');
@@ -322,11 +347,16 @@ export function openPlaylistPage(id: string): void {
 }
 
 function renderPlaylistPage(): void {
+  if (sharedPreview) return renderSharedPlaylistPreview();
   const playlist = loadPlaylists().find((item) => item.id === currentPlaylistId);
   const host = $('tabPlaylist');
   if (!playlist || !host) return;
   const entries = playlistSongs(playlist);
+  const allEntries = playlistTrackEntries(playlist);
+  const unavailable = allEntries.length - entries.length;
   const totalSeconds = entries.reduce((sum, { song }) => sum + secondsOf(song), 0);
+  const linkField = $('playlistShareLink') as HTMLTextAreaElement | null;
+  const linkSelection = linkField && document.activeElement === linkField ? [linkField.selectionStart, linkField.selectionEnd] : null;
 
   host.innerHTML = `
     <button class="pl-back" type="button" data-playlist-back><i class="fa-solid fa-arrow-left"></i>Back to playlists</button>
@@ -336,26 +366,33 @@ function renderPlaylistPage(): void {
         <p class="pl-kicker">Playlist</p>
         <h2 class="pl-name">${esc(playlist.title)}</h2>
         <div class="pl-owner">${ownerAvatarMarkup()}<span>${esc(ownerName())}</span></div>
-        <p class="pl-meta">On this device · ${esc(String(playlist.year))} · ${entries.length} track${entries.length === 1 ? '' : 's'} · ${durationLabel(totalSeconds)}</p>
+        <p class="pl-meta">On this device · ${esc(String(playlist.year))} · ${allEntries.length} track${allEntries.length === 1 ? '' : 's'} · ${durationLabel(totalSeconds)}</p>
         ${playlist.description ? `<p class="pl-desc">${esc(playlist.description)}</p>` : ''}
         <div class="pl-actions">
           <button type="button" data-play-playlist ${entries.length ? '' : 'disabled'}><i class="fa-solid fa-play"></i><span>Play</span></button>
-          <button type="button" data-edit-current><i class="fa-solid fa-pen"></i><span>Edit</span></button>
-          <button type="button" data-share-current><i class="fa-solid fa-share"></i><span>Share</span></button>
-          <button type="button" class="danger" data-delete-current><i class="fa-solid fa-trash"></i><span>Delete</span></button>
+          <button type="button" data-edit-current aria-label="Edit playlist"><i class="fa-solid fa-pen" aria-hidden="true"></i><span>Edit</span></button>
+          <button type="button" data-share-current aria-label="Share playlist" aria-controls="playlistSharePanel" aria-expanded="${sharePanel?.playlistId === playlist.id}"><i class="fa-solid fa-share" aria-hidden="true"></i><span>Share</span></button>
+          <button type="button" class="danger" data-delete-current aria-label="Delete playlist"><i class="fa-solid fa-trash" aria-hidden="true"></i><span>Delete</span></button>
         </div>
       </div>
     </div>
+    <div id="playlistSharePanel" data-playlist-share-slot></div>
     <section class="pl-content-section">
-      <div class="pl-section-head"><h3>Tracks</h3><span>${entries.length}</span></div>
+      <div class="pl-section-head"><h3>Tracks</h3><span>${allEntries.length}</span></div>
+      ${unavailable ? `<p class="pl-availability">${unavailable} track${unavailable === 1 ? ' is' : 's are'} unavailable in your library. Their places are kept.</p>` : ''}
       <div class="pl-track-list">
-        ${entries.length ? entries.map(({ key, song, index }, position) => `
-          <div class="pl-track" data-play-index="${index}">
-            <span class="pl-track-number">${position + 1}</span>
-            <img src="${esc(song.img || '')}" alt="" loading="lazy" decoding="async">
-            <div class="pl-track-meta"><b>${esc(song.title)}</b><span>${esc(song.artist)}</span></div>
-            <button class="pl-track-remove" type="button" data-remove-key="${encodeURIComponent(key)}" aria-label="Remove ${esc(song.title)} from playlist"><i class="fa-solid fa-xmark"></i></button>
-          </div>`).join('') : `<div class="pl-empty"><i class="fa-solid fa-music"></i><h3>This playlist is empty</h3><p>Add a track from the suggestions below or from any track menu.</p></div>`}
+        ${allEntries.length ? allEntries.map(({ key, song, index, available }, position) => {
+          const details = playlist.shared?.tracks.find((track) => track.key === key);
+          const title = song?.title || details?.title || 'Unavailable track';
+            const content = `
+              <span class="pl-track-number">${position + 1}</span>
+              ${available ? `<img src="${esc(song.img || '')}" alt="" loading="lazy" decoding="async">` : '<span class="pl-track-placeholder" aria-hidden="true"><i class="fa-solid fa-music"></i></span>'}
+              <span class="pl-track-meta"><b>${esc(title)}</b><span>${esc(available ? song.artist : `${song?.artist || details?.artist || 'Unknown artist'} · ${song?.isLocal ? 'Local file missing on this device' : 'Not in your library'}`)}</span></span>`;
+            return `<div class="pl-track ${available ? 'pl-track-playable' : 'pl-track-unavailable'}" ${available ? '' : 'data-unavailable-track'}>
+              ${available ? `<button class="pl-track-play" type="button" data-play-index="${index}" aria-label="Play ${esc(title)} by ${esc(song.artist || 'Unknown artist')}">${content}</button>` : content}
+              <button class="pl-track-remove" type="button" data-remove-key="${esc(encodeURIComponent(key))}" aria-label="Remove ${esc(title)} from playlist"><i class="fa-solid fa-xmark" aria-hidden="true"></i></button>
+          </div>`;
+        }).join('') : `<div class="pl-empty"><i class="fa-solid fa-music"></i><h3>This playlist is empty</h3><p>Add a track from the suggestions below or from any track menu.</p></div>`}
       </div>
     </section>
     ${renderSuggestions(playlist)}
@@ -367,11 +404,8 @@ function renderPlaylistPage(): void {
   host.querySelector<HTMLElement>('[data-delete-current]')!.onclick = () => deletePlaylist(playlist.id);
   const playButton = host.querySelector<HTMLButtonElement>('[data-play-playlist]');
   if (playButton) playButton.onclick = () => playPlaylist(playlist.id);
-  host.querySelectorAll<HTMLElement>('[data-play-index]').forEach((row) => {
-    row.onclick = (event) => {
-      if ((event.target as HTMLElement).closest('button')) return;
-      playSong(Number(row.dataset.playIndex));
-    };
+  host.querySelectorAll<HTMLButtonElement>('[data-play-index]').forEach((button) => {
+    button.onclick = () => playSong(Number(button.dataset.playIndex));
   });
   host.querySelectorAll<HTMLElement>('[data-remove-key]').forEach((button) => {
     button.onclick = () => removeTrackFromPlaylist(playlist.id, decodeURIComponent(button.dataset.removeKey || ''));
@@ -379,12 +413,126 @@ function renderPlaylistPage(): void {
   host.querySelectorAll<HTMLElement>('[data-add-index]').forEach((button) => {
     button.onclick = () => addTrackToPlaylist(playlist.id, Number(button.dataset.addIndex));
   });
+  renderSharePanel();
+  if (linkSelection) {
+    const field = $('playlistShareLink') as HTMLTextAreaElement | null;
+    field?.focus({ preventScroll: true });
+    field?.setSelectionRange(linkSelection[0], linkSelection[1]);
+  }
 }
 
 /* Read-only repaint: cloud metadata must never normalize or rewrite storage. */
 export function refreshPlaylistViews(): void {
   renderPlaylistsPage();
   if ($('tabPlaylist')?.classList.contains('active')) renderPlaylistPage();
+}
+
+function clearSharedPlaylistLink(): void {
+  if (!location.hash.startsWith(PLAYLIST_SHARE_PREFIX) && location.hash !== '#playlist') return;
+  history.replaceState(history.state, '', location.pathname + location.search);
+}
+
+function omittedTracksText(playlist: SharedPlaylist): string {
+  const parts: string[] = [];
+  if (playlist.omitted.local) parts.push(`${playlist.omitted.local} local file${playlist.omitted.local === 1 ? '' : 's'}`);
+  if (playlist.omitted.unavailable) parts.push(`${playlist.omitted.unavailable} unavailable track${playlist.omitted.unavailable === 1 ? '' : 's'}`);
+  return parts.length ? `Left out of this link: ${parts.join(' and ')}.` : '';
+}
+
+/** Called only after the existing app bootstrap (including local hydration).
+    Opening a link is read-only; saving is a separate, explicit action. */
+export function openSharedPlaylistPreview(playlist: SharedPlaylist | null, error = ''): void {
+  const modalOwnsFocus = activeDialogOwnsFocus();
+  sharedPreview = playlist ? { playlist } : { error };
+  currentPlaylistId = null;
+  renderSharedPlaylistPreview();
+  showPlaylistTab('tabPlaylist');
+  if (!$('musicApp')?.hidden && !modalOwnsFocus) $('sharedPlaylistHeading')?.focus({ preventScroll: true });
+}
+
+function dismissSharedPlaylist(): void {
+  clearSharedPlaylistLink();
+  sharedPreview = null;
+  goTab('tabPlaylists');
+}
+
+function matchingSavedPlaylist(playlist: SharedPlaylist, keys: string[]): Playlist | undefined {
+  return loadPlaylists().find((saved) => {
+    if (saved.title !== playlist.title || saved.description !== playlist.description) return false;
+    const savedKeys = playlistTrackEntries(saved).map(({ key, song }) => song ? trackKey(song) : key);
+    return savedKeys.length === keys.length && savedKeys.every((key, index) => {
+      if (key === keys[index]) return true;
+      const resolved = resolveSong(keys[index]);
+      return Boolean(resolved && trackMatchesKey(resolved.song, key));
+    });
+  });
+}
+
+function renderSharedPlaylistPreview(): void {
+  const host = $('tabPlaylist');
+  if (!host || !sharedPreview) return;
+  if ('error' in sharedPreview) {
+    host.innerHTML = `<div class="pl-empty pl-link-error"><i class="fa-solid fa-triangle-exclamation" aria-hidden="true"></i><h2 id="sharedPlaylistHeading" tabindex="-1">This playlist link can’t be opened</h2><p role="alert">${esc(sharedPreview.error)}</p><button class="playlist-btn" type="button" data-dismiss-shared>Back to playlists</button></div>`;
+  } else {
+    const playlist = sharedPreview.playlist;
+    const matches = matchSharedPlaylist(playlist, state.songs);
+    const available = matches.filter((match) => match.available).length;
+    const existing = matchingSavedPlaylist(playlist, matches.map(({ track }) => track.key));
+    host.innerHTML = `
+      <button class="pl-back" type="button" data-dismiss-shared><i class="fa-solid fa-arrow-left" aria-hidden="true"></i>Back to playlists</button>
+      <div class="pl-head">
+        <div class="pl-cover pl-shared-cover" aria-hidden="true"><i class="fa-solid fa-bars-staggered"></i></div>
+        <div class="pl-head-info">
+          <p class="pl-meta">Shared playlist preview</p>
+          <h2 class="pl-name" id="sharedPlaylistHeading" tabindex="-1">${esc(playlist.title)}</h2>
+          ${playlist.description ? `<p class="pl-desc">${esc(playlist.description)}</p>` : ''}
+          <p class="pl-meta">${matches.length} track${matches.length === 1 ? '' : 's'} · ${available} in your library</p>
+          <div class="pl-preview-actions"><button class="playlist-btn primary" type="button" data-save-shared>${existing ? 'Open saved playlist' : matches.length ? 'Save playlist' : 'Save empty playlist'}</button><button class="playlist-btn" type="button" data-dismiss-shared>Dismiss</button></div>
+          <p class="pl-share-status" id="playlistImportStatus" role="status" aria-live="polite"></p>
+        </div>
+      </div>
+      <p class="pl-availability">Save a copy on this device. Only tracks already in your library can play. Missing tracks keep their places; availability updates with your library. Changes to the sender’s playlist won’t update this copy.</p>
+      ${omittedTracksText(playlist) ? `<p class="pl-availability">${esc(omittedTracksText(playlist))} Local audio isn’t transferred.</p>` : ''}
+      <section class="pl-content-section" aria-label="Shared tracks">
+        <div class="pl-section-head"><h3>Tracks</h3><span>${matches.length}</span></div>
+        <div class="pl-track-list">${matches.map(({ track, song, available: canPlay }, index) => `
+          <div class="pl-shared-track" data-shared-track>
+            <span class="pl-track-number">${index + 1}</span>
+            <div class="pl-track-meta"><b>${esc(song?.title || track.title)}</b><span>${esc(song?.artist || track.artist || 'Unknown artist')}</span></div>
+            <span class="pl-track-availability">${canPlay ? 'In your library' : song?.isLocal ? 'Local file missing' : 'Not in your library'}</span>
+          </div>`).join('') || '<div class="pl-empty"><h3>No tracks included</h3><p>This link contains the playlist name and description only.</p></div>'}</div>
+      </section>`;
+    host.querySelector<HTMLButtonElement>('[data-save-shared]')!.onclick = importSharedPlaylist;
+  }
+  host.querySelectorAll<HTMLButtonElement>('[data-dismiss-shared]').forEach((button) => { button.onclick = dismissSharedPlaylist; });
+}
+
+function importSharedPlaylist(): void {
+  if (!sharedPreview || !('playlist' in sharedPreview)) return;
+  const snapshot = sharedPreview.playlist;
+  const matches = matchSharedPlaylist(snapshot, state.songs);
+  const keys = matches.map(({ track }) => track.key);
+  const existing = matchingSavedPlaylist(snapshot, keys);
+  if (existing) {
+    openPlaylistPage(existing.id);
+    toast('This playlist is already saved on this device.', 'circle-info');
+    return;
+  }
+  const playlist: Playlist = {
+    id: `pl_${typeof crypto.randomUUID === 'function' ? crypto.randomUUID() : `${Date.now()}_${Math.random().toString(36).slice(2)}`}`,
+    title: snapshot.title, description: snapshot.description, privacy: 'Private',
+    year: new Date().getFullYear(), createdAt: Date.now(), tracks: keys,
+    shared: { ...snapshot, tracks: matches.map(({ track }) => track) },
+  };
+  if (!savePlaylists([playlist, ...loadPlaylists()])) {
+    const status = $('playlistImportStatus');
+    if (status) { status.textContent = 'Could not save on this device. Check browser storage and try again.'; status.dataset.tone = 'error'; }
+    return;
+  }
+  renderSidebarPlaylists();
+  openPlaylistPage(playlist.id);
+  const missing = matches.filter((match) => !match.available).length;
+  toast(`Playlist saved on this device.${missing ? ` ${missing} track${missing === 1 ? ' is' : 's are'} not in your library yet.` : ''}`, 'circle-check');
 }
 
 function playlistHasSong(playlist: Playlist, song: any): boolean {
@@ -436,10 +584,20 @@ export function removeTrackFromPlaylist(playlistId: string, key: string): void {
   const playlists = loadPlaylists();
   const playlist = playlists.find((item) => item.id === playlistId);
   if (!playlist) return;
-  playlist.tracks = playlist.tracks.filter((track) => track !== key);
+  const removeButtons = [...($('tabPlaylist')?.querySelectorAll<HTMLButtonElement>('[data-remove-key]') || [])];
+  const focusIndex = removeButtons.indexOf(document.activeElement as HTMLButtonElement);
+  const removedSong = resolveSong(key)?.song;
+  const keep = (track: string) => track !== key && !(removedSong && trackMatchesKey(removedSong, track));
+  playlist.tracks = playlist.tracks.filter(keep);
+  if (playlist.shared) playlist.shared.tracks = playlist.shared.tracks.filter((track) => keep(track.key));
   if (!savePlaylists(playlists)) return;
   renderSidebarPlaylists();
   if (currentPlaylistId === playlistId) renderPlaylistPage();
+  if (focusIndex >= 0) {
+    const buttons = [...($('tabPlaylist')?.querySelectorAll<HTMLButtonElement>('[data-remove-key]') || [])];
+    const next = buttons[Math.min(focusIndex, buttons.length - 1)] || $('tabPlaylist')?.querySelector<HTMLButtonElement>('[data-edit-current]');
+    next?.focus({ preventScroll: true });
+  }
   toast('Removed from playlist.', 'circle-check');
 }
 
@@ -518,16 +676,114 @@ export function closePlaylistPicker(clearPending = true): void {
   if (clearPending) pendingTrackKey = null;
 }
 
-export function playlistPageShare(): void {
+function renderSharePanel(): void {
+  const slot = $('tabPlaylist')?.querySelector<HTMLElement>('[data-playlist-share-slot]');
+  const panel = sharePanel;
+  if (!slot || !panel || panel.playlistId !== currentPlaylistId) return;
+  slot.innerHTML = `<section class="pl-share-panel" aria-labelledby="playlistShareHeading">
+    <div class="playlist-picker-head"><h3 id="playlistShareHeading">Share playlist</h3><button type="button" data-close-share aria-label="Close sharing"><i class="fa-solid fa-xmark" aria-hidden="true"></i></button></div>
+    <p>${panel.playlist.tracks.length} track${panel.playlist.tracks.length === 1 ? '' : 's'} in this link. Anyone with it can preview and save a copy. Edits won’t update this snapshot.</p>
+    ${omittedTracksText(panel.playlist) ? `<p>${esc(omittedTracksText(panel.playlist))} Local audio isn’t transferred.</p>` : ''}
+    <label class="playlist-field" for="playlistShareLink"><span>Playlist link</span><textarea id="playlistShareLink" rows="2" readonly spellcheck="false">${esc(panel.url)}</textarea></label>
+    <div class="pl-preview-actions"><button class="playlist-btn" type="button" data-copy-share><i class="fa-solid fa-copy" aria-hidden="true"></i>Copy link</button>${typeof navigator.share === 'function' ? '<button class="playlist-btn" type="button" data-system-share><i class="fa-solid fa-share" aria-hidden="true"></i>Share via…</button>' : ''}</div>
+    <p class="pl-share-status" id="playlistShareStatus" role="status" aria-live="polite"></p>
+  </section>`;
+  slot.querySelector<HTMLButtonElement>('[data-copy-share]')!.onclick = () => { if (!panel.busy) void copyShareLink(panel); };
+  const systemShare = slot.querySelector<HTMLButtonElement>('[data-system-share]');
+  if (systemShare) systemShare.onclick = () => { if (!panel.busy) void shareViaDevice(panel); };
+  slot.querySelector<HTMLButtonElement>('[data-close-share]')!.onclick = () => {
+    sharePanel = null;
+    slot.replaceChildren();
+    const button = $('tabPlaylist')?.querySelector<HTMLButtonElement>('[data-share-current]');
+    if (button) { button.disabled = false; button.removeAttribute('aria-busy'); button.setAttribute('aria-expanded', 'false'); button.focus({ preventScroll: true }); }
+  };
+  updateShareStatus(panel, panel.status, panel.tone, panel.busy);
+}
+
+function updateShareStatus(panel: SharePanel, status: string, tone: SharePanel['tone'], busy = false): void {
+  Object.assign(panel, { status, tone, busy });
+  if (panel !== sharePanel || panel.playlistId !== currentPlaylistId) return;
+  const message = $('playlistShareStatus');
+  if (message) { message.textContent = status; message.dataset.tone = tone; }
+  $('tabPlaylist')?.querySelectorAll<HTMLButtonElement>('[data-copy-share], [data-system-share], [data-share-current]').forEach((button) => {
+    button.disabled = busy;
+    button.setAttribute('aria-busy', String(busy));
+  });
+  $('tabPlaylist')?.querySelector('[data-share-current]')?.setAttribute('aria-expanded', 'true');
+}
+
+async function tryCopyShareLink(panel: SharePanel): Promise<boolean> {
+  if (panel !== sharePanel || panel.playlistId !== currentPlaylistId) return false;
+  try {
+    if (typeof navigator.clipboard?.writeText === 'function') {
+      await navigator.clipboard.writeText(panel.url);
+      return true;
+    }
+  } catch { /* Denied/insecure clipboard: try selection-based copying below. */ }
+  if (panel !== sharePanel || panel.playlistId !== currentPlaylistId) return false;
+  const field = $('playlistShareLink') as HTMLTextAreaElement | null;
+  if (!field) return false;
+  try {
+    field.focus({ preventScroll: true });
+    field.select();
+    field.setSelectionRange(0, field.value.length);
+    return document.execCommand('copy');
+  } catch { return false; }
+}
+
+async function copyShareLink(panel: SharePanel, shareFailed = false): Promise<void> {
+  updateShareStatus(panel, 'Copying playlist link…', 'neutral', true);
+  const copied = await tryCopyShareLink(panel);
+  updateShareStatus(panel, copied
+    ? shareFailed ? 'Sharing didn’t open. Playlist link copied instead.' : 'Playlist link copied. Send it to open this playlist on another device.'
+    : `${shareFailed ? 'Sharing didn’t open. ' : ''}Could not copy automatically. Select and copy the link above.`, copied ? 'success' : 'error');
+  if (panel === sharePanel && panel.playlistId === currentPlaylistId) {
+    toast(copied ? 'Playlist link copied.' : 'Could not copy. Select and copy the playlist link.', copied ? 'circle-check' : 'triangle-exclamation');
+  }
+}
+
+async function shareViaDevice(panel: SharePanel): Promise<void> {
+  updateShareStatus(panel, 'Opening sharing…', 'neutral', true);
+  const data = { title: panel.playlist.title, text: 'Open this playlist in Aura Music.', url: panel.url };
+  try {
+    if (typeof navigator.share !== 'function' || (navigator.canShare && !navigator.canShare(data))) {
+      await copyShareLink(panel, true);
+      return;
+    }
+    await navigator.share(data);
+    updateShareStatus(panel, 'Playlist link shared.', 'success');
+    if (panel === sharePanel && panel.playlistId === currentPlaylistId) toast('Playlist link shared.', 'circle-check');
+  } catch (error) {
+    if ((error as Error)?.name === 'AbortError') {
+      updateShareStatus(panel, 'Sharing canceled. You can still copy the link.', 'neutral');
+      if (panel === sharePanel && panel.playlistId === currentPlaylistId) toast('Sharing canceled.', 'circle-info');
+    } else await copyShareLink(panel, true);
+  }
+}
+
+export async function playlistPageShare(): Promise<void> {
+  if (sharePanel?.busy) return;
   const playlist = loadPlaylists().find((item) => item.id === currentPlaylistId);
   if (!playlist) return;
-  const text = `${playlist.title} — Aura Music\n${playlist.description ? `${playlist.description}\n` : ''}${playlist.tracks.length} tracks`;
-  if (navigator.share) navigator.share({ title: playlist.title, text }).catch(() => {});
-  else navigator.clipboard?.writeText(text).then(() => toast('Playlist details copied.', 'circle-check'));
+  try {
+    const snapshot = createPlaylistShare(playlist, state.songs);
+    sharePanel = { playlistId: playlist.id, playlist: snapshot, url: playlistShareUrl(snapshot, location.href), status: 'Playlist link ready.', tone: 'neutral', busy: false };
+    renderSharePanel();
+    $('playlistSharePanel')?.scrollIntoView({ block: 'center', behavior: matchMedia('(prefers-reduced-motion: reduce)').matches ? 'auto' : 'smooth' });
+  } catch (error) {
+    sharePanel = null;
+    const message = error instanceof PlaylistShareError ? error.message : 'Could not create a playlist link. Try again.';
+    const slot = $('tabPlaylist')?.querySelector<HTMLElement>('[data-playlist-share-slot]');
+    if (slot) slot.innerHTML = `<p class="pl-share-status" data-tone="error" role="alert">${esc(message)}</p>`;
+    toast(message, 'triangle-exclamation');
+    return;
+  }
+  if (typeof navigator.share === 'function') await shareViaDevice(sharePanel);
+  else await copyShareLink(sharePanel);
 }
 
 export function playlistPageMore(): void {
-  playlistPageShare();
+  void playlistPageShare();
 }
 
 document.addEventListener('keydown', (event) => {

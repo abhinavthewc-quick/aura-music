@@ -131,6 +131,19 @@ alice.send({ t: 'queue', action: 'add', trackKey: 'song-3' });
 const q = await bob.waitFor((m) => m.t === 'queue' && m.queue.length === 2);
 check('queue is visible to listener', q.queue.join(',') === 'song-2,song-3', q.queue.join(','));
 
+// The referee acknowledges an idempotent add with the same queue. Clients
+// must use membership, not a count increase, to recognize that confirmation.
+alice.inbox.length = 0; bob.inbox.length = 0;
+alice.send({ t: 'queue', action: 'add', trackKey: 'song-2' });
+const duplicate = await bob.waitFor((m) => m.t === 'queue');
+const ownDuplicate = await alice.waitFor((m) => m.t === 'queue');
+const duplicatePing = Date.now();
+alice.send({ t: 'ping', sentAt: duplicatePing });
+await alice.waitFor((m) => m.t === 'pong' && m.sentAt === duplicatePing);
+check('duplicate adds acknowledge the unchanged queue to both clients',
+  duplicate.queue.join(',') === 'song-2,song-3' && ownDuplicate.queue.join(',') === 'song-2,song-3', duplicate.queue.join(','));
+check('duplicate queue adds do not restart playback', !alice.inbox.some((m) => m.t === 'playback'));
+
 alice.send({ t: 'queue', action: 'next' });
 const skipped = await bob.waitFor((m) => m.t === 'playback' && m.playback.trackKey === 'song-2');
 check('skip advances the room', skipped.playback.trackKey === 'song-2', skipped.playback.trackKey);

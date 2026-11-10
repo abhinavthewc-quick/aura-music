@@ -1,4 +1,5 @@
 import { state, $ } from '../core/state';
+import { getActivePlaybackTime, seekActivePlayback } from './player';
 
 export type SyncType = 'Syllable' | 'Word' | 'Line' | 'Unsynced';
 
@@ -895,13 +896,11 @@ export function renderLyrics(lyrics: ParsedLyrics | null, containerId = 'fullPla
     return;
   }
 
-  const curTime = state.isPlaying
-    ? (state.audio?.currentTime || (window as any).auraYTPlayer?.getCurrentTime?.() || 0)
-    : ((window as any).auraYTPlayer?.getCurrentTime?.() || 0);
+  const curTime = getActivePlaybackTime();
 
   let introHtml = '';
   if (lyrics.lines.length > 0 && lyrics.lines[0].time > 1.8) {
-    const isIntroActive = curTime < lyrics.lines[0].time;
+    const isIntroActive = curTime + syncOffset < lyrics.lines[0].time;
     introHtml = `
       <div class="bl-lyric-line bl-instrumental ${isIntroActive ? 'active' : 'passed'}" data-idx="-1" data-time="0" onclick="seekToLyric(0)">
         <div class="bl-lyric-main">
@@ -974,13 +973,13 @@ export function renderLyrics(lyrics: ParsedLyrics | null, containerId = 'fullPla
   const backdrop = $('blLyricsBackdrop');
   if (backdrop) {
     const curSong = state.songs[state.currentIndex];
-    const poster = curSong?.img || (window as any).auraYTPoster || '';
+    const poster = curSong?.img || '';
     if (poster) {
       backdrop.style.backgroundImage = `url("${poster}")`;
     }
   }
 
-  // Sync to current audio position immediately
+  // Sync to the selected source, including a paused position or the intro at 0.
   updateLyricsProgress(curTime, containerId);
   setTimeout(() => centerActiveLyricLine(undefined, false), 50);
 
@@ -1075,13 +1074,7 @@ export function startLyricsSyncLoop() {
       return;
     }
     lastLyricsSync = now;
-    const curTime = state.isPlaying
-      ? (state.audio?.currentTime || (window as any).auraYTPlayer?.getCurrentTime?.() || 0)
-      : ((window as any).auraYTPlayer?.getCurrentTime?.() || 0);
-
-    if (curTime > 0) {
-      updateLyricsProgress(curTime);
-    }
+    updateLyricsProgress(getActivePlaybackTime());
     lyricsRafId = requestAnimationFrame(tick);
   }
   lyricsRafId = requestAnimationFrame(tick);
@@ -1099,24 +1092,20 @@ export function stopLyricsSyncLoop() {
   }
 }
 
-/* Auto-stop when lyrics panel is hidden */
+/* The lyrics sheet is independent of the full-player overlay. Transport class
+   changes on a minimized player must not stop a visible (even paused) sheet. */
 function observeLyricsVisibility() {
   const container = $('fullPlayerLyricsContainer') || $('ytmLyricsPanel');
   if (!container) return;
   const mo = new MutationObserver(() => {
-    if (container.offsetParent === null) {
+    if (!lyricsPanelVisible() || container.offsetParent === null) {
       stopLyricsSyncLoop();
-    } else if (currentLyrics?.isSynced && state.isPlaying) {
+    } else if (currentLyrics?.isSynced) {
       startLyricsSyncLoop();
     }
   });
-  mo.observe(container, { attributes: true, attributeFilter: ['style', 'class'] });
-  // Also observe the full player overlay
-  const overlay = $('fullPlayerOverlay');
-  if (overlay) {
-    new MutationObserver(() => {
-      if (!overlay.classList.contains('active')) stopLyricsSyncLoop();
-    }).observe(overlay, { attributes: true, attributeFilter: ['class'] });
+  for (const target of new Set([container, $('upNextSheet'), $('ytmLyricsPanel')])) {
+    if (target) mo.observe(target, { attributes: true, attributeFilter: ['style', 'class'] });
   }
 }
 // Initialize observer when lyrics module loads
@@ -1250,8 +1239,7 @@ export function setSyncOffset(delta: number) {
       localStorage.setItem('aura_offset_' + currentTrackKey, syncOffset.toString());
     } catch (_) {}
   }
-  const curTime = state.audio?.currentTime || (window as any).auraYTPlayer?.getCurrentTime?.() || 0;
-  updateLyricsProgress(curTime);
+  updateLyricsProgress(getActivePlaybackTime());
 }
 
 export function resetSyncOffset() {
@@ -1262,8 +1250,7 @@ export function resetSyncOffset() {
       localStorage.removeItem('aura_offset_' + currentTrackKey);
     } catch (_) {}
   }
-  const curTime = state.audio?.currentTime || (window as any).auraYTPlayer?.getCurrentTime?.() || 0;
-  updateLyricsProgress(curTime);
+  updateLyricsProgress(getActivePlaybackTime());
 }
 
 function updateSyncOffsetLabel() {
@@ -1277,30 +1264,19 @@ function escapeHtml(str: string): string {
   return str.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
 }
 
+export function seekToLyric(time: number): void {
+  if(!seekActivePlayback(time)) return;
+  userIsScrolling = false;
+  if (userScrollTimeout) clearTimeout(userScrollTimeout);
+  const autoBtn = $('blAutoScrollBtn');
+  if (autoBtn) autoBtn.style.display = 'none';
+  updateLyricsProgress(Math.max(0, time));
+  setTimeout(() => centerActiveLyricLine(undefined, true), 40);
+}
+
 /* Expose Global Handlers for HTML Onclick Binding */
 if (typeof window !== 'undefined') {
-  (window as any).seekToLyric = function(time: number) {
-    userIsScrolling = false;
-    if (userScrollTimeout) clearTimeout(userScrollTimeout);
-    const autoBtn = $('blAutoScrollBtn');
-    if (autoBtn) autoBtn.style.display = 'none';
-
-    const yt = (window as any).auraYTPlayer;
-    if (yt && typeof yt.seekTo === 'function') {
-      try {
-        yt.seekTo(time, true);
-        updateLyricsProgress(time);
-        setTimeout(() => centerActiveLyricLine(undefined, true), 40);
-        return;
-      } catch (_) {}
-    }
-    if (state.audio) {
-      state.audio.currentTime = time;
-      if (state.audio.paused) state.audio.play();
-      updateLyricsProgress(time);
-      setTimeout(() => centerActiveLyricLine(undefined, true), 40);
-    }
-  };
+  (window as any).seekToLyric = seekToLyric;
   (window as any).resumeLyricsAutoScroll = resumeLyricsAutoScroll;
   (window as any).centerActiveLyricLine = centerActiveLyricLine;
   (window as any).toggleLyricsTranslation = toggleLyricsTranslation;

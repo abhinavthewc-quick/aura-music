@@ -2,16 +2,14 @@
 
 These guides describe the Aura Music web app, its companion services, and the
 conventions used to keep them working together. They are written for the person
-maintaining this deployment, not for end users.
-
-**Last verified:** 2026-10-31 · live at <https://aura-music-01g.pages.dev>
+maintaining the app and follow the repository source.
 
 ## Read in this order
 
 | # | Document | What it answers |
 | --- | --- | --- |
-| 1 | [Architecture](architecture.md) | How does the app boot? Which module owns what? How do the three entry points and two backends fit together? |
-| 2 | [Features](features.md) | What does every screen/flow do, including edge cases? |
+| 1 | [Architecture](architecture.md) | How does session-aware startup recover? Which modules own playback, identities, sharing and the backends? |
+| 2 | [Features](features.md) | How do the screens work, including playlist snapshot sharing, recipient saving and room entry? |
 | 3 | [Configuration](configuration.md) | Which constants, environment variables, OAuth clients and credentials are required? |
 | 4 | [Development](development.md) | How do I run, debug and test everything locally? |
 | 5 | [Deployment](deployment.md) | How do I ship the site, functions, rooms worker and upload pipeline? |
@@ -24,6 +22,13 @@ maintaining this deployment, not for end users.
 | 12 | [Troubleshooting](troubleshooting.md) | Why is X broken, and what should I check first? |
 | 13 | [Contributing](contributing.md) | What is the definition of done for a change? |
 | 14 | [Lighthouse](lighthouse.md) | What are the measured mobile/desktop scores, startup optimizations and audit commands? |
+
+## Focused guides
+
+- [Artist storage](artist-storage.md) — centralized identities, aliases and
+  admin-owned metadata; display grouping is separate from saved track keys.
+- [Public resource discovery](discovery.md) — public navigation documents,
+  the read-only artist directory, and their access conditions.
 
 ## Other sources of truth
 

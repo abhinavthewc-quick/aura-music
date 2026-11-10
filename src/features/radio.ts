@@ -1,5 +1,6 @@
 import { copyToClipboard, escapeHtml, showTrackSheet, stateHTML, toast } from '../core/dom';
-import { mediaSessionAction, updatePlayState, applyDynamicPlayerColor } from './player';
+import { mediaSessionAction, updatePlayState, applyDynamicPlayerColor, stopAuraYouTube } from './player';
+import { beginPlaybackIntent, getPlaybackIntent } from '../core/playbackIntent';
 import { closeTrackMenu } from './queue';
 import { $, state } from '../core/state';
 /* ===== 5623-5819 ===== */
@@ -46,11 +47,11 @@ import { $, state } from '../core/state';
           const country=escapeHtml(st.country || '');
           const tags=escapeHtml((st.tags||'').split(',').slice(0,2).join(' • '));
           const logo=st.favicon ? `<img src="${escapeHtml(st.favicon)}" alt="" loading="lazy" decoding="async" onerror="this.style.display='none'">` : '<i class="fa-solid fa-radio"></i>';
-          return `<div class="radio-station" role="button" tabindex="0" data-radio-index="${i}">
-            <div class="radio-station-art">${logo}</div>
-            <div class="radio-station-main"><div class="radio-station-name">${name}</div><div class="radio-station-meta">${country}${country&&tags?' • ':''}${tags||'Live station'}</div></div>
-            <button class="radio-play-btn" type="button" aria-label="Play ${name}"><i class="fa-solid fa-play"></i></button>
-          </div>`;
+          return `<button class="radio-station" type="button" data-radio-index="${i}" aria-label="Play ${name}">
+            <span class="radio-station-art" aria-hidden="true">${logo}</span>
+            <span class="radio-station-main"><span class="radio-station-name">${name}</span><span class="radio-station-meta">${country}${country&&tags?' • ':''}${tags||'Live station'}</span></span>
+            <span class="radio-play-btn" aria-hidden="true"><i class="fa-solid fa-play"></i></span>
+          </button>`;
         }).join('');
         usable.forEach((st,i)=>{
           list.querySelector(`[data-radio-index="${i}"]`).addEventListener('click',()=>playRadioStation(st));
@@ -89,13 +90,20 @@ import { $, state } from '../core/state';
 
     export function toggleRadioPlay(){
       if(!currentRadioStation) return;
-      if(radioAudio.paused){ radioAudio.play().then(()=>{state.radioIsPlaying=true;updateRadioPlayerUI();}).catch(()=>toast('The radio stream could not be resumed','triangle-exclamation')); }
+      const station = currentRadioStation;
+      const intent = beginPlaybackIntent();
+      if(radioAudio.paused){ radioAudio.play().then(()=>{
+        if(intent !== getPlaybackIntent() || currentRadioStation !== station) return;
+        state.radioIsPlaying=true;updateRadioPlayerUI();
+      }).catch(()=>{ if(intent === getPlaybackIntent() && currentRadioStation === station) toast('The radio stream could not be resumed','triangle-exclamation'); }); }
       else { radioAudio.pause(); state.radioIsPlaying=false; updateRadioPlayerUI(); }
     }
 
     export function playRadioStation(st){
       const url=st.url_resolved || st.url;
       if(!url){toast('This station has no playable stream','triangle-exclamation');return;}
+      stopAuraYouTube();
+      const intent = beginPlaybackIntent();
       state.audio.pause();
       state.isPlaying=false;
       updatePlayState();
@@ -105,24 +113,37 @@ import { $, state } from '../core/state';
       saveRadioState(url);
       radioAudio.src=url;
       radioAudio.play().then(()=>{
+        if(intent !== getPlaybackIntent() || currentRadioStation !== st) return;
         state.radioIsPlaying=true;
         updateRadioPlayerUI();
         document.querySelectorAll('.radio-play-btn').forEach(b=>{b.classList.remove('active');b.innerHTML='<i class="fa-solid fa-play"></i>';});
         const active=[...document.querySelectorAll('.radio-station')].find(el=>el.querySelector('.radio-station-name')?.textContent===String(st.name||'Unknown Station'));
         if(active){const b=active.querySelector('.radio-play-btn');b.classList.add('active');b.innerHTML='<i class="fa-solid fa-volume-high"></i>';}
-      }).catch(()=>{state.radioIsPlaying=false;updateRadioPlayerUI();toast('This station could not be played by your browser','triangle-exclamation');});
+      }).catch(()=>{
+        if(intent !== getPlaybackIntent() || currentRadioStation !== st) return;
+        state.radioIsPlaying=false;updateRadioPlayerUI();toast('This station could not be played by your browser','triangle-exclamation');
+      });
     }
 
     export function playCustomRadio(){
       const url=$('customRadioUrl').value.trim();
       if(!/^https?:\/\//i.test(url)){toast('Enter a valid radio stream URL','triangle-exclamation');return;}
+      stopAuraYouTube();
+      const intent = beginPlaybackIntent();
       state.audio.pause(); state.isPlaying=false; updatePlayState();
       $('miniPlayer').classList.remove('active');
       $('fullPlayerOverlay').classList.remove('active');
       currentRadioStation={name:'Custom radio station',country:'Custom stream',tags:'',favicon:'',url};
+      const station = currentRadioStation;
       saveRadioState(url);
       radioAudio.src=url;
-      radioAudio.play().then(()=>{ state.radioIsPlaying=true; updateRadioPlayerUI(); }).catch(()=>{ state.radioIsPlaying=false; updateRadioPlayerUI(); toast('The stream could not be played. It may not be a browser-supported audio stream.','triangle-exclamation'); });
+      radioAudio.play().then(()=>{
+        if(intent !== getPlaybackIntent() || currentRadioStation !== station) return;
+        state.radioIsPlaying=true; updateRadioPlayerUI();
+      }).catch(()=>{
+        if(intent !== getPlaybackIntent() || currentRadioStation !== station) return;
+        state.radioIsPlaying=false; updateRadioPlayerUI(); toast('The stream could not be played. It may not be a browser-supported audio stream.','triangle-exclamation');
+      });
     }
 
     export function stopRadio(){
@@ -235,5 +256,3 @@ import { $, state } from '../core/state';
     }
     export function radioMenuSite(){ const st=currentRadioStation; if(st&&st.homepage) window.open(st.homepage,'_blank','noopener'); }
     $('radioHeaderMenuBtn').onclick=openRadioMenu;
-
-

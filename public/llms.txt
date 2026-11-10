@@ -1,0 +1,21 @@
+# Aura Music
+
+> Aura Music is a browser-based music player with personal playlists and shared listening rooms.
+
+Home and Library open after sign-in through the browser interface. Listening rooms have a separate public join/create flow using a display name and a room code or invite link.
+
+## Browser application
+
+- [Home and Library](https://aura-music-01g.pages.dev/): Sign in to browse and search the music library, play music, and manage personal playlists.
+- [Listen Together](https://aura-music-01g.pages.dev/rooms): Start a room or join an existing room for shared playback, a shared queue, and chat.
+
+## Public read-only resources
+
+- [Public resource guide](https://aura-music-01g.pages.dev/docs/public-resources.json): JSON guide to browser destinations, access conditions, and the artist directory's response fields.
+- [Artist directory](https://aura-music-01g.pages.dev/api/artists): GET returns public artist profiles keyed by aliases, track-artist name corrections, and a directory revision. Profiles include names, biographies, genres, portraits, and social links where available. The crawler policy below applies to this API path.
+
+## Discovery and crawler policy
+
+- [ARD manifest](https://aura-music-01g.pages.dev/.well-known/ard.json): Machine-readable discovery entries for the public resource guide and artist directory.
+- [Sitemap](https://aura-music-01g.pages.dev/sitemap.xml): The Home and Listen Together page URLs.
+- [Crawler policy](https://aura-music-01g.pages.dev/robots.txt): The site's robots.txt currently disallows crawling /api/, including the publicly readable artist directory.

@@ -1,7 +1,7 @@
 import { GOOGLE_CLIENT_ID, ADMIN_EMAILS } from '../core/config';
 import { verifyGoogleCredential } from '../core/google-auth';
 import {
-  exchangeGoogleToken, getProfileUsername, isValidUsername, normalizeUsername,
+  exchangeGoogleToken, getProfileUsername, getSession, isValidUsername, normalizeUsername,
   SESSION_TTL_SEC, setProfileUsername, setSession,
 } from '../core/session';
 import { loginLocalAccount, normEmail, registerLocalAccount } from '../core/local-auth';
@@ -20,34 +20,72 @@ const $ = <T extends HTMLElement = HTMLElement>(id: string) => document.getEleme
       await loadApplication();
     }
 
+    export function showSignIn(message = ''){
+      const welcome = $('welcomeScreen'), overlay = $('loginOverlay');
+      const wasRestoring = document.documentElement.hasAttribute('data-aura-entry');
+      const app = $('musicApp');
+      app.hidden = true;
+      app.inert = true;
+      welcome.hidden = false;
+      welcome.classList.remove('hidden');
+      welcome.inert = false;
+      welcome.setAttribute('aria-hidden', 'false');
+      overlay.hidden = true;
+      overlay.classList.remove('active');
+      overlay.setAttribute('aria-hidden', 'true');
+      $('loginRetry').hidden = true;
+      document.documentElement.removeAttribute('data-aura-entry');
+      if(message || wasRestoring) setGoogleNote(message || 'Please sign in again to continue.', true);
+      if(wasRestoring) welcome.focus({ preventScroll: true });
+    }
+
+    function showLibraryError(message: string){
+      document.documentElement.dataset.auraEntry = 'failed';
+      const status = $('loginStatus');
+      status.textContent = message;
+      status.classList.add('login-error');
+      $('loginRetry').hidden = false;
+    }
+
     let libraryOpening = false;
-    export async function playLoginAnimation(n: string){
+    export async function playLoginAnimation(n: string, restoring = false){
       if(libraryOpening) return;
+      if(!getSession()) { showSignIn('Your session has ended. Please sign in again.'); return; }
       libraryOpening = true;
       const overlay=$('loginOverlay');
-      const wn=$('loginWelcomeName'); if(wn) wn.textContent='Welcome, '+n;
+      const wn=$('loginWelcomeName'); if(wn) wn.textContent=restoring ? 'Aura Music' : 'Welcome, '+n;
       const status=$('loginStatus');
       status.textContent='Getting your music ready…';
       status.classList.remove('login-error');
       $('loginRetry').hidden=true;
-      $('welcomeScreen').inert=true;
+      const welcome=$('welcomeScreen');
+      welcome.hidden=true;
+      welcome.classList.add('hidden');
+      welcome.inert=true;
+      welcome.setAttribute('aria-hidden','true');
+      overlay.hidden=false;
       overlay.classList.add('active');
       overlay.setAttribute('aria-hidden','false');
+      document.documentElement.dataset.auraEntry='loading';
+      overlay.focus({ preventScroll: true });
+      const timeout=window.setTimeout(() => showLibraryError('Aura is taking longer than expected. Reload to try again.'), 15000);
       try{
         await finishLogin(n);
+        $('loginRetry').hidden=true;
         overlay.classList.remove('active');
         overlay.setAttribute('aria-hidden','true');
         document.querySelector<HTMLElement>('.app-container')?.focus({ preventScroll: true });
       }catch{
-        status.textContent='Could not open your library. Check your connection and try again.';
-        status.classList.add('login-error');
-        $('loginRetry').hidden=false;
-        $('loginRetry').focus();
+        if(!getSession()) showSignIn('Your session has ended. Please sign in again.');
+        else {
+          showLibraryError('Could not open your library. Check your connection and try again.');
+          $('loginRetry').focus();
+        }
       }finally{
+        clearTimeout(timeout);
         libraryOpening=false;
       }
     }
-    $('loginRetry')?.addEventListener('click', () => location.reload());
 
     /* ---------- Google Sign-In (any Google account; username picked on first entry) ---------- */
     let gisInitialized = false;

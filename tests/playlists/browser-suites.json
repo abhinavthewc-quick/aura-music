@@ -1,0 +1,24 @@
+[
+  {
+    "name": "playlist-sharing",
+    "page": "main",
+    "module": "../playlists/browser-playlist-regressions.js",
+    "entry": "runPlaylistSharingRegressions"
+  },
+  {
+    "name": "playlist-arrival-returning",
+    "page": "main",
+    "module": "../playlists/browser-playlist-regressions.js",
+    "entry": "runPlaylistArrivalRegressions",
+    "query": "#playlist=eyJ2IjoxLCJ0aXRsZSI6IuCuruCuvuCusuCviCDwn46nIMK3IENhZsOpIDwzIiwiZGVzY3JpcHRpb24iOiI8Yj5TbmFwc2hvdCBvbmx5PC9iPlxuTXVzaWMgJiBmcmllbmRzIiwidHJhY2tzIjpbeyJrZXkiOiJsazpoYW5kIHVwbG9hZHxvbGQgYXJ0aXN0IiwidGl0bGUiOiJIYW5kIHVwbG9hZCIsImFydGlzdCI6IlJlbmFtZWQgQXJ0aXN0In0seyJrZXkiOiJ2aWQ6YWJjZGVmZ2hpamsiLCJ0aXRsZSI6IkFmdGVyIHRoZSByYWluIiwiYXJ0aXN0IjoiUmVuYW1lZCBBcnRpc3QifSx7ImtleSI6InZpZDp6eXh3dnV0c3JxcCIsInRpdGxlIjoi4K6u4K604K-IIPCfjrUiLCJhcnRpc3QiOiLpgaDjgYTpn7MifV0sIm9taXR0ZWQiOnsibG9jYWwiOjEsInVuYXZhaWxhYmxlIjoxfX0"
+  },
+  {
+    "name": "playlist-arrival-fresh",
+    "page": "main",
+    "signedOut": true,
+    "module": "../playlists/browser-playlist-regressions.js",
+    "entry": "runPlaylistArrivalRegressions",
+    "options": { "signIn": true },
+    "query": "#playlist=eyJ2IjoxLCJ0aXRsZSI6IuCuruCuvuCusuCviCDwn46nIMK3IENhZsOpIDwzIiwiZGVzY3JpcHRpb24iOiI8Yj5TbmFwc2hvdCBvbmx5PC9iPlxuTXVzaWMgJiBmcmllbmRzIiwidHJhY2tzIjpbeyJrZXkiOiJsazpoYW5kIHVwbG9hZHxvbGQgYXJ0aXN0IiwidGl0bGUiOiJIYW5kIHVwbG9hZCIsImFydGlzdCI6IlJlbmFtZWQgQXJ0aXN0In0seyJrZXkiOiJ2aWQ6YWJjZGVmZ2hpamsiLCJ0aXRsZSI6IkFmdGVyIHRoZSByYWluIiwiYXJ0aXN0IjoiUmVuYW1lZCBBcnRpc3QifSx7ImtleSI6InZpZDp6eXh3dnV0c3JxcCIsInRpdGxlIjoi4K6u4K604K-IIPCfjrUiLCJhcnRpc3QiOiLpgaDjgYTpn7MifV0sIm9taXR0ZWQiOnsibG9jYWwiOjEsInVuYXZhaWxhYmxlIjoxfX0"
+  }
+]

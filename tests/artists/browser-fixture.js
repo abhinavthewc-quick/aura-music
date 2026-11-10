@@ -67,6 +67,10 @@
       ]));
     }
     if (url.pathname === '/api/artists') return Response.json(fixture.directory);
+    if (url.hostname === 'de1.api.radio-browser.info' && url.pathname === '/json/stations/search') {
+      const query = (url.searchParams.get('name') || '').toLowerCase();
+      return Response.json(['Evening frequency', 'Quiet signals'].filter(name => name.toLowerCase().includes(query)).map(name => ({ name, url: location.origin + '/__fixture_audio.wav', country: 'Local fixture', tags: 'ambient,night', favicon: '/src/assets/brand-logo.webp' })));
+    }
     if (url.pathname === '/api/admin') {
       if (body.action === 'library') return Response.json({ files: tracks.flatMap((t) => [{ path: t.hfPath, size: 1024 }, { path: t.hfPath.replace(/\.opus$/, '.jpg'), size: 256 }]), videoIds: tracks.map((t) => t.videoId).filter(Boolean), bucketId: 'fixture', manifest: {}, ...fixture.directory });
       if (body.action === 'status') return Response.json({ secrets: ['HF_TOKEN', 'HF_BUCKET_ID', 'YOUTUBE_COOKIES'] });

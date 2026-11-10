@@ -17,6 +17,8 @@ import { state } from '../core/state';
     document.body.classList.toggle('np-open', isOn(overlay) || isOn(radioOverlay));
     document.body.classList.toggle('has-mini', isOn(mini) || isOn(radioMini));
     const ex = $('miniExpandBtn'); if(ex) ex.classList.toggle('open', isOn(overlay));
+    for(const id of ['miniExpandBtn', 'miniTrackOpenBtn']) $(id)?.setAttribute('aria-expanded', String(Boolean(isOn(overlay))));
+    $('radioMiniOpenBtn')?.setAttribute('aria-expanded', String(Boolean(isOn(radioOverlay))));
     if(isOn(overlay) && mq.matches){ try{ renderUpNext(); }catch(e){} }
   }
   const mo = new MutationObserver(syncBody);
@@ -70,6 +72,11 @@ import { state } from '../core/state';
     e.stopPropagation();
     if(isOn(overlay)) $('closeFullPlayerBtn').click();
     else { overlay.classList.add('active'); try{ renderUpNext(); }catch(_){} }
+  };
+  $('miniTrackOpenBtn').onclick = e => {
+    e.stopPropagation();
+    overlay.classList.add('active');
+    renderUpNext();
   };
 
   /* ---- seek line ---- */

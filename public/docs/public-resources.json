@@ -1,0 +1,59 @@
+{
+  "title": "Aura Music public resource guide",
+  "description": "Public navigation and read-only metadata for Aura Music.",
+  "site": "https://aura-music-01g.pages.dev",
+  "discovery": {
+    "overview": "https://aura-music-01g.pages.dev/llms.txt",
+    "manifest": "https://aura-music-01g.pages.dev/.well-known/ard.json"
+  },
+  "resources": [
+    {
+      "id": "home",
+      "title": "Home and Library",
+      "url": "https://aura-music-01g.pages.dev/",
+      "mediaType": "text/html",
+      "access": "browser-sign-in",
+      "description": "Sign in through the browser interface to browse and search the music library, play music, and manage personal playlists."
+    },
+    {
+      "id": "rooms",
+      "title": "Listen Together",
+      "url": "https://aura-music-01g.pages.dev/rooms",
+      "mediaType": "text/html",
+      "access": "public",
+      "description": "Start a shared listening room, or join using a room code or invite link and a display name. Rooms provide shared playback, a shared queue, and chat through their own public join/create page."
+    },
+    {
+      "id": "artists",
+      "title": "Read-only artist directory",
+      "url": "https://aura-music-01g.pages.dev/api/artists",
+      "mediaType": "application/json",
+      "access": "public",
+      "method": "GET",
+      "description": "Public artist profiles keyed by normalized aliases, plus track-artist name corrections and a directory revision.",
+      "responseFields": {
+        "artists": "Object mapping normalized artist alias keys to public profiles. An artist can appear under several aliases; profile.key is its canonical key. Profile fields are key, name, img, bio, genres, social, updated, and version; optional metadata may be empty.",
+        "trackArtists": "Object mapping track identifiers to corrected artist display names. Identifiers use vid:<videoId> when available, otherwise hf:<path>.",
+        "revision": "Numeric revision of the artist directory."
+      },
+      "cacheControl": "no-store",
+      "crawlerPolicy": "The site's robots.txt disallows crawling /api/, including this publicly readable directory."
+    },
+    {
+      "id": "sitemap",
+      "title": "Sitemap",
+      "url": "https://aura-music-01g.pages.dev/sitemap.xml",
+      "mediaType": "application/xml",
+      "access": "public",
+      "description": "XML sitemap listing the Home and Listen Together page URLs."
+    },
+    {
+      "id": "crawler-policy",
+      "title": "Crawler policy",
+      "url": "https://aura-music-01g.pages.dev/robots.txt",
+      "mediaType": "text/plain",
+      "access": "public",
+      "description": "Robots directives and the sitemap location. The current policy disallows crawling /api/."
+    }
+  ]
+}

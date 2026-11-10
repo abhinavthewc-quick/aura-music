@@ -263,7 +263,7 @@ import { goTab } from '../ui/nav';
           <div class="artist-hero-content">
             <img class="artist-hero-img" src="${escapeHtml(artist.img)}" alt="${escapeHtml(artist.name)}" loading="lazy">
             <div class="artist-hero-meta">
-              <h1 class="artist-hero-name">${escapeHtml(artist.name)}</h1>
+              <h2 class="artist-hero-name">${escapeHtml(artist.name)}</h2>
               <p class="artist-hero-count">${artist.songs.length} song${artist.songs.length !== 1 ? 's' : ''} in your music</p>
               ${artistProfileDetailsHTML(profile)}
             </div>
@@ -293,15 +293,15 @@ import { goTab } from '../ui/nav';
           const globalIdx = state.songs.findIndex(x => x.id === s.id);
           const isPlaying = state.currentIndex === globalIdx && state.isPlaying;
           return `
-            <div class="artist-song-row ${isPlaying ? 'is-playing' : ''}" role="button" tabindex="0" onclick="playSong(${globalIdx >= 0 ? globalIdx : 0})">
-              <span class="artist-song-num">${isPlaying ? '<i class="fa-solid fa-volume-high"></i>' : (idx + 1)}</span>
+            <button type="button" class="artist-song-row ${isPlaying ? 'is-playing' : ''}" aria-label="Play ${escapeHtml(s.title || 'Untitled')} by ${escapeHtml(s.artist || 'Unknown Artist')}" onclick="playSong(${globalIdx})" ${globalIdx < 0 ? 'disabled' : ''}>
+              <span class="artist-song-num" aria-hidden="true">${isPlaying ? '<i class="fa-solid fa-volume-high"></i>' : (idx + 1)}</span>
               <img class="artist-song-cover" src="${escapeHtml(s.img || DEFAULT_COVER)}" alt="" loading="lazy">
-              <div class="artist-song-info">
-                <div class="artist-song-title">${escapeHtml(s.title || 'Untitled')}</div>
-                <div class="artist-song-sub">${escapeHtml(s.artist || '')}</div>
-              </div>
-              <button type="button" class="artist-song-play-btn" title="Play"><i class="fa-solid fa-play"></i></button>
-            </div>
+              <span class="artist-song-info">
+                <span class="artist-song-title">${escapeHtml(s.title || 'Untitled')}</span>
+                <span class="artist-song-sub">${escapeHtml(s.artist || '')}</span>
+              </span>
+              <span class="artist-song-play-btn" aria-hidden="true"><i class="fa-solid fa-play"></i></span>
+            </button>
           `;
         }).join('');
       }
@@ -424,12 +424,12 @@ import { goTab } from '../ui/nav';
       }
     }
 
-    /* Home: spotlight EVERY artist who has 2+ tracks in the library,
-       most-tracks-first — variants ("A. R. Rahman" / "A.R. Rahman" /
-       "… - Topic") merge into one bucket via artistKey. */
+    /* Home and Library use the same identities, including collaborations and
+       authoritative cloud profiles. A shared credit appears once per artist. */
     export function renderArtistSpotlight(){
       const artists = getArtistGroups().filter(g => g.songs.length >= 2);
       const container = $('artistSpotlightContainer');
+      if(!container) return;
 
       if(!artists.length){ container.innerHTML=''; return; }
 

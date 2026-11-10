@@ -56,6 +56,17 @@ import { $, persistLikedHistory, savedLikeMap, state } from '../core/state';
     }
     $('trackSheetOverlay').onclick = (e) => { if(e.target === $('trackSheetOverlay')) closeTrackMenu(); };
 
+    function shareTrack(song){
+      const shareUrl = song.isYouTube && song.videoId ? `https://youtu.be/${song.videoId}` : (song.url || '');
+      if(navigator.share){
+        navigator.share({ title: song.title, text: `${song.title} — ${song.artist}`, url: shareUrl || undefined }).catch(()=>{});
+      } else if(shareUrl){
+        copyToClipboard(shareUrl,'Link copied to clipboard');
+      } else {
+        toast('Sharing is not supported on this device', 'triangle-exclamation');
+      }
+    }
+
     export function queueTrackAction(action){
       const id = trackSheetSongId;
       const song = findSongById(id);
@@ -93,14 +104,7 @@ import { $, persistLikedHistory, savedLikeMap, state } from '../core/state';
       } else if(action === 'delete'){
         deleteTrack(null, song.id);
       } else if(action === 'share'){
-        const shareUrl = song.isYouTube && song.videoId ? `https://youtu.be/${song.videoId}` : (song.url || '');
-        if(navigator.share){
-          navigator.share({ title: song.title, text: `${song.title} — ${song.artist}`, url: shareUrl || undefined }).catch(()=>{});
-        } else if(shareUrl){
-          copyToClipboard(shareUrl,'Link copied to clipboard');
-        } else {
-          toast('Sharing is not supported on this device', 'triangle-exclamation');
-        }
+        shareTrack(song);
       } else if(action === 'download'){
         try{
           const a = document.createElement('a');
@@ -117,10 +121,25 @@ import { $, persistLikedHistory, savedLikeMap, state } from '../core/state';
     }
 
 /* ===== 5986-6184 ===== */
-    /* ---------- Up Next: rolling 4-song queue + touch drag reorder ---------- */
+    /* ---------- Up Next: rolling queue + pointer and keyboard reorder ---------- */
     export const UP_NEXT_PHONE_LIMIT = 4, UP_NEXT_DESKTOP_LIMIT = 30;
     export const upNextLimit = () => (window.matchMedia && window.matchMedia('(min-width:900px)').matches) ? UP_NEXT_DESKTOP_LIMIT : UP_NEXT_PHONE_LIMIT;
     export let upNextDrag = null;
+    const UP_NEXT_REORDER_HELP = 'Drag a handle, or focus it and press Arrow Up or Arrow Down to reorder.';
+    const UP_NEXT_CONTROLS = ['.up-next-play', '.up-next-action.favorite', '.up-next-action.reorder'];
+
+    function focusUpNextControl(id: string, selector = '.up-next-action.reorder'){
+      const row=[...($('upNextList')?.querySelectorAll<HTMLElement>('.up-next-row') || [])]
+        .find(row=>row.dataset.upNextId===id);
+      const control=row?.querySelector<HTMLButtonElement>(selector);
+      control?.focus({preventScroll:true});
+      return control;
+    }
+
+    function announceUpNextReorder(message: string){
+      const status=$('upNextReorderStatus');
+      if(status) status.textContent=message;
+    }
 
     export function getRollingUpNextItems(){
       const UP_NEXT_LIMIT = upNextLimit();
@@ -147,26 +166,38 @@ import { $, persistLikedHistory, savedLikeMap, state } from '../core/state';
     export function renderUpNext(){
       const list=$('upNextList');
       if(!list) return;
+      const focused=document.activeElement as HTMLElement | null;
+      const focusId=focused && list.contains(focused) ? focused.closest<HTMLElement>('.up-next-row')?.dataset.upNextId : undefined;
+      const focusControl=focusId !== undefined ? UP_NEXT_CONTROLS.find(selector=>focused.matches(selector)) : undefined;
       const items=getRollingUpNextItems();
+      // Keep the instructions and live region mounted while row controls refresh.
+      if(!$('upNextReorderHelp')) list.insertAdjacentHTML('beforebegin', `<p id="upNextReorderHelp" class="up-next-reorder-help">${UP_NEXT_REORDER_HELP}</p>`);
+      if(!$('upNextReorderStatus')) list.insertAdjacentHTML('beforebegin', '<p id="upNextReorderStatus" class="up-next-reorder-status" role="status" aria-live="polite" aria-atomic="true"></p>');
+      $('upNextReorderHelp').hidden=!items.length;
+      $('upNextReorderStatus').hidden=!items.length;
       if(!items.length){
+        announceUpNextReorder('');
         list.innerHTML="<div class='up-next-empty'>Nothing queued yet. Add a song with Play Next or Add to Queue.</div>";
         return;
       }
-      list.innerHTML=items.map(song=>{
+      list.innerHTML=items.map((song, index)=>{
         const liked=!!song.favorite;
-        return `<div class="up-next-row" role="button" tabindex="0" data-up-next-id="${escapeHtml(song.id)}">
-          <img class="up-next-cover" src="${escapeHtml(song.img||'')}" alt="" loading="lazy" decoding="async">
-          <div class="up-next-info"><div class="up-next-song-title">${escapeHtml(song.title||'Untitled')}</div><div class="up-next-song-artist">${escapeHtml(song.artist||'Unknown Artist')}</div></div>
+        const title=escapeHtml(song.title||'Untitled'), artist=escapeHtml(song.artist||'Unknown Artist');
+        return `<div class="up-next-row" data-up-next-id="${escapeHtml(song.id)}">
+          <button class="up-next-play" type="button" aria-label="Play ${title} by ${artist}">
+            <img class="up-next-cover" src="${escapeHtml(song.img||'')}" alt="" loading="lazy" decoding="async">
+            <span class="up-next-info"><span class="up-next-song-title">${title}</span><span class="up-next-song-artist">${artist}</span></span>
+          </button>
           <div class="up-next-actions">
-            <button class="up-next-action favorite" type="button" aria-label="${liked?'Remove from favorites':'Add to favorites'}"><i class="fa-${liked?'solid':'regular'} fa-heart"></i></button>
-            <button class="up-next-action reorder" type="button" aria-label="Hold and drag to reorder"></button>
+            <button class="up-next-action favorite" type="button" aria-label="${liked?'Remove from favorites':'Add to favorites'}: ${title}"><i class="fa-${liked?'solid':'regular'} fa-heart" aria-hidden="true"></i></button>
+            <button class="up-next-action reorder" type="button" aria-label="Reorder ${title}, position ${index+1} of ${items.length}" aria-describedby="upNextReorderHelp" aria-keyshortcuts="ArrowUp ArrowDown"></button>
           </div>
         </div>`;
       }).join('');
 
-      list.querySelectorAll('.up-next-row').forEach(row=>{
-        row.addEventListener('click',e=>{
-          if(e.target.closest('.up-next-action')) return;
+      list.querySelectorAll('.up-next-play').forEach(btn=>{
+        btn.addEventListener('click',()=>{
+          const row=btn.closest('.up-next-row');
           const id=row.dataset.upNextId;
           const idx=state.songs.findIndex(x=>String(x.id)===String(id));
           if(idx!==-1){
@@ -191,6 +222,7 @@ import { $, persistLikedHistory, savedLikeMap, state } from '../core/state';
         });
       });
       list.querySelectorAll('.up-next-action.reorder').forEach(handle=>initUpNextReorder(handle));
+      if(focusControl) focusUpNextControl(focusId, focusControl);
     }
 
     export function promoteVisibleOrder(ids){
@@ -202,11 +234,37 @@ import { $, persistLikedHistory, savedLikeMap, state } from '../core/state';
     }
 
     export function initUpNextReorder(handle){
+      handle.onclick=(e)=>{
+        e.stopPropagation();
+        if(e.detail===0) announceUpNextReorder(UP_NEXT_REORDER_HELP);
+      };
+      handle.onkeydown=(e)=>{
+        if((e.key!=='ArrowUp' && e.key!=='ArrowDown') || e.altKey || e.ctrlKey || e.metaKey || e.shiftKey || upNextDrag) return;
+        e.preventDefault();
+        e.stopPropagation();
+        const row=handle.closest('.up-next-row');
+        if(!row) return;
+        const id=row.dataset.upNextId;
+        const ids=[...$('upNextList').querySelectorAll<HTMLElement>('.up-next-row')].map(row=>row.dataset.upNextId);
+        const from=ids.indexOf(id), to=from+(e.key==='ArrowUp' ? -1 : 1);
+        if(from===-1) return;
+        const title=findSongById(id)?.title || 'Untitled';
+        if(to<0 || to>=ids.length){
+          announceUpNextReorder(`"${title}" is already ${to<0 ? 'first' : 'last'} in Up Next, position ${from+1} of ${ids.length}.`);
+          return;
+        }
+        [ids[from],ids[to]]=[ids[to],ids[from]];
+        promoteVisibleOrder(ids);
+        renderUpNext();
+        focusUpNextControl(id)?.scrollIntoView({block:'nearest',inline:'nearest'});
+        announceUpNextReorder(`Moved "${title}" to position ${to+1} of ${ids.length}.`);
+      };
       handle.onpointerdown=(e)=>{
         e.preventDefault();
         e.stopPropagation();
         const row=handle.closest('.up-next-row');
         if(!row) return;
+        handle.focus({preventScroll:true});
         handle.setPointerCapture?.(e.pointerId);
         upNextDrag={row,pointerId:e.pointerId,moved:false};
         row.classList.add('dragging-row');
@@ -227,10 +285,13 @@ import { $, persistLikedHistory, savedLikeMap, state } from '../core/state';
       if(!upNextDrag || upNextDrag.pointerId!==e.pointerId) return;
       const list=$('upNextList');
       const ids=[...list.querySelectorAll('.up-next-row')].map(r=>r.dataset.upNextId);
-      if(upNextDrag.moved) promoteVisibleOrder(ids);
+      const id=upNextDrag.row.dataset.upNextId, moved=upNextDrag.moved;
+      if(moved) promoteVisibleOrder(ids);
       upNextDrag.row.classList.remove('dragging-row');
       upNextDrag=null;
       renderUpNext();
+      focusUpNextControl(id);
+      if(moved) announceUpNextReorder(`Moved "${findSongById(id)?.title || 'Untitled'}" to position ${ids.indexOf(id)+1} of ${ids.length}.`);
       toast('Up Next order updated','list-check');
     }
 
@@ -293,10 +354,16 @@ import { $, persistLikedHistory, savedLikeMap, state } from '../core/state';
     }
 
     export async function playNext(keepFull=false){
-      if(manualQueue.length){
+      // Deleted tracks and unavailable local files cannot make later queued
+      // tracks lose their turn to the library/YouTube fallback.
+      while(manualQueue.length){
         const nextId = manualQueue.shift();
         const idx = state.songs.findIndex(s => String(s.id) === String(nextId));
-        if(idx !== -1){ playSong(idx); renderUpNext(); return; }
+        const song = state.songs[idx];
+        if(!song || song.missing || (song.isLocal && !song.url)) continue;
+        playSong(idx);
+        renderUpNext();
+        return;
       }
       if(keepFull && !window.matchMedia('(min-width:900px)').matches){
         $('fullPlayerOverlay').classList.add('active');
@@ -330,9 +397,18 @@ import { $, persistLikedHistory, savedLikeMap, state } from '../core/state';
       renderUpNext();
     }
 
-    $('fullHeaderMenuBtn').onclick=e=>{
+    function openCurrentTrackMenu(e){
       e.stopPropagation();
       if(state.songs[state.currentIndex]) openTrackMenu(e, state.songs[state.currentIndex].id);
+    }
+    $('fullHeaderMenuBtn').onclick=openCurrentTrackMenu;
+    const artInfoBtn=$('artInfoBtn');
+    if(artInfoBtn) artInfoBtn.onclick=openCurrentTrackMenu;
+    const artShareBtn=$('artShareBtn');
+    if(artShareBtn) artShareBtn.onclick=e=>{
+      e.stopPropagation();
+      const song=state.songs[state.currentIndex];
+      if(song) shareTrack(song);
     };
     $('fullPrevBtn').onclick=e=>{e.stopPropagation();playPrevious(true);};
     $('fullNextBtn').onclick=e=>{e.stopPropagation();playNext(true);};

@@ -33,7 +33,7 @@ const ALARM_MS = 30_000;
 interface StoredRoom {
   schema: string;
   state: RefereeState;
-  /** When the room last had anybody in it. */
+  /** Start of the current empty period; 0 while occupied. */
   idleSince: number;
 }
 
@@ -71,6 +71,7 @@ export class RoomDO {
   private sockets = new Map<string, WebSocket>();
   private clientIds = new WeakMap<WebSocket, string>();
   private referee: RoomReferee | null = null;
+  private idleSince: number | null = null;
   private hydrated = false;
 
   constructor(ctx: DurableObjectState, env: Env) {
@@ -100,8 +101,8 @@ export class RoomDO {
       const ownerKey = url.searchParams.get('k') || '';
       const ownerId = 'creator';
       if (roomId && ownerKey) {
-        // Recording the creator keeps the room alive even before anyone
-        // connects, and makes the owner key valid from the first moment.
+        // The owner key is valid immediately. Persistence starts the empty
+        // room's grace period while we wait for its first socket.
         const referee = await this.ensureReferee(roomId, ownerKey, ownerId);
         // Wait for the write rather than relying on waitUntil: the caller may
         // immediately open a socket, and the object could be evicted first.
@@ -204,9 +205,7 @@ export class RoomDO {
     const referee = new RoomReferee('room', '', 'creator', {
       deliver: (clientId, message) => this.send(clientId, message),
       finished: () => {
-        // No ctx.delete() in the runtime API: clearing storage is what lets
-        // the platform reclaim the object.
-        void this.ctx.storage.deleteAll();
+        this.ctx.waitUntil(this.deleteRoom());
       },
     }, {
       // Durable Objects have no `window`; the referee's grace/rescue timers
@@ -219,15 +218,14 @@ export class RoomDO {
         clearTimeout: (id) => clearTimeout(id as ReturnType<typeof setTimeout>),
       },
       onChange: (state) => {
-        this.ctx.waitUntil(this.ctx.storage.put('room', {
-          schema: SCHEMA,
-          state,
-          idleSince: state.participants.length ? 0 : Date.now(),
-        } satisfies StoredRoom));
+        this.ctx.waitUntil(this.persistState(state));
       },
     });
 
-    if (stored && stored.schema === SCHEMA) referee.importState(stored.state);
+    if (stored && stored.schema === SCHEMA) {
+      referee.importState(stored.state);
+      this.idleSince = stored.state.participants.length ? null : stored.idleSince ?? null;
+    }
     this.referee = referee;
     this.hydrated = true;
     return referee;
@@ -244,13 +242,31 @@ export class RoomDO {
     return referee;
   }
 
-  private async persist(referee: RoomReferee): Promise<void> {
-    const state = referee.exportState();
+  private persist(referee: RoomReferee): Promise<void> {
+    return this.persistState(referee.exportState());
+  }
+
+  private async persistState(state: RefereeState): Promise<void> {
+    // Empty-room writes (including replayed creates) must not renew the
+    // lifetime. A normal last departure supplies its own authoritative start.
+    this.idleSince = state.participants.length ? null : state.expiresAt !== null
+      ? state.expiresAt - GRACE_MS
+      : this.idleSince ?? Date.now();
     await this.ctx.storage.put('room', {
       schema: SCHEMA,
       state,
-      idleSince: state.participants.length ? 0 : Date.now(),
+      idleSince: this.idleSince ?? 0,
     } satisfies StoredRoom);
+  }
+
+  private async deleteRoom(): Promise<void> {
+    this.referee?.dispose();
+    this.referee = null;
+    this.idleSince = null;
+    // Clearing storage lets the platform reclaim the object, but deleteAll
+    // alone leaves its alarm behind. Retire both paths into the old lifetime.
+    await this.ctx.storage.deleteAll();
+    await this.ctx.storage.deleteAlarm();
   }
 
   private send(clientId: string, message: ServerMessage): void {
@@ -278,9 +294,10 @@ export class RoomDO {
     const state = referee.exportState();
 
     if (state.participants.length === 0) {
-      const idleSince = state.expiresAt ? state.expiresAt - GRACE_MS : Date.now();
-      if (Date.now() - idleSince >= GRACE_MS) {
-        await this.ctx.storage.deleteAll();
+      const idleSince = state.expiresAt !== null ? state.expiresAt - GRACE_MS : this.idleSince;
+      // A leftover alarm with no persisted idle period must not start a room.
+      if (idleSince === null || Date.now() - idleSince >= GRACE_MS) {
+        await this.deleteRoom();
         return;
       }
     } else {

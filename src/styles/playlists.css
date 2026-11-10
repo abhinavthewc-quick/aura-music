@@ -9,6 +9,8 @@
 .playlist-field small { color: var(--text-sub); font-weight: 400; }
 .playlist-field input { width: 100%; min-height: 48px; padding: 10px 12px; border: 1px solid var(--line-strong); border-radius: var(--radius-xs); background: var(--surface-1); color: var(--text); font-size: 15px; }
 .playlist-field input:focus { border-color: var(--accent); }
+.playlist-field textarea { display: block; width: 100%; min-width: 0; min-height: 76px; max-height: 180px; padding: 10px 12px; resize: vertical; overflow-wrap: anywhere; border: 1px solid var(--line-strong); border-radius: var(--radius-xs); background: var(--surface-1); color: var(--text); font: inherit; font-size: 13px; line-height: 1.5; }
+.playlist-field textarea:focus { border-color: var(--accent); }
 .playlist-error { margin: 0 0 12px; color: var(--danger); font-size: 13px; }
 .playlist-modal-actions { display: flex; align-items: center; justify-content: flex-end; gap: 8px; margin-top: 24px; }
 .playlist-btn, .playlist-create-btn { display: inline-flex; align-items: center; justify-content: center; gap: 8px; min-height: var(--tap); padding: 8px 16px; border: 1px solid var(--line-strong); border-radius: var(--radius-xs); background: transparent; color: var(--text); font-size: 13px; font-weight: 600; }
@@ -44,8 +46,12 @@
 .playlist-card-cover > span, .pl-cover-mosaic > span { display: grid; place-items: center; background: var(--surface-2); color: var(--text-dim); font-size: 26px; }
 .playlist-card-copy { display: block; padding-top: 12px; }
 .playlist-card-copy h3 { display: block; overflow: hidden; color: var(--text); font-size: 14px; font-weight: 600; line-height: 1.35; white-space: nowrap; text-overflow: ellipsis; }
+.playlist-card-open { display: block; max-width: 100%; overflow: hidden; padding: 0; border: 0; background: transparent; color: inherit; font: inherit; text-align: left; white-space: inherit; text-overflow: ellipsis; }
+.playlist-card-open::after { position: absolute; inset: 0; border-radius: var(--radius-sm); content: ''; }
+.playlist-card-open:focus-visible { outline: none; }
+.playlist-card-open:focus-visible::after { outline: 2px solid var(--accent); outline-offset: 4px; }
 .playlist-card-copy p { display: block; margin-top: 4px; color: var(--text-sub); font-size: 12px; line-height: 1.4; }
-.playlist-card-menu { position: absolute; top: 8px; right: 8px; display: grid; place-items: center; width: var(--tap); height: var(--tap); padding: 0; border: 1px solid rgba(255,255,255,.16); border-radius: 50%; background: rgba(0,0,0,.68); color: #fff; font-size: 16px; }
+.playlist-card-menu { position: absolute; z-index: 1; top: 8px; right: 8px; display: grid; place-items: center; width: var(--tap); height: var(--tap); padding: 0; border: 1px solid rgba(255,255,255,.16); border-radius: 50%; background: rgba(0,0,0,.68); color: #fff; font-size: 16px; }
 .playlist-card-menu:hover { background: rgba(0,0,0,.86); }
 .playlists-empty { display: flex; flex-direction: column; align-items: flex-start; gap: 12px; max-width: 520px; padding: 24px 0; }
 .playlists-empty-mark { display: grid; place-items: center; width: 60px; height: 60px; margin-bottom: 4px; border-radius: var(--radius-md); background: var(--accent-soft); color: var(--accent); font-size: 26px; }
@@ -77,6 +83,8 @@
 .pl-track-list { display: flex; flex-direction: column; gap: 2px; }
 .pl-track { display: grid; grid-template-columns: 24px 48px minmax(0, 1fr) 44px; align-items: center; gap: 12px; min-width: 0; min-height: 72px; padding: 8px; border-bottom: 1px solid var(--line); border-radius: var(--radius-xs); cursor: pointer; }
 .pl-track:hover { background: var(--hover); }
+.pl-track.pl-track-playable { grid-template-columns: minmax(0, 1fr) 44px; }
+.pl-track-play { display: grid; grid-template-columns: 24px 48px minmax(0, 1fr); align-items: center; gap: 12px; min-width: 0; min-height: 56px; padding: 0; border: 0; border-radius: var(--radius-xs); background: transparent; color: var(--text); text-align: left; }
 .pl-track-number { color: var(--text-dim); font-size: 12px; text-align: center; font-variant-numeric: tabular-nums; }
 .pl-track img { width: 48px; height: 48px; border-radius: var(--radius-xs); background: var(--surface-2); object-fit: cover; }
 .pl-track-meta { flex: 1; min-width: 0; }
@@ -92,6 +100,25 @@
 .pl-empty > i { color: var(--text-dim); font-size: 28px; }
 .pl-empty h3 { font-size: 20px; font-weight: 600; }
 .pl-empty p { max-width: 46ch; color: var(--text-sub); font-size: 13px; line-height: 1.55; }
+
+/* Sharing is an inline snapshot, keeping the player and navigation available. */
+.pl-share-panel { max-width: 720px; margin: 24px 0; padding: 20px; border: 1px solid var(--line-strong); border-radius: var(--radius-sm); background: var(--surface-1); }
+.pl-share-panel > p, .pl-availability { max-width: 68ch; margin: 0 0 16px; color: var(--text-sub); font-size: 13px; line-height: 1.6; overflow-wrap: anywhere; }
+.pl-share-panel .playlist-field { margin-top: 20px; }
+.pl-preview-actions { display: flex; flex-wrap: wrap; gap: 8px; }
+.pl-share-status { max-width: 68ch; margin: 12px 0 0; color: var(--text-sub); font-size: 13px; line-height: 1.6; overflow-wrap: anywhere; }
+.pl-share-status:empty { display: none; }
+.pl-share-status[data-tone="success"] { color: var(--text); }
+.pl-share-status[data-tone="error"] { color: var(--danger); }
+.pl-share-panel > .pl-share-status { margin: 12px 0 0; }
+.pl-shared-cover { display: grid; place-items: center; color: var(--text-sub); font-size: 48px; }
+.pl-shared-track { display: grid; grid-template-columns: 24px minmax(0, 1fr) auto; align-items: center; gap: 16px; min-width: 0; min-height: 72px; padding: 12px 8px; border-bottom: 1px solid var(--line); }
+.pl-track-availability { color: var(--text-sub); font-size: 12px; text-align: right; }
+.pl-track-unavailable { cursor: default; }
+.pl-track-unavailable:hover { background: transparent; }
+.pl-track-placeholder { display: grid; place-items: center; width: 48px; height: 48px; border-radius: var(--radius-xs); background: var(--surface-2); color: var(--text-dim); }
+.pl-link-error h2 { max-width: 26ch; font-size: 26px; line-height: 1.2; }
+#sharedPlaylistHeading:focus { outline: none; }
 
 .playlist-picker-head { display: flex; align-items: flex-start; justify-content: space-between; gap: 16px; margin-bottom: 16px; }
 .playlist-picker-head h3 { margin: 0 0 6px; font-size: 22px; font-weight: 600; }
@@ -124,8 +151,13 @@
   .pl-actions button:first-child { width: auto; padding: 8px 14px; }
   .pl-actions button:first-child span { display: inline; }
   .pl-track { grid-template-columns: 44px minmax(0, 1fr) 44px; gap: 10px; padding: 8px 4px; }
+  .pl-track-play { grid-template-columns: 44px minmax(0, 1fr); gap: 10px; }
   .pl-track-number { display: none; }
   .pl-track img { width: 44px; height: 44px; }
+  .pl-track-placeholder { width: 44px; height: 44px; }
+  .pl-shared-track { grid-template-columns: minmax(0, 1fr); gap: 6px; }
+  .pl-track-availability { text-align: left; }
+  .pl-share-panel { padding: 16px; }
   .pl-add-btn { width: var(--tap); padding: 0; }
   .pl-add-btn span { display: none; }
 }

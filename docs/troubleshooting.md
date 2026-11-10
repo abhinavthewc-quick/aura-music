@@ -7,39 +7,45 @@ there. This guide is ordered by symptom.
 
 | Symptom | First check |
 | --- | --- |
-| White screen / loader never leaves | Console errors; `document.readyState`; loader has an 8 s CSS failsafe but JS may have failed |
+| Startup does not finish | **Reload Aura**, Console errors and failed entry/runtime requests |
 | Library empty | `state.catalogError`, Network request to `huggingface.co/api/buckets/.../tree` |
 | A track won't play | Network request to the HF resolve URL; format; CORS; autoplay gesture |
-| Search returns nothing | Query length ≥2; YouTube key/provider availability; Network |
+| Search returns nothing | Confirm the track is in the loaded library; check query/category and catalogue loading |
+| Shared playlist cannot open/save | Complete `#playlist=` fragment, size limits and browser storage |
 | Admin returns 401/500 | Pages env `GH_TOKEN`/`GOOGLE_CLIENT_ID`; allow-list; session expiry |
 | Rooms 503 | `ROOMS_WORKER_URL` in Pages env; worker deploy |
 | Discord presence missing | PreMiD dev mode/account; CLI connection; site tab; presence attributes |
 
 ## App & loader
 
-### The page is blank or stuck on the orb
+### Returning-session startup does not finish
 
-1. Open DevTools → Console. A syntax/import error in a module prevents the app
-   from booting; the loader’s 8 s CSS failsafe only fades the overlay, it does
-   not fix the app.
-2. Check `npm run build` locally; a broken import usually fails there first.
-3. Verify `index.html` still loads `/src/main.ts` (dev) or the hashed
-   `assets/main-*.js` (production).
-4. Hard-reload (Cmd/Ctrl+Shift+R) after a deploy; Pages serves HTML with
+1. A valid saved session shows **Restoring your session…** / **Getting your music
+   ready…** while the signed-in runtime loads. A failure or a 15-second wait
+   exposes **Reload Aura**, including when the entry module never downloads.
+2. Use **Reload Aura** when the connection is available. Reloading retains
+   browser-local playlists; clearing site data removes them.
+3. Inspect Console and Network for a failed entry/runtime chunk or an import
+   error. Verify `/src/main.ts` (dev) or the hashed entry and runtime assets
+   (build); `npm run build` locally can identify broken imports.
+4. Malformed, expired or unavailable `auraSession_v2` data returns to sign-in.
+   The runtime rechecks the session before revealing the music app. Catalogue
+   loading errors after entry use the library’s **Try again** action instead.
+5. Hard-reload (Cmd/Ctrl+Shift+R) after a deploy; Pages serves HTML with
    `must-revalidate`, but an old service worker or cached asset can survive in a
    browser profile.
 
-### Theme resets / flashes dark
+### An old light-theme preference has no effect
 
-- `auraTheme` must be `light`; the bootstrap script at the top of `<body>` reads
-  it before paint. If localStorage is blocked (private mode), the theme cannot
-  persist by design.
+- Aura’s canvas is intentionally true black (`#000`), with neutral raised
+  surfaces and artwork colour. Legacy `auraTheme` values and the OS light
+  preference do not select another theme. If styling is missing, check the
+  entry/runtime CSS and bundled font requests.
 
 ### “Something went wrong” toasts
 
-- Most are recoverable: broken image (fallback), provider failure (other
-  providers still work), autoplay rejection (press play), audio error (source
-  blocked/removed).
+- Most are recoverable: broken image (fallback), catalogue fetch failure
+  (retry), autoplay rejection (press play), audio error (source blocked/removed).
 - If a toast repeats in a loop, capture the console stack; the app’s per-module
   listeners are initialized once, so a loop usually means a retry timer.
 
@@ -101,10 +107,20 @@ there. This guide is ordered by symptom.
 
 ### A track appears twice
 
-- Identity is `videoId` first, then `title|artist`. Two uploads without a video
-  id but different titles will not dedupe automatically. Add the known duplicate
-  to `HIDDEN_TRACK_PATTERNS` in `catalog.ts` (by bracketed video id) or fix the
-  filenames.
+- Track keys use `videoId` first, then title plus the original catalogue artist
+  (`catalogArtist` when present). A display-artist correction preserves that key.
+  Compare recording IDs/keys before treating appearances under multiple credited
+  artists as duplicate uploads; the shared rules live in `src/core/trackIdentity.ts`.
+
+### Artist grouping or portraits disagree
+
+- Home, Library, artist details and counts share the central identity resolver.
+  Check the public `/api/artists` response and the loaded catalogue, then refresh
+  the page or return focus to it to pick up metadata changes.
+- Admin-owned aliases/corrections outrank fallback spellings. Similar but
+  ambiguous names stay separate; a collaboration may appear under multiple
+  credited artists without duplicating the stored recording. See
+  [Artist storage](artist-storage.md#read-side-artist-identity).
 
 ### Cover art is missing
 
@@ -148,16 +164,47 @@ there. This guide is ordered by symptom.
 
 ### A track does not appear in search
 
-Search only filters music already available in the Aura catalogue. Check the
-title, artist, album, or film spelling. To request new music, submit it through
-the configured AURA FARMER Discord channel and wait for the download batch to
-finish.
+Public Search filters the current library, including added/local tracks. Check
+the title, artist, album, or film spelling and the active category. To request
+new catalogue music, intentionally submit it through the configured
+[AURA FARMER](https://github.com/angel2rider/AURA-FARMER) Discord channel and wait
+for review/download. Farmer is maintained in a separate repository; an empty
+search does not submit anything.
+
+## Playlists & sharing
 
 ### A playlist is missing
 
 Playlists are stored on the current browser/device in `auraPlaylists`; they do
 not sync between devices. Confirm the same browser profile is in use and that
 site storage was not cleared or blocked.
+
+### Share did not open or copy
+
+- Open the playlist’s **Share** action and check its inline panel. Native
+  cancellation is reported separately and does not silently copy the link.
+- Use **Copy link**; if browser copying is blocked, select and copy the entire
+  displayed URL manually, including `#playlist=…`.
+
+### A received link is invalid or too large
+
+- Ask for a complete, freshly generated link. The reader accepts a version-1
+  snapshot with at most 100 tracks including omissions and 16 KiB decoded JSON.
+  Truncated, malformed or unsupported payloads show an error.
+- Share a smaller playlist if it exceeds the limits. Fresh recipients finish
+  sign-in/username entry before the preview opens; opening it never auto-saves.
+
+### A saved snapshot has missing tracks, or Save fails
+
+- **Save playlist** creates a private copy in this browser. **Open saved
+  playlist** means that unchanged snapshot is already saved here.
+- Local files stay on the sender’s device; omitted local/unresolvable entries
+  are counted in the panel. Included tracks absent from your library retain
+  their labels and positions, becoming playable when the library can resolve
+  them. A link transfers metadata, not audio or download requests.
+- If saving reports a storage error, check site-storage permissions/capacity and
+  retry. The preview stays open. Sender edits do not update an imported copy;
+  ask for a new snapshot when needed. See [sharing](features.md#sharing-a-playlist).
 
 ## Radio
 
@@ -219,6 +266,16 @@ site storage was not cleared or blocked.
 
 ## Rooms
 
+### Joining or inviting someone
+
+- At `/rooms`, paste a room code or full invite link, choose a name and press
+  **Join room**, or use **Start a room**. Progress has a **Cancel** action;
+  invalid/closed rooms and failed connections show an inline error.
+- **Invite friends** offers a listener-only link. If copying is blocked, copy
+  the selected link manually. Admins share controls through the people section.
+- **Reconnect** retries a disconnected session; **Leave room** returns to entry.
+  See [Rooms](rooms.md) for detailed roles and lifecycle rules.
+
 ### `/api/rooms` returns 503
 
 - `ROOMS_WORKER_URL` is not set in the Pages env. Set it and redeploy.
@@ -235,8 +292,8 @@ site storage was not cleared or blocked.
 
 ### Room joins but nobody hears audio
 
-- Autoplay policy: join/create is the gesture; if the context is suspended the
-  UI shows a resume path. Tap the page/play.
+- Autoplay policy: use **Turn on sound** when shown, then check **Your volume**.
+  These controls affect your device; admins control shared playback.
 - The track must be in the shared catalogue (bucket). A room can only play
   tracks both listeners can resolve.
 - The Web Audio engine decodes the whole track; a slow phone/network can take
@@ -246,10 +303,10 @@ site storage was not cleared or blocked.
 
 ### Admin key lost / wrong role
 
-- The admin key is in the URL (`&k=…`) and in `auraRecentRooms_v1`. If it is
-  gone, the room cannot be controlled by you; the 30 s rescue window lets a
-  remaining listener claim it. Otherwise recreate the room and share the new
-  admin link as a password.
+- An admin invite can carry `&k=…`; successful entry removes it from the address
+  bar and remembers it in `auraRecentRooms_v1`. Normal **Invite friends** links
+  join as listeners. An existing admin can grant controls in the people section;
+  see [Rooms](rooms.md#authority-model) for recovery when no admin remains.
 
 ### Room is stale after a deploy
 
@@ -347,5 +404,6 @@ library (or clear `addedTracks`), and will show as `missing`.
 - [Configuration](configuration.md) — env/keys
 - [Deployment](deployment.md) — Pages/worker/workflows
 - [Rooms](rooms.md) — protocol and sync
+- [Public resource discovery](discovery.md) — navigation guides and public directory access
 - [Presence](presence.md) — Discord activity
 - [Security](security.md) — trust boundaries

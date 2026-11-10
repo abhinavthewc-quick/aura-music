@@ -6,7 +6,7 @@
  *   - no console.log/debugger left in shipped source,
  *   - every <button> has an explicit type,
  *   - every <img> has alt text,
- *   - index.html ids stay unique,
+ *   - production page ids stay unique,
  *   - no random placeholder image services,
  *   - new-tab links carry rel="noopener".
  *
@@ -29,7 +29,7 @@ function walk(dir) {
 }
 
 const sourceFiles = walk(join(root, 'src'))
-const htmlFiles = [join(root, 'index.html')].filter((f) => {
+const htmlFiles = ['index.html', 'admin.html', 'rooms.html'].map((name) => join(root, name)).filter((f) => {
   try { return statSync(f).isFile() } catch { return false }
 })
 
@@ -85,4 +85,4 @@ if (problems.length) {
   process.exit(1)
 }
 
-console.log(`lint: clean (${sourceFiles.length} source files, ${htmlFiles.length} html file)`)
+console.log(`lint: clean (${sourceFiles.length} source files, ${htmlFiles.length} html files)`)

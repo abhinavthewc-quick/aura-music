@@ -1,4 +1,4 @@
-/* Deep links: /?play=<track id> and /?play=yt:<videoId>.
+/* Deep links: /?play=<track id>, /?play=yt:<videoId>, and /#playlist=<snapshot>.
  *
  * The PreMiD activity points its "Listen in Aura Music" button and the
  * clickable song title here, so pressing them opens the site already playing
@@ -11,15 +11,21 @@
 
 import { fetchYouTubeMeta } from '../core/dom';
 import { state } from '../core/state';
+import { getPlaybackIntent } from '../core/playbackIntent';
 import { playSong, playYouTubeInsideAura } from './player';
+import { decodePlaylistShare, PLAYLIST_SHARE_PREFIX, PlaylistShareError } from '../core/playlist-sharing';
+import { openSharedPlaylistPreview } from './playlists';
 
 let applied = false;
+let lastPlaylistHash = '';
+let pendingTrackIntent: number | null = null;
+let linkRevision = 0;
 
 function clearPlayParam(): void {
   try {
     const url = new URL(location.href);
     url.searchParams.delete('play');
-    history.replaceState(null, '', url.pathname + (url.search || '') + url.hash);
+    history.replaceState(history.state, '', url.pathname + (url.search || '') + url.hash);
   } catch {
     /* URL API unavailable — leave the address alone. */
   }
@@ -28,20 +34,42 @@ function clearPlayParam(): void {
 function playYouTubeDeepLink(videoId: string): void {
   applied = true;
   clearPlayParam();
+  const intent = getPlaybackIntent();
+  const revision = ++linkRevision;
   const poster = `https://i.ytimg.com/vi/${videoId}/mqdefault.jpg`;
   fetchYouTubeMeta(videoId).then(({ title }) => {
+    if (intent !== getPlaybackIntent() || revision !== linkRevision) return;
     playYouTubeInsideAura(videoId, title, poster).catch(() => {
       /* The iframe player reports its own errors. */
     });
   });
 }
 
+function applyPlaylistDeepLink(): boolean {
+  const hash = location.hash;
+  if (!hash.startsWith(PLAYLIST_SHARE_PREFIX) && hash !== '#playlist') return false;
+  /* A playlist preview takes priority over a combined ?play= parameter. A
+     received snapshot must not start playback or a YouTube metadata request. */
+  applied = true;
+  clearPlayParam();
+  if (hash === lastPlaylistHash) return true;
+  lastPlaylistHash = hash;
+  linkRevision++;
+  try {
+    openSharedPlaylistPreview(decodePlaylistShare(hash.slice(PLAYLIST_SHARE_PREFIX.length)));
+  } catch (error) {
+    openSharedPlaylistPreview(null, error instanceof PlaylistShareError ? error.message : 'Could not open this playlist link. Ask the sender for a new link.');
+  }
+  return true;
+}
+
 /**
- * Applies a pending ?play= link. Safe to call repeatedly: it does nothing once
+ * Applies a received playlist preview or a pending ?play= link. Safe to call repeatedly: it does nothing once
  * a track has been started, and it waits (returns) while the catalog is still
  * loading so app.ts can retry after the remote tracks arrive.
  */
 export function applyPlayDeepLink(): void {
+  if (applyPlaylistDeepLink()) return;
   if (applied) return;
 
   let raw = '';
@@ -51,6 +79,13 @@ export function applyPlayDeepLink(): void {
     return;
   }
   if (!raw) return;
+  if (pendingTrackIntent === null) pendingTrackIntent = getPlaybackIntent();
+  else if (pendingTrackIntent !== getPlaybackIntent()) {
+    // A manual selection supersedes a link that was waiting for the catalogue.
+    applied = true;
+    clearPlayParam();
+    return;
+  }
 
   const youtube = /^yt:([\w-]{11})$/.exec(raw);
   if (youtube) {
@@ -67,3 +102,10 @@ export function applyPlayDeepLink(): void {
   clearPlayParam();
   playSong(index);
 }
+
+/* Also handle a second received link in an already-open music session. The
+   fragment survives the existing signed-out gate until bootstrap calls above. */
+window.addEventListener('hashchange', () => {
+  lastPlaylistHash = '';
+  applyPlayDeepLink();
+});

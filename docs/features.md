@@ -1,23 +1,28 @@
 # Features
 
-Everything here is implemented in the current build unless marked **Known gap**.
-Paths point at the owning module.
+This guide describes the user flows in the source tree. Paths point at the
+owning module.
 
 ## Authentication & profile
 
 | Flow | Behaviour |
 | --- | --- |
 | Google sign-in | Google Identity Services button/One Tap. The ID token is verified in the browser (RS256 against Google's JWKS) and again by `/api/admin` for admin actions. Any Google account can enter. |
-| First entry | The user picks a username (3–20 characters, letters/numbers/space/`_`/`-`). It is stored per email in `auraProfiles_v1` and becomes the profile name on this device. |
+| First entry | The user picks a username (2–20 characters, starting with a Unicode letter/number; spaces, `_` and `-` are also allowed). It is stored per email in `auraProfiles_v1` and becomes the profile name on this device. |
 | Email + password fallback | Device-local accounts only. PBKDF2-SHA256, 150k iterations, random 16-byte salt; only the hash is stored (`auraLocalAccounts_v1`). Works offline and when Google is unavailable. |
 | Session | `auraSession_v2` stores email/name/picture, expiry and token. Google sessions are extended to 7 days via `/api/admin`’s exchange action; the raw ID token remains valid ~1 hour. |
-| Profile popover | Shows name, avatar (or initial), first/last sign-in, track and favourite counts, theme toggle and “change name”. |
+| Returning entry | A valid stored session opens a restoring/loading screen while the music runtime loads. Failed or slow startup exposes **Reload Aura**; malformed or expired sessions return to sign-in. |
+| Profile popover | Shows name, avatar (or initial), first/last sign-in, track and favourite counts, and “change name”. |
 | Sign out | Clears the display name and session, disables Google auto-select, shows a 1.5 s logout animation, then reloads. |
 | Admin gate | A separate allow-list (`ADMIN_EMAILS` in `src/core/config.ts`, mirrored in `functions/api/admin.ts`). Signing into the site does **not** grant admin API access unless the email is on that list. |
 
 **Privacy:** no account data is sent to an Aura backend. Sessions and profiles
 live in this browser only. The admin API sees Google tokens to verify them but
 does not store them.
+
+Signed-out entry loads the sign-in UI before the music runtime, catalogue or
+audio initialization. A received playlist fragment waits through sign-in and
+username entry, then opens its preview. See [startup recovery](troubleshooting.md#returning-session-startup-does-not-finish).
 
 ## Home
 
@@ -28,20 +33,26 @@ does not store them.
 - **Aura Picks**: eight seeded picks, refreshed when the catalogue grows or the
   user presses “Refresh mix”. Designed empty state when the library is empty.
 - **More from**: an artist spotlight for every artist with at least two tracks,
-  merged across spelling variants (`A. R. Rahman` / `A.R. Rahman` / `… - Topic`).
+  using the same artist identities and portraits as Library.
 - All sections are rebuilt in a single animation frame per change
   (`updateLibCount` batches the home paint).
 
 ## Library
 
-Three navigation destinations share the library data:
+The library views share the same track data:
 
 - **Tracks** — the full list (catalogue + added/local tracks), virtual one row
   per song, heart and “…” actions.
-- **Artists** — grouped by normalised artist name; group headers can play the
-  first track.
+- **Artists** — grouped by centralized artist identities; open an artist to
+  browse their credited tracks.
 - **Albums** — grouped by album metadata from `manifest.json`.
 - **Films** — extracts `(From "Film")` credits from titles/albums.
+
+Home, Library, artist details and artist counts use one identity resolver.
+Admin-owned aliases/corrections take precedence over reviewed spelling variants;
+ambiguous names stay separate. Supported collaborations can appear under each
+credited artist while retaining the recording’s original track keys. Details:
+[Artist storage](artist-storage.md#read-side-artist-identity).
 
 Other library features:
 
@@ -78,7 +89,9 @@ switches to whole-library results.
 
 Search is deliberately library-only. New music enters through the Discord
 submission pipeline, is reviewed/downloaded, and then appears in the shared
-Aura catalogue; search never injects previews from third-party catalogues.
+Aura catalogue. Requests are an intentional user action through
+[AURA FARMER](https://github.com/angel2rider/AURA-FARMER), a separate repository;
+an empty search never submits music or injects third-party previews.
 
 ## Playlists
 
@@ -88,6 +101,32 @@ Aura catalogue; search never injects previews from third-party catalogues.
 - Remove tracks without removing them from the Aura library.
 - Playlist data stays in `localStorage` on the current device and updates across
   browser tabs through the `storage` event.
+
+### Sharing a playlist
+
+1. Open a playlist and choose **Share**. Aura builds a usable
+   `/#playlist=<snapshot>` link and opens native sharing when supported.
+2. The inline share panel shows the link, omission counts and sharing status.
+   **Copy link** uses clipboard fallbacks; if copying is blocked, select and
+   copy the displayed link manually. Native cancellation is reported without
+   silently copying.
+3. Recipients open a read-only preview after the existing sign-in flow. Choose
+   **Save playlist** to create a private browser-local copy, or **Dismiss**.
+   An unchanged snapshot already saved offers **Open saved playlist**.
+
+The snapshot contains the title, description and ordered track labels/keys.
+Anyone with the link can read it; subsequent sender edits do not update the
+recipient’s copy. Local audio, artwork/media URLs and account data are excluded.
+Local files and unresolvable legacy entries are omitted with counts. The limit
+is **100 tracks including omissions** and **16 KiB of decoded JSON**; oversized
+playlists fail visibly rather than silently dropping tracks.
+
+Only matches already in the recipient’s library can play. Missing tracks keep
+their names and places in the saved copy and resolve when the library updates.
+Opening or saving a link does not start playback, fetch missing music or submit
+downloads. Playlists remain local to each browser. Owners:
+`src/features/playlists.ts`, `src/features/deeplink.ts`, and
+`src/core/playlist-sharing.ts`.
 
 ## Player
 
@@ -139,20 +178,25 @@ The effects panel mixes Web Audio layers under music/radio:
 
 ## Listen Together (rooms)
 
-A room is a shared playback session: one admin controls the transport, everyone
-hears the same track at the same moment, and listeners can chat and see the queue.
+A room is a shared playback session: admins control the transport, listeners
+hear synchronized playback, and everyone can chat and see the queue.
 Rooms are a **separate page** (`/rooms`) with their own bundle and Web Audio
 engine.
 
-See [rooms.md](rooms.md) for the protocol, Durable Object, clock sync, drift
-correction, grace period and local development harness. The short version:
+- Enter a room code or paste an invite link, choose a name, then **Join room**;
+  **Start a room** makes you an admin. Entry shows progress, **Cancel** and
+  actionable errors.
+- The now-playing stage shows track, loading and sync status. **Turn on sound**
+  handles browser audio blocking; **Your volume** affects only your device.
+- Admins choose from the shared library, manage **Up next**, control playback,
+  and share controls through **Here together**. Listeners can browse and chat.
+- **Invite friends** opens an inline listener-link panel with copy/manual-copy
+  feedback. Its `/rooms?r=<id>` link excludes the admin key.
+- **Queue**, **People** and **Chat** shortcuts reach the room sections on small
+  screens. **Reconnect** handles a disconnected session; **Leave room** exits it.
 
-- Create room → share link `/rooms?r=<id>`; the creator gets an admin key.
-- Invitees join with the code/name.
-- Admin can play/pause/seek/track, manage the queue, promote/demote listeners.
-- Chat, participants, queue and room expiry are server-authoritative.
-- Room survives an empty room for 3 minutes; listeners can reclaim control for
-  30 seconds after the last admin leaves.
+See [rooms.md](rooms.md) for authority, protocol, lifecycle, synchronization and
+the development harness.
 
 ## Settings
 
@@ -163,8 +207,11 @@ Stored in `auraSettings_v1` unless noted:
 | Autoplay next track | on | `ended` advances the queue |
 | Remember volume | on | stores `auraVolume` |
 | Reduce motion | off | adds `.aura-reduce-motion` (also honours OS preference) |
-| Theme | dark | persisted in `auraTheme`, applied before first paint |
 | Reset preferences | — | restores defaults after confirmation |
+
+The interface uses a true-black (`#000`) canvas with neutral raised surfaces,
+local fonts/icons and artwork colour. Legacy `auraTheme` values do not switch
+the app to a light theme.
 
 Other surfaces: Help & Support (mail/Discord), About, sidebar collapse
 (`auraSidebarCollapsed`), Effects, and the profile popover.

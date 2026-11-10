@@ -1,0 +1,30 @@
+{
+  "entries": [
+    {
+      "identifier": "urn:air:aura-music-01g.pages.dev:public:resource-guide",
+      "displayName": "Aura Music public resource guide",
+      "type": "application/json",
+      "url": "https://aura-music-01g.pages.dev/docs/public-resources.json",
+      "description": "Read-only navigation guide covering Home and Library after browser sign-in, the separate public listening-room entry, the public artist directory, the sitemap, and crawler policy.",
+      "representativeQueries": [
+        "Where do I sign in to browse Aura Music and manage playlists?",
+        "Where can I start or join an Aura Music listening room?",
+        "Where are Aura Music's public metadata and sitemap?"
+      ],
+      "tags": ["music", "navigation", "documentation"]
+    },
+    {
+      "identifier": "urn:air:aura-music-01g.pages.dev:public:artist-directory",
+      "displayName": "Aura Music read-only artist directory",
+      "type": "application/json",
+      "url": "https://aura-music-01g.pages.dev/api/artists",
+      "description": "Public GET resource containing artist profiles keyed by aliases, track-artist name corrections, and a directory revision. The site's robots.txt disallows crawling /api/; public readability does not change that policy.",
+      "representativeQueries": [
+        "What public profile metadata is available for an artist on Aura Music?",
+        "Which canonical artist does an Aura Music artist alias refer to?",
+        "What artist-name corrections are recorded for Aura Music tracks?"
+      ],
+      "tags": ["music", "artists", "public-metadata"]
+    }
+  ]
+}

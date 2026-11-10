@@ -11,14 +11,20 @@ shaped that way.
 1. **Playback is client-side.** The site streams audio directly from public
    bucket URLs and YouTube's official embedded player. There is no media proxy.
 2. **Personal data stays in the browser.** Likes, local uploads, queue state,
-   theme and profile names live in `localStorage`/IndexedDB. There is no user
-   table anywhere.
+   playlists, preferences and profile names live in `localStorage`/IndexedDB.
+   There is no user table anywhere.
 3. **The library is a bucket, not a database.** Tracks are files in a Hugging
    Face bucket; `manifest.json` adds cleaned metadata keyed by YouTube video id.
+   Admin-owned artist metadata lives separately in [D1](artist-storage.md).
 4. **The admin panel is a remote control.** It never handles audio bytes; it
    dispatches GitHub Actions that do the downloading/uploading.
 5. **Real-time rooms are a separate deployable.** Cloudflare does not allow a
    Durable Object inside a Pages project, so `rooms-worker/` is its own Worker.
+6. **Public Search is library-only.** Ingestion starts with intentional Discord
+   submissions through [AURA FARMER](https://github.com/angel2rider/AURA-FARMER),
+   maintained in a separate repository.
+7. **Black is the canvas.** The UI uses `#000`, neutral controls, artwork colour
+   and locally bundled fonts/icons.
 
 ## Entry points
 
@@ -27,8 +33,9 @@ Vite builds three HTML documents, each with its own dependency graph:
 ```mermaid
 flowchart LR
   A[index.html] --> A1[src/main.ts]
-  A1 --> A2[app / expose / login / mini-player / a11y]
-  A2 --> A3[features: player, library, search, radio, home, ambience]
+  A1 --> A2[session / login / bootstrap]
+  A2 -->|valid session: lazy import| A3[src/runtime.ts]
+  A3 --> A4[app / expose / features / mini-player / a11y]
   B[admin.html] --> B1[src/admin/main.ts]
   B1 --> B2[core/config, core/session, core/google-auth]
   C[rooms.html] --> C1[src/rooms/page.ts]
@@ -48,31 +55,32 @@ Pages redirects `*.html` to the clean URL (e.g. `/rooms.html` → 308 →
 
 ```text
 index.html
-  ├─ inline loader CSS + theme bootstrap (reads localStorage auraTheme)
-  ├─ main.css (30 stylesheets imported in cascade order)
+  ├─ entry.css + local fonts
+  ├─ saved-session paint hint + reload fallback
   └─ /src/main.ts
-       ├─ ./ui/loader        orb canvas + intro loader
-       ├─ ./app              session, greeting, local tracks, catalogue, deep link
-       ├─ ./expose           publishes inline-handler functions on globalThis
-       ├─ ./ui/login         Google / local sign-in UI
-       ├─ ./ui/mini-player   player bar, volume, media controls
-       ├─ ./ui/a11y          Escape, focus trap, keyboard activation
-       ├─ ./features/presence-reporter
-       └─ installCoverFallback()
+       ├─ core/session + ui/login
+       └─ core/bootstrap.loadApplication() [valid session]
+            └─ lazy /src/runtime.ts
+                 ├─ main.css + icons.css
+                 ├─ expose / loader / mini-player / a11y / presence-reporter
+                 └─ app.ready: local hydration + initial render
 ```
 
-`app.ts` then:
+The HTML hint recognizes a well-formed, unexpired `auraSession_v2` for first
+paint; `main.ts` rechecks it through `getSession()`. Signed-out visits remain in
+the lightweight entry UI. Returning listeners and successful sign-ins use the
+same guarded `loadApplication()` promise. The music app stays hidden/inert until
+its runtime is ready and the session is checked again.
 
-1. Reads the session and hides the welcome screen if signed in.
-2. Sets the catalogue loading flag (skeletons only when there is no cache).
-3. Hydrates IndexedDB local tracks, renders the library/home lists.
-4. Applies a `?play=` deep link if present.
-5. Fetches the remote catalogue in the background; on success rebuilds the
-   lists, on failure shows the retryable error state.
-6. Starts the presence reporter (separate module) and the idle heartbeat.
+Failed startup exposes a status message and **Reload Aura**. A 15-second
+recovery path also covers a stalled entry/runtime download; malformed or expired
+sessions return to sign-in. This is separate from catalogue retry after entry.
 
-Because module evaluation order is significant (state is built at import time),
-`src/main.ts` is the only place that decides the order of boot imports.
+`app.ts` hydrates local tracks and paints cached data, then applies a received
+playlist preview or `?play=` link. Catalogue refresh runs in the background and
+reconciles the lists; failure exposes the library retry state. Playlist fragments
+survive sign-in and take priority over a combined `?play=` parameter. The entry
+stays independent of the music store; `runtime.ts` owns the full-app imports.
 
 ## Module map
 
@@ -81,8 +89,12 @@ Because module evaluation order is significant (state is built at import time),
 | Module | Responsibility |
 | --- | --- |
 | `config.ts` | Site constants: Google client id and admin allow-list |
-| `state.ts` | Single mutable `state` object, track identity/dedupe (`trackKey`), favourites, catalogue rebuild |
-| `catalog.ts` | Hugging Face tree + manifest fetch, filename parsing, title cleaning, cover pairing, cache |
+| `bootstrap.ts` | Guarded lazy runtime load and ready/session checks |
+| `state.ts` | Single mutable `state` object, favourites, catalogue rebuild |
+| `trackIdentity.ts` | Stable track keys and legacy-key matching, re-exported by state |
+| `catalog.ts` | HF tree/manifest/cache, artist-directory refresh and attribution overrides |
+| `artistIdentity.ts`, `artistAliases.ts`, `artistGroups.ts` | Shared read-side artist resolution, reviewed aliases and group construction |
+| `playlist-sharing.ts` | Bounded snapshot codec, URL construction, omissions and recipient library matching |
 | `session.ts` | Google session, 7-day token exchange, per-email usernames |
 | `google-auth.ts` | Browser-side Google ID-token verification (RS256/JWKS) |
 | `local-auth.ts` | Device-local PBKDF2 email/password accounts |
@@ -97,12 +109,12 @@ Because module evaluation order is significant (state is built at import time),
 | `queue.ts` | Up-next queue, play next/previous, track sheet actions, queue persistence in memory |
 | `library.ts` | Library/home song lists, legacy saved-track hydration, likes, stats, catalogue retry |
 | `search.ts` | Aura catalogue filtering and search categories |
-| `playlists.ts` | Device-local playlist CRUD, overview/detail pages, add/remove picker |
+| `playlists.ts` | Browser-local playlist CRUD, inline sharing, received previews and explicit local imports |
 | `radio.ts` | radio-browser search, station playback, custom streams, radio sheet |
 | `home.ts` | Greeting, quick-access tiles, Aura Picks, artist spotlight |
 | `ambience.ts` | Web Audio ambient layers, spatial/muffle effects, focus timer |
-| `settings.ts` | Settings modal, theme persistence, help, profile popup, sidebar, settings storage |
-| `deeplink.ts` | Consumes `?play=<track id>` and `?play=yt:<videoId>` |
+| `settings.ts` | Settings modal, help, profile popup, sidebar and preference storage |
+| `deeplink.ts` | Playback query links and `#playlist=` previews, including later hash arrivals |
 | `presence-reporter.ts` | Samples the player and publishes the presence contract once per second/event |
 
 ### `src/ui/`
@@ -120,11 +132,13 @@ Because module evaluation order is significant (state is built at import time),
 | Path | Responsibility |
 | --- | --- |
 | `functions/api/admin.ts` | Authenticated admin API: search, bucket mutations, workflow dispatch, secrets |
+| `functions/api/artists.ts`, `functions/api/artist-image.ts` | Public artist metadata/images and authenticated admin edits backed by D1 |
 | `functions/api/rooms.ts` | Thin Pages proxy to the rooms Worker; adds share URLs |
 | `rooms-worker/src/index.ts` | Worker routing, room id/admin key minting, CORS |
 | `rooms-worker/src/room.ts` | Durable Object plumbing: sockets, persistence, alarms |
 | `src/rooms/referee.ts` | Room rules, shared verbatim between DO and browser dev harness |
 | `src/rooms/*` | Client transport, clock sync, sync engine, WebAudio target, page controller |
+| `src/rooms/presentation.ts`, `src/rooms/sessionAudio.ts` | Invite/status presentation and session-owned audio lifecycle |
 | `scripts/*.py` | Upload pipeline: tag repair and manifest generation |
 | `premid/*` | PreMiD activity source + setup |
 
@@ -159,6 +173,30 @@ flowchart TD
    song by id then by identity key, and re-renders.
 5. Failure keeps the cached list (if any) and exposes a retry state when the
    list is empty.
+
+### Artist identities
+
+Home, Library, artist pages, portraits and counts share one grouping snapshot.
+The resolver prefers admin-owned aliases and intentional attribution corrections,
+then conservative formatting and reviewed equivalents. Ambiguous owners remain
+separate; supported collaboration credits can reference one recording from
+multiple artist groups. Display grouping does not replace persistent track keys
+or restart audio. See [Artist storage](artist-storage.md#read-side-artist-identity).
+
+### Playlist snapshots
+
+Sharing serializes an allowlisted version-1 snapshot as base64url UTF-8 JSON in
+`/#playlist=…`. Limits are 100 tracks including omission counts and 16 KiB decoded
+JSON. The fragment carries title/description, track labels/stable keys and counts;
+it excludes media/artwork URLs, local audio identifiers and account data. It is
+readable by anyone with the link but is not sent as part of the HTTP request.
+
+`deeplink.ts` validates the fragment and `playlists.ts` renders a read-only preview
+in `#tabPlaylist`. Explicit Save writes a private copy to `auraPlaylists`,
+deduplicating stable keys and retaining missing-track metadata for later library
+resolution. Sharing feedback is inline in `#playlistSharePanel`. Preview/import
+does not trigger playback, remote discovery, downloads or submissions. See
+[Features](features.md#sharing-a-playlist) for the sender and recipient flow.
 
 ## Rendering model
 
@@ -234,17 +272,18 @@ dist/
 ├── index.html
 ├── admin.html
 ├── rooms.html
-├── assets/main-*.js      # ~125 KB (39 KB gzip)
-├── assets/admin-*.js     # ~30 KB
-├── assets/rooms-*.js     # ~29 KB
-├── assets/main-*.css     # ~177 KB (34 KB gzip)
+├── assets/main-*.js      # sign-in/session entry
+├── assets/runtime-*.js   # lazy signed-in runtime
+├── assets/admin-*.js
+├── assets/rooms-*.js
+├── assets/*.css          # entry/runtime/page styles
 ├── aura-logo.png         # copied from public/
 └── aura-thumbnail.png
 ```
 
 `public/` is copied verbatim (stable URLs for the PreMiD activity). The unused
 `src/assets/hero-vinyl.png` is **not** in the bundle; Vite only emits imported
-assets. The sidebar logo is a 16 KB 512 px WebP.
+assets. Fonts and icons are bundled locally under `assets/`.
 
 ## Failure handling
 
@@ -254,10 +293,12 @@ assets. The sidebar logo is a 16 KB 512 px WebP.
 | Catalogue unreachable, cache exists | Cached tracks remain; toast explains |
 | Broken cover | Capture-phase error listener swaps in the vinyl placeholder |
 | Audio error / autoplay block | UI resets, toast explains; `play()` rejections are caught |
-| Search provider failures | `Promise.allSettled`; other providers still render; retry state |
+| Public Search has no matches | Local empty state; search filters the loaded library only |
+| Playlist link invalid / storage unavailable | Visible preview/import error; saving remains an explicit action |
+| Native share / clipboard unavailable | Inline status with copy/manual-copy fallback; cancellation stays distinct |
 | YouTube API blocked | Embedded player error is caught and shown as a toast |
 | Rooms disconnect | Client reconnects with backoff; sync engine pauses and re-converges |
-| Loader stalls | 8-second failsafe animation removes the loader overlay |
+| Entry/runtime fails or stalls | Loading status exposes **Reload Aura**; an invalid session returns to sign-in |
 
 ## Key design decisions
 
@@ -275,5 +316,7 @@ assets. The sidebar logo is a 16 KB 512 px WebP.
 
 - [Features](features.md) for the user-facing behaviour.
 - [Data model](data-model.md) for track/bucket/storage shapes.
+- [Artist storage](artist-storage.md) for identity resolution and metadata ownership.
 - [Rooms](rooms.md) for the real-time subsystem.
+- [Public resource discovery](discovery.md) for navigation documents and public read access.
 - [Deployment](deployment.md) for the Pages/Worker topology.

@@ -2,11 +2,12 @@ import { auraMasterCtx, effectCtx } from './ambience';
 import { fmt, toast } from '../core/dom';
 import { addToRecent, renderSongs, updateLibCount, updateLibNowPlaying } from './library';
 import { closeUpNext, playNext, playPrevious, renderUpNext } from './queue';
-import { currentRadioStation, escapeHtml, radioAudio, stopRadio, updateRadioPlayerUI } from './radio';
+import { currentRadioStation, escapeHtml, radioAudio, stopRadio, toggleRadioPlay, updateRadioPlayerUI } from './radio';
 import { auraYTQueue, extractYouTubeId } from './search';
 import { auraSettings } from './settings';
 import { roomModeActive } from '../rooms/roomFlag';
 import { $, persistLikedHistory, savedLikeMap, state } from '../core/state';
+import { beginPlaybackIntent, getPlaybackIntent } from '../core/playbackIntent';
 import { fetchLyricsForTrack, renderLyrics, updateLyricsProgress, prepareLyricsForNewSong, getTrackKey, lyricsCache, startLyricsSyncLoop } from './lyrics';
 /* ===== 2955-2994 ===== */
     export const dynamicColorCache = {};
@@ -164,6 +165,79 @@ import { fetchLyricsForTrack, renderLyrics, updateLyricsProgress, prepareLyricsF
     // moment (especially on mobile), so we keep the requested state separately.
     export let auraYTDesiredPlaying = false;
 
+    type YouTubePlayback = {
+      intent: number;
+      videoId: string;
+      player: any;
+      ended: boolean;
+      advanceTimer: ReturnType<typeof setTimeout> | null;
+    };
+    let youtubePlayback: YouTubePlayback | null = null;
+    let activePlaybackSource: 'audio' | 'youtube' | null = null;
+    let audioLoadRevision = 0;
+
+    function isCurrentYouTube(playback: YouTubePlayback): boolean {
+      return youtubePlayback === playback && playback.intent === getPlaybackIntent() &&
+        activePlaybackSource === 'youtube' && !currentRadioStation && !roomModeActive();
+    }
+
+    function cancelYouTubeAdvance(playback = youtubePlayback): void {
+      if(!playback) return;
+      if(playback.advanceTimer !== null) clearTimeout(playback.advanceTimer);
+      playback.advanceTimer = null;
+      playback.ended = false;
+    }
+
+    function isAudioSourceActive(): boolean {
+      return activePlaybackSource === 'audio' && !auraYTVideoId &&
+        !currentRadioStation && !roomModeActive() && !!state.audio.getAttribute('src');
+    }
+
+    /* The selected source owns the clock even when paused or still loading.
+       Never fall back to a previously loaded audio element when YouTube is at 0. */
+    export function getActivePlaybackTime(): number {
+      let time = 0;
+      try{
+        if(youtubePlayback && isCurrentYouTube(youtubePlayback)){
+          if(auraYTPlayerReady) time = youtubePlayback.player.getCurrentTime();
+        }else if(isAudioSourceActive()){
+          time = state.audio.currentTime;
+        }
+      }catch(_){}
+      return Number.isFinite(time) ? Math.max(0, time) : 0;
+    }
+
+    /* Seeking changes position only. In particular, a paused lyric click must
+       not start playback, and an unavailable iframe must not seek library audio. */
+    export function seekActivePlayback(time: number): boolean {
+      if(!Number.isFinite(time)) return false;
+      const target = Math.max(0, time);
+      try{
+        if(youtubePlayback && isCurrentYouTube(youtubePlayback)){
+          if(!auraYTPlayerReady) return false;
+          cancelYouTubeAdvance();
+          youtubePlayback.player.seekTo(target, true);
+          return true;
+        }
+        if(isAudioSourceActive()){
+          state.audio.currentTime = target;
+          return true;
+        }
+      }catch(_){}
+      return false;
+    }
+
+    function requestAudioPlayback(intent = getPlaybackIntent()): void {
+      const revision = audioLoadRevision;
+      state.isPlaying = true;
+      state.audio.play().catch(err => {
+        if(intent !== getPlaybackIntent() || revision !== audioLoadRevision || !isAudioSourceActive()) return;
+        if(err?.name === 'AbortError') return;
+        state.isPlaying = false;
+        updatePlayState();
+      });
+    }
+
     export function ensureYouTubeAPI(){
       if(window.YT && window.YT.Player) return Promise.resolve();
       if(auraYTReadyPromise) return auraYTReadyPromise;
@@ -183,17 +257,34 @@ import { fetchLyricsForTrack, renderLyrics, updateLyricsProgress, prepareLyricsF
        Preloading it here pulled YouTube's third-party script on every visit,
        including the majority that only play library/radio audio. */
 
+    /* Move the existing tools, rather than recreating them: queue.ts binds the
+       original Info/Share buttons and Like has its own inline listener. */
+    function replaceFullPlayerArtMedia(media: HTMLElement): void {
+      const art = $('fullPlayerArt');
+      if(!art) return;
+      const tools = art.querySelector('.ytm-art-overlay-tools');
+      art.replaceChildren(media, ...(tools ? [tools] : []));
+    }
+
     export function resetFullPlayerArtToImage(poster){
       const art=$('fullPlayerArt');
       if(!art) return;
       art.classList.remove('youtube-mode');
-      art.innerHTML=`<img id="fullImg" src="${escapeHtml(poster||'')}" alt="">`;
+      const image = document.createElement('img');
+      image.id = 'fullImg';
+      image.src = poster || '';
+      image.alt = '';
+      image.decoding = 'async';
+      replaceFullPlayerArtMedia(image);
       $('youtubeModeBadge').classList.remove('active');
     }
 
-    export function stopAuraYouTube(){
-      try{ if(auraYTPlayer && typeof auraYTPlayer.stopVideo==='function') auraYTPlayer.stopVideo(); }catch(e){}
-      try{ if(auraYTPlayer && typeof auraYTPlayer.destroy==='function') auraYTPlayer.destroy(); }catch(e){}
+    function retireAuraYouTube(): void {
+      const player = auraYTPlayer;
+      cancelYouTubeAdvance();
+      // Retire before calling the iframe: stop/destroy can emit late events.
+      youtubePlayback = null;
+      if(activePlaybackSource === 'youtube') activePlaybackSource = null;
       auraYTPlayer=null;
       auraYTPendingPlay=false;
       auraYTDesiredPlaying=false;
@@ -201,17 +292,31 @@ import { fetchLyricsForTrack, renderLyrics, updateLyricsProgress, prepareLyricsF
       auraYTVideoId='';
       auraYTTitle='';
       auraYTPoster='';
+      try{ player?.stopVideo?.(); }catch(e){}
+      try{ player?.destroy?.(); }catch(e){}
+    }
+
+    export function stopAuraYouTube(){
+      if(youtubePlayback || auraYTPlayer || auraYTVideoId) beginPlaybackIntent();
+      retireAuraYouTube();
     }
 
     export async function playYouTubeInsideAura(videoId,title,poster,liked=false,autoPlay=true){
       if(!videoId){toast('YouTube video ID was missing','triangle-exclamation');return;}
       stopRadio();
+      const playback: YouTubePlayback = {
+        intent: beginPlaybackIntent(), videoId: String(videoId), player: null,
+        ended: false, advanceTimer: null,
+      };
+      retireAuraYouTube();
+      youtubePlayback = playback;
+      activePlaybackSource = 'youtube';
       if(state.audio){ try{state.audio.pause();}catch(e){} }
       state.isPlaying=false;
       auraYTPendingPlay=false;
-      auraYTDesiredPlaying=false;
+      auraYTDesiredPlaying=autoPlay;
       auraYTPlayerReady=false;
-      auraYTVideoId=String(videoId);
+      auraYTVideoId=playback.videoId;
       auraYTPoster=poster||'';
 
       let ytArtist = 'YouTube Music';
@@ -254,53 +359,79 @@ import { fetchLyricsForTrack, renderLyrics, updateLyricsProgress, prepareLyricsF
 
       const art=$('fullPlayerArt');
       art.classList.add('youtube-mode');
-      art.innerHTML=`<div id="auraYTFrameHost" style="width:100%;height:100%;background:#000"></div>`;
+      const host = document.createElement('div');
+      host.id = 'auraYTFrameHost';
+      host.style.cssText = 'width:100%;height:100%;background:#000';
+      replaceFullPlayerArtMedia(host);
       updatePlayState();
       prepareLyricsForNewSong(ytTitle, ytArtist, videoId);
-      fetchLyricsForTrack(ytTitle, ytArtist, undefined, videoId).then(l => renderLyrics(l));
+      fetchLyricsForTrack(ytTitle, ytArtist, undefined, videoId).then(l => {
+        if(isCurrentYouTube(playback)) renderLyrics(l);
+      });
 
       try{
         // IMPORTANT: finish loading the API and create the player before the
         // user is expected to press AURA Play. This avoids the mobile race where
         // playVideo() is called before the iframe is ready and gets blocked.
         await ensureYouTubeAPI();
-        auraYTPlayer=new YT.Player('auraYTFrameHost',{
-          videoId:auraYTVideoId,
+        if(!isCurrentYouTube(playback)) return;
+        const ownsEvent = (event) => isCurrentYouTube(playback) && event.target === playback.player;
+        const player=new YT.Player(host,{
+          videoId:playback.videoId,
           width:'100%',height:'100%',
-          playerVars:{autoplay:autoPlay?1:0,playsinline:1,rel:0,controls:1,enablejsapi:1,origin:(location.protocol==='http:'||location.protocol==='https:')?location.origin:undefined},
+          playerVars:{autoplay:auraYTDesiredPlaying?1:0,playsinline:1,rel:0,controls:1,enablejsapi:1,origin:(location.protocol==='http:'||location.protocol==='https:')?location.origin:undefined},
           events:{
-            onReady:()=>{
+            onReady:(e)=>{
+              if(!ownsEvent(e)) return;
               auraYTPlayerReady=true;
               auraYTPendingPlay=false;
-              if(autoPlay){
-                try{ auraYTDesiredPlaying=true; auraYTPendingPlay=true; auraYTPlayer.playVideo(); }catch(e){}
-              }
               state.isPlaying=false;
+              if(auraYTDesiredPlaying){
+                try{ auraYTPendingPlay=true; playback.player.playVideo(); }catch(e){}
+              }
               updatePlayState();
             },
             onStateChange:(e)=>{
-              if(!window.YT) return;
+              if(!ownsEvent(e) || !window.YT) return;
               if(e.data===YT.PlayerState.PLAYING){
+                cancelYouTubeAdvance(playback);
                 auraYTPendingPlay=false;
                 auraYTDesiredPlaying=true;
                 state.isPlaying=true;
                 updatePlayState();
               }else if(e.data===YT.PlayerState.PAUSED){
+                cancelYouTubeAdvance(playback);
                 auraYTPendingPlay=false;
                 auraYTDesiredPlaying=false;
                 state.isPlaying=false;
                 updatePlayState();
               }else if(e.data===YT.PlayerState.ENDED){
-                if(state.repeatMode==='one'){ try{ auraYTPlayer.seekTo(0,true); auraYTPlayer.playVideo(); }catch(_){} return; }
+                if(playback.player.getPlayerState() !== YT.PlayerState.ENDED) return;
+                if(playback.ended) return;
+                playback.ended = true;
+                if(state.repeatMode==='one'){ try{ playback.player.seekTo(0,true); playback.player.playVideo(); }catch(_){} return; }
                 auraYTPendingPlay=false;
                 auraYTDesiredPlaying=false;
                 state.isPlaying=false;
                 updatePlayState();
-                if(auraSettings.autoplayNext && auraYTQueue.length){ setTimeout(()=>{ playNext(); },250); }
+                if(auraSettings.autoplayNext){
+                  const intent = playback.intent;
+                  playback.advanceTimer = setTimeout(()=>{
+                    playback.advanceTimer = null;
+                    if(!isCurrentYouTube(playback) || intent !== getPlaybackIntent() || !playback.ended ||
+                      !auraSettings.autoplayNext || state.repeatMode==='one') return;
+                    // The retained library/playlist queue owns next-track order.
+                    // A replay or seek during this small delay cancels the end.
+                    try{ if(playback.player.getPlayerState() !== YT.PlayerState.ENDED) return; }catch(_){ return; }
+                    void playNext();
+                  },250);
+                }
               }
               // BUFFERING / CUED / UNSTARTED do not change the AURA play state.
             },
-            onAutoplayBlocked:()=>{
+            onAutoplayBlocked:(e)=>{
+              if(!ownsEvent(e)) return;
+              cancelYouTubeAdvance(playback);
               // Do not flip AURA into a fake playing state when the browser blocks
               // scripted playback. The user can press AURA Play again directly.
               auraYTPendingPlay=false;
@@ -309,26 +440,38 @@ import { fetchLyricsForTrack, renderLyrics, updateLyricsProgress, prepareLyricsF
               updatePlayState();
             },
             onError:(e)=>{
+              if(!ownsEvent(e)) return;
+              cancelYouTubeAdvance(playback);
               auraYTPlayerReady=false;
+              auraYTPendingPlay=false;
+              auraYTDesiredPlaying=false;
               state.isPlaying=false;
               updatePlayState();
               toast('This YouTube video cannot be embedded. Try another song.','triangle-exclamation');
             }
           }
         });
+        if(!isCurrentYouTube(playback)){ player.destroy(); return; }
+        playback.player = player;
+        auraYTPlayer = player;
       }catch(err){
+        if(!isCurrentYouTube(playback)) return;
         console.warn('YouTube player load error:',err);
         auraYTPlayerReady=false;
+        auraYTPendingPlay=false;
+        auraYTDesiredPlaying=false;
+        state.isPlaying=false;
+        updatePlayState();
         toast('YouTube player could not load. Try again.','triangle-exclamation');
       }
     }
 
     export function closeYouTubePlayer(){
+      const poster = auraYTPoster;
       stopAuraYouTube();
-      const art=$('fullPlayerArt');
-      if(art) art.classList.remove('youtube-mode');
-      const badge=$('youtubeModeBadge');
-      if(badge) badge.classList.remove('active');
+      resetFullPlayerArtToImage(poster);
+      state.isPlaying=false;
+      updatePlayState();
     }
 
     export async function playYouTubeProResult(meta){
@@ -363,19 +506,28 @@ import { fetchLyricsForTrack, renderLyrics, updateLyricsProgress, prepareLyricsF
        picks back up on its own instead of staying stuck paused. */
     export let radioWasPlayingBeforeHidden = false;
     export let audioWasPlayingBeforeHidden = false;
+    let backgroundPlaybackIntent = 0;
 
     export function auraCaptureBackgroundState(){
+      backgroundPlaybackIntent = getPlaybackIntent();
       radioWasPlayingBeforeHidden = !!(currentRadioStation && state.radioIsPlaying && !radioAudio.paused);
-      audioWasPlayingBeforeHidden = !!(state.isPlaying && state.audio.src && !state.audio.paused && !auraYTPlayer && !auraYTVideoId);
+      audioWasPlayingBeforeHidden = !!(isAudioSourceActive() && state.isPlaying && !state.audio.paused);
     }
 
     export function auraResumeAfterForeground(){
-      if(radioWasPlayingBeforeHidden && currentRadioStation && radioAudio.paused){
-        radioAudio.play().then(()=>{state.radioIsPlaying=true;updateRadioPlayerUI();}).catch(()=>{});
+      const intent = backgroundPlaybackIntent;
+      if(intent === getPlaybackIntent() && radioWasPlayingBeforeHidden && currentRadioStation && radioAudio.paused){
+        radioAudio.play().then(()=>{
+          if(intent !== getPlaybackIntent() || !currentRadioStation) return;
+          state.radioIsPlaying=true;updateRadioPlayerUI();
+        }).catch(()=>{});
       }
-      if(audioWasPlayingBeforeHidden && state.audio.src && state.audio.paused){
-        state.audio.play().then(()=>{state.isPlaying=true;updatePlayState();}).catch(()=>{});
+      if(intent === getPlaybackIntent() && audioWasPlayingBeforeHidden && isAudioSourceActive() && state.audio.paused){
+        requestAudioPlayback(intent);
+        updatePlayState();
       }
+      radioWasPlayingBeforeHidden = false;
+      audioWasPlayingBeforeHidden = false;
       if(typeof effectCtx!=='undefined' && effectCtx && effectCtx.state==='suspended'){ effectCtx.resume().catch(()=>{}); }
       if(typeof auraMasterCtx!=='undefined' && auraMasterCtx && auraMasterCtx.state==='suspended'){ auraMasterCtx.resume().catch(()=>{}); }
     }
@@ -390,8 +542,14 @@ import { fetchLyricsForTrack, renderLyrics, updateLyricsProgress, prepareLyricsF
 /* ===== 5888-5985 ===== */
     export function setupMainMediaSession(){
       if(!('mediaSession' in navigator)) return;
-      mediaSessionAction('play',()=>{ if(state.audio.src) state.audio.play().catch(()=>{}); });
-      mediaSessionAction('pause',()=>{ state.audio.pause(); });
+      mediaSessionAction('play',()=>{
+        if(currentRadioStation){ if(radioAudio.paused) toggleRadioPlay(); }
+        else setMainPlaybackPlaying(true);
+      });
+      mediaSessionAction('pause',()=>{
+        if(currentRadioStation){ if(!radioAudio.paused) toggleRadioPlay(); }
+        else setMainPlaybackPlaying(false);
+      });
       mediaSessionAction('previoustrack',()=>{ playPrevious(); });
       mediaSessionAction('nexttrack',()=>{ playNext(); });
     }
@@ -400,7 +558,7 @@ import { fetchLyricsForTrack, renderLyrics, updateLyricsProgress, prepareLyricsF
     export function updateMainMediaSession(){
       if(!('mediaSession' in navigator)) return;
       const s = state.songs[state.currentIndex];
-      if(!s || (auraYTPlayer || auraYTVideoId)) return; // YouTube playback manages its own session state
+      if(!s || !isAudioSourceActive()) return; // Other sources manage their own session state.
       try{
         navigator.mediaSession.metadata = new MediaMetadata({
           title: s.title || 'AURA Music',
@@ -414,21 +572,30 @@ import { fetchLyricsForTrack, renderLyrics, updateLyricsProgress, prepareLyricsF
 
     export function loadSong(i){
       const s=state.songs[i]; if(!s) return;
-      state.audio.src=s.url;
+      // Bootstrap/metadata preparation is passive; it never claims a newer
+      // playback intent or replaces an already selected YouTube source.
+      if(youtubePlayback) return;
+      activePlaybackSource = s.isYouTube ? null : 'audio';
+      const revision = ++audioLoadRevision;
+      if(s.isYouTube) state.audio.removeAttribute('src');
+      else state.audio.src=s.url;
+      const source = state.audio.src;
       // Resilient fallback: if edge proxy has a transient failure, seamlessly fall back to direct Hugging Face URL
       state.audio.onerror = () => {
-        if (!s.hfUrl) return;
+        if (!s.hfUrl || revision !== audioLoadRevision || !isAudioSourceActive() || state.audio.src !== source) return;
         let fallback = s.hfUrl;
         try { fallback = new URL(s.hfUrl, location.href).href; } catch (_) {}
         /* src is always the resolved absolute URL; comparing it to a possibly
            relative hfUrl meant a broken file reloaded itself forever. Once the
            fallback is in place, let the failure stand. */
         if (state.audio.src === fallback) return;
+        const resume = state.isPlaying;
         console.warn('[Aura Audio] Edge proxy unreachable, falling back to direct Hugging Face URL');
         state.audio.src = fallback;
         state.audio.load();
-        state.audio.play().catch(() => {});
+        if(resume) requestAudioPlayback();
       };
+      if(!$('fullImg')) resetFullPlayerArtToImage(s.img);
       $('currentImg').src=$('fullImg').src=s.img;
       $('currentTitle').textContent=$('fullTitle').textContent=$('fullHeaderTitle').textContent=s.title;
       $('currentArtist').textContent=$('fullArtist').textContent=s.artist;
@@ -451,7 +618,9 @@ import { fetchLyricsForTrack, renderLyrics, updateLyricsProgress, prepareLyricsF
          only do the eager work when it is actually on screen. */
       if(lyricsPanelOpen()){
         prepareLyricsForNewSong(s.title, s.artist, s.videoId);
-        fetchLyricsForTrack(s.title, s.artist, s.duration, s.videoId).then(l => renderLyrics(l));
+        fetchLyricsForTrack(s.title, s.artist, s.duration, s.videoId).then(l => {
+          if(revision === audioLoadRevision && isAudioSourceActive()) renderLyrics(l);
+        });
       }
     }
 
@@ -473,6 +642,7 @@ import { fetchLyricsForTrack, renderLyrics, updateLyricsProgress, prepareLyricsF
        away (or report Infinity on Chrome for chunked streams). Show it as soon
        as it is known; 'durationchange' fires again when it resolves. */
     export function refreshDurationDisplay(){
+      if(!isAudioSourceActive()) return;
       const d = state.audio.duration;
       /* Streamed MP3s can report Infinity until the browser has probed further
          into the file. The old code forced that probe by seeking to 1e101 and
@@ -488,9 +658,9 @@ import { fetchLyricsForTrack, renderLyrics, updateLyricsProgress, prepareLyricsF
 
     export let lastPlayRequestAt=0;
     export function playSong(i, keepFull=false){
-      lastPlayRequestAt=Date.now();
       const s=state.songs[i];
       if(!s) return;
+      lastPlayRequestAt=Date.now();
       if(s.isYouTube && s.videoId){
         state.currentIndex=i;
         playYouTubeInsideAura(s.videoId,s.title,s.img,!!s.favorite,true);
@@ -499,7 +669,8 @@ import { fetchLyricsForTrack, renderLyrics, updateLyricsProgress, prepareLyricsF
         }
         return;
       }
-      stopAuraYouTube();
+      const intent = beginPlaybackIntent();
+      retireAuraYouTube();
       state.auraYTQueueIndex=-1;
       resetFullPlayerArtToImage(s.img||'');
       const keepBigPlayer = window.matchMedia('(min-width:900px)').matches && $('fullPlayerOverlay').classList.contains('active');
@@ -507,16 +678,7 @@ import { fetchLyricsForTrack, renderLyrics, updateLyricsProgress, prepareLyricsF
       if(keepBigPlayer || keepFull) $('fullPlayerOverlay').classList.add('active');
       if(s.missing){ toast('This file is unavailable — please re-add it', 'triangle-exclamation'); return; }
       state.currentIndex=i; loadSong(i);
-      /* A play() that is superseded by a newer track rejects with AbortError a
-         moment later. That used to flip the controls to "paused" while audio was
-         actually playing, which looked like the player had got stuck. */
-      const requestAt = lastPlayRequestAt;
-      state.audio.play().catch(err => {
-        if(requestAt !== lastPlayRequestAt) return;
-        if(err && (err as any).name === 'AbortError') return;
-        state.isPlaying=false; updatePlayState();
-      });
-      state.isPlaying=true;
+      requestAudioPlayback(intent);
       $('miniPlayer').classList.add('active');
       updatePlayState();
       /* Re-rendering the whole song list on every play froze the UI on phones.
@@ -531,9 +693,12 @@ import { fetchLyricsForTrack, renderLyrics, updateLyricsProgress, prepareLyricsF
     }
 
     export function updatePlayState(){
-      const icon = state.isPlaying ? "fa-solid fa-pause" : "fa-solid fa-play";
+      // A pending iframe play can still be canceled with Pause. Keep the
+      // transport label honest about that command without faking audio state.
+      const playing = state.isPlaying || !!(youtubePlayback && isCurrentYouTube(youtubePlayback) && auraYTDesiredPlaying);
+      const icon = playing ? "fa-solid fa-pause" : "fa-solid fa-play";
       $('playIcon').className = $('fullPlayIcon').className = icon;
-      const label = state.isPlaying ? 'Pause' : 'Play';
+      const label = playing ? 'Pause' : 'Play';
       $('fullPlayBtn')?.setAttribute('aria-label', label);
       $('playPauseBtn')?.setAttribute('aria-label', label);
       // Apple-Music artwork pulse: springs between scale(1) and scale(.8)
@@ -548,42 +713,51 @@ import { fetchLyricsForTrack, renderLyrics, updateLyricsProgress, prepareLyricsF
     $('fullPlayBtn').onclick=e=>{ e.stopPropagation(); togglePlay(); };
 
 /* ===== 6185-6273 ===== */
-    export function togglePlay(){
-      if(auraYTPlayer){
-        if(!auraYTPlayerReady){
-          toast('AURA player is still loading…','spinner');
+    function setMainPlaybackPlaying(playing: boolean): void {
+      if(currentRadioStation || roomModeActive()) return;
+      const playback = youtubePlayback;
+      if(playback && activePlaybackSource === 'youtube'){
+        // A same-source command cancels pending work but retains this player's
+        // callbacks. This also lets Pause cancel autoplay before onReady arrives.
+        playback.intent = beginPlaybackIntent();
+        cancelYouTubeAdvance(playback);
+        auraYTDesiredPlaying=playing;
+        auraYTPendingPlay=playing && auraYTPlayerReady;
+        if(!auraYTPlayerReady || !playback.player){
+          state.isPlaying=false;
+          updatePlayState();
           return;
         }
         try{
-          const ytState=auraYTPlayer.getPlayerState();
-          if(window.YT && ytState===YT.PlayerState.PLAYING){
-            auraYTDesiredPlaying=false;
-            auraYTPendingPlay=false;
-            auraYTPlayer.pauseVideo();
-            state.isPlaying=false;
-          }else{
-            auraYTDesiredPlaying=true;
-            auraYTPendingPlay=true;
-            auraYTPlayer.playVideo();
-            state.isPlaying=true;
-          }
+          if(playing) playback.player.playVideo();
+          else playback.player.pauseVideo();
+          state.isPlaying=playing;
         }catch(e){
+          auraYTDesiredPlaying=false;
+          auraYTPendingPlay=false;
           state.isPlaying=false;
         }
         updatePlayState();
         return;
       }
-      if(auraYTVideoId){
-        toast('AURA player is still loading…','spinner');
+      if(!isAudioSourceActive()){
+        if(playing) playSong(state.currentIndex >= 0 ? state.currentIndex : 0);
+        else beginPlaybackIntent();
         return;
       }
-      if(!state.audio.src) playSong(0);
-      else if(state.isPlaying){ state.audio.pause(); state.isPlaying=false; }
-      else{ state.audio.play().catch(()=>{ state.isPlaying=false; updatePlayState(); }); state.isPlaying=true; }
+      const intent = beginPlaybackIntent();
+      if(playing) requestAudioPlayback(intent);
+      else{ state.audio.pause(); state.isPlaying=false; }
       updatePlayState();
+    }
+
+    export function togglePlay(){
+      const playing = activePlaybackSource === 'youtube' ? auraYTDesiredPlaying || state.isPlaying : state.isPlaying;
+      setMainPlaybackPlaying(!playing);
     }
     
     state.audio.addEventListener('loadedmetadata', ()=>{
+      if(!isAudioSourceActive()) return;
       if(state.audio.duration && isFinite(state.audio.duration) && state.audio.duration > 0){
         const lmdApi = (window as any).__auraMiniProgress;
         if(lmdApi && lmdApi.apply) lmdApi.apply(0, false);
@@ -604,6 +778,7 @@ import { fetchLyricsForTrack, renderLyrics, updateLyricsProgress, prepareLyricsF
     let timeUpdateRaf = 0;
     let lastTimeUpdate = 0;
     state.audio.addEventListener('timeupdate', ()=>{
+      if(!isAudioSourceActive()) return;
       const now = performance.now();
       // Throttle to ~30fps (33ms) max to prevent UI lag on mobile
       if (now - lastTimeUpdate < 33) return;
@@ -611,6 +786,8 @@ import { fetchLyricsForTrack, renderLyrics, updateLyricsProgress, prepareLyricsF
 
       if (timeUpdateRaf) cancelAnimationFrame(timeUpdateRaf);
       timeUpdateRaf = requestAnimationFrame(() => {
+        timeUpdateRaf = 0;
+        if(!isAudioSourceActive()) return;
         if(state.audio.duration && isFinite(state.audio.duration) && state.audio.duration > 0){
           const pct=(state.audio.currentTime/state.audio.duration)*100;
           $('progressFill').style.width=pct+'%';
@@ -623,18 +800,20 @@ import { fetchLyricsForTrack, renderLyrics, updateLyricsProgress, prepareLyricsF
         // updateLyricsProgress moved to lyrics sync loop to avoid duplicate work
       });
     });
-    state.audio.addEventListener('play',()=>{state.isPlaying=true;updatePlayState();updateMainMediaSession();});
-    state.audio.addEventListener('pause',()=>{state.isPlaying=false;updatePlayState();updateMainMediaSession();});
+    state.audio.addEventListener('play',()=>{if(isAudioSourceActive() && !state.audio.paused){state.isPlaying=true;updatePlayState();updateMainMediaSession();}});
+    state.audio.addEventListener('pause',()=>{if(isAudioSourceActive() && state.audio.paused){state.isPlaying=false;updatePlayState();updateMainMediaSession();}});
     /* A listening room owns what plays next, so the personal autoplay rules
        stand down while one is active — otherwise a track finishing would race
        the room and start something nobody else was expecting. */
     state.audio.addEventListener('ended',()=>{
-      if(roomModeActive()) return;
-      if(state.repeatMode==='one'){state.audio.currentTime=0;state.audio.play().catch(()=>{ state.isPlaying=false; updatePlayState(); });state.isPlaying=true;updatePlayState();return;}
-      if(auraSettings.autoplayNext){playNext();}else if(!state.isPlaying) updatePlayState();
+      if(!isAudioSourceActive() || !state.audio.ended) return;
+      if(state.repeatMode==='one'){state.audio.currentTime=0;requestAudioPlayback(beginPlaybackIntent());updatePlayState();return;}
+      state.isPlaying=false;
+      updatePlayState();
+      if(auraSettings.autoplayNext) void playNext();
     });
     setInterval(()=>{
-      if(!auraYTPlayer || document.hidden) return;
+      if(!youtubePlayback || !isCurrentYouTube(youtubePlayback) || !auraYTPlayerReady || document.hidden) return;
       try{
         const d=auraYTPlayer.getDuration()||0, c=auraYTPlayer.getCurrentTime()||0;
         if(d){ if(!fullSeekDragging) $('fullSeekSlider').value=(c/d)*100; $('fullCurrentTime').textContent=fmt(c); $('fullDurationTime').textContent=fmt(d); }
@@ -643,22 +822,25 @@ import { fetchLyricsForTrack, renderLyrics, updateLyricsProgress, prepareLyricsF
     },1000); // Reduced from 500ms to 1000ms for mobile performance
     $('fullSeekSlider').oninput=()=>{
       const pct=Number($('fullSeekSlider').value)||0;
-      if(auraYTPlayer){
+      if(youtubePlayback && isCurrentYouTube(youtubePlayback)){
         try{
+          if(!auraYTPlayerReady) return;
           const d=auraYTPlayer.getDuration();
           if(isFinite(d) && d>0){
             const t=(pct/100)*d;
-            auraYTPlayer.seekTo(t,true);
-            $('fullCurrentTime').textContent=fmt(t);
-            updateLyricsProgress(t);
+            if(seekActivePlayback(t)){
+              $('fullCurrentTime').textContent=fmt(t);
+              updateLyricsProgress(t);
+            }
           }
         }catch(e){} return;
       }
-      if(state.audio.duration && isFinite(state.audio.duration) && state.audio.duration > 0){
+      if(isAudioSourceActive() && state.audio.duration && isFinite(state.audio.duration) && state.audio.duration > 0){
         const targetTime = (pct/100)*state.audio.duration;
-        state.audio.currentTime=targetTime;
-        $('fullCurrentTime').textContent=fmt(targetTime);
-        updateLyricsProgress(targetTime);
+        if(seekActivePlayback(targetTime)){
+          $('fullCurrentTime').textContent=fmt(targetTime);
+          updateLyricsProgress(targetTime);
+        }
       }
     };
 
@@ -667,14 +849,28 @@ import { fetchLyricsForTrack, renderLyrics, updateLyricsProgress, prepareLyricsF
        ignored (only a short, still pointer press counts as a tap). */
     const artTap = $('fullPlayerArt');
     let artTapDownX = 0, artTapDownY = 0, artTapDownT = 0;
+    let artTapPointer: number | null = null;
     artTap.addEventListener('pointerdown', e => {
+      artTapPointer = null;
+      if(e.button !== 0 || e.isPrimary === false || (e.target as HTMLElement).closest('button, a, input')) return;
+      artTapPointer = e.pointerId;
       artTapDownX = e.clientX; artTapDownY = e.clientY; artTapDownT = Date.now();
     });
+    artTap.addEventListener('pointermove', e => {
+      if(e.pointerId === artTapPointer && (Math.abs(e.clientX - artTapDownX) > 12 || Math.abs(e.clientY - artTapDownY) > 12)) artTapPointer = null;
+    });
     artTap.addEventListener('pointerup', e => {
+      const tracked = e.pointerId === artTapPointer;
+      artTapPointer = null;
+      if((e.target as HTMLElement).closest('button, a, input')) return;
+      if(!tracked) return;
       if(Math.abs(e.clientX - artTapDownX) > 12 || Math.abs(e.clientY - artTapDownY) > 12) return;
       if(Date.now() - artTapDownT > 600) return;
       togglePlay();
     });
+    artTap.addEventListener('pointercancel', () => { artTapPointer = null; });
+    window.addEventListener('pointerup', () => { artTapPointer = null; });
+    window.addEventListener('pointercancel', () => { artTapPointer = null; });
 
 
     $('miniPlayer').onclick=e=>{
@@ -707,8 +903,10 @@ import { fetchLyricsForTrack, renderLyrics, updateLyricsProgress, prepareLyricsF
     }
 
     export function getCurrentActiveTrack(): { title: string; artist: string; videoId?: string; duration?: number } | null {
+      if(currentRadioStation || roomModeActive()) return null;
       if (auraYTVideoId) {
-        let ytArtist = 'YouTube Music';
+        const song = state.songs[state.currentIndex];
+        let ytArtist = song?.videoId === auraYTVideoId ? song.artist || 'YouTube Music' : 'YouTube Music';
         let ytTitle = auraYTTitle;
         if (auraYTTitle.includes(' - ')) {
           const parts = auraYTTitle.split(' - ');
@@ -753,12 +951,12 @@ import { fetchLyricsForTrack, renderLyrics, updateLyricsProgress, prepareLyricsF
         const cur = getCurrentActiveTrack();
         if (cur) {
           const key = getTrackKey(cur.title, cur.artist);
-          if (lyricsCache.has(key)) {
-            renderLyrics(lyricsCache.get(key) || null);
-          } else {
-            prepareLyricsForNewSong(cur.title, cur.artist, cur.videoId);
+          const playback = youtubePlayback;
+          const revision = audioLoadRevision;
+          prepareLyricsForNewSong(cur.title, cur.artist, cur.videoId);
+          if (!lyricsCache.has(key)) {
             fetchLyricsForTrack(cur.title, cur.artist, cur.duration, cur.videoId).then(l => {
-              renderLyrics(l);
+              if(playback ? isCurrentYouTube(playback) : revision === audioLoadRevision && isAudioSourceActive()) renderLyrics(l);
             });
           }
         }
@@ -876,15 +1074,16 @@ import { fetchLyricsForTrack, renderLyrics, updateLyricsProgress, prepareLyricsF
             <div class="ytm-rel-list">
               ${sameArtistSongs.map(s => {
                 const originalIdx = state.songs.findIndex(x => x.id === s.id);
+                const unavailable = originalIdx < 0 || s.missing || (s.isLocal && !s.url);
                 return `
-                  <div class="ytm-rel-row" onclick="playSong(${originalIdx >= 0 ? originalIdx : 0})" role="button" tabindex="0">
+                  <button type="button" class="ytm-rel-row" data-related-id="${escapeHtml(s.id)}" aria-label="${escapeHtml(`Play ${s.title || 'Untitled'} by ${s.artist || 'Unknown Artist'}`)}" ${unavailable ? 'disabled' : ''}>
                     <img class="ytm-rel-row-img" src="${escapeHtml(s.img || '')}" alt="" loading="lazy">
-                    <div class="ytm-rel-row-meta">
-                      <div class="ytm-rel-row-title">${escapeHtml(s.title || '')}</div>
-                      <div class="ytm-rel-row-sub">${escapeHtml(s.artist || '')}</div>
-                    </div>
-                    <button type="button" class="ytm-rel-row-play"><i class="fa-solid fa-play"></i></button>
-                  </div>
+                    <span class="ytm-rel-row-meta">
+                      <span class="ytm-rel-row-title">${escapeHtml(s.title || '')}</span>
+                      <span class="ytm-rel-row-sub">${escapeHtml(s.artist || '')}</span>
+                    </span>
+                    <span class="ytm-rel-row-play" aria-hidden="true"><i class="fa-solid fa-play"></i></span>
+                  </button>
                 `;
               }).join('')}
             </div>
@@ -893,6 +1092,17 @@ import { fetchLyricsForTrack, renderLyrics, updateLyricsProgress, prepareLyricsF
       }
 
       container.innerHTML = html;
+      container.querySelectorAll<HTMLButtonElement>('.ytm-rel-row').forEach(button => {
+        button.addEventListener('click', () => {
+          const index = state.songs.findIndex(song => String(song.id) === button.dataset.relatedId);
+          const song = state.songs[index];
+          if(!song || song.missing || (song.isLocal && !song.url)){
+            button.disabled = true;
+            return;
+          }
+          playSong(index);
+        });
+      });
     }
 
     if (typeof window !== 'undefined') {

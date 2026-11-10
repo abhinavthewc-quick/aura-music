@@ -6,7 +6,8 @@
    manifest.json, written by the upload workflow and keyed by video ID.
    Editable artist profiles and name overrides live independently in D1. */
 
-import { artistTrackId, normalizeArtistKey, type ArtistProfile, type ArtistDirectory } from '../../lib/artistProfiles';
+import { artistTrackId, type ArtistProfile, type ArtistDirectory } from '../../lib/artistProfiles';
+import { createArtistIdentityResolver } from './artistIdentity';
 
 export const HF_BUCKET_ID = 'Angelrider/sonora';
 const HF_TREE_URL = `https://huggingface.co/api/buckets/${HF_BUCKET_ID}/tree?recursive=true`;
@@ -63,8 +64,8 @@ export function getAudioStreamUrl(path: string): string {
   return '/api/audio?path=' + encodeURIComponent(path);
 }
 
-/* YouTube's auto-generated channels publish as "<Artist> - Topic" — strip the
-   suffix so one artist groups as one artist everywhere in the UI. */
+/* Preserve the historic filename parser: no-ID playlist keys include its
+   artist spelling. Richer read-side identity belongs in artistIdentity.ts. */
 export function cleanArtist(name: string): string {
   return name.replace(/\s*-\s*Topic$/i, '').trim() || 'Unknown Artist';
 }
@@ -225,22 +226,38 @@ if (typeof window !== 'undefined') {
   });
 }
 
+let manifestArtistsRaw: string | null | undefined;
+let manifestArtistsCache: Record<string, ArtistMeta> = {};
+let combinedArtistSource: Record<string, ArtistMeta> | undefined;
+let combinedArtistsCache: Record<string, ArtistMeta> | undefined;
 export function readArtistsCache(): Record<string, ArtistMeta> {
+  let raw: string | null = null;
   try {
-    const raw = localStorage.getItem(ARTISTS_CACHE_KEY);
-    if (!raw) return cloudArtists().artists;
-    const parsed = JSON.parse(raw);
-    return { ...(parsed && typeof parsed === 'object' && !Array.isArray(parsed) ? parsed : {}), ...cloudArtists().artists };
-  } catch {
-    return cloudArtists().artists;
+    raw = localStorage.getItem(ARTISTS_CACHE_KEY);
+  } catch { /* storage may be unavailable */ }
+  if (raw !== manifestArtistsRaw) {
+    manifestArtistsRaw = raw;
+    manifestArtistsCache = {};
+    try {
+      const parsed = JSON.parse(raw || 'null');
+      if (parsed && typeof parsed === 'object' && !Array.isArray(parsed)) manifestArtistsCache = parsed;
+    } catch { /* bad fallback data cannot mask the cloud snapshot */ }
+    combinedArtistsCache = undefined;
   }
+  const cloud = cloudArtists().artists;
+  if (!combinedArtistsCache || combinedArtistSource !== cloud) {
+    combinedArtistSource = cloud;
+    combinedArtistsCache = { ...manifestArtistsCache, ...cloud };
+  }
+  return combinedArtistsCache;
 }
 
 export function getArtistMeta(artistName: string): ArtistMeta | undefined {
   if (!artistName) return undefined;
-  const artists = readArtistsCache();
-  const k = normalizeArtistKey(artistName);
-  return artists[k] || Object.values(artists).find((a) => normalizeArtistKey(a.name || '') === k);
+  return createArtistIdentityResolver({
+    profiles: readArtistsCache(), authoritativeProfiles: cloudArtists().artists,
+    authoritativeNames: Object.values(cloudArtists().trackArtists),
+  }).resolve(artistName)?.profile;
 }
 
 export async function fetchHfCatalog(): Promise<any[]> {

@@ -1,20 +1,21 @@
 /* Shared track rows and Library. Also used by Search and Home. */
 .song-list { display: flex; flex-direction: column; gap: 2px; width: 100%; min-width: 0; }
-.song-item { display: flex; align-items: center; justify-content: space-between; gap: 12px; min-width: 0; min-height: 68px; padding: 10px 12px; border: 0; border-radius: var(--radius-xs); background: transparent; color: var(--text); cursor: pointer; transition: background-color var(--dur-fast); }
+.song-item { display: flex; align-items: center; justify-content: space-between; gap: 12px; min-width: 0; min-height: 68px; padding: 0 12px 0 0; border: 0; border-radius: var(--radius-xs); background: transparent; color: var(--text); transition: background-color var(--dur-fast); }
 .song-item:hover { background: var(--hover); }
 .song-item.active { background: var(--accent-soft); }
+.song-item-play { display: flex; align-items: center; align-self: stretch; flex: 1; min-width: 0; min-height: var(--tap); padding: 10px 0 10px 12px; border: 0; border-radius: var(--radius-xs); appearance: none; background: transparent; color: inherit; text-align: left; }
 .song-info { display: flex; align-items: center; gap: 12px; flex: 1; min-width: 0; overflow: hidden; }
 .song-info img { display: block; width: 48px; height: 48px; flex: 0 0 48px; border-radius: var(--radius-xs); background: var(--surface-2); object-fit: cover; }
-.song-info > div { flex: 1; min-width: 0; }
-.song-title { overflow: hidden; color: var(--text); font-size: 14px; font-weight: 600; line-height: 1.35; white-space: nowrap; text-overflow: ellipsis; }
-.song-artist { overflow: hidden; margin-top: 3px; color: var(--text-sub); font-size: 12px; line-height: 1.35; white-space: nowrap; text-overflow: ellipsis; }
+.song-info > div, .song-info > .song-meta { flex: 1; min-width: 0; }
+.song-title { display: block; overflow: hidden; color: var(--text); font-size: 14px; font-weight: 600; line-height: 1.35; white-space: nowrap; text-overflow: ellipsis; }
+.song-artist { display: block; overflow: hidden; margin-top: 3px; color: var(--text-sub); font-size: 12px; line-height: 1.35; white-space: nowrap; text-overflow: ellipsis; }
 .song-item-actions { display: flex; align-items: center; flex: 0 0 auto; gap: 2px; }
 .song-item-like, .song-item-menu-btn { display: grid; place-items: center; flex: 0 0 var(--tap); width: var(--tap); height: var(--tap); padding: 0; border: 0; border-radius: 50%; appearance: none; background: transparent; color: var(--text-sub); font-size: 17px; line-height: 1; }
 .song-item-like:hover, .song-item-menu-btn:hover { background: var(--hover); color: var(--text); }
 .song-item-like.active { color: var(--accent); }
 .song-item-like i, .song-item-menu-btn i { pointer-events: none; }
 
-#tabLibrary > h3 { margin-bottom: 24px; font-size: 28px; font-weight: 600; letter-spacing: -.035em; }
+#tabLibrary > h2 { margin-bottom: 24px; font-size: 28px; font-weight: 600; letter-spacing: -.035em; }
 .lib-menu-group { overflow: hidden; margin-bottom: 12px; border: 1px solid var(--line); border-radius: var(--radius-sm); background: var(--surface-1); }
 .lib-menu-row { display: flex; align-items: center; gap: 14px; min-height: 64px; padding: 12px 16px; cursor: pointer; transition: background-color var(--dur-fast); }
 .lib-menu-row + .lib-menu-row { border-top: 1px solid var(--line); }
@@ -60,4 +61,4 @@
 .artist-social-link i { font-size: 11px; }
 .artist-hero-meta .artist-profile-details { margin-bottom: 0; }
 @media (min-width: 1100px) { #songList { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 4px 20px; } }
-@media (max-width: 600px) { .song-item { gap: 8px; padding: 8px 4px; } .song-info { gap: 10px; } .song-info img { width: 44px; height: 44px; flex-basis: 44px; } .artist-page-name { font-size: 24px; } }
+@media (max-width: 600px) { .song-item { gap: 8px; padding: 0 4px 0 0; } .song-item-play { padding: 8px 0 8px 4px; } .song-info { gap: 10px; } .song-info img { width: 44px; height: 44px; flex-basis: 44px; } .artist-page-name { font-size: 24px; } }

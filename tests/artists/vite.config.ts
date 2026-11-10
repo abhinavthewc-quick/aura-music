@@ -17,7 +17,9 @@ const portrait = readFileSync(new URL('../../src/assets/radio-hero.jpg', import.
 
 export default defineConfig({
   ...base,
-  server: { host: '127.0.0.1', port: 5186, strictPort: true },
+  // Tests navigate explicitly; HMR could reload a rewritten room/deep-link URL
+  // outside its fixture while another scoped change is being saved.
+  server: { host: '127.0.0.1', port: 5186, strictPort: true, hmr: false },
   plugins: [{
     name: 'local-artist-fixtures',
     enforce: 'pre',

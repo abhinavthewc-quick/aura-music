@@ -64,11 +64,11 @@ test('managed spelling variants group together regardless of track order without
   assert.deepEqual(new Set(formatted.map((group) => group.key)), new Set(['profile:first profile', 'profile:second profile']));
 });
 
-test('initials, articles, aliases and portrait replacement share the same artist identity', () => {
+test('initials and aliases share identity, articles stay distinct, and portraits refresh', () => {
   const initials = buildArtistGroups([song('A. R. Rahman'), song('a.r. rahman - Topic', 'two')], {});
   assert.equal(initials.length, 1);
   assert.doesNotMatch(initials[0].name, /Topic/i);
-  assert.equal(buildArtistGroups([song('The National'), song('National', 'two')], {}).length, 1);
+  assert.equal(buildArtistGroups([song('The National'), song('National', 'two')], {}).length, 2);
   const songs = [song('Old Artist')];
   const before = buildArtistGroups(songs, directory(1, 'New Artist', 'portrait:one').artists)[0];
   const after = resolveArtistSelection(buildArtistGroups(songs, directory(2, 'New Artist', 'portrait:two').artists), selectArtist(before))!;
