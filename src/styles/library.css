@@ -47,7 +47,7 @@
 .artist-page-back { display: inline-flex; align-items: center; gap: 8px; min-height: var(--tap); margin-bottom: 16px; padding: 8px 0; border: 0; background: transparent; color: var(--text-sub); }
 .artist-page-head { display: flex; align-items: center; flex-wrap: wrap; gap: 20px; margin-bottom: 24px; }
 .artist-page-avatar { width: 112px; height: 112px; }
-.artist-page-meta { flex: 1; min-width: 0; }
+.artist-page-meta { flex: 1 1 160px; min-width: 0; }
 .artist-page-name { font-size: 28px; font-weight: 600; line-height: 1.2; letter-spacing: -.03em; overflow-wrap: anywhere; }
 .artist-page-actions { display: flex; flex: 0 0 auto; gap: 8px; }
 .artist-page-actions button { display: inline-flex; align-items: center; gap: 8px; min-height: var(--tap); padding: 8px 16px; border: 1px solid var(--line); border-radius: var(--radius-xs); background: var(--surface-2); color: var(--text); font-size: 13px; font-weight: 600; }
