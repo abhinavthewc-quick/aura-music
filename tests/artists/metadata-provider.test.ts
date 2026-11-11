@@ -78,7 +78,7 @@ test('Alan Walker uses its verified binding, accepts mul labels, and retains val
   assert.equal(data.calls[0].url.searchParams.get('action'), 'wbgetentities', 'seeded names do not use a fuzzy search');
   for (const call of data.calls) {
     assert.equal(new Headers(call.init.headers).get('User-Agent'), WIKIMEDIA_USER_AGENT);
-    assert.equal(call.init.redirect, 'error');
+    assert.equal(call.init.redirect, 'manual');
     assert.equal(call.init.credentials, 'omit');
   }
 });
@@ -91,6 +91,19 @@ test('seed IDs are revalidated for both music evidence and the verified name', a
     const data = fixture({ entities: { [changed.id]: changed } });
     assert.equal((await fetchArtistMetadata('Alan Walker', data.options)).status, 'ambiguous');
     assert.equal(data.calls.length, 1);
+  }
+});
+
+test('provider redirects are rejected without following or trusting their payloads', async () => {
+  for (const status of [301, 302, 303, 307, 308]) {
+    const data = fixture({ respond: () => Response.json({ search: [] }, {
+      status, headers: { Location: 'https://untrusted.example/artist', 'Retry-After': '90' },
+    }) });
+    assert.deepEqual(await fetchArtistMetadata('Redirected Artist', data.options), {
+      key: 'redirected artist', status: 'retry', retryAfter: 90,
+    });
+    assert.equal(data.calls.length, 1);
+    assert.equal(data.calls[0].init.redirect, 'manual', 'use the redirect policy supported by the Pages runtime');
   }
 });
 

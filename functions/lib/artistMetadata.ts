@@ -165,7 +165,9 @@ class WikimediaClient {
     const timer = setTimeout(aborted, boundedTimeout(this.options.requestTimeoutMs, 6500));
     try {
       const response = await abortable(Promise.resolve().then(() => this.fetcher(url.href, {
-        method: 'GET', redirect: 'error', credentials: 'omit', signal: controller.signal,
+        // workerd supports manual/follow, not redirect:error. Manual leaves
+        // every 3xx to the non-OK check below, so no target URL is followed.
+        method: 'GET', redirect: 'manual', credentials: 'omit', signal: controller.signal,
         headers: { 'Accept': 'application/json', 'User-Agent': WIKIMEDIA_USER_AGENT },
       })), controller.signal);
       /* Fixed API origins only; never follow a provider-supplied target URL. */
