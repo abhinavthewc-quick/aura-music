@@ -94,6 +94,7 @@ stays independent of the music store; `runtime.ts` owns the full-app imports.
 | `trackIdentity.ts` | Stable track keys and legacy-key matching, re-exported by state |
 | `catalog.ts` | HF tree/manifest/cache, artist-directory refresh and attribution overrides |
 | `artistIdentity.ts`, `artistAliases.ts`, `artistGroups.ts` | Shared read-side artist resolution, reviewed aliases and group construction |
+| `artistMetadata.ts` | Lazy automatic-profile scheduling, bounded client cache and display refresh events |
 | `playlist-sharing.ts` | Bounded snapshot codec, URL construction, omissions and recipient library matching |
 | `session.ts` | Google session, 7-day token exchange, per-email usernames |
 | `google-auth.ts` | Browser-side Google ID-token verification (RS256/JWKS) |
@@ -133,6 +134,7 @@ stays independent of the music store; `runtime.ts` owns the full-app imports.
 | --- | --- |
 | `functions/api/admin.ts` | Authenticated admin API: search, bucket mutations, workflow dispatch, secrets |
 | `functions/api/artists.ts`, `functions/api/artist-image.ts` | Public artist metadata/images and authenticated admin edits backed by D1 |
+| `functions/api/artist-metadata.ts`, `functions/lib/artistMetadata*.ts` | Cached Wikimedia lookups, identity checks, source credits and shared request budgets |
 | `functions/api/rooms.ts` | Thin Pages proxy to the rooms Worker; adds share URLs |
 | `rooms-worker/src/index.ts` | Worker routing, room id/admin key minting, CORS |
 | `rooms-worker/src/room.ts` | Durable Object plumbing: sockets, persistence, alarms |
@@ -182,6 +184,12 @@ then conservative formatting and reviewed equivalents. Ambiguous owners remain
 separate; supported collaboration credits can reference one recording from
 multiple artist groups. Display grouping does not replace persistent track keys
 or restart audio. See [Artist storage](artist-storage.md#read-side-artist-identity).
+
+Automatic portraits and biographies are composed after that identity decision.
+They live in a separate metadata cache and cannot create profile ownership or
+change aliases. Explicit photo/biography overrides win over automatic content.
+Post-sign-in scheduling and artist-only refreshes keep provider latency outside
+catalogue startup and playback. See [Automatic artist profiles](artist-metadata.md).
 
 ### Playlist snapshots
 

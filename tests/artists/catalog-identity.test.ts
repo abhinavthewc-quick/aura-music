@@ -28,14 +28,14 @@ test('catalogue metadata and artist pages share D1 authority over aliases and st
     ], catalog.readArtistsCache(), { authoritativeProfiles: catalog.getCachedArtistDirectory().artists });
     assert.equal(groups.length, 1);
     for (const name of ['A. R. Rahman', 'A.R.Rahman', 'AR Rahman - Topic', 'A R Rahman Official']) {
-      assert.equal(catalog.getArtistMeta(name), latest);
-      assert.equal(catalog.getArtistMeta(name), groups[0].profile);
+      assert.deepEqual(catalog.getArtistMeta(name), latest);
+      assert.deepEqual(catalog.getArtistMeta(name), groups[0].profile);
     }
     assert.equal(groups[0].profile?.bio, '');
     assert.equal(groups[0].profile?.img, '');
   }
   storage.set(catalog.ARTISTS_CACHE_KEY, 'not valid JSON');
-  assert.equal(catalog.getArtistMeta('A. R. Rahman'), latest);
+  assert.deepEqual(catalog.getArtistMeta('A. R. Rahman'), latest);
   catalog.cacheArtistDirectory({ artists: {}, trackArtists: {}, revision: ++revision });
   assert.equal(catalog.getArtistMeta('A. R. Rahman'), undefined);
 });

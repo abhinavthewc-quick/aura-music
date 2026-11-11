@@ -1,4 +1,5 @@
 import { normalizeArtistKey, type ArtistProfile } from '../../lib/artistProfiles';
+import { composeArtistMetadata, type AutomaticArtistMetadata, type DisplayArtistProfile } from '../../lib/artistMetadata';
 import {
   artistDisplayName, artistKey, artistNamesMatch, compareArtistText,
   createArtistIdentityResolver, type ArtistIdentityOptions,
@@ -19,7 +20,7 @@ export interface ArtistGroup {
   profileKeys?: string[];
   songs: any[];
   cover: string;
-  profile?: ArtistProfile;
+  profile?: DisplayArtistProfile;
 }
 
 export interface ArtistSelection {
@@ -71,11 +72,14 @@ function preferredLabel(tally: Map<string, number>): string {
 
 export function buildArtistGroups(
   songs: any[], profiles: Record<string, ArtistProfile>,
-  options: Pick<ArtistIdentityOptions, 'authoritativeNames' | 'authoritativeProfiles'> = {},
+  options: Pick<ArtistIdentityOptions, 'authoritativeNames' | 'authoritativeProfiles'> & {
+    automaticMetadata?: (canonicalName: string) => AutomaticArtistMetadata | undefined;
+  } = {},
 ): ArtistGroup[] {
-  const resolver = createArtistIdentityResolver({ ...options, profiles, names: songs.map((song) => song?.artist) });
+  const { automaticMetadata, ...identityOptions } = options;
+  const resolver = createArtistIdentityResolver({ ...identityOptions, profiles, names: songs.map((song) => song?.artist) });
   const groups = new Map<string, ArtistGroup & {
-    tally: Map<string, number>; seen: Set<unknown>; preferredName: boolean; coverId: string;
+    tally: Map<string, number>; seen: Set<unknown>; preferredName: boolean;
   }>();
   for (const song of songs) {
     if (!song || typeof song.artist !== 'string') continue;
@@ -88,7 +92,7 @@ export function buildArtistGroups(
       if (!group) {
         group = { key: identity.key, name: identity.name, aliases: [...identity.aliases], profileKeys: identity.profileKeys,
           songs: [], cover: '', profile: identity.profile, tally: new Map(), seen: new Set(),
-          preferredName: identity.preferredName, coverId: '' };
+          preferredName: identity.preferredName };
         groups.set(identity.key, group);
       }
       for (const alias of [credit, identity.name]) if (!group.aliases.includes(alias)) group.aliases.push(alias);
@@ -100,19 +104,19 @@ export function buildArtistGroups(
       group.songs.push(song);
       const label = artistDisplayName(identity.name);
       group.tally.set(label, (group.tally.get(label) || 0) + 1);
-      const coverId = String(song.id ?? song.videoId ?? '') + '\n' + String(song.img || '');
-      if (song.img && (!group.cover || compareArtistText(coverId, group.coverId) < 0)) {
-        group.cover = song.img;
-        group.coverId = coverId;
-      }
     }
   }
-  const result = [...groups.values()].map(({ tally, seen, preferredName, coverId, ...group }) => ({
-    ...group,
-    aliases: group.aliases.sort(compareArtistText),
-    name: preferredName ? group.name : preferredLabel(tally),
-    cover: group.profile?.img || group.cover,
-  })).sort((a, b) => b.songs.length - a.songs.length || compareArtistText(a.name.toLowerCase(), b.name.toLowerCase()) || compareArtistText(a.key, b.key));
+  const result = [...groups.values()].map(({ tally, seen, preferredName, ...group }) => {
+    const name = preferredName ? group.name : preferredLabel(tally);
+    // Resolve ownership FIRST. Provider names/IDs never enter the resolver or
+    // rename the credit; an unresolved ownership conflict stays neutral.
+    const profile = composeArtistMetadata(group.profile,
+      group.key.startsWith('unresolved:') ? undefined : automaticMetadata?.(name)) || undefined;
+    return { ...group, aliases: group.aliases.sort(compareArtistText), name, profile,
+      // Album artwork is not an artist portrait. Track/album covers stay on
+      // their original songs; artist views render a neutral fallback instead.
+      cover: profile?.img || '' };
+  }).sort((a, b) => b.songs.length - a.songs.length || compareArtistText(a.name.toLowerCase(), b.name.toLowerCase()) || compareArtistText(a.key, b.key));
   groupResolvers.set(result, resolver);
   return result;
 }

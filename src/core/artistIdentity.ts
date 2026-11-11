@@ -108,17 +108,20 @@ function indexAlias(index: ProfileIndex, alias: string, record: IdentityRecord, 
   if (known) addIndex(index.verified, known.id, record);
 }
 
-/* Version orders copies of ONE owner. Across the audited duplicate owners,
-   updated orders edits; a large old version must not defeat a recent save.
-   Select the whole record, so an explicit cleared field stays cleared. */
-function newerProfile(a: ArtistProfile, b: ArtistProfile): ArtistProfile {
+/* Version orders copies of ONE owner. Only audited equivalent owners prefer
+   admin over manifest; then updated orders their edits, not an old high version.
+   Select the whole record, carrying its clears and field override intentions. */
+function newerProfile(a: ArtistProfile, b: ArtistProfile, auditedOwners = false): ArtistProfile {
   const time = (p: ArtistProfile) => Number.isFinite(p.updated) ? p.updated! : 0;
   const version = (p: ArtistProfile) => Number.isFinite(p.version) ? p.version! : 0;
   const order = a.key === b.key
     ? version(a) - version(b) || time(a) - time(b)
-    : time(a) - time(b) || version(a) - version(b);
+    : (auditedOwners ? Number(a.source === 'admin') - Number(b.source === 'admin') : 0)
+      || time(a) - time(b) || version(a) - version(b);
   if (order) return order > 0 ? a : b;
-  const tie = (p: ArtistProfile) => JSON.stringify([p.key, p.name, p.img, p.bio, p.genres, p.social]);
+  const tie = (p: ArtistProfile) => JSON.stringify([
+    p.key, p.name, p.img, p.bio, p.genres, p.social, p.source, p.imgOverride, p.bioOverride,
+  ]);
   return compareArtistText(tie(a), tie(b)) <= 0 ? a : b;
 }
 
@@ -193,7 +196,7 @@ export function createArtistIdentityResolver(options: ArtistIdentityOptions = {}
       record = { key, name: '', aliases: new Set(), profileKeys: new Set() };
       records.set(key, record);
     }
-    record.profile = record.profile ? newerProfile(record.profile, profile) : profile;
+    record.profile = record.profile ? newerProfile(record.profile, profile, !!audited) : profile;
     record.profileKeys.add(owner);
     literalAliases.set(key, new Set([...(literalAliases.get(key) || []), ...aliases]));
     for (const alias of aliases) record.aliases.add(alias);

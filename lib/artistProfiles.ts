@@ -9,6 +9,10 @@ export interface ArtistProfile {
   social?: string;
   updated?: number;
   version?: number;
+  source?: 'admin' | 'manifest';
+  /* Overrides include explicit empty strings. False allows automatic data. */
+  imgOverride?: boolean;
+  bioOverride?: boolean;
 }
 
 export interface ArtistDirectory {

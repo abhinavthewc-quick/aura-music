@@ -5,6 +5,8 @@
   const realFetch = window.fetch.bind(window);
   const page = options.get('page') || 'main';
   const signedOut = options.has('signed-out');
+  const metadataKey = (name) => String(name).normalize('NFKC').trim().replace(/\s+/g, ' ').toLowerCase();
+  const metadataCacheKey = 'auraAutomaticArtistMetadata_v1';
   const tracks = [
     ['Old Artist', 'Hand upload', ''],
     ['Old Artist', 'After the rain', 'abcdefghijk'],
@@ -42,9 +44,39 @@
   const fixture = window.__auraFixture = {
     directory: { artists: {}, trackArtists: {}, revision: 0 },
     requests: [], errors: [], playlist, tracks, page,
+    metadataCases: new Map(), metadataPending: new Map(), adminGateConfirmed: false,
+    adminGate: options.get('admin-gate') || 'ready', releaseAdminGate: null,
+    readyMetadata(name, fields = {}) {
+      const fetchedAt = Date.now();
+      return { key: metadataKey(name), status: 'ready', metadata: {
+        name: 'Provider spelling is display-only', entityId: 'Q42',
+        img: '/api/artist-image?id=automatic.jpg', bio: 'Verified fixture biography.',
+        imageCredit: { title: 'Fixture artist portrait', url: 'https://commons.wikimedia.org/wiki/File:Fixture_artist.jpg', author: 'Fixture photographer', license: 'CC BY-SA 4.0', licenseUrl: 'https://creativecommons.org/licenses/by-sa/4.0/' },
+        bioCredit: { title: 'Fixture artist article', url: 'https://en.wikipedia.org/wiki/Fixture_artist', license: 'CC BY-SA 4.0', licenseUrl: 'https://creativecommons.org/licenses/by-sa/4.0/' },
+        fetchedAt, expiresAt: fetchedAt + 7 * 24 * 3600 * 1000, ...fields,
+      } };
+    },
+    setMetadata(name, response, controls = {}) {
+      fixture.metadataCases.set(metadataKey(name), { response, ...controls });
+    },
+    releaseMetadata(name) { fixture.metadataPending.get(metadataKey(name))?.(); },
+    async publishMetadata(name, response) {
+      const key = metadataKey(name);
+      const cache = JSON.parse(localStorage.getItem(metadataCacheKey) || '{"v":1,"entries":[]}');
+      const previous = cache.entries.find(entry => entry.key === key);
+      const checkedAt = Math.max(Date.now(), (previous?.checkedAt || 0) + 1);
+      const entry = { key, name, status: response.status, metadata: response.metadata,
+        checkedAt, usedAt: checkedAt, failures: response.status === 'retry' ? 1 : 0,
+        nextRequestAt: checkedAt + (response.status === 'ready' ? Math.max(1500, response.metadata.expiresAt - checkedAt)
+          : response.status === 'retry' ? Math.max(30000, (response.retryAfter || 0) * 1000) : 24 * 3600 * 1000) };
+      cache.entries = [entry, ...cache.entries.filter(saved => saved.key !== key)].slice(0, 320);
+      localStorage.setItem(metadataCacheKey, JSON.stringify(cache));
+      window.dispatchEvent(new StorageEvent('storage', { key: metadataCacheKey, storageArea: localStorage }));
+      await new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve)));
+    },
     cloud(revision = 1, name = 'New Artist', img = '/api/artist-image?id=one.jpg') {
-      const profile = { key: 'old artist', name, img, bio: 'Independent music, made for long evenings.', genres: ['Soul', 'Alternative'], social: 'https://example.com', version: revision, updated: Date.now() };
-      return { artists: { 'old artist': profile, 'new artist': profile, [name.toLowerCase()]: profile, 'anirudh ravichander': { key: 'anirudh ravichander', name: 'Anirudh Ravichander', bio: 'Composer and performer.', img: '/api/artist-image?id=anirudh.jpg', version: 1 } }, trackArtists: Object.fromEntries(tracks.slice(0, 2).map((track) => [track.videoId ? 'vid:' + track.videoId : 'hf:' + track.hfPath, name])), revision };
+      const profile = { key: 'old artist', name, img, bio: 'Independent music, made for long evenings.', genres: ['Soul', 'Alternative'], social: 'https://example.com', version: revision, updated: Date.now(), source: 'admin', imgOverride: true, bioOverride: true };
+      return { artists: { 'old artist': profile, 'new artist': profile, [name.toLowerCase()]: profile, 'anirudh ravichander': { key: 'anirudh ravichander', name: 'Anirudh Ravichander', bio: 'Composer and performer.', img: '/api/artist-image?id=anirudh.jpg', version: 1, source: 'admin', imgOverride: true, bioOverride: true } }, trackArtists: Object.fromEntries(tracks.slice(0, 2).map((track) => [track.videoId ? 'vid:' + track.videoId : 'hf:' + track.hfPath, name])), revision };
     },
     async publish(directory) {
       fixture.directory = directory;
@@ -54,11 +86,20 @@
     },
   };
   if (page === 'admin' || options.has('cloud')) fixture.directory = fixture.cloud();
+  const metadataMode = options.get('metadata');
+  if (metadataMode) {
+    const name = fixture.directory.artists['old artist']?.name || 'Old Artist';
+    const response = metadataMode === 'ambiguous' || metadataMode === 'retry'
+      ? { key: metadataKey(name), status: metadataMode, ...(metadataMode === 'retry' ? { retryAfter: 120 } : {}) }
+      : fixture.readyMetadata(name);
+    fixture.setMetadata(name, response, { hold: metadataMode === 'held-ready' });
+  }
   window.fetch = async (input, init = {}) => {
     const url = new URL(typeof input === 'string' ? input : input.url, location.href);
     const body = typeof init.body === 'string' ? JSON.parse(init.body) : {};
     const method = init.method || 'GET';
-    if (url.pathname.startsWith('/api/') || url.origin !== location.origin) fixture.requests.push({ method, path: url.pathname, action: body.action, version: body.version, artistKey: body.artistKey, name: body.name, img: body.img, bio: body.bio });
+    if (url.pathname.startsWith('/api/') || url.origin !== location.origin) fixture.requests.push({ method, path: url.pathname, queryName: url.searchParams.get('name') || undefined, action: body.action, version: body.version, artistKey: body.artistKey, name: body.name, img: body.img, bio: body.bio, imgOverride: body.imgOverride, bioOverride: body.bioOverride,
+      ...(url.pathname === '/api/artist-metadata' ? { intent: new Headers(init.headers).get('X-Aura-Artist-Intent'), gateConfirmed: fixture.adminGateConfirmed, appVisible: !!document.getElementById('musicApp') && !document.getElementById('musicApp').hidden && !document.getElementById('musicApp').inert } : {}) });
     if (url.hostname === 'huggingface.co' || (url.pathname.startsWith('/__fixture_hf/') && url.pathname.endsWith('manifest.json'))) {
       if (url.pathname.endsWith('manifest.json')) return Response.json({ v: 1, artists: {}, tracks: Object.fromEntries(tracks.filter((t) => t.videoId).map((t) => [t.videoId, { t: t.title, a: t.artist, al: t.album, y: t.year, d: t.duration }])) });
       return Response.json(tracks.flatMap((t) => [
@@ -67,18 +108,45 @@
       ]));
     }
     if (url.pathname === '/api/artists') return Response.json(fixture.directory);
+    if (url.pathname === '/api/artist-metadata') {
+      const name = url.searchParams.get('name') || '', key = metadataKey(name);
+      const spec = fixture.metadataCases.get(key) || { response: { key, status: 'not-found' } };
+      if (spec.hold || spec.delay) await new Promise((resolve, reject) => {
+        let timer;
+        const finish = () => { clearTimeout(timer); fixture.metadataPending.delete(key); init.signal?.removeEventListener('abort', abort); resolve(); };
+        const abort = () => { clearTimeout(timer); fixture.metadataPending.delete(key); reject(new DOMException('Fixture lookup aborted', 'AbortError')); };
+        if (init.signal?.aborted) { abort(); return; }
+        init.signal?.addEventListener('abort', abort, { once: true });
+        if (spec.hold) fixture.metadataPending.set(key, finish);
+        else timer = setTimeout(finish, spec.delay);
+      });
+      return Response.json(typeof spec.response === 'function' ? spec.response(name) : spec.response, {
+        status: spec.httpStatus || 200, headers: spec.retryAfter ? { 'Retry-After': String(spec.retryAfter) } : {},
+      });
+    }
     if (url.hostname === 'de1.api.radio-browser.info' && url.pathname === '/json/stations/search') {
       const query = (url.searchParams.get('name') || '').toLowerCase();
       return Response.json(['Evening frequency', 'Quiet signals'].filter(name => name.toLowerCase().includes(query)).map(name => ({ name, url: location.origin + '/__fixture_audio.wav', country: 'Local fixture', tags: 'ambient,night', favicon: '/src/assets/brand-logo.webp' })));
     }
     if (url.pathname === '/api/admin') {
       if (body.action === 'library') return Response.json({ files: tracks.flatMap((t) => [{ path: t.hfPath, size: 1024 }, { path: t.hfPath.replace(/\.opus$/, '.jpg'), size: 256 }]), videoIds: tracks.map((t) => t.videoId).filter(Boolean), bucketId: 'fixture', manifest: {}, ...fixture.directory });
-      if (body.action === 'status') return Response.json({ secrets: ['HF_TOKEN', 'HF_BUCKET_ID', 'YOUTUBE_COOKIES'] });
+      if (body.action === 'status') {
+        if (fixture.adminGate === 'held') await new Promise(resolve => { fixture.releaseAdminGate = resolve; });
+        if (fixture.adminGate === 'denied') return Response.json({ error: 'Fixture admin access denied' }, { status: 403 });
+        fixture.adminGateConfirmed = true;
+        return Response.json({ secrets: ['HF_TOKEN', 'HF_BUCKET_ID', 'YOUTUBE_COOKIES'] });
+      }
       if (body.action === 'runs') return Response.json({ runs: [] });
       if (body.action === 'artistSet') {
         const current = fixture.directory.artists[body.artistKey];
         if (body.version !== (current?.version || 0)) return Response.json({ error: 'This artist was changed in another tab. Reload the artist list, then reapply your changes.' }, { status: 409 });
-        const profile = { key: body.artistKey, name: body.name, img: body.img?.startsWith('data:') ? `/api/artist-image?id=upload-${fixture.directory.revision + 1}.png` : body.img, bio: body.bio, genres: body.genres, social: body.social, version: body.version + 1, updated: Date.now() };
+        const has = field => Object.prototype.hasOwnProperty.call(body, field);
+        const img = has('img') ? body.img : current?.img || '';
+        const profile = { ...current, key: body.artistKey, name: body.name, img: img?.startsWith('data:') ? `/api/artist-image?id=upload-${fixture.directory.revision + 1}.png` : img,
+          bio: has('bio') ? body.bio : current?.bio || '',
+          imgOverride: typeof body.imgOverride === 'boolean' ? body.imgOverride : has('img') ? true : current?.imgOverride ?? !!current?.version,
+          bioOverride: typeof body.bioOverride === 'boolean' ? body.bioOverride : has('bio') ? true : current?.bioOverride ?? !!current?.version,
+          source: 'admin', genres: body.genres, social: body.social, version: body.version + 1, updated: Date.now() };
         const artists = Object.fromEntries(Object.entries(fixture.directory.artists).map(([alias, saved]) => [alias, saved.key === body.artistKey ? profile : saved]));
         fixture.directory = { ...fixture.directory, artists: { ...artists, [body.artistKey]: profile, [body.name.toLowerCase()]: profile }, revision: fixture.directory.revision + 1 };
         return Response.json({ ...fixture.directory, ok: true, persisted: true, artist: profile, renamedTrackCount: 0 });

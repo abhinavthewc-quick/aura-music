@@ -1,6 +1,11 @@
 import { escapeHtml, stateHTML, toast } from '../core/dom';
 import { buildArtistGroups, resolveArtistSelection, selectArtist, type ArtistGroup, type ArtistSelection } from '../core/artistGroups';
 import { DEFAULT_COVER, fetchHfCatalog, getCachedArtistDirectory, readArtistsCache, type ArtistMeta } from '../core/catalog';
+import {
+  artistMetadataCreditHTML, getArtistMetadataRevision, getAutomaticArtistMetadata,
+  observeArtistMetadataCards, prioritizeArtistMetadata, setArtistMetadataCatalog, setArtistPortraitSource,
+} from '../core/artistMetadata';
+import type { DisplayArtistProfile } from '../../lib/artistMetadata';
 import { beginPlaybackIntent } from '../core/playbackIntent';
 import { refreshArtistViews, renderAuraPicks, renderQuickAccess, renderQuickPicks } from './home';
 import { filterSongs, loadSong, playSong, resetFullPlayerArtToImage, stopAuraYouTube, updateMainMediaSession, updatePlayState } from './player';
@@ -25,6 +30,7 @@ import { $, getPlayCount, persistLikedHistory, rebuildSongs, recordPlayCount, sa
     }
     export function updateLibCount(){
       const _lc = $('libCount'); if(_lc) _lc.textContent = `${state.songs.length} track${state.songs.length!==1?'s':''} in your library`;
+      setArtistMetadataCatalog(getArtistGroups().filter(g => !g.key.startsWith('unresolved:')).map(g => g.name));
       scheduleHomeSections();
     }
 
@@ -386,38 +392,42 @@ import { $, getPlayCount, persistLikedHistory, rebuildSongs, recordPlayCount, sa
     let artistGroupingSnapshot: {
       profiles: Record<string, ArtistMeta>;
       directory: ReturnType<typeof getCachedArtistDirectory>;
+      metadataRevision: number;
       inputs: { song: any; id: any; artist: any; img: any }[];
       groups: ArtistGroup[];
     } | undefined;
     export function getArtistGroups(){
-      const profiles = readArtistsCache(), directory = getCachedArtistDirectory();
+      const profiles = readArtistsCache(), directory = getCachedArtistDirectory(), metadataRevision = getArtistMetadataRevision();
       const previous = artistGroupingSnapshot;
       // Home's shelf, grid, spotlight, stats and both detail views often paint
       // together. Reuse their snapshot; also notice in-place local metadata edits.
-      if(previous && previous.profiles === profiles && previous.directory === directory &&
+      if(previous && previous.profiles === profiles && previous.directory === directory && previous.metadataRevision === metadataRevision &&
         previous.inputs.length === state.songs.length && state.songs.every((song, i) => {
           const before = previous.inputs[i];
           return before.song === song && before.id === song?.id && before.artist === song?.artist && before.img === song?.img;
         })) return previous.groups;
       const groups = buildArtistGroups(state.songs, profiles, {
         authoritativeProfiles: directory.artists, authoritativeNames: Object.values(directory.trackArtists),
+        automaticMetadata: getAutomaticArtistMetadata,
       });
-      artistGroupingSnapshot = { profiles, directory, groups,
+      artistGroupingSnapshot = { profiles, directory, metadataRevision, groups,
         inputs: state.songs.map(song => ({ song, id: song?.id, artist: song?.artist, img: song?.img })) };
       return groups;
     }
 
     function artistInitial(name){ return String(name || '').trim().charAt(0) || '#'; }
     function artistAvatarHTML(g, cls){
-      if(g.cover) return `<img class="artist-avatar ${cls || ''}" src="${escapeHtml(g.cover)}" alt="">`;
+      if(g.cover) return `<img class="artist-avatar ${cls || ''}" data-artist-portrait src="${escapeHtml(g.cover)}" alt="">`;
       return `<span class="artist-avatar artist-avatar-fallback ${cls || ''}">${escapeHtml(artistInitial(g.name))}</span>`;
     }
 
-    export function artistProfileDetailsHTML(profile?: ArtistMeta): string {
+    export function artistProfileDetailsHTML(profile?: DisplayArtistProfile): string {
       if(!profile) return '';
-      const bio = profile.bio ? `<p class="artist-bio">${escapeHtml(profile.bio)}</p>` : '';
+      const bio = typeof profile.bio === 'string' && profile.bio.trim() ? `<p class="artist-bio">${escapeHtml(profile.bio.slice(0, 2000))}</p>` : '';
       const genres = Array.isArray(profile.genres) && profile.genres.length
-        ? `<div class="artist-genres">${profile.genres.map(g => `<span>${escapeHtml(String(g))}</span>`).join('')}</div>` : '';
+        ? `<div class="artist-genres">${profile.genres.slice(0, 20).map(g => `<span>${escapeHtml(String(g).slice(0, 120))}</span>`).join('')}</div>` : '';
+      const credits = (profile.img ? artistMetadataCreditHTML(profile.imageCredit, 'image') : '') +
+        (bio ? artistMetadataCreditHTML(profile.bioCredit, 'bio') : '');
       let social = '';
       try{
         const url = new URL(profile.social || '');
@@ -425,10 +435,32 @@ import { $, getPlayCount, persistLikedHistory, rebuildSongs, recordPlayCount, sa
           social = `<a class="artist-social-link" href="${escapeHtml(url.href)}" target="_blank" rel="noopener noreferrer">Artist website <i class="fa-solid fa-arrow-up-right-from-square" aria-hidden="true"></i></a>`;
         }
       }catch{ /* no external link */ }
-      return bio || genres || social ? `<div class="artist-profile-details">${bio}${genres}${social}</div>` : '';
+      return bio || genres || social || credits ? `<div class="artist-profile-details">${bio}${credits}${genres}${social}</div>` : '';
     }
+
+    /** Automatic arrivals cannot replace track/artist buttons. Only this
+        reading block changes; keep an equivalent source link focused too. */
+    export function updateArtistProfileDetails(container: HTMLElement, profile?: DisplayArtistProfile, before?: Element, portrait?: HTMLImageElement) {
+      const previous = [...container.children].find(element => element.classList.contains('artist-profile-details')) as HTMLElement | undefined;
+      const template = document.createElement('template');
+      template.innerHTML = artistProfileDetailsHTML(profile);
+      const next = template.content.firstElementChild as HTMLElement | null;
+      if(portrait?.dataset.coverFallback) next?.querySelector<HTMLElement>('[data-artist-credit="image"]')?.setAttribute('hidden', '');
+      if(previous?.isEqualNode(next) || !previous && !next) return;
+      const focused = document.activeElement as HTMLElement | null;
+      const sourceHref = previous?.contains(focused) && focused instanceof HTMLAnchorElement ? focused.href : '';
+      const sourceField = sourceHref ? focused?.closest('[data-artist-credit]')?.getAttribute('data-artist-credit') : undefined;
+      if(previous) { if(next) previous.replaceWith(next); else previous.remove(); }
+      else if(next) container.insertBefore(next, before || null);
+      if(sourceHref) {
+        const equivalent = [...(next?.querySelectorAll<HTMLAnchorElement>('a') || [])].find(link =>
+          link.href === sourceHref && link.closest('[data-artist-credit]')?.getAttribute('data-artist-credit') === sourceField);
+        if(equivalent) equivalent.focus({ preventScroll: true });
+      }
+    }
+
     export function artistTileHTML(g, i){
-      return `<button type="button" class="artist-tile" onclick="openArtist(${i})">${artistAvatarHTML(g, '')}<span class="artist-name">${escapeHtml(g.name)}</span></button>`;
+      return `<button type="button" class="artist-tile" data-artist-key="${escapeHtml(g.key)}" data-artist-metadata-name="${g.key.startsWith('unresolved:') ? '' : escapeHtml(g.name)}" onclick="openArtist(${i})">${artistAvatarHTML(g, '')}<span class="artist-name">${escapeHtml(g.name)}</span></button>`;
     }
 
     let currentArtist: ArtistSelection | null = null;
@@ -468,12 +500,43 @@ import { $, getPlayCount, persistLikedHistory, rebuildSongs, recordPlayCount, sa
         currentArtist = null;
       }
       c.innerHTML = `<div class="artist-tiles">${artistGroupsCache.map((g, i) => artistTileHTML(g, i)).join('')}</div>`;
+      observeArtistMetadataCards(c);
+    }
+
+    export function refreshAutomaticLibraryArtists(){
+      if(libView !== 'artists') return;
+      const groups = getArtistGroups();
+      artistGroupsCache = groups;
+      const updateAvatar = (avatar: Element | null, group: ArtistGroup, cls = '') => {
+        if(!avatar) return;
+        if(avatar instanceof HTMLImageElement && group.cover) setArtistPortraitSource(avatar, group.cover);
+        else {
+          const template = document.createElement('template');
+          template.innerHTML = artistAvatarHTML(group, cls);
+          const next = template.content.firstElementChild;
+          if(next && !avatar.isEqualNode(next)) avatar.replaceWith(next);
+        }
+      };
+      const container = $('librarySongList');
+      if(currentArtist) {
+        const group = resolveArtistSelection(groups, currentArtist), page = container.querySelector<HTMLElement>('.artist-page');
+        if(!group || !page) return;
+        updateAvatar(page.querySelector('.artist-page-avatar'), group, 'artist-page-avatar');
+        updateArtistProfileDetails(page, group.profile, page.querySelector('.song-list'), page.querySelector<HTMLImageElement>('.artist-page-avatar'));
+      } else {
+        const byKey = new Map(groups.map(group => [group.key, group]));
+        container.querySelectorAll<HTMLElement>('.artist-tile').forEach(tile => {
+          const group = byKey.get(tile.dataset.artistKey || '');
+          if(group) updateAvatar(tile.querySelector('.artist-avatar'), group);
+        });
+      }
     }
 
     export function openArtist(i){
       const groups = artistGroupsCache.length ? artistGroupsCache : getArtistGroups();
       artistGroupsCache = groups;
       currentArtist = groups[i] ? selectArtist(groups[i]) : null;
+      if(groups[i] && !groups[i].key.startsWith('unresolved:')) prioritizeArtistMetadata(groups[i].name, 'open');
       libView = 'artists';
       document.querySelectorAll('#libViewSeg .lib-seg-btn').forEach(b => {
         b.classList.toggle('active', (b as HTMLElement).dataset.view === 'artists');

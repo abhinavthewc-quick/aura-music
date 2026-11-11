@@ -30,6 +30,8 @@ interface ArtistRow {
   name: string;
   img: string;
   bio: string;
+  img_override: number;
+  bio_override: number;
   genres: string;
   social: string;
   updated: number;
@@ -50,6 +52,7 @@ function publicProfile(row: ArtistRow): ArtistProfile {
     key: row.artist_key, name: row.name, img: row.img, bio: row.bio,
     genres: JSON.parse(row.genres), social: row.social,
     updated: row.updated, version: row.version,
+    source: row.source, imgOverride: row.img_override === 1, bioOverride: row.bio_override === 1,
   };
 }
 
@@ -78,6 +81,12 @@ function field(value: unknown, fallback: string, max: number, label: string): st
   if (text.length > max) throw new ArtistStoreError(`${label} is too long (max ${max} characters).`);
   if (/[\u0000-\u0008\u000b\u000c\u000e-\u001f]/.test(text)) throw new ArtistStoreError(`${label} contains invalid characters.`);
   return text;
+}
+
+function overrideFlag(value: unknown, label: string): boolean | undefined {
+  if (value === undefined) return undefined;
+  if (typeof value !== 'boolean') throw new ArtistStoreError(`${label} must be a boolean.`);
+  return value;
 }
 
 function httpsUrl(value: string, label: string): string {
@@ -147,6 +156,8 @@ export interface ArtistSave {
   name?: unknown;
   img?: unknown;
   bio?: unknown;
+  imgOverride?: unknown;
+  bioOverride?: unknown;
   genres?: unknown;
   social?: unknown;
   renameTracks?: unknown;
@@ -170,6 +181,12 @@ export async function saveArtistProfile(
   }
   const name = field(input.name, existing?.name || original, 120, 'Artist name');
   if (!name) throw new ArtistStoreError('Artist name is required.');
+  /* Explicit values (including clears) retain the old API's manual ownership.
+     Only a boolean false unlocks; unrelated saves preserve each field's intent. */
+  const imgOverride = Number(overrideFlag(input.imgOverride, 'imgOverride')
+    ?? (input.img === undefined ? existing?.img_override === 1 : true));
+  const bioOverride = Number(overrideFlag(input.bioOverride, 'bioOverride')
+    ?? (input.bio === undefined ? existing?.bio_override === 1 : true));
   const bio = field(input.bio, existing?.bio || '', 2000, 'Biography');
   const social = httpsUrl(field(input.social, existing?.social || '', 2048, 'Social link'), 'Social link');
   const rawGenres = input.genres === undefined ? JSON.parse(existing?.genres || '[]') : input.genres;
@@ -190,15 +207,16 @@ export async function saveArtistProfile(
      request's unique mutation ID, not just a version number: a losing race
      cannot add aliases, an image, or track overrides to the winner's save. */
   const statements = [db.prepare(`INSERT INTO artist_profiles
-    (artist_key, name, img, bio, genres, social, updated, version, source, mutation_id)
-    SELECT ?, ?, ?, ?, ?, ?, ?, ?, 'admin', ?
+    (artist_key, name, img, bio, img_override, bio_override, genres, social, updated, version, source, mutation_id)
+    SELECT ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 'admin', ?
     WHERE (? IS NULL OR (SELECT revision FROM artist_catalog_state WHERE id = 1) = ?)
     ON CONFLICT(artist_key) DO UPDATE SET
       name = excluded.name, img = excluded.img, bio = excluded.bio,
+      img_override = excluded.img_override, bio_override = excluded.bio_override,
       genres = excluded.genres, social = excluded.social, updated = excluded.updated,
       version = excluded.version, source = 'admin', mutation_id = excluded.mutation_id
     WHERE artist_profiles.version = ? RETURNING *`)
-    .bind(key, name, image.img, bio, JSON.stringify(genres), social, now, version, mutation,
+    .bind(key, name, image.img, bio, imgOverride, bioOverride, JSON.stringify(genres), social, now, version, mutation,
       expectedDirectoryRevision ?? null, expectedDirectoryRevision ?? null, expected)];
   for (const alias of aliases) {
     /* A name already owned by a different artist violates the primary key,
@@ -276,8 +294,9 @@ export async function saveTrackArtistEdits(
   return readArtistDirectory(env);
 }
 
-/* Cutover-only import. Re-running a fresh manifest is safe: newer imports win,
-   but any profile saved through the admin has permanent ownership. The image,
+/* Cutover-only import. New rows preserve nonempty legacy choices by default;
+   reimports retain existing override flags, even when the manifest omits them.
+   Newer imports win, but any admin save has permanent ownership. The image,
    aliases and revision have the same transaction gate as an ordinary save. */
 export async function importLegacyArtistProfile(
   env: ArtistEnv, alias: string, profile: ArtistProfile,
@@ -303,16 +322,18 @@ export async function importLegacyArtistProfile(
   if (!Array.isArray(rawGenres) || rawGenres.length > 20) throw new ArtistStoreError('Use at most 20 genres.');
   const genres = [...new Set(rawGenres.map((g) => field(g, '', 64, 'Genre')).filter(Boolean))];
   const image = await prepareImage(profile.img, '');
+  const imgOverride = Number(overrideFlag(profile.imgOverride, 'imgOverride') ?? !!image.img);
+  const bioOverride = Number(overrideFlag(profile.bioOverride, 'bioOverride') ?? !!bio);
   const mutation = crypto.randomUUID();
   const statements = [db.prepare(`INSERT INTO artist_profiles
-    (artist_key, name, img, bio, genres, social, updated, version, source, mutation_id)
-    VALUES (?, ?, ?, ?, ?, ?, ?, 1, 'manifest', ?)
+    (artist_key, name, img, bio, img_override, bio_override, genres, social, updated, version, source, mutation_id)
+    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 1, 'manifest', ?)
     ON CONFLICT(artist_key) DO UPDATE SET name = excluded.name, img = excluded.img,
       bio = excluded.bio, genres = excluded.genres, social = excluded.social,
       updated = excluded.updated, version = artist_profiles.version + 1, mutation_id = excluded.mutation_id
     WHERE artist_profiles.source = 'manifest' AND artist_profiles.updated < excluded.updated
     RETURNING artist_key`)
-    .bind(key, name, image.img, bio, JSON.stringify(genres), social, updated, mutation)];
+    .bind(key, name, image.img, bio, imgOverride, bioOverride, JSON.stringify(genres), social, updated, mutation)];
   for (const artistAlias of new Set([key, lookupKey, normalizeArtistKey(name)])) {
     statements.push(db.prepare(`INSERT INTO artist_aliases (alias_key, artist_key)
       SELECT ?, ? WHERE EXISTS (SELECT 1 FROM artist_profiles WHERE artist_key = ? AND mutation_id = ?)

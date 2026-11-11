@@ -60,6 +60,12 @@ Shows all bucket audio files, grouped with their cover/manifest state.
 - “Already uploaded” marks come from the `library` action; the tree cache is
   60 s, so a just-finished upload may be missing until the cache expires.
 
+Artist profile edits are stored independently in D1. Photo and biography fields
+have separate manual overrides: editing or clearing a field keeps that choice,
+while **Use automatic** permits a sourced Wikimedia value. Automatic refreshes
+preserve open drafts and their captured versions. See
+[Automatic artist profiles](artist-metadata.md#manual-control).
+
 ### 3. Discord (`panelDiscord`)
 
 Controls the Aura Farmer bot ([separate repo](https://github.com/angel2rider/AURA-FARMER)).

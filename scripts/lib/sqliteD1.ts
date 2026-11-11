@@ -1,4 +1,4 @@
-import { readFileSync } from 'node:fs';
+import { readFileSync, readdirSync } from 'node:fs';
 import { DatabaseSync } from 'node:sqlite';
 import type { ArtistDatabase, D1Statement } from '../../functions/lib/artistStore.js';
 
@@ -27,8 +27,9 @@ export class SqliteD1 implements ArtistDatabase {
   beforeBatch?: (statements: Statement[]) => Promise<void>;
   constructor() {
     this.sqlite.exec('PRAGMA foreign_keys = ON');
-    for (const file of ['0001_artist_storage.sql', '0002_track_artist_edits.sql']) {
-      this.sqlite.exec(readFileSync(new URL('../../migrations/artists/' + file, import.meta.url), 'utf8'));
+    const migrations = new URL('../../migrations/artists/', import.meta.url);
+    for (const file of readdirSync(migrations).filter((name) => name.endsWith('.sql')).sort()) {
+      this.sqlite.exec(readFileSync(new URL(file, migrations), 'utf8'));
     }
   }
   prepare(sql: string): Statement { return new Statement(this, sql); }

@@ -3,8 +3,9 @@ import { resolveArtistSelection, selectArtist, type ArtistSelection } from '../c
 import { playSong } from './player';
 import { escapeHtml } from './radio';
 import { DEFAULT_COVER } from '../core/catalog';
+import { DEFAULT_ARTIST_PORTRAIT, observeArtistMetadataCards, prioritizeArtistMetadata, setArtistPortraitSource } from '../core/artistMetadata';
 import { $, state } from '../core/state';
-import { getArtistGroups, artistProfileDetailsHTML } from './library';
+import { getArtistGroups, artistProfileDetailsHTML, updateArtistProfileDetails } from './library';
 import { goTab } from '../ui/nav';
 /* ===== 3075-3096 ===== */
     export function setGreeting(){
@@ -155,12 +156,14 @@ import { goTab } from '../ui/nav';
       img: string;
       count: number;
       songs: any[];
+      metadataName: string;
     }
 
     export function getAllArtists(): ArtistDirectoryEntry[] {
       return getArtistGroups().map(g => ({
-        key: g.key, name: g.name, img: g.cover || DEFAULT_COVER,
+        key: g.key, name: g.name, img: g.cover || DEFAULT_ARTIST_PORTRAIT,
         count: g.songs.length, songs: g.songs,
+        metadataName: g.key.startsWith('unresolved:') ? '' : g.name,
       }));
     }
 
@@ -175,15 +178,16 @@ import { goTab } from '../ui/nav';
 
       const topArtists = artists.slice(0, 16);
       shelf.innerHTML = topArtists.map(a => `
-        <div class="ytm-artist-card" role="button" tabindex="0" data-artist-open="${escapeHtml(a.key)}" title="${escapeHtml(a.name)}">
+        <div class="ytm-artist-card" role="button" tabindex="0" data-artist-open="${escapeHtml(a.key)}" data-artist-metadata-name="${escapeHtml(a.metadataName)}" title="${escapeHtml(a.name)}">
           <div class="ytm-artist-art-wrap">
-            <img class="ytm-artist-avatar" src="${escapeHtml(a.img)}" alt="${escapeHtml(a.name)}" loading="lazy" decoding="async">
+            <img class="ytm-artist-avatar" data-artist-portrait src="${escapeHtml(a.img)}" alt="${escapeHtml(a.name)}" loading="lazy" decoding="async">
             <div class="ytm-artist-play-overlay"><i class="fa-solid fa-play"></i></div>
           </div>
           <div class="ytm-artist-name">${escapeHtml(a.name)}</div>
           <div class="ytm-artist-sub">${a.count} song${a.count !== 1 ? 's' : ''}</div>
         </div>
       `).join('');
+      observeArtistMetadataCards(shelf);
     }
 
     export function renderArtistsFullGrid() {
@@ -196,15 +200,16 @@ import { goTab } from '../ui/nav';
       }
 
       grid.innerHTML = artists.map(a => `
-        <div class="ytm-artist-card grid-card" role="button" tabindex="0" data-artist-open="${escapeHtml(a.key)}" title="${escapeHtml(a.name)}">
+        <div class="ytm-artist-card grid-card" role="button" tabindex="0" data-artist-open="${escapeHtml(a.key)}" data-artist-metadata-name="${escapeHtml(a.metadataName)}" title="${escapeHtml(a.name)}">
           <div class="ytm-artist-art-wrap">
-            <img class="ytm-artist-avatar" src="${escapeHtml(a.img)}" alt="${escapeHtml(a.name)}" loading="lazy" decoding="async">
+            <img class="ytm-artist-avatar" data-artist-portrait src="${escapeHtml(a.img)}" alt="${escapeHtml(a.name)}" loading="lazy" decoding="async">
             <div class="ytm-artist-play-overlay"><i class="fa-solid fa-play"></i></div>
           </div>
           <div class="ytm-artist-name">${escapeHtml(a.name)}</div>
           <div class="ytm-artist-sub">${a.count} song${a.count !== 1 ? 's' : ''}</div>
         </div>
       `).join('');
+      observeArtistMetadataCards(grid);
     }
 
     export function openHomeArtistsTab() {
@@ -237,7 +242,7 @@ import { goTab } from '../ui/nav';
     }
 
     let openArtistSelection: ArtistSelection | null = null;
-    export function openArtistDetail(artistName: string | ArtistSelection, scroll = true) {
+    export function openArtistDetail(artistName: string | ArtistSelection, scroll = true, interactive = true) {
       const group = resolveArtistSelection(getArtistGroups(), artistName);
       if(!group) {
         if(typeof artistName !== 'string') { closeArtistDetail(); return; }
@@ -245,7 +250,8 @@ import { goTab } from '../ui/nav';
         return;
       }
       openArtistSelection = selectArtist(group);
-      const artist = { ...group, img: group.cover || DEFAULT_COVER };
+      if(interactive && !group.key.startsWith('unresolved:')) prioritizeArtistMetadata(group.name, 'open');
+      const artist = { ...group, img: group.cover || DEFAULT_ARTIST_PORTRAIT };
       const profile = group.profile;
 
       const mainView = $('homeMainView');
@@ -261,7 +267,7 @@ import { goTab } from '../ui/nav';
         heroCard.innerHTML = `
           <div class="artist-hero-backdrop"></div>
           <div class="artist-hero-content">
-            <img class="artist-hero-img" src="${escapeHtml(artist.img)}" alt="${escapeHtml(artist.name)}" loading="lazy">
+            <img class="artist-hero-img" data-artist-portrait src="${escapeHtml(artist.img)}" alt="${escapeHtml(artist.name)}" loading="lazy">
             <div class="artist-hero-meta">
               <h2 class="artist-hero-name">${escapeHtml(artist.name)}</h2>
               <p class="artist-hero-count">${artist.songs.length} song${artist.songs.length !== 1 ? 's' : ''} in your music</p>
@@ -313,7 +319,26 @@ import { goTab } from '../ui/nav';
       renderFeaturedArtistsShelf();
       renderArtistSpotlight();
       if($('homeArtistsView')?.style.display === 'block') renderArtistsFullGrid();
-      if(openArtistSelection && $('homeArtistDetailView')?.style.display === 'block') openArtistDetail(openArtistSelection, false);
+      if(openArtistSelection && $('homeArtistDetailView')?.style.display === 'block') openArtistDetail(openArtistSelection, false, false);
+    }
+
+    export function refreshAutomaticArtistViews() {
+      const groups = getArtistGroups(), byKey = new Map(groups.map(group => [group.key, group]));
+      document.querySelectorAll<HTMLElement>('[data-artist-open]').forEach(card => {
+        const group = byKey.get(card.dataset.artistOpen || ''), image = card.querySelector<HTMLImageElement>('[data-artist-portrait]');
+        if(group && image) setArtistPortraitSource(image, group.cover || DEFAULT_ARTIST_PORTRAIT);
+      });
+      $('artistSpotlightContainer')?.querySelectorAll<HTMLImageElement>('[data-artist-key][data-artist-portrait]').forEach(image => {
+        const group = byKey.get(image.dataset.artistKey || '');
+        if(group) setArtistPortraitSource(image, group.cover || DEFAULT_ARTIST_PORTRAIT);
+      });
+      if(!openArtistSelection || $('homeArtistDetailView')?.style.display !== 'block') return;
+      const group = resolveArtistSelection(groups, openArtistSelection), hero = $('artistHeroCard');
+      if(!group || !hero) return;
+      const image = hero.querySelector<HTMLImageElement>('.artist-hero-img'), details = hero.querySelector<HTMLElement>('.artist-hero-meta');
+      if(image) setArtistPortraitSource(image, group.cover || DEFAULT_ARTIST_PORTRAIT);
+      if(details) updateArtistProfileDetails(details, group.profile, undefined, image);
+      // Names, selection, song rows and playback callbacks remain mounted.
     }
 
     document.addEventListener('click', event => {
@@ -443,12 +468,13 @@ import { goTab } from '../ui/nav';
         }).join('');
         return `<div class="artist-spotlight-block" style="margin-bottom:24px">
           <div class="spotlight-header">
-            <img class="spotlight-avatar" src="${escapeHtml(g.cover || DEFAULT_COVER)}" alt="" loading="lazy" decoding="async">
+            <img class="spotlight-avatar" data-artist-portrait data-artist-key="${escapeHtml(g.key)}" data-artist-metadata-name="${g.key.startsWith('unresolved:') ? '' : escapeHtml(g.name)}" src="${escapeHtml(g.cover || DEFAULT_ARTIST_PORTRAIT)}" alt="" loading="lazy" decoding="async">
             <div><p>More from</p><p>${escapeHtml(g.name)}</p></div>
           </div>
           <div class="recent-scroll">${cards}</div>
         </div>`;
       }).join('');
+      observeArtistMetadataCards(container);
     }
 
 /* ===== 4646-4660 ===== */

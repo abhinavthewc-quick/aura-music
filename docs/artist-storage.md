@@ -6,6 +6,11 @@ download manifest. Uploaded JPEG, PNG and WebP portraits are immutable D1 BLOBs
 (maximum 1.5 MiB). Removing a portrait clears the profile reference, not old
 image URLs. External HTTPS image URLs remain references, not copied uploads.
 
+Pictures and biographies have independent explicit override flags. Automatic
+Wikimedia metadata is cached separately and fills unlocked fields; a manual clear
+remains empty. Existing saved nonempty fields are retained when enabling this
+feature. See [Automatic artist profiles](artist-metadata.md).
+
 `/api/artists` is a public, uncached directory. `/api/artist-image?id=…` serves
 immutable images with ETags, HEAD support and `nosniff`. Admin writes require
 the existing admin session; Farmer credentials cannot read the full library or
@@ -33,11 +38,14 @@ display grouping.
   featured credit. Compound band names and explicitly owned joint projects stay
   intact. Each recording is counted once per credited artist.
 - The two observed natural Rahman profile keys are explicitly listed as
-  equivalent display identities. Both D1 records survive; their latest whole
-  profile supplies metadata, including intentionally cleared fields. Custom
+  equivalent display identities. Both D1 records survive; an admin owner takes
+  precedence over an imported owner, then whole-profile recency resolves peers.
+  The winning record retains its field overrides, including clears. Custom
   profile keys and later intentional renames remain distinct.
 - Legacy HF profile data supplies fallback metadata only. It cannot override or
   refill a cleared D1 profile, even if the old manifest has a newer timestamp.
+- Automatic profiles are composed after identity resolution. Provider records
+  cannot create aliases, split collaboration credits or alter saved track keys.
 
 Grouping is deterministic across catalogue/profile iteration order. Cached
 snapshots are invalidated by profile revisions and local metadata edits;
@@ -99,6 +107,13 @@ npm audit
   [catalogue identity](../tests/artists/catalog-identity.test.ts): D1 ownership,
   cleared metadata, aliases, Unicode, compound/collaboration credits, deterministic
   groups and selections, literal metadata keys and stable fresh/cached track keys.
+- [Automatic composition](../tests/artists/metadata-composition.test.ts),
+  [provider matching](../tests/artists/metadata-provider.test.ts) and
+  [metadata storage](../tests/artists/metadata-store.test.ts): independent field
+  overrides, source credits, conservative identity checks and shared cache claims.
+- [Metadata API](../tests/artists/metadata-api.test.ts) and
+  [client scheduling](../tests/artists/metadata-client.test.ts): request intent,
+  bounded queues/cache, retry deadlines, session gates and cross-tab fencing.
 - [Stored state](../tests/artists/storage-state.test.ts): corrupt or blocked
   storage, read-only initialization, stable IDs and blob references, current-track
   retention/reappearance, explicit deletion and delayed-deletion reconciliation.
@@ -144,6 +159,24 @@ Info/Share actions. It observes playback callbacks and uses programmatic clicks,
 synthetic reorder keys and a Share stub. See the
 [native keyboard checks](../tests/playlists/README.md#native-keyboard-checks)
 for real browser key input.
+
+### Automatic artist metadata
+
+Import `/tests/artists/browser-metadata-regressions.js` on a fresh fixture for
+each row, then call the indicated export:
+
+| Fixture query | Export |
+| --- | --- |
+| default main | `runAutomaticMetadataRegressions()` |
+| `?metadata=held-ready` | `runMetadataLookupRegressions()` |
+| `?page=admin` | `runAdminMetadataRegressions()` |
+| `?page=admin&admin-gate=held` | `runAdminMetadataGateRegressions()` |
+| `?page=admin&admin-gate=denied` | `runAdminMetadataGateRegressions()` |
+| `?signed-out` or `?page=admin&signed-out` | `runSignedOutMetadataRegressions()` |
+
+These verify neutral portraits, independent fields and credits, live-node focus
+retention, unchanged audio/playlist bytes, older-request fencing, untouched
+editor drafts, explicit clears/unlocks, and no work before the appropriate gate.
 
 ### Queue playback and library races
 

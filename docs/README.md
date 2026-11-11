@@ -27,6 +27,8 @@ maintaining the app and follow the repository source.
 
 - [Artist storage](artist-storage.md) — centralized identities, aliases and
   admin-owned metadata; display grouping is separate from saved track keys.
+- [Automatic artist profiles](artist-metadata.md) — sourced portraits and
+  biographies, field overrides, identity checks and background caching.
 - [Public resource discovery](discovery.md) — public navigation documents,
   the read-only artist directory, and their access conditions.
 

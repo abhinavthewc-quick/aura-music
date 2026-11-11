@@ -55,6 +55,9 @@
 /* Cloud profiles share the same reading treatment in either artist view. */
 .artist-profile-details { margin: 16px 0 24px; max-width: 70ch; }
 .artist-bio { color: var(--text-sub); font-size: 14px; line-height: 1.65; white-space: pre-line; overflow-wrap: anywhere; }
+.artist-metadata-credit { margin: 8px 0 0; color: var(--text-sub); font-size: 12px; line-height: 1.65; overflow-wrap: anywhere; }
+.artist-metadata-credit a { display: inline-block; min-height: 24px; color: inherit; text-decoration: underline; text-underline-offset: 3px; }
+.artist-metadata-credit a:hover { color: var(--text); }
 .artist-genres { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 12px; }
 .artist-genres span { padding: 4px 9px; border: 1px solid var(--line); border-radius: var(--radius-xs); color: var(--text-sub); font-size: 12px; }
 .artist-social-link { display: inline-flex; align-items: center; gap: 8px; min-height: var(--tap); margin-top: 8px; color: var(--text); font-size: 13px; text-underline-offset: 3px; }

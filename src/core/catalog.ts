@@ -8,6 +8,8 @@
 
 import { artistTrackId, type ArtistProfile, type ArtistDirectory } from '../../lib/artistProfiles';
 import { createArtistIdentityResolver } from './artistIdentity';
+import { getDisplayArtistProfile } from './artistMetadata';
+import type { DisplayArtistProfile } from '../../lib/artistMetadata';
 
 export const HF_BUCKET_ID = 'Angelrider/sonora';
 const HF_TREE_URL = `https://huggingface.co/api/buckets/${HF_BUCKET_ID}/tree?recursive=true`;
@@ -252,12 +254,14 @@ export function readArtistsCache(): Record<string, ArtistMeta> {
   return combinedArtistsCache;
 }
 
-export function getArtistMeta(artistName: string): ArtistMeta | undefined {
+export function getArtistMeta(artistName: string): DisplayArtistProfile | undefined {
   if (!artistName) return undefined;
-  return createArtistIdentityResolver({
+  const identity = createArtistIdentityResolver({
     profiles: readArtistsCache(), authoritativeProfiles: cloudArtists().artists,
     authoritativeNames: Object.values(cloudArtists().trackArtists),
-  }).resolve(artistName)?.profile;
+  }).resolve(artistName);
+  return identity && identity.confidence !== 'ambiguous'
+    ? getDisplayArtistProfile(identity.name, identity.profile) : undefined;
 }
 
 export async function fetchHfCatalog(): Promise<any[]> {

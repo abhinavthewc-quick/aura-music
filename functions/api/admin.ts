@@ -1346,6 +1346,8 @@ export const onRequestPost = async ({ request, env, ctx }: {
             candidates.push({ id, artist });
           }
         }
+        /* Forward imgOverride/bioOverride unchanged: false unlocks, omission
+           preserves intent, and the store rejects non-boolean flags. */
         const saved = await saveArtistProfile(env, body, candidates, revision);
         return json({ ok: true, persisted: true, artist: saved.artist, renamedTrackCount: saved.renamedTrackCount, ...saved.directory });
       }

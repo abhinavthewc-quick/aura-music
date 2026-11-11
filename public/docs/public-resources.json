@@ -32,7 +32,7 @@
       "method": "GET",
       "description": "Public artist profiles keyed by normalized aliases, plus track-artist name corrections and a directory revision.",
       "responseFields": {
-        "artists": "Object mapping normalized artist alias keys to public profiles. An artist can appear under several aliases; profile.key is its canonical key. Profile fields are key, name, img, bio, genres, social, updated, and version; optional metadata may be empty.",
+        "artists": "Object mapping normalized artist alias keys to saved public profiles. An artist can appear under several aliases; profile.key is its canonical key. Profile fields are key, name, img, bio, genres, social, updated, version, source, imgOverride, and bioOverride. The independent override flags preserve manual values and explicit clears; automatic enrichment is cached separately. Optional metadata may be empty.",
         "trackArtists": "Object mapping track identifiers to corrected artist display names. Identifiers use vid:<videoId> when available, otherwise hf:<path>.",
         "revision": "Numeric revision of the artist directory."
       },

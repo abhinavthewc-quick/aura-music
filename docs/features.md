@@ -54,6 +54,11 @@ ambiguous names stay separate. Supported collaborations can appear under each
 credited artist while retaining the recording’s original track keys. Details:
 [Artist storage](artist-storage.md#read-side-artist-identity).
 
+Artist profiles automatically fill missing portraits and descriptions from
+Wikimedia sources after sign-in. Saved field overrides, including explicit
+clears, take precedence. Source credits accompany automatic content; unavailable
+portraits use a neutral placeholder. See [Automatic artist profiles](artist-metadata.md).
+
 Other library features:
 
 - **Likes** — persisted in `auraLikedSongs_v2` and merged into the catalogue by
@@ -63,11 +68,6 @@ Other library features:
 - **Local files** — drag/drop or picker; ID3/MP4/FLAC tags are read with
   jsmediatags, audio blobs stored in IndexedDB (`auraMusicDB` / `audioFiles`),
   metadata in `addedTracks`.
-- **Add by URL** — title + `http(s)` audio URL; invalid or non-http URLs are
-  rejected.
-- **Add YouTube link** — stores title/artist from public oEmbed metadata and a
-  thumbnail; playback uses the official embedded player. Duplicate video ids
-  are rejected and the button disables while the request is pending.
 - **Edit/delete** — rename title/artist, replace cover from a URL or uploaded
   file, delete from the library (also deletes the IndexedDB blob for local files).
 - **Stats** — total tracks, favourites, local files, distinct artists.

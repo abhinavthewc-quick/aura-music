@@ -39,7 +39,7 @@ test('production duplicates have one page per artist, with every collaboration c
   const groups = buildArtistGroups(tracks, profiles);
   const rahman = named(groups, 'A.R. Rahman');
   assert.equal(rahman.songs.length, 4);
-  assert.equal(rahman.profile, newerRahman);
+  assert.deepEqual(rahman.profile, newerRahman);
   assert.equal(rahman.cover, 'newer:portrait');
   assert.deepEqual(rahman.profileKeys, ['a. r. rahman', 'a.r. rahman']);
   assert.equal(groups.filter((group) => /rahman/i.test(group.name)).length, 1);
@@ -142,12 +142,84 @@ test('legacy metadata cannot compete with or refill a cloud profile, including c
   };
   const groups = buildArtistGroups(songs('AR Rahman', 'A. R. Rahman'), cloudAndLegacy);
   assert.equal(groups.length, 1);
-  assert.equal(groups[0].profile, cleared);
+  assert.deepEqual(groups[0].profile, cleared);
   assert.equal(groups[0].profile?.bio, '');
   assert.notEqual(groups[0].cover, 'stale:portrait');
   for (const name of ['A. R. Rahman', 'A.R. Rahman', 'AR Rahman']) {
     assert.equal(createArtistIdentityResolver({ profiles: cloudAndLegacy }).resolve(name)?.profile, cleared);
   }
+});
+
+test('audited natural Rahman owners prefer the whole admin profile over a newer manifest', () => {
+  const admin: ArtistProfile = Object.freeze({
+    ...olderRahman, source: 'admin', version: 1, img: 'admin:portrait', bio: '', imgOverride: true, bioOverride: false,
+  });
+  const manifest: ArtistProfile = Object.freeze({
+    ...newerRahman, source: 'manifest', version: 99, updated: 9999,
+    bio: 'Manifest biography', imgOverride: true, bioOverride: true,
+  });
+  const directory = { 'a. r. rahman': admin, 'a.r. rahman': manifest };
+  for (const data of [directory, Object.fromEntries(Object.entries(directory).reverse())]) {
+    const resolver = createArtistIdentityResolver({ profiles: data });
+    for (const name of ['A. R. Rahman', 'A.R. Rahman', 'AR Rahman']) {
+      const identity = resolver.resolve(name)!;
+      assert.equal(identity.key, 'artist:ar-rahman');
+      assert.equal(identity.profile, admin);
+      assert.equal(identity.profile.bioOverride, false, 'the other owner cannot lock an unspecified admin biography');
+      assert.deepEqual(identity.profileKeys, ['a. r. rahman', 'a.r. rahman']);
+    }
+  }
+});
+
+test('equivalent admin owners still use recency then version and carry whole-profile clears', () => {
+  const older: ArtistProfile = { ...olderRahman, source: 'admin', bio: 'Old biography', imgOverride: true, bioOverride: true };
+  const cleared: ArtistProfile = { ...newerRahman, source: 'admin', img: '', bio: '', imgOverride: true, bioOverride: true };
+  for (const data of [
+    { 'a. r. rahman': older, 'a.r. rahman': cleared },
+    { 'a.r. rahman': cleared, 'a. r. rahman': older },
+  ]) {
+    assert.equal(createArtistIdentityResolver({ profiles: data }).resolve('AR Rahman')?.profile, cleared);
+  }
+  const sameTime = { ...cleared, updated: older.updated, version: older.version! + 1 };
+  assert.equal(createArtistIdentityResolver({ profiles: {
+    'a. r. rahman': older, 'a.r. rahman': sameTime,
+  } }).resolve('AR Rahman')?.profile, sameTime);
+});
+
+test('copies of one owner remain version-first even when source and timestamps differ', () => {
+  const olderAdmin: ArtistProfile = { ...olderRahman, source: 'admin', version: 1, updated: 9999, imgOverride: true };
+  const latestManifest: ArtistProfile = { ...olderRahman, source: 'manifest', version: 2, updated: 1, imgOverride: false };
+  const directory = { 'a. r. rahman': olderAdmin, 'a.r. rahman': latestManifest };
+  for (const data of [directory, Object.fromEntries(Object.entries(directory).reverse())]) {
+    assert.equal(createArtistIdentityResolver({ profiles: data }).resolve('AR Rahman')?.profile, latestManifest);
+  }
+});
+
+test('source priority never merges custom Rahman owners or a renamed natural owner', () => {
+  const custom: Record<string, ArtistProfile> = {
+    'a. r. rahman': { key: 'custom admin', name: 'A. R. Rahman', source: 'admin' },
+    'a.r. rahman': { key: 'custom manifest', name: 'A.R. Rahman', source: 'manifest' },
+  };
+  const resolver = createArtistIdentityResolver({ profiles: custom });
+  assert.equal(resolver.resolve('A. R. Rahman')?.key, 'profile:custom admin');
+  assert.equal(resolver.resolve('A.R. Rahman')?.key, 'profile:custom manifest');
+  assert.equal(resolver.resolve('AR Rahman')?.confidence, 'ambiguous');
+  const renamed = createArtistIdentityResolver({ profiles: {
+    'a. r. rahman': { ...olderRahman, source: 'manifest' },
+    'a.r. rahman': { ...newerRahman, source: 'admin', name: 'Another Composer' },
+  } });
+  assert.equal(renamed.resolve('A.R. Rahman')?.key, 'profile:a.r. rahman');
+  assert.equal(renamed.resolve('A.R. Rahman')?.name, 'Another Composer');
+  assert.equal(renamed.resolve('A. R. Rahman')?.key, 'artist:ar-rahman');
+});
+
+test('equal-version owner copies with differing field intent have deterministic whole-record selection', () => {
+  const locked: ArtistProfile = { key: 'owner', name: 'Artist', version: 1, updated: 10, img: '', bio: '', imgOverride: true, bioOverride: true };
+  const automatic: ArtistProfile = { ...locked, imgOverride: false, bioOverride: false };
+  const directory = { artist: locked, alias: automatic };
+  const selected = createArtistIdentityResolver({ profiles: directory }).resolve('Artist')?.profile;
+  assert.equal(createArtistIdentityResolver({ profiles: Object.fromEntries(Object.entries(directory).reverse()) }).resolve('Artist')?.profile, selected);
+  assert.ok(selected === locked || selected === automatic);
 });
 
 test('explicit directory aliases outrank ambiguous display labels and copies use the latest owner version', () => {
@@ -169,7 +241,7 @@ test('HF profile keys never gain D1 ownership when the authoritative snapshot is
   const fallback = { 'a r rahman': { key: 'old import key', name: 'AR Rahman', img: 'fallback', updated: 9999 } };
   const groups = buildArtistGroups(songs('AR Rahman', 'A.R. Rahman'), { ...fallback, ...profiles }, { authoritativeProfiles: profiles });
   assert.equal(groups.length, 1);
-  assert.equal(groups[0].profile, newerRahman);
+  assert.deepEqual(groups[0].profile, newerRahman);
   assert.deepEqual(groups[0].profileKeys, ['a. r. rahman', 'a.r. rahman']);
 });
 

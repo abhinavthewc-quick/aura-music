@@ -1,9 +1,10 @@
 import { toast } from './core/dom';
 import { applyArtistTrackOverrides, fetchArtistDirectory, fetchHfCatalog } from './core/catalog';
+import { ARTIST_METADATA_UPDATED_EVENT, installArtistPortraitFallback, setArtistMetadataCatalog, startArtistMetadata } from './core/artistMetadata';
 import { getProfileUsername, getSession, setProfileUsername } from './core/session';
-import { refreshArtistViews, renderQuickPicks, setGreeting, setupHeaderSearch, setupMoodChips } from './features/home';
+import { refreshArtistViews, refreshAutomaticArtistViews, renderQuickPicks, setGreeting, setupHeaderSearch, setupMoodChips } from './features/home';
 import { applyPlayDeepLink } from './features/deeplink';
-import { hydrateLocalTracks, reconcileCatalog, renderLibrary, renderRecent, renderSongs, updateLibCount } from './features/library';
+import { getArtistGroups, hydrateLocalTracks, reconcileCatalog, refreshAutomaticLibraryArtists, renderLibrary, renderRecent, renderSongs, updateLibCount } from './features/library';
 import { auraYTPlayer, auraYTVideoId, lastPlayRequestAt, loadSong, updateMainMediaSession } from './features/player';
 import { updateProfilePopup } from './features/settings';
 import { filterSearchTab } from './features/search';
@@ -13,17 +14,32 @@ import { $, setHfTracks, state } from './core/state';
 /* ===== 4669-4686 ===== */
 
     let artistPaint = 0;
-    window.addEventListener('aura:artists-updated', () => {
+    let artistDirectoryPending = false;
+    installArtistPortraitFallback();
+    function scheduleArtistPaint(directoryChanged = false){
+      artistDirectoryPending ||= directoryChanged;
       if(artistPaint) return;
       artistPaint = requestAnimationFrame(() => {
         artistPaint = 0;
+        const directoryChanged = artistDirectoryPending;
+        artistDirectoryPending = false;
+        if(!getSession()) return;
         /* Reconcile metadata without reloading audio, seeking, or replacing
-           browser-local playlists. The current track keeps its stable ID. */
-        setHfTracks(applyArtistTrackOverrides(state.hfSongs));
-        renderSongs(state.songs);
-        renderRecent();
+           browser-local playlists. Automatic updates ONLY repaint artist
+           views: their data cannot rebuild songs, queues or playlist keys. */
+        if(directoryChanged){
+          setHfTracks(applyArtistTrackOverrides(state.hfSongs));
+          renderSongs(state.songs);
+          renderRecent();
+          refreshPlaylistViews();
+          setArtistMetadataCatalog(getArtistGroups().filter(g => !g.key.startsWith('unresolved:')).map(g => g.name));
+        }
+        if(!directoryChanged){
+          refreshAutomaticArtistViews();
+          refreshAutomaticLibraryArtists();
+          return;
+        }
         refreshArtistViews();
-        refreshPlaylistViews();
         if($('tabLibrary')?.classList.contains('active')) renderLibrary();
         if($('tabSearch')?.classList.contains('active')) filterSearchTab();
         if($('upNextSheet')?.classList.contains('active')) renderUpNext();
@@ -33,11 +49,15 @@ import { $, setHfTracks, state } from './core/state';
           updateMainMediaSession();
         }
       });
+    }
+    window.addEventListener('aura:artists-updated', () => scheduleArtistPaint(true));
+    window.addEventListener(ARTIST_METADATA_UPDATED_EVENT, (event: CustomEvent) => {
+      if(event.detail?.displayChanged !== false) scheduleArtistPaint();
     });
 
     let lastArtistRefresh = 0;
     const refreshArtists = () => {
-      if(document.visibilityState === 'hidden' || Date.now() - lastArtistRefresh < 15000) return;
+      if(!getSession() || document.visibilityState === 'hidden' || Date.now() - lastArtistRefresh < 15000) return;
       lastArtistRefresh = Date.now();
       void fetchArtistDirectory();
     };
@@ -66,6 +86,7 @@ import { $, setHfTracks, state } from './core/state';
 /* ===== 6274-6287 ===== */
     export const ready = (async function init(){
       const session = getSession();
+      if(!session) return;
       if(session){
         const name = session.name || 'Listener';
         if(!getProfileUsername(session.email) && session.name) setProfileUsername(session.email, session.name);
@@ -84,6 +105,15 @@ import { $, setHfTracks, state } from './core/state';
       await hydrateLocalTracks();
       renderSongs(state.songs); if(state.songs.length) loadSong(0); updateLibCount(); renderRecent(); renderQuickPicks();
       updateProfilePopup();
+      /* Do not hold app.ready or the catalogue for provider work. Two frames
+         let the real signed-in library paint before the lazy queue starts. */
+      requestAnimationFrame(() => requestAnimationFrame(() => startArtistMetadata({
+        canRequest: () => {
+          const app = $('musicApp');
+          return !!getSession() && !!app && !app.hidden && !app.inert;
+        },
+        catalog: getArtistGroups().filter(g => !g.key.startsWith('unresolved:')).map(g => g.name),
+      })));
 
       /* A PreMiD "Listen in Aura Music" button lands here. Cached/local tracks
          can start immediately; bucket tracks are retried after the fetch. */

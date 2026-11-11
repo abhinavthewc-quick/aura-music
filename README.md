@@ -30,6 +30,9 @@ queue, settings) stays in your browser.
 - **Your library** — tracks and cover art streamed from the bucket, with album,
   year and duration metadata from `manifest.json`. Home and Library share
   centralized artist identities, aliases, portraits and counts.
+- **Artist profiles** — automatically fill missing portraits and descriptions
+  from Wikimedia sources, with source credits and per-field manual overrides.
+  See [automatic artist profiles](docs/artist-metadata.md).
 - **Library search** — filters the Aura catalogue by title, artist, album,
   film, favourites, and recent plays. It never mixes preview tracks from other
   services into the library.

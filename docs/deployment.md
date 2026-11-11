@@ -2,7 +2,7 @@
 
 The app has four independently deployable pieces:
 
-1. **Cloudflare Pages site** — static app + two Pages Functions.
+1. **Cloudflare Pages site** — static app + Pages Functions.
 2. **Rooms Worker** — Cloudflare Worker + Durable Object.
 3. **GitHub Actions** — upload/manage pipeline (no separate server).
 4. **PreMiD activity** — optional; loaded from the Activities repo/dev mode.
@@ -12,6 +12,11 @@ flowchart TD
   GH[GitHub repo] -->|Pages Git integration| PAGES[Cloudflare Pages\naura-music-01g.pages.dev]
   PAGES -->|/api/admin| FUNC[Pages Functions]
   PAGES -->|/api/rooms| FUNC2[Pages Function proxy]
+  PAGES -->|/api/artists, /api/artist-image| ARTISTS[Artist storage Functions]
+  PAGES -->|/api/artist-metadata| METADATA[Automatic metadata Function]
+  ARTISTS --> ARTISTDB[(Artist D1 database)]
+  METADATA --> ARTISTDB
+  METADATA --> WIKI[Wikidata / Wikimedia / Wikipedia]
   FUNC2 -->|WebSocket| WORKER[aura-rooms Worker]
   WORKER --> DO[(RoomDO Durable Object)]
   FUNC -->|dispatch / secrets| GITHUB[GitHub Actions]
@@ -34,8 +39,8 @@ flowchart TD
 | Functions directory | `functions` (default) |
 | Node version | 20+ (set `NODE_VERSION` if the default is older) |
 
-Cloudflare automatically detects `functions/api/admin.ts` and
-`functions/api/rooms.ts` and exposes them at `/api/admin` and `/api/rooms`.
+Cloudflare automatically maps the handlers in `functions/api/` to `/api/` routes,
+including admin, rooms, saved artist profiles/images and automatic artist metadata.
 The build emits `index.html`, `admin.html` and `rooms.html`; Pages’ pretty URLs
 serve `/`, `/admin` and `/rooms` (`*.html` requests 308 to the clean URL).
 
@@ -50,12 +55,14 @@ If you deploy from a laptop instead of Git integration:
 ```bash
 npm ci
 npm run build
-npx wrangler pages deploy dist --project-name aura-music-01g
+npx wrangler pages deploy dist --project-name aura-music --branch main
 ```
 
-`wrangler` needs a Cloudflare login/token. The Pages project name is the
-subdomain part of the URL (`aura-music-01g`). Git integration is preferred: every
-push to `main` rebuilds the site.
+`wrangler` needs a Cloudflare login/token. The Pages project is **`aura-music`**;
+its public hostname is `aura-music-01g.pages.dev`. Git integration is preferred:
+every push to `main` rebuilds the site. Apply the pending
+[artist migrations](artist-metadata.md#storage-and-development) before deploying
+Functions that depend on their columns or cache tables.
 
 ### Cache and routes
 
@@ -63,8 +70,8 @@ push to `main` rebuilds the site.
 - `public/aura-logo.png` and `public/aura-thumbnail.png` are stable URLs used by
   the PreMiD activity and docs; if you replace them, the CDN may serve the old
   copy until its cache expires.
-- There is no `_headers` or `_redirects` file; Pages’ defaults are used.
-  `index.html` is served with `cache-control: max-age=0, must-revalidate`.
+- `public/_headers` revalidates HTML and caches hashed assets for one year with
+  `immutable`. `public/_redirects` defines the legacy discovery-manifest redirect.
 - Internal links use `/rooms` and `/admin`; keep the pretty URLs enabled.
 
 ### Rollback
@@ -233,8 +240,8 @@ Full steps: [premid/README.md](../premid/README.md) and
 - **No app-level CI.** `.github/workflows` only contains the music pipeline.
   Typecheck/lint/build are manual gates; consider adding a small CI workflow if
   more contributors join.
-- **No custom HTTP headers/CSP** are configured. The app loads Font Awesome,
-  Google Fonts and jsmediatags from CDNs and uses inline event handlers, so a
-  strict CSP would need a separate migration. See [security](security.md).
+- **No strict CSP** is configured. Fonts and selected icons are self-hosted;
+  optional integrations and inline event handlers still need consideration for
+  a CSP migration. See [security](security.md).
 - **Keep `main` deployable.** Pages builds `main` automatically; a broken
   `npm run build` blocks deployment but does not take down the previous build.
