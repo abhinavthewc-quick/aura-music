@@ -1,15 +1,18 @@
 {
-  "date": "2026-11-10",
+  "date": "2026-11-11",
+  "release": "Automatic artist profiles",
   "origin": "https://aura-music-01g.pages.dev",
-  "localOrigin": "http://127.0.0.1:5187",
+  "localOrigin": "http://127.0.0.1:5191",
   "scope": "Public signed-out home, admin and rooms entry pages",
-  "implementationCommit": "51e1a9ff82dc8a6dce56ceab8b2c7f0a8be1e5ab",
+  "implementationCommit": "f419616aa8181eab921a28e08b5a5dcd97e10701",
+  "auditedClientCommit": "f419616aa8181eab921a28e08b5a5dcd97e10701",
+  "commitNote": "Includes the workerd redirect correction and readable narrow artist headers. All 13 deployed JavaScript/CSS hashes match the newly audited build.",
+  "previousResults": "lighthouse-results-2026-11-10.json",
   "lighthouseVersion": "13.6.0",
   "chromeVersion": "157.0.0.0",
   "throttlingMethod": "simulate",
   "categories": ["performance", "accessibility", "best-practices", "seo", "agentic-browsing"],
   "scoreScale": 100,
-  "scoreScaleAppliesTo": "The four numeric categories in scores; Agentic Browsing is a passed/applicable fraction",
   "metricUnits": {
     "first-contentful-paint": "ms",
     "largest-contentful-paint": "ms",
@@ -21,361 +24,213 @@
   "agenticBrowsingDefinition": {
     "displayMode": "fraction",
     "countUnit": "audits",
-    "scope": "All final local and live runs; notApplicable audits are excluded from the denominator",
     "applicableAuditIds": ["agent-accessibility-tree", "cumulative-layout-shift", "llms-txt", "ard-schema"],
     "notApplicableAuditIds": ["webmcp-form-coverage", "webmcp-registered-tools", "webmcp-schema-validity"]
   },
-  "agenticBaseline": {
-    "kind": "observed-audit-summary",
-    "source": "baseline-agentic-home-mobile.summary.json",
-    "provenance": "Reconstructed from retained session observations; not an original full Lighthouse or PageSpeed Insights report",
-    "observedCommit": "42cd4ec05b3ac8ec6bb7c1537be5302f49e3eaca",
-    "page": "home",
-    "device": "mobile",
-    "url": "https://aura-music-01g.pages.dev/",
-    "fetchedAt": "2026-11-10T16:45:05.514Z",
-    "agenticBrowsing": { "passed": 2, "applicable": 4, "notApplicable": 3 },
-    "failedAuditIds": ["llms-txt", "ard-schema"],
-    "discoveryResponse": "Homepage HTML fallback",
-    "fullLighthouseResultRetained": false,
-    "originalPsiReportSupplied": false
-  },
   "audits": [
     {
-      "page": "home",
-      "device": "mobile",
-      "url": "https://aura-music-01g.pages.dev/",
-      "auditedCommit": "51e1a9ff82dc8a6dce56ceab8b2c7f0a8be1e5ab",
-      "fetchedAt": "2026-11-10T18:13:38.160Z",
+      "page": "home", "device": "mobile", "fetchedAt": "2026-11-11T11:44:22.493Z",
       "scores": { "performance": 100, "accessibility": 100, "best-practices": 100, "seo": 100 },
       "agenticBrowsing": { "passed": 4, "applicable": 4, "notApplicable": 3 },
       "metrics": {
-        "first-contentful-paint": 930,
-        "largest-contentful-paint": 930,
-        "speed-index": 1003.5083999961614,
-        "total-blocking-time": 16,
-        "cumulative-layout-shift": 0,
-        "total-byte-weight": 96528
+        "first-contentful-paint": 930, "largest-contentful-paint": 930,
+        "speed-index": 1731.669960110426, "total-blocking-time": 84,
+        "cumulative-layout-shift": 0, "total-byte-weight": 96596
       },
-      "warnings": [],
-      "report": "live-home-mobile.report.html",
-      "jsonReport": "live-home-mobile.report.json"
+      "warnings": [], "report": "live-home-mobile.report.html", "jsonReport": "live-home-mobile.report.json"
     },
     {
-      "page": "home",
-      "device": "desktop",
-      "url": "https://aura-music-01g.pages.dev/",
-      "auditedCommit": "51e1a9ff82dc8a6dce56ceab8b2c7f0a8be1e5ab",
-      "fetchedAt": "2026-11-10T18:14:12.624Z",
+      "page": "admin", "device": "mobile", "fetchedAt": "2026-11-11T11:44:35.868Z",
       "scores": { "performance": 100, "accessibility": 100, "best-practices": 100, "seo": 100 },
       "agenticBrowsing": { "passed": 4, "applicable": 4, "notApplicable": 3 },
       "metrics": {
-        "first-contentful-paint": 277.978,
-        "largest-contentful-paint": 277.978,
-        "speed-index": 351.89230183233667,
-        "total-blocking-time": 0,
-        "cumulative-layout-shift": 0,
-        "total-byte-weight": 96537
+        "first-contentful-paint": 919.407, "largest-contentful-paint": 919.407,
+        "speed-index": 919.407, "total-blocking-time": 9.5,
+        "cumulative-layout-shift": 0, "total-byte-weight": 124724
       },
-      "warnings": [],
-      "report": "live-home-desktop.report.html",
-      "jsonReport": "live-home-desktop.report.json"
+      "warnings": [], "report": "live-admin-mobile.report.html", "jsonReport": "live-admin-mobile.report.json"
     },
     {
-      "page": "admin",
-      "device": "mobile",
-      "url": "https://aura-music-01g.pages.dev/admin",
-      "auditedCommit": "51e1a9ff82dc8a6dce56ceab8b2c7f0a8be1e5ab",
-      "fetchedAt": "2026-11-10T18:13:49.780Z",
+      "page": "rooms", "device": "mobile", "fetchedAt": "2026-11-11T11:44:49.658Z",
       "scores": { "performance": 100, "accessibility": 100, "best-practices": 100, "seo": 100 },
       "agenticBrowsing": { "passed": 4, "applicable": 4, "notApplicable": 3 },
       "metrics": {
-        "first-contentful-paint": 904.84,
-        "largest-contentful-paint": 904.84,
-        "speed-index": 904.84,
-        "total-blocking-time": 0,
-        "cumulative-layout-shift": 0,
-        "total-byte-weight": 117489
+        "first-contentful-paint": 772.703, "largest-contentful-paint": 772.703,
+        "speed-index": 2180.0344159992455, "total-blocking-time": 43,
+        "cumulative-layout-shift": 0, "total-byte-weight": 113227
       },
-      "warnings": [],
-      "report": "live-admin-mobile.report.html",
-      "jsonReport": "live-admin-mobile.report.json"
+      "warnings": [], "report": "live-rooms-mobile.report.html", "jsonReport": "live-rooms-mobile.report.json"
     },
     {
-      "page": "admin",
-      "device": "desktop",
-      "url": "https://aura-music-01g.pages.dev/admin",
-      "auditedCommit": "51e1a9ff82dc8a6dce56ceab8b2c7f0a8be1e5ab",
-      "fetchedAt": "2026-11-10T18:14:23.828Z",
+      "page": "home", "device": "desktop", "fetchedAt": "2026-11-11T11:45:04.266Z",
       "scores": { "performance": 100, "accessibility": 100, "best-practices": 100, "seo": 100 },
       "agenticBrowsing": { "passed": 4, "applicable": 4, "notApplicable": 3 },
       "metrics": {
-        "first-contentful-paint": 280,
-        "largest-contentful-paint": 280,
-        "speed-index": 340.7104694962725,
-        "total-blocking-time": 0,
-        "cumulative-layout-shift": 0,
-        "total-byte-weight": 117461
+        "first-contentful-paint": 297.173, "largest-contentful-paint": 297.173,
+        "speed-index": 598.3544780787861, "total-blocking-time": 0,
+        "cumulative-layout-shift": 0, "total-byte-weight": 96585
       },
-      "warnings": [],
-      "report": "live-admin-desktop.report.html",
-      "jsonReport": "live-admin-desktop.report.json"
+      "warnings": [], "report": "live-home-desktop.report.html", "jsonReport": "live-home-desktop.report.json"
     },
     {
-      "page": "rooms",
-      "device": "mobile",
-      "url": "https://aura-music-01g.pages.dev/rooms",
-      "auditedCommit": "51e1a9ff82dc8a6dce56ceab8b2c7f0a8be1e5ab",
-      "fetchedAt": "2026-11-10T18:14:01.139Z",
+      "page": "admin", "device": "desktop", "fetchedAt": "2026-11-11T11:45:18.491Z",
       "scores": { "performance": 100, "accessibility": 100, "best-practices": 100, "seo": 100 },
       "agenticBrowsing": { "passed": 4, "applicable": 4, "notApplicable": 3 },
       "metrics": {
-        "first-contentful-paint": 789.747,
-        "largest-contentful-paint": 789.747,
-        "speed-index": 898.3748239979923,
-        "total-blocking-time": 40,
-        "cumulative-layout-shift": 0,
-        "total-byte-weight": 107496
+        "first-contentful-paint": 290, "largest-contentful-paint": 290,
+        "speed-index": 417.77474941241616, "total-blocking-time": 0,
+        "cumulative-layout-shift": 0, "total-byte-weight": 124677
       },
-      "warnings": [],
-      "report": "live-rooms-mobile.report.html",
-      "jsonReport": "live-rooms-mobile.report.json"
+      "warnings": [], "report": "live-admin-desktop.report.html", "jsonReport": "live-admin-desktop.report.json"
     },
     {
-      "page": "rooms",
-      "device": "desktop",
-      "url": "https://aura-music-01g.pages.dev/rooms",
-      "auditedCommit": "51e1a9ff82dc8a6dce56ceab8b2c7f0a8be1e5ab",
-      "fetchedAt": "2026-11-10T18:14:35.377Z",
+      "page": "rooms", "device": "desktop", "fetchedAt": "2026-11-11T11:45:32.029Z",
       "scores": { "performance": 100, "accessibility": 100, "best-practices": 100, "seo": 100 },
       "agenticBrowsing": { "passed": 4, "applicable": 4, "notApplicable": 3 },
       "metrics": {
-        "first-contentful-paint": 278,
-        "largest-contentful-paint": 278,
-        "speed-index": 336.46472500041125,
-        "total-blocking-time": 0,
-        "cumulative-layout-shift": 0,
-        "total-byte-weight": 107532
+        "first-contentful-paint": 257.16600000000005, "largest-contentful-paint": 257.16600000000005,
+        "speed-index": 1039.9615203289409, "total-blocking-time": 0,
+        "cumulative-layout-shift": 0.0007076061184805768, "total-byte-weight": 113310
       },
-      "warnings": [],
-      "report": "live-rooms-desktop.report.html",
-      "jsonReport": "live-rooms-desktop.report.json"
+      "warnings": [], "report": "live-rooms-desktop.report.html", "jsonReport": "live-rooms-desktop.report.json"
     }
   ],
   "localAudits": [
     {
-      "page": "home",
-      "device": "mobile",
-      "url": "http://127.0.0.1:5187/",
-      "auditedCommit": "51e1a9ff82dc8a6dce56ceab8b2c7f0a8be1e5ab",
-      "fetchedAt": "2026-11-10T18:09:32.883Z",
+      "page": "home", "device": "mobile", "fetchedAt": "2026-11-11T06:28:05.442Z",
       "scores": { "performance": 100, "accessibility": 100, "best-practices": 100, "seo": 100 },
       "agenticBrowsing": { "passed": 4, "applicable": 4, "notApplicable": 3 },
       "metrics": {
-        "first-contentful-paint": 762.7447,
-        "largest-contentful-paint": 762.7447,
-        "speed-index": 762.7447,
-        "total-blocking-time": 0,
-        "cumulative-layout-shift": 0,
-        "total-byte-weight": 94950
+        "first-contentful-paint": 762.0128, "largest-contentful-paint": 762.0128,
+        "speed-index": 762.0128, "total-blocking-time": 3,
+        "cumulative-layout-shift": 0, "total-byte-weight": 94760
       },
-      "warnings": [],
-      "report": "local-home-mobile.report.html",
-      "jsonReport": "local-home-mobile.report.json"
+      "warnings": [], "report": "local-home-mobile.report.html", "jsonReport": "local-home-mobile.report.json"
     },
     {
-      "page": "home",
-      "device": "desktop",
-      "url": "http://127.0.0.1:5187/",
-      "auditedCommit": "51e1a9ff82dc8a6dce56ceab8b2c7f0a8be1e5ab",
-      "fetchedAt": "2026-11-10T18:10:06.901Z",
+      "page": "admin", "device": "mobile", "fetchedAt": "2026-11-11T06:28:16.479Z",
       "scores": { "performance": 100, "accessibility": 100, "best-practices": 100, "seo": 100 },
       "agenticBrowsing": { "passed": 4, "applicable": 4, "notApplicable": 3 },
       "metrics": {
-        "first-contentful-paint": 263.2414,
-        "largest-contentful-paint": 263.2414,
-        "speed-index": 263.2414,
-        "total-blocking-time": 0,
-        "cumulative-layout-shift": 0,
-        "total-byte-weight": 94950
+        "first-contentful-paint": 756.2755999999999, "largest-contentful-paint": 756.2755999999999,
+        "speed-index": 756.2755999999999, "total-blocking-time": 0,
+        "cumulative-layout-shift": 0, "total-byte-weight": 122012
       },
-      "warnings": [],
-      "report": "local-home-desktop.report.html",
-      "jsonReport": "local-home-desktop.report.json"
+      "warnings": [], "report": "local-admin-mobile.report.html", "jsonReport": "local-admin-mobile.report.json"
     },
     {
-      "page": "admin",
-      "device": "mobile",
-      "url": "http://127.0.0.1:5187/admin",
-      "auditedCommit": "51e1a9ff82dc8a6dce56ceab8b2c7f0a8be1e5ab",
-      "fetchedAt": "2026-11-10T18:09:44.034Z",
+      "page": "rooms", "device": "mobile", "fetchedAt": "2026-11-11T06:28:26.989Z",
       "scores": { "performance": 100, "accessibility": 100, "best-practices": 100, "seo": 100 },
       "agenticBrowsing": { "passed": 4, "applicable": 4, "notApplicable": 3 },
       "metrics": {
-        "first-contentful-paint": 756.4546,
-        "largest-contentful-paint": 756.4546,
-        "speed-index": 756.4546,
-        "total-blocking-time": 0,
-        "cumulative-layout-shift": 0,
-        "total-byte-weight": 115257
+        "first-contentful-paint": 756.2547, "largest-contentful-paint": 756.2547,
+        "speed-index": 756.2547, "total-blocking-time": 0,
+        "cumulative-layout-shift": 0, "total-byte-weight": 110249
       },
-      "warnings": [],
-      "report": "local-admin-mobile.report.html",
-      "jsonReport": "local-admin-mobile.report.json"
+      "warnings": [], "report": "local-rooms-mobile.report.html", "jsonReport": "local-rooms-mobile.report.json"
     },
     {
-      "page": "admin",
-      "device": "desktop",
-      "url": "http://127.0.0.1:5187/admin",
-      "auditedCommit": "51e1a9ff82dc8a6dce56ceab8b2c7f0a8be1e5ab",
-      "fetchedAt": "2026-11-10T18:10:18.775Z",
+      "page": "home", "device": "desktop", "fetchedAt": "2026-11-11T06:28:37.657Z",
       "scores": { "performance": 100, "accessibility": 100, "best-practices": 100, "seo": 100 },
       "agenticBrowsing": { "passed": 4, "applicable": 4, "notApplicable": 3 },
       "metrics": {
-        "first-contentful-paint": 206.00799999999998,
-        "largest-contentful-paint": 206.00799999999998,
-        "speed-index": 206.00799999999998,
-        "total-blocking-time": 0,
-        "cumulative-layout-shift": 0,
-        "total-byte-weight": 115257
+        "first-contentful-paint": 254.84969999999998, "largest-contentful-paint": 254.84969999999998,
+        "speed-index": 254.84969999999998, "total-blocking-time": 0,
+        "cumulative-layout-shift": 0, "total-byte-weight": 94760
       },
-      "warnings": [],
-      "report": "local-admin-desktop.report.html",
-      "jsonReport": "local-admin-desktop.report.json"
+      "warnings": [], "report": "local-home-desktop.report.html", "jsonReport": "local-home-desktop.report.json"
     },
     {
-      "page": "rooms",
-      "device": "mobile",
-      "url": "http://127.0.0.1:5187/rooms",
-      "auditedCommit": "51e1a9ff82dc8a6dce56ceab8b2c7f0a8be1e5ab",
-      "fetchedAt": "2026-11-10T18:09:55.024Z",
+      "page": "admin", "device": "desktop", "fetchedAt": "2026-11-11T06:28:48.623Z",
       "scores": { "performance": 100, "accessibility": 100, "best-practices": 100, "seo": 100 },
       "agenticBrowsing": { "passed": 4, "applicable": 4, "notApplicable": 3 },
       "metrics": {
-        "first-contentful-paint": 756.9019000000001,
-        "largest-contentful-paint": 756.9019000000001,
-        "speed-index": 756.9019000000001,
-        "total-blocking-time": 0,
-        "cumulative-layout-shift": 0,
-        "total-byte-weight": 104947
+        "first-contentful-paint": 296.5305, "largest-contentful-paint": 296.5305,
+        "speed-index": 296.5305, "total-blocking-time": 0,
+        "cumulative-layout-shift": 0, "total-byte-weight": 122012
       },
-      "warnings": [],
-      "report": "local-rooms-mobile.report.html",
-      "jsonReport": "local-rooms-mobile.report.json"
+      "warnings": [], "report": "local-admin-desktop.report.html", "jsonReport": "local-admin-desktop.report.json"
     },
     {
-      "page": "rooms",
-      "device": "desktop",
-      "url": "http://127.0.0.1:5187/rooms",
-      "auditedCommit": "51e1a9ff82dc8a6dce56ceab8b2c7f0a8be1e5ab",
-      "fetchedAt": "2026-11-10T18:10:30.104Z",
+      "page": "rooms", "device": "desktop", "fetchedAt": "2026-11-11T06:29:00.939Z",
       "scores": { "performance": 100, "accessibility": 100, "best-practices": 100, "seo": 100 },
       "agenticBrowsing": { "passed": 4, "applicable": 4, "notApplicable": 3 },
       "metrics": {
-        "first-contentful-paint": 294.9097,
-        "largest-contentful-paint": 294.9097,
-        "speed-index": 294.9097,
-        "total-blocking-time": 0,
-        "cumulative-layout-shift": 0,
-        "total-byte-weight": 104947
+        "first-contentful-paint": 317.4144, "largest-contentful-paint": 317.4144,
+        "speed-index": 317.4144, "total-blocking-time": 0,
+        "cumulative-layout-shift": 0, "total-byte-weight": 110249
       },
-      "warnings": [],
-      "report": "local-rooms-desktop.report.html",
-      "jsonReport": "local-rooms-desktop.report.json"
+      "warnings": [], "report": "local-rooms-desktop.report.html", "jsonReport": "local-rooms-desktop.report.json"
     }
   ],
   "verification": {
-    "source": "functional-verification.json",
-    "node": { "passed": 132, "failed": 0, "source": "node-regressions.tap" },
-    "browser": {
-      "suites": 28,
-      "passedAssertions": 1268,
-      "failed": 0,
-      "source": "browser-regressions-summary.json",
-      "note": "Recorded run totals; entry frame-sampling counts can vary on reruns"
-    },
+    "node": { "passedCases": 233, "failed": 0, "sources": ["node-regressions.log", "provider-runtime-fix-tests.log"], "note": "Final integrated run includes the new redirect regression; the earlier 58-case backend recheck also passed" },
+    "browser": { "suites": 40, "passedAssertions": 1366, "failed": 0, "source": "browser-regressions-summary.json" },
     "nativeKeyboard": { "passedChecks": 53, "failed": 0, "source": "keyboard-regressions.json" },
-    "accessibility": {
-      "engine": "axe",
-      "appStates": 72,
-      "roomsStates": 16,
-      "violations": 0,
-      "horizontalOverflow": 0,
-      "uncaughtErrors": 0,
-      "sources": ["fixture-app-accessibility.json", "rooms-ui-accessibility.json"]
-    },
+    "accessibility": { "engine": "axe", "appStates": 72, "metadataStates": 16, "violations": 0, "horizontalOverflow": 0, "uncaughtErrors": 0, "sources": ["fixture-app-accessibility.json", "metadata-accessibility.json"] },
+    "runtimeCompatibility": { "passed": true, "source": "runtime-compatibility-verification.json" },
     "viewports": { "mobile": [390, 844], "desktop": [1440, 960] },
-    "checks": { "typecheck": "passed", "lint": "passed", "productionBuild": "passed", "workerTypecheck": "passed", "workerDryRun": "passed" },
-    "localWorkerE2e": { "passedChecks": 22, "source": "Earlier session observation", "scope": "Local Worker end-to-end run" },
-    "mutationCoverage": "Google authentication, admin editing and room mutations are covered by isolated regression fixtures",
-    "liveAdminSave": { "verified": false, "reason": "No usable live admin credential was available" }
+    "checks": { "typecheck": "passed", "lint": "passed", "productionBuild": "passed", "pagesFunctionsCompilation": "passed" },
+    "liveAdminSave": { "verified": false, "reason": "No usable live admin credential; isolated browser and SQLite coverage passed" }
   },
   "releaseVerification": {
     "source": "implementation-release-verification.json",
-    "scope": "Verified implementation deployment",
-    "checkedAt": "2026-11-10T18:13:17.381Z",
-    "pagesDeployment": "21552980-40c6-4859-95f5-f8bf82d4d194",
-    "implementationCommit": "51e1a9ff82dc8a6dce56ceab8b2c7f0a8be1e5ab",
+    "checkedAt": "2026-11-11T11:45:55.872Z",
+    "pagesDeployment": "e69cc099-391b-45cf-9f07-1affef4146c1",
     "stage": "success",
     "bundles": { "count": 13, "liveSha256MatchesLocal": true, "cacheControl": "public, max-age=31536000, immutable" },
-    "pagesConfiguration": { "valuesMatchSnapshot": true, "fields": ["source", "build_config", "deployment_configs"] },
-    "artistDirectory": { "revision": 18, "profiles": 18, "snapshotPreserved": true }
+    "pagesConfiguration": { "valuesMatchSnapshot": true, "fields": ["source", "build_config", "deployment_configs", "production_branch"] },
+    "artistDirectory": { "revisionBefore": 18, "migrationRevision": 19, "revision": 21, "originalProfiles": 18, "profiles": 20, "imageBlobs": 16, "originalValuesPreserved": true, "portraitOverrides": 20, "biographiesEligible": 20, "concurrentAdminAdditionsPreserved": ["Ilaiyaraaja", "Arijit Singh"] },
+    "integrity": { "quickCheck": "ok", "foreignKeyViolations": 0 },
+    "migrations": ["0003_artist_metadata_overrides.sql", "0004_artist_metadata_cache.sql"],
+    "roomsWorker": { "version": "798c7ce0-da30-4fd8-b2e8-11866dc79ab5", "trafficPercentage": 100, "preserved": true }
   },
-  "finalReleaseVerification": {
-    "source": "release-verification.json",
-    "scope": "Final documentation deployment; same application bundles as the audited implementation"
+  "discoveryVerification": { "source": "discovery-live-validation.json", "verifiedAt": "2026-11-11T11:47:09.131Z", "documents": "passed", "http": "passed" },
+  "liveMetadata": {
+    "source": "live-metadata-verification.json", "checkedAt": "2026-11-11T06:05:10.121Z",
+    "implementationCommit": "45554976c28a05a0f326aec44561606a3cef5798",
+    "scope": "Actual Cloudflare provider egress, D1 cache rows, public API, portrait downloads and unchanged manual directory",
+    "results": [
+      { "name": "Ed Sheeran", "status": "ready", "portrait": true, "biographyCharacters": 315, "jobsStarted": 1, "cachedReadJobs": 0, "recoveredRetry": true },
+      { "name": "Lana Del Rey", "status": "ready", "portrait": true, "biographyCharacters": 390, "jobsStarted": 1, "cachedReadJobs": 0, "cold": true },
+      { "name": "Deepak Dev", "status": "ready", "portrait": true, "biographyCharacters": 311, "jobsStarted": 1, "cachedReadJobs": 0, "cold": true },
+      { "name": "Sorana", "status": "ready", "portrait": false, "biographyCharacters": 942, "jobsStarted": 1, "cachedReadJobs": 0, "cold": true },
+      { "name": "Torine", "status": "ambiguous", "portrait": false, "biographyCharacters": 0, "jobsStarted": 1, "cachedReadJobs": 0, "cold": true }
+    ],
+    "positiveTtlDays": 7, "negativeTtlDays": 1, "manualDirectoryPreserved": true
   },
-  "workerReleaseVerification": {
-    "source": "worker-release-verification.json",
-    "checkedAt": "2026-11-10T18:13:17.274Z",
-    "version": "798c7ce0-da30-4fd8-b2e8-11866dc79ab5",
-    "trafficPercentage": 100,
-    "runtimeSettingsPreserved": true,
-    "subdomainPreserved": true,
-    "intentionalMetadataAdditions": ["annotations.workers/message"]
-  },
-  "discoveryVerification": {
-    "source": "discovery-live-validation.json",
-    "verifiedAt": "2026-11-10T18:13:34.968Z",
-    "documents": "passed",
-    "http": "passed"
+  "liveArtistUI": {
+    "implementationCommit": "f419616aa8181eab921a28e08b5a5dcd97e10701",
+    "sources": ["live-artist-ui-mobile.json", "live-artist-ui-desktop.json"],
+    "browserVersion": "HeadlessChrome/158.0.8127.18",
+    "scope": "Five real artists in Home and Library after browser-local listener sign-in; verified portraits, displayed source/license/crop credits, neutral fallbacks, readable headers, unchanged music state and cached reloads",
+    "completedRuns": 2, "passedChecks": 182, "catalogueTracks": 407,
+    "views": 20, "screenshots": 20, "visuallyReviewedScreenshots": 20,
+    "axeStates": 4, "axeViolations": 0,
+    "signedOutMetadataRequests": 0, "cachedEdSheeranRequests": 0,
+    "uncaughtErrors": 0, "remoteSubmissions": 0,
+    "runs": [
+      { "device": "mobile", "checkedAt": "2026-11-11T11:52:33.887Z", "passedChecks": 91 },
+      { "device": "desktop", "checkedAt": "2026-11-11T11:53:08.423Z", "passedChecks": 91 }
+    ],
+    "browserNote": "Ordinary Chrome 157 automation intermittently detached or closed; the final functional run uses installed Chrome for Testing 158. Lighthouse remains on Chrome 157.",
+    "accessibilityScope": "Live axe checks cover portrait-plus-biography and biography-only Library states on both devices; the separate fixture reports cover the remaining metadata states"
   },
   "productionSmoke": {
-    "source": "production-smoke-summary.json",
-    "auditedCommit": "51e1a9ff82dc8a6dce56ceab8b2c7f0a8be1e5ab",
-    "completedRuns": 6,
-    "passedChecks": 146,
-    "scope": "Home uses browser-local sign-in and the live library; admin and rooms cover only entry gates; no remote mutations",
+    "source": "production-smoke-summary.json", "implementationCommit": "f419616aa8181eab921a28e08b5a5dcd97e10701",
+    "browserVersion": "HeadlessChrome/158.0.8127.18",
+    "completedRuns": 6, "passedChecks": 146,
+    "scope": "Live Home uses browser-local sign-in, catalogue, native audio, playlists and independent share-recipient storage; admin and rooms cover entry gates",
     "runs": [
-      { "page": "home", "device": "mobile", "passedChecks": 55, "source": "production-home-mobile.json" },
-      { "page": "admin", "device": "mobile", "passedChecks": 9, "gatesOnly": true, "source": "production-admin-mobile.json" },
-      { "page": "rooms", "device": "mobile", "passedChecks": 9, "gatesOnly": true, "source": "production-rooms-mobile.json" },
-      { "page": "home", "device": "desktop", "passedChecks": 55, "source": "production-home-desktop.json" },
-      { "page": "admin", "device": "desktop", "passedChecks": 9, "gatesOnly": true, "source": "production-admin-desktop.json" },
-      { "page": "rooms", "device": "desktop", "passedChecks": 9, "gatesOnly": true, "source": "production-rooms-desktop.json" }
+      { "page": "home", "device": "mobile", "passedChecks": 55 },
+      { "page": "admin", "device": "mobile", "passedChecks": 9, "gatesOnly": true },
+      { "page": "rooms", "device": "mobile", "passedChecks": 9, "gatesOnly": true },
+      { "page": "home", "device": "desktop", "passedChecks": 55 },
+      { "page": "admin", "device": "desktop", "passedChecks": 9, "gatesOnly": true },
+      { "page": "rooms", "device": "desktop", "passedChecks": 9, "gatesOnly": true }
     ],
-    "recipient": {
-      "isolation": "Independent browser context with separate storage",
-      "passedChecksPerDevice": 11,
-      "includedInHomeTotals": true,
-      "sharedTracksPerDevice": 2,
-      "liveLibraryTracksPerDevice": 407,
-      "catalogueArrivalPreservesSavedBytes": true,
-      "repeatImportReusesSavedCopy": true
-    },
-    "returningSessionSamples": {
-      "mobile": { "returning": true, "frames": 3, "signInFrames": 0, "done": true },
-      "desktop": { "returning": true, "frames": 1, "signInFrames": 0, "done": true },
-      "scope": "Captured returning-session frames only; not a guarantee for every visit"
-    },
-    "completionNote": "Completed mobile run plus filtered desktop rerun after a clean Chrome exit (Connection closed) interrupted the first desktop recipient step; no remote writes",
-    "harnessCorrection": "Recipient catalogue assertion waits for !state.catalogLoading; no application changes were needed"
+    "remoteSubmissions": 0,
+    "runNote": "The initial final smoke run completed all mobile checks but timed out waiting for desktop live audio. An unchanged filtered desktop rerun passed all 55 Home and both nine-check gate suites; no assertions were relaxed."
   },
-  "evidenceArchive": {
-    "name": "aura-ux-and-discovery-2026-11-10.zip",
-    "location": "outside git",
-    "reportSources": ["local-lighthouse-summary.json", "live-lighthouse-summary.json"],
-    "contents": ["Lighthouse JSON/HTML reports", "Retained observed Agentic baseline summary", "Safe verification summaries", "run-keyboard-regressions.mjs", "Screenshots"],
-    "note": "Report and summary filenames refer to the external evidence set"
-  }
+  "evidenceArchive": { "name": "aura-artist-metadata-2026-11-11.zip", "location": "outside git", "reportSources": ["local-lighthouse-summary.json", "live-lighthouse-summary.json"] }
 }

@@ -28,7 +28,78 @@ The separate mobile-home observation at **16:45:05.514 UTC** on `42cd4ec` was
 reconstructed from session observations. Its original full Lighthouse report
 was not retained, and the user's original PageSpeed Insights report was unavailable.
 
-## Local and production results — 10 November 2026
+## Automatic artist profiles — 11 November 2026
+
+The [automatic artist profiles](artist-metadata.md) release retains **100** in
+Performance, Accessibility, Best Practices and SEO on all six local and all six
+production entry-page audits. Agentic Browsing passes **4/4 applicable audits**
+in every run; the three WebMCP audits remain N/A. Eleven runs have zero layout
+shift; live desktop Rooms records **0.000708**. All runs have zero Lighthouse
+warnings and runtime errors.
+
+The audited implementation is `f419616`, including the Cloudflare `workerd`
+redirect correction and a responsive artist-header fix found during screenshot
+review. All **13 JavaScript/CSS SHA-256 hashes** match production. Local audits
+ran at **06:28:05–06:29:00 UTC**, and production at **11:44:22–11:45:32 UTC**.
+
+| Mobile page | Live FCP / LCP | Live blocking | Live transfer | Local FCP / LCP | Local transfer |
+| --- | ---: | ---: | ---: | ---: | ---: |
+| Home | 0.930 s | 84 ms | 94 KiB | 0.762 s | 93 KiB |
+| Admin | 0.919 s | 9.5 ms | 122 KiB | 0.756 s | 119 KiB |
+| Rooms | 0.773 s | 43 ms | 111 KiB | 0.756 s | 108 KiB |
+
+Local mobile Home recorded 3 ms blocking; the other local runs and every live
+desktop run recorded zero. These signed-out benchmarks do not measure portrait
+downloads: automatic metadata starts after sign-in and library paint.
+
+The final integrated **233 Node tests** passed, including the new redirect
+regression; the earlier **58-case backend recheck** also passed.
+Other recorded checks passed: **40 browser suites / 1,366 assertions**, **53 native
+keyboard checks**, and **72 existing + 16 metadata axe states** with zero violations,
+horizontal overflow or uncaught errors. Typecheck, lint, production build, Pages
+Functions compilation and a native `workerd` provider-fixture check also passed.
+
+Deployment `e69cc099-391b-45cf-9f07-1affef4146c1` preserved the Pages configuration
+and all original artist data, including **18 profiles and 16 image BLOBs**. The two
+verified migrations moved the directory revision **18 → 19**, preserved all 18
+portraits, and enabled automatic fill for the 18 unspecified biographies. Two
+independent admin saves added Ilaiyaraaja and Arijit Singh during verification;
+the final read-only check preserved these too, at **20 profiles / revision 21**.
+The original records, image bytes, aliases and track ownership are unchanged. D1's
+quick check returned `ok`, with no foreign-key violations. The Rooms Worker stays
+at version `798c7ce0-da30-4fd8-b2e8-11866dc79ab5`, 100%.
+
+Actual Cloudflare provider lookups returned verified photos and Wikipedia
+descriptions for **Ed Sheeran, Lana Del Rey and Deepak Dev**, biography-only for
+**Sorana**, and an ambiguous result for **Torine**. Each used one provider job;
+all cached repeats used zero. Positive and negative D1 lifetimes, image downloads,
+source credits and the unchanged manual directory were verified. This also
+confirmed recovery from the runtime-option failure caught during the first live
+check, with the existing cooldown respected.
+
+Final live artist UI verification passed **182 checks** across mobile and
+desktop, with **20 visually reviewed Home/Library screenshots** and four
+additional zero-violation axe states. It verified real portraits and displayed
+source/license/crop credits, neutral fallbacks, readable narrow headers and
+unchanged track identities, recording artwork, playlists and audio state in the
+407-track catalogue. Signed-out metadata requests, cached Ed Sheeran lookup
+requests, uncaught page errors and remote submissions were all zero.
+Functional runs use Chrome for Testing **158.0.8127.18** after ordinary Chrome
+157 automation intermittently detached or closed; Lighthouse remains on Chrome 157.
+
+Production smoke passed **146 checks across six mobile/desktop runs**, covering
+local listener sign-in, the live catalogue, native playback, playlist sharing,
+independent recipient storage, returning sessions and admin/rooms entry gates.
+The initial desktop live-audio wait timed out; the unchanged desktop rerun
+passed every assertion. Final totals retain the completed mobile run.
+
+Exact current metrics and verification references are in
+[`lighthouse-results.json`](lighthouse-results.json). Current safe evidence is
+packaged outside git as `aura-artist-metadata-2026-11-11.zip`.
+Live authenticated admin saving remains unverified because no usable credential
+was available; isolated browser and SQLite regressions cover the save flow.
+
+## Previous local and production results — 10 November 2026
 
 All six local and six live audits cover implementation commit `51e1a9f`.
 Local runs were fetched at **18:09:32–18:10:30 UTC** and live runs at
@@ -60,7 +131,7 @@ all live desktop runs. Live mobile Home transfers approximately **99.5% fewer
 bytes** than the initial baseline; Rooms transfers 105 KiB versus its earlier
 5.76 MiB eager-entry transfer.
 
-[`lighthouse-results.json`](lighthouse-results.json) records every run's full
+[`lighthouse-results-2026-11-10.json`](lighthouse-results-2026-11-10.json) records every run's full
 implementation hash, UTC timestamp and exact metrics: timings in **milliseconds**,
 layout shift **unitless**, and transfer size in **bytes**. The table rounds FCP/LCP
 to seconds and transfer sizes to KiB (1 KiB = 1,024 bytes).
@@ -115,7 +186,7 @@ separate output paths. Reports depend on browser version and network conditions.
 The [discovery guide](discovery.md#document-checks) also documents document/schema
 validation and the Pages-specific HTTP redirect checks.
 
-## Regression and release verification
+## Previous UX release verification — 10 November 2026
 
 The recorded isolated checks for this implementation passed:
 
@@ -187,7 +258,7 @@ bundles, configuration and artist snapshot.
 Release evidence is packaged outside git as `aura-ux-and-discovery-2026-11-10.zip`:
 the local/live JSON and HTML reports, retained observed Agentic baseline, safe
 verification summaries, `run-keyboard-regressions.mjs` and screenshots. Report
-and summary filenames in `lighthouse-results.json` refer to that evidence set
+and summary filenames in `lighthouse-results-2026-11-10.json` refer to that evidence set
 outside git. `functional-verification.json`, `browser-regressions-summary.json`,
 `keyboard-regressions.json`, the app/rooms axe summaries and
 `production-smoke-summary.json` retain the detailed verification results.

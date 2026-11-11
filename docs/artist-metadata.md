@@ -105,5 +105,44 @@ APIs. Vite development proxies metadata requests to the deployed Pages Function;
 the isolated artist fixtures supply local responses. Regression setup and commands are in
 [Artist storage](artist-storage.md#concurrency-and-tests).
 
+## Verified release — 11 November 2026
+
+Implementation `f419616` is deployed on `aura-music-01g.pages.dev`. Production
+checks preserved all 18 saved profiles and all 16 image BLOBs, with directory
+revision 19 after the two migrations. Subsequent independent admin saves added
+Ilaiyaraaja and Arijit Singh; final verification preserved those additions too,
+at 20 profiles and revision 21. Existing configuration and the Rooms Worker
+version were preserved.
+
+Actual Pages → Wikimedia → D1 → public API checks returned:
+
+| Artist | Portrait | Description | Result |
+| --- | --- | --- | --- |
+| Ed Sheeran | Verified | Wikipedia excerpt | Ready |
+| Lana Del Rey | Verified | Wikipedia excerpt | Ready |
+| Deepak Dev | Verified | Wikipedia excerpt | Ready |
+| Sorana | None verified | Wikipedia excerpt | Ready |
+| Torine | None selected | None selected | Ambiguous |
+
+Every lookup used one provider job and its cached repeat used zero. All four
+ready records had seven-day lifetimes, and the ambiguous result had a one-day
+lifetime. The manual directory was unchanged after every lookup. Ed Sheeran's
+lookup also verified recovery from an earlier retry record.
+
+The cold provider/cache checks ran on `4555497`; `f419616` retains that provider
+unchanged and adds the responsive artist-header correction. Final live Home and
+Library verification passed **182 checks** across mobile and desktop, with all
+**20 screenshots** visually reviewed. It checked real photos and displayed
+source/license/crop credits, neutral fallbacks and readable names, while retaining
+all 407 track records, recording artwork, playlist bytes and audio state.
+Signed-out artist requests and cached Ed Sheeran reload requests were both zero.
+
+Live verification caught and corrected a platform-specific fetch option:
+Cloudflare `workerd` supports `redirect: 'manual'`, not `'error'`. The adapter
+rejects all non-OK responses, including redirects, without following their
+targets. Native-runtime fixture checks and production egress both passed after
+the correction. Performance and full regression records are in
+[Lighthouse verification](lighthouse.md#automatic-artist-profiles--11-november-2026).
+
 Related code: `lib/artistMetadata.ts`, `src/core/artistMetadata.ts`,
 `functions/api/artist-metadata.ts`, and `functions/lib/artistMetadataStore.ts`.
