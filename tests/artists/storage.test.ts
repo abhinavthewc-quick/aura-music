@@ -282,6 +282,32 @@ test('individual corrections override earlier batch renames; a later intentional
   assert.equal(db.count('artist_track_edits'), 1);
 });
 
+test('artist profile batch renames leave collaborative credits and another performer untouched', async (t) => {
+  const db = new SqliteD1(); t.after(() => db.close());
+  const env = { ARTIST_DB: db };
+  await saveArtistProfile(env, { artist: 'Anirudh Ravichander', img: PNG, bio: 'Saved profile.' });
+  await saveArtistProfile(env, { artist: 'Dhanush', bio: 'A separate performer.' });
+  const credits = [
+    { id: videoId(0), artist: 'Anirudh Ravichander' },
+    { id: videoId(1), artist: 'Anirudh Ravichander & Dhanush' },
+    { id: videoId(2), artist: 'Dhanush' },
+    { id: videoId(3), artist: 'Anirudh Ravichandran & Dhanush' },
+  ];
+  const before = await readArtistDirectory(env), raw = JSON.stringify(credits);
+  const saved = await saveArtistProfile(env, { artist: 'Anirudh Ravichander', version: 1,
+    name: 'Reviewed Anirudh', renameTracks: true }, credits, before.revision);
+  assert.equal(saved.renamedTrackCount, 1);
+  assert.deepEqual({ ...saved.directory.trackArtists }, { [videoId(0)]: 'Reviewed Anirudh' });
+  assert.deepEqual(saved.directory.artists.dhanush, before.artists.dhanush);
+  assert.equal(saved.artist.img, before.artists['anirudh ravichander'].img);
+  assert.equal(db.count('artist_images'), 1);
+  assert.equal(JSON.stringify(credits), raw);
+  const collaboratorOnly = await saveArtistProfile(env, { artist: 'Guest Artist', name: 'Renamed Guest', renameTracks: true },
+    [{ id: videoId(4), artist: 'Anirudh Ravichander & Guest Artist' }], saved.directory.revision);
+  assert.equal(collaboratorOnly.renamedTrackCount, 0);
+  assert.deepEqual(collaboratorOnly.directory.trackArtists, saved.directory.trackArtists);
+});
+
 test('track edits made while a batch rename is being prepared reject the stale rename', async (t) => {
   const db = new SqliteD1(); t.after(() => db.close());
   const env = { ARTIST_DB: db };

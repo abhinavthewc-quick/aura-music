@@ -20,8 +20,27 @@
     ['Vishnu Vijay', 'Stay a while', 'ijklmnopqrs'],
     ['Jakes Bejoy', 'First light', 'jklmnopqrst'],
     ['Local Ensemble', 'Night drive', 'klmnopqrstu'],
-  ].map(([artist, title, videoId], index) => {
-    const hfPath = `${artist} - ${title}${videoId ? ` [${videoId}]` : ''}.opus`;
+    ...(options.has('credits') ? [
+      ['Dhanush', 'Separate voice', 'lmnopqrstu1'],
+      ['Anirudh Ravichander & Dhanush', 'Shared recording', 'lmnopqrstu2', 'Anirudh Ravichander'],
+      ['Anirudh Ravichandran & Dhanush', 'Spelling duet', 'lmnopqrstu3', 'Anirudh Ravichander'],
+      ['Anirudh Ravichander, Anirudh Ravichandran & Dhanush', 'Repeated credit', 'lmnopqrstu4', 'Anirudh Ravichander'],
+      ['Hamsika Iyer & Yogi B', 'Be Notorious', 'lmnopqrstu5', 'Hamsika Iyer'],
+      ['Siri Xander & Arra Aria Khayal', 'Pesamale', 'lmnopqrstu6', 'Siri Xander'],
+      ['Narayani Gopan & Mithun Jayaraj', 'Uyire', 'lmnopqrstu7', 'Narayani Gopan'],
+      ['Saurav Srisan & Tanisha Gnanavel', 'Rathinamo', 'lmnopqrstu8', 'Saurav Srisan'],
+      ['M. G. Sreekumar & Bindu Anirudhan', 'Digi Rigi Dum Dum', 'lmnopqrstu9', 'MG'],
+      ['A.R. Ameen, Vaishali Samant, Rakshita Suresh & Antara Nandy', "Sita's Aspiration", 'lmnopqrst10', 'A. R. Ameen'],
+      ['Manikandan Ayyappa, Chemban Vinod Jose, Himna Hilari & Hinitha Hilary', 'Aadame', 'lmnopqrst11', 'Manikandan Ayyappa'],
+      ['Earth, Wind & Fire', 'Band recording', 'lmnopqrst12'],
+      ['Local One & Local Two', 'Joint project recording', 'lmnopqrst13', 'Local One'],
+      ['Edited One & Edited Two', 'Intentional correction', 'lmnopqrst14', 'Edited One'],
+      ['Strangers & Friends', 'Compound name', 'lmnopqrst15'],
+      ['The Dhanush Ensemble', 'Unrelated recording', 'lmnopqrst16'],
+      ['Alex North', 'Ambiguous owner recording', 'lmnopqrst17'],
+    ] : []),
+  ].map(([artist, title, videoId, source], index) => {
+    const hfPath = `${source || artist} - ${title}${videoId ? ` [${videoId}]` : ''}.opus`;
     return {
       id: 'hf:' + hfPath, hfPath, artist, title, videoId,
       album: index < 2 ? 'After hours' : 'Singles', year: '2026', duration: 120,
@@ -76,7 +95,15 @@
     },
     cloud(revision = 1, name = 'New Artist', img = '/api/artist-image?id=one.jpg') {
       const profile = { key: 'old artist', name, img, bio: 'Independent music, made for long evenings.', genres: ['Soul', 'Alternative'], social: 'https://example.com', version: revision, updated: Date.now(), source: 'admin', imgOverride: true, bioOverride: true };
-      return { artists: { 'old artist': profile, 'new artist': profile, [name.toLowerCase()]: profile, 'anirudh ravichander': { key: 'anirudh ravichander', name: 'Anirudh Ravichander', bio: 'Composer and performer.', img: '/api/artist-image?id=anirudh.jpg', version: 1, source: 'admin', imgOverride: true, bioOverride: true } }, trackArtists: Object.fromEntries(tracks.slice(0, 2).map((track) => [track.videoId ? 'vid:' + track.videoId : 'hf:' + track.hfPath, name])), revision };
+      return { artists: { 'old artist': profile, 'new artist': profile, [name.toLowerCase()]: profile, 'anirudh ravichander': { key: 'anirudh ravichander', name: 'Anirudh Ravichander', bio: 'Composer and performer.', img: '/api/artist-image?id=anirudh.jpg', version: 1, source: 'admin', imgOverride: true, bioOverride: true },
+        ...(options.has('credits') ? {
+          'local one & local two': { key: 'joint project', name: 'Local One & Local Two', img: '/api/artist-image?id=joint.jpg', version: 1, source: 'admin', imgOverride: true, bioOverride: false },
+          'first alex': { key: 'alex north', name: 'Alex North', bio: 'First owner biography.', version: 1, source: 'admin', imgOverride: false, bioOverride: true },
+          'second alex': { key: 'second alex', name: 'Alex North', bio: 'Second owner biography.', version: 1, source: 'admin', imgOverride: false, bioOverride: true },
+        } : {}),
+      }, trackArtists: { ...Object.fromEntries(tracks.slice(0, 2).map((track) => [track.videoId ? 'vid:' + track.videoId : 'hf:' + track.hfPath, name])),
+        ...(options.has('credits') ? { 'vid:lmnopqrst14': 'Edited One & Edited Two' } : {}),
+      }, revision };
     },
     async publish(directory) {
       fixture.directory = directory;
@@ -98,7 +125,7 @@
     const url = new URL(typeof input === 'string' ? input : input.url, location.href);
     const body = typeof init.body === 'string' ? JSON.parse(init.body) : {};
     const method = init.method || 'GET';
-    if (url.pathname.startsWith('/api/') || url.origin !== location.origin) fixture.requests.push({ method, path: url.pathname, queryName: url.searchParams.get('name') || undefined, action: body.action, version: body.version, artistKey: body.artistKey, name: body.name, img: body.img, bio: body.bio, imgOverride: body.imgOverride, bioOverride: body.bioOverride,
+    if (url.pathname.startsWith('/api/') || url.origin !== location.origin) fixture.requests.push({ method, path: url.pathname, queryName: url.searchParams.get('name') || undefined, action: body.action, version: body.version, artistKey: body.artistKey, name: body.name, img: body.img, bio: body.bio, imgOverride: body.imgOverride, bioOverride: body.bioOverride, renameTracks: body.renameTracks,
       ...(url.pathname === '/api/artist-metadata' ? { intent: new Headers(init.headers).get('X-Aura-Artist-Intent'), gateConfirmed: fixture.adminGateConfirmed, appVisible: !!document.getElementById('musicApp') && !document.getElementById('musicApp').hidden && !document.getElementById('musicApp').inert } : {}) });
     if (url.hostname === 'huggingface.co' || (url.pathname.startsWith('/__fixture_hf/') && url.pathname.endsWith('manifest.json'))) {
       if (url.pathname.endsWith('manifest.json')) return Response.json({ v: 1, artists: {}, tracks: Object.fromEntries(tracks.filter((t) => t.videoId).map((t) => [t.videoId, { t: t.title, a: t.artist, al: t.album, y: t.year, d: t.duration }])) });
@@ -129,7 +156,7 @@
       return Response.json(['Evening frequency', 'Quiet signals'].filter(name => name.toLowerCase().includes(query)).map(name => ({ name, url: location.origin + '/__fixture_audio.wav', country: 'Local fixture', tags: 'ambient,night', favicon: '/src/assets/brand-logo.webp' })));
     }
     if (url.pathname === '/api/admin') {
-      if (body.action === 'library') return Response.json({ files: tracks.flatMap((t) => [{ path: t.hfPath, size: 1024 }, { path: t.hfPath.replace(/\.opus$/, '.jpg'), size: 256 }]), videoIds: tracks.map((t) => t.videoId).filter(Boolean), bucketId: 'fixture', manifest: {}, ...fixture.directory });
+      if (body.action === 'library') return Response.json({ files: tracks.flatMap((t) => [{ path: t.hfPath, size: 1024 }, { path: t.hfPath.replace(/\.opus$/, '.jpg'), size: 256 }]), videoIds: tracks.map((t) => t.videoId).filter(Boolean), bucketId: 'fixture', manifest: options.has('credits') ? Object.fromEntries(tracks.filter(t => t.videoId).map(t => [t.videoId, { t: t.title, a: t.artist, al: t.album, y: t.year, d: t.duration }])) : {}, ...fixture.directory });
       if (body.action === 'status') {
         if (fixture.adminGate === 'held') await new Promise(resolve => { fixture.releaseAdminGate = resolve; });
         if (fixture.adminGate === 'denied') return Response.json({ error: 'Fixture admin access denied' }, { status: 403 });
@@ -148,8 +175,22 @@
           bioOverride: typeof body.bioOverride === 'boolean' ? body.bioOverride : has('bio') ? true : current?.bioOverride ?? !!current?.version,
           source: 'admin', genres: body.genres, social: body.social, version: body.version + 1, updated: Date.now() };
         const artists = Object.fromEntries(Object.entries(fixture.directory.artists).map(([alias, saved]) => [alias, saved.key === body.artistKey ? profile : saved]));
-        fixture.directory = { ...fixture.directory, artists: { ...artists, [body.artistKey]: profile, [body.name.toLowerCase()]: profile }, revision: fixture.directory.revision + 1 };
-        return Response.json({ ...fixture.directory, ok: true, persisted: true, artist: profile, renamedTrackCount: 0 });
+        const trackArtists = { ...fixture.directory.trackArtists };
+        let renamedTrackCount = 0;
+        if (options.has('credits') && body.renameTracks) {
+          const aliases = new Set([body.artistKey, body.artist?.toLowerCase(), body.name.toLowerCase(),
+            ...Object.entries(fixture.directory.artists).filter(([, saved]) => saved.key === body.artistKey).map(([alias]) => alias)]);
+          for (const track of tracks) {
+            const id = track.videoId ? 'vid:' + track.videoId : 'hf:' + track.hfPath;
+            const artist = trackArtists[id] || track.artist;
+            if (aliases.has(artist.toLowerCase()) && artist !== body.name) {
+              trackArtists[id] = body.name;
+              renamedTrackCount++;
+            }
+          }
+        }
+        fixture.directory = { ...fixture.directory, artists: { ...artists, [body.artistKey]: profile, [body.name.toLowerCase()]: profile }, trackArtists, revision: fixture.directory.revision + 1 };
+        return Response.json({ ...fixture.directory, ok: true, persisted: true, artist: profile, renamedTrackCount });
       }
       return Response.json({ error: 'Fixture blocked a real admin action' }, { status: 400 });
     }

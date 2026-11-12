@@ -1,7 +1,7 @@
 import { normalizeArtistKey, type ArtistProfile } from '../../lib/artistProfiles';
 import { composeArtistMetadata, type AutomaticArtistMetadata, type DisplayArtistProfile } from '../../lib/artistMetadata';
 import {
-  artistDisplayName, artistKey, artistNamesMatch, compareArtistText,
+  artistDisplayName, artistKey, artistNamesMatch, artistSourceCredit, compareArtistText,
   createArtistIdentityResolver, type ArtistIdentityOptions,
 } from './artistIdentity';
 export { artistKey, artistNamesMatch } from './artistIdentity';
@@ -77,7 +77,8 @@ export function buildArtistGroups(
   } = {},
 ): ArtistGroup[] {
   const { automaticMetadata, ...identityOptions } = options;
-  const resolver = createArtistIdentityResolver({ ...identityOptions, profiles, names: songs.map((song) => song?.artist) });
+  const resolver = createArtistIdentityResolver({ ...identityOptions, profiles,
+    names: songs.map((song) => song?.artist), creditSources: songs.map(artistSourceCredit) });
   const groups = new Map<string, ArtistGroup & {
     tally: Map<string, number>; seen: Set<unknown>; preferredName: boolean;
   }>();

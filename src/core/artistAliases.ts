@@ -18,6 +18,8 @@ export const VERIFIED_ARTISTS: readonly VerifiedArtist[] = [
     equivalentProfileKeys: ['a. r. rahman', 'a.r. rahman'],
   },
   { id: 'anirudh-ravichander', name: 'Anirudh Ravichander', aliases: ['Anirudh Ravichandran'] },
+  // Full singer name only. The catalogue's bare MG / M G labels stay distinct.
+  { id: 'mg-sreekumar', name: 'M. G. Sreekumar' },
   { id: 'sai-abhyankkar', name: 'Sai Abhyankkar', aliases: ['Sai Abhyankar'] },
   { id: 'ilaiyaraaja', name: 'Ilaiyaraaja', aliases: ['Ilaiyaraja', 'Ilayaraja', 'Ilayaraaja'] },
   { id: 'ouseppachan', name: 'Ouseppachan', aliases: ['Ousepachan'] },

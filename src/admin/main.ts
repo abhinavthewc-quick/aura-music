@@ -1,8 +1,8 @@
 import './admin.css';
 import { ADMIN_EMAILS, GOOGLE_CLIENT_ID } from '../core/config';
-import { cleanArtist, cleanTitle, cacheArtistDirectory, fetchArtistDirectory, getCachedArtistDirectory, ArtistMeta, type ArtistDirectory } from '../core/catalog';
+import { cleanArtist, cleanTitle, parseTrackName, cacheArtistDirectory, fetchArtistDirectory, getCachedArtistDirectory, ArtistMeta, type ArtistDirectory } from '../core/catalog';
 import { artistTrackId, normalizeArtistKey } from '../../lib/artistProfiles';
-import { createArtistIdentityResolver } from '../core/artistIdentity';
+import { buildAdminArtistGroups } from './artistGroups';
 import {
   ARTIST_METADATA_UPDATED_EVENT, artistMetadataCreditHTML, createArtistMetadataDraft,
   DEFAULT_ARTIST_PORTRAIT, editArtistMetadataDraft, getArtistMetadataResponse,
@@ -784,6 +784,7 @@ interface LibraryResponse {
   revision?: number;
 }
 interface LibEntry {
+  id: string;
   path: string; stem: string; ext: string; vid: string;
   size: number; mtime: string;
   title: string; artist: string; album: string; year: string; duration: number; genre?: string;
@@ -811,6 +812,7 @@ function ingestArtistDirectory(data: Partial<ArtistDirectory>): void {
 }
 
 interface AdminArtist {
+  key: string;
   name: string;
   normKey: string;
   trackCount: number;
@@ -823,6 +825,7 @@ interface AdminArtist {
   social: string;
   profile?: ArtistMeta;
   metadataName: string;
+  renameTrackCount: number;
 }
 
 let libArtistsCache: AdminArtist[] | null = null;
@@ -837,6 +840,8 @@ let libLoadError = '';
 let libFilter = 'all';
 let libSortMode = 'title';
 let libQuery = '';
+let libArtistKey = '';
+let libArtistNormKey = '';
 let libSelectMode = false;
 let libSelected = new Set<string>();
 let coverPicker: HTMLInputElement | null = null;
@@ -887,10 +892,7 @@ function buildLibEntries(): LibEntry[] {
     const ext = f.path.slice(stem.length);
     const vidM = VID_SUFFIX_RE.exec(stem);
     const vid = vidM ? vidM[1] : '';
-    const base = stem.replace(VID_SUFFIX_RE, '');
-    const fm = /^(.+?)\s+-\s+(.+)$/.exec(base);
-    let artist = fm ? fm[1].trim() : '';
-    let title = fm ? fm[2].trim() : base;
+    let { artist, title } = parseTrackName(f.path);
     let album = '', year = '', duration = 0, genre = '';
     const m = vid ? libManifest[vid] : undefined;
     if (m) {
@@ -904,6 +906,7 @@ function buildLibEntries(): LibEntry[] {
     artist = libTrackArtists[artistTrackId(vid, f.path)] || artist;
     const coverPath = libCovers.get(stem);
     return {
+      id: 'hf:' + f.path,
       path: f.path, stem, ext, vid,
       size: Number(f.size) || 0, mtime: f.mtime || '',
       title, artist, album, year, duration, genre,
@@ -918,7 +921,14 @@ function libVisibleEntries(): LibEntry[] {
   let list = buildLibEntries().slice();
   if (libFilter === 'nocover') list = list.filter((e) => !e.coverUrl);
   else if (libFilter === 'noid') list = list.filter((e) => !e.vid);
-  const q = libQuery.toLowerCase();
+  if (libArtistKey) {
+    const artists = buildAdminArtists();
+    const matches = artists.filter((artist) => artist.normKey === libArtistNormKey);
+    const artist = artists.find((item) => item.key === libArtistKey) || (matches.length === 1 ? matches[0] : undefined);
+    const paths = new Set(artist?.tracks.map((track) => track.path));
+    list = list.filter((entry) => paths.has(entry.path));
+  }
+  const q = libArtistKey ? '' : libQuery.toLowerCase();
   if (q) {
     list = list.filter((e) =>
       e.title.toLowerCase().includes(q) ||
@@ -1555,78 +1565,13 @@ function buildAdminArtists(): AdminArtist[] {
   if (libArtistsCache && libArtistsMetadataRevision === metadataRevision) return libArtistsCache;
   libArtistsMetadataRevision = metadataRevision;
   const entries = buildLibEntries();
-  const resolver = createArtistIdentityResolver({ profiles: libArtists, authoritativeProfiles: libArtists,
-    authoritativeNames: Object.values(libTrackArtists), names: entries.map(entry => entry.artist) });
-  const map = new Map<string, { name: string; tracks: LibEntry[]; albums: Set<string>; profile?: ArtistMeta; metadataName: string }>();
-
-  for (const e of entries) {
-    const rawArtist = (e.artist || '').trim() || 'Unknown Artist';
-    const identity = resolver.resolve(rawArtist);
-    const profile = identity?.confidence !== 'ambiguous' ? identity?.profile : undefined;
-    const name = identity?.name || rawArtist;
-    const norm = profile?.key || normalizeArtistKey(name);
-    let g = map.get(norm);
-    if (!g) {
-      g = { name, tracks: [], albums: new Set(), profile, metadataName: identity?.confidence !== 'ambiguous' ? name : '' };
-      map.set(norm, g);
-    }
-    g.tracks.push(e);
-    if (e.album) g.albums.add(e.album);
-  }
-
-  const result: AdminArtist[] = [];
-  for (const [norm, g] of map.entries()) {
-    const custom = g.profile;
-    const name = custom?.name || g.name;
-    const img = (g.metadataName ? getDisplayArtistProfile(g.metadataName, custom)?.img : custom?.img) || DEFAULT_ARTIST_PORTRAIT;
-    const hasCustomImg = Boolean(custom?.img) && createArtistMetadataDraft(custom).imgOverride;
-    const bio = custom?.bio || '';
-    const genres = Array.isArray(custom?.genres) ? custom.genres : [];
-    const social = custom?.social || '';
-
-    result.push({
-      name,
-      normKey: norm,
-      trackCount: g.tracks.length,
-      tracks: g.tracks,
-      albums: Array.from(g.albums),
-      img,
-      hasCustomImg,
-      bio,
-      genres,
-      social,
-      profile: custom,
-      metadataName: g.metadataName,
-    });
-  }
-
-  // Include saved profiles with 0 tracks once, not once for every old-name alias.
-  const included = new Set(result.map(a => a.normKey));
-  for (const [norm, meta] of Object.entries(libArtists)) {
-    const k = meta?.key || normalizeArtistKey(norm);
-    if (!included.has(k) && meta) {
-      included.add(k);
-      const identity = resolver.resolve(norm);
-      const profile = identity?.confidence !== 'ambiguous' && identity?.profile?.key === k ? identity.profile : meta;
-      const metadataName = identity?.confidence !== 'ambiguous' && (!identity?.profile?.key || identity.profile.key === k) ? identity?.name || profile.name || norm : '';
-      result.push({
-        name: profile.name || norm,
-        normKey: k,
-        trackCount: 0,
-        tracks: [],
-        albums: [],
-        img: (metadataName ? getDisplayArtistProfile(metadataName, profile)?.img : profile.img) || DEFAULT_ARTIST_PORTRAIT,
-        hasCustomImg: Boolean(profile.img) && createArtistMetadataDraft(profile).imgOverride,
-        bio: profile.bio || '',
-        genres: Array.isArray(profile.genres) ? profile.genres : [],
-        social: profile.social || '',
-        profile,
-        metadataName,
-      });
-    }
-  }
-
-  libArtistsCache = result;
+  libArtistsCache = buildAdminArtistGroups(entries, libArtists, Object.values(libTrackArtists)).map((group) => ({
+    ...group, trackCount: group.tracks.length,
+    img: (group.metadataName ? getDisplayArtistProfile(group.metadataName, group.profile)?.img : group.profile?.img) || DEFAULT_ARTIST_PORTRAIT,
+    hasCustomImg: Boolean(group.profile?.img) && createArtistMetadataDraft(group.profile).imgOverride,
+    bio: group.profile?.bio || '', genres: Array.isArray(group.profile?.genres) ? group.profile.genres : [],
+    social: group.profile?.social || '',
+  }));
   return libArtistsCache;
 }
 
@@ -1705,7 +1650,7 @@ function renderArtistsGrid(): void {
       : '';
 
     return `
-      <div class="adm-acard" data-artist="${escHtml(a.name)}" data-artist-key="${escHtml(a.normKey)}" data-artist-metadata-name="${escHtml(a.metadataName)}">
+      <div class="adm-acard" data-artist="${escHtml(a.name)}" data-artist-key="${escHtml(a.normKey)}" data-artist-identity="${escHtml(a.key)}" data-artist-metadata-name="${escHtml(a.metadataName)}">
         <div class="adm-acard-avatar">
           ${avatar}
           ${customBadge}
@@ -1744,16 +1689,27 @@ async function loadArtistsManager(force = false): Promise<void> {
 }
 
 function viewArtistSongs(artistName: string): void {
+  const artists = buildAdminArtists();
+  const matchingKeys = artists.filter((item) => item.normKey === artistName);
+  const matchingNames = artists.filter((item) => item.name === artistName);
+  const artist = artists.find((item) => item.key === artistName) || (matchingKeys.length === 1 ? matchingKeys[0] : undefined) ||
+    (matchingNames.length === 1 ? matchingNames[0] : undefined);
+  if (!artist) return;
   switchTab('panelLibrary');
-  libQuery = artistName;
+  libArtistKey = artist.key;
+  libArtistNormKey = artist.normKey;
+  libQuery = artist.name;
   const input = $<HTMLInputElement>('libSearchInput');
-  input.value = artistName;
+  input.value = artist.name;
   renderLibGrid();
 }
 
 function openEditArtistModal(artistName: string): void {
   const artists = buildAdminArtists();
-  const artist = artists.find((a) => a.name.toLowerCase() === artistName.toLowerCase() || a.normKey === artistName.toLowerCase());
+  const matchingKeys = artists.filter((a) => a.normKey === normalizeArtistKey(artistName));
+  const matchingNames = artists.filter((a) => normalizeArtistKey(a.name) === normalizeArtistKey(artistName));
+  const artist = artists.find((a) => a.key === artistName) || (matchingKeys.length === 1 ? matchingKeys[0] : undefined) ||
+    (matchingNames.length === 1 ? matchingNames[0] : undefined);
   if (!artist) {
     toast('Artist not found', 'err');
     return;
@@ -1819,8 +1775,8 @@ function openEditArtistModal(artistName: string): void {
           <label class="adm-label" for="aemName">Artist Name</label>
           <input class="adm-input" id="aemName" type="text" maxlength="120" value="${escHtml(artist.name)}">
           <label class="adm-dcheck" style="margin-top:6px;">
-            <input type="checkbox" id="aemRenameTracks" checked>
-            <span>Also update artist name on all <b>${artist.trackCount}</b> tracks in library (batch rename)</span>
+            <input type="checkbox" id="aemRenameTracks" ${artist.renameTrackCount ? 'checked' : 'disabled'}>
+            <span>Also update artist name on <b>${artist.renameTrackCount}</b> whole-credit tracks (batch rename). Other collaborators keep their credits.</span>
           </label>
         </div>
 
@@ -2894,6 +2850,8 @@ function bind() {
      every single letter. */
   let libFilterTimer: number | undefined;
   $('libSearchInput').addEventListener('input', () => {
+    libArtistKey = '';
+    libArtistNormKey = '';
     libQuery = ($('libSearchInput') as HTMLInputElement).value.trim();
     window.clearTimeout(libFilterTimer);
     libFilterTimer = window.setTimeout(() => renderLibGrid(), 150);
@@ -2966,12 +2924,12 @@ function bind() {
   $('artistGrid').addEventListener('click', (e) => {
     const editBtn = (e.target as HTMLElement).closest<HTMLElement>('[data-artist-edit]');
     if (editBtn?.dataset.artistEdit) {
-      openEditArtistModal(editBtn.dataset.artistEdit);
+      openEditArtistModal(editBtn.closest<HTMLElement>('[data-artist-identity]')?.dataset.artistIdentity || editBtn.dataset.artistEdit);
       return;
     }
     const viewBtn = (e.target as HTMLElement).closest<HTMLElement>('[data-artist-view]');
     if (viewBtn?.dataset.artistView) {
-      viewArtistSongs(viewBtn.dataset.artistView);
+      viewArtistSongs(viewBtn.closest<HTMLElement>('[data-artist-identity]')?.dataset.artistIdentity || viewBtn.dataset.artistView);
       return;
     }
   });
@@ -3047,9 +3005,9 @@ window.addEventListener(ARTIST_METADATA_UPDATED_EVENT, (event: CustomEvent) => {
   if (!adminMetadataGate()) return;
   if (event.detail?.displayChanged !== false) {
     libArtistsCache = null;
-    const byKey = new Map(buildAdminArtists().map(artist => [artist.normKey, artist]));
+    const byKey = new Map(buildAdminArtists().map(artist => [artist.key, artist]));
     $('artistGrid').querySelectorAll<HTMLElement>('.adm-acard').forEach(card => {
-      const artist = byKey.get(card.dataset.artistKey || ''), image = card.querySelector<HTMLImageElement>('[data-artist-portrait]');
+      const artist = byKey.get(card.dataset.artistIdentity || ''), image = card.querySelector<HTMLImageElement>('[data-artist-portrait]');
       if (artist && image) setArtistPortraitSource(image, artist.img);
     });
   }

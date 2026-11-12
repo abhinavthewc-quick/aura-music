@@ -79,6 +79,9 @@ export interface ArtistIdentityOptions {
   /* Full catalogue credits, used only as independent evidence for splitting
      collaborations and unadorned "Official" channel suffixes. */
   names?: Iterable<string>;
+  /* Original filename/channel credits can support a collaborator even when
+     that person has no solo recording. They never add performers or aliases. */
+  creditSources?: Iterable<string>;
   /* A D1 track edit is an explicit identity when no cloud alias owns its name.
      Do not reinterpret that correction as a typo or a collaboration. */
   authoritativeNames?: Iterable<string>;
@@ -148,6 +151,18 @@ function creditParts(name: string): CreditPart[] {
   return parts.every((part) => part.name) ? parts : [];
 }
 
+/* Read the original HF filename, not catalogArtist (which preserves playlist
+   keys and may already be a collaboration). Keep this presentation-only and
+   independent of catalog.ts's historic filename parser and persistence keys. */
+export function artistSourceCredit(track: { hfPath?: unknown; id?: unknown }): string {
+  const path = typeof track?.hfPath === 'string' && track.hfPath
+    ? track.hfPath : typeof track?.id === 'string' && track.id.startsWith('hf:') ? track.id.slice(3) : '';
+  if (!path || path.length > 4000 || !/\.(?:mp3|opus|webm|m4a|flac|wav|aac|ogg)$/i.test(path)) return '';
+  const stem = path.slice(path.lastIndexOf('/') + 1).replace(/\.[^.]+$/, '')
+    .replace(/\s\[[A-Za-z0-9_-]{11}\]$/, '').replace(/\s*-\s*Topic\s*-\s*/i, ' - ');
+  return artistDisplayName(/^(.+?)\s+-\s+(.+)$/.exec(stem)?.[1] || '');
+}
+
 /** A deterministic read-side resolver. There is no edit-distance search or
  * transitive fuzzy union. Strong aliases win; multiple owners mean abstain.
  * Construct once for a catalogue snapshot, then resolve its distinct credits. */
@@ -156,6 +171,7 @@ export function createArtistIdentityResolver(options: ArtistIdentityOptions = {}
   const edited: Index = new Map();
   const records = new Map<string, IdentityRecord>();
   const names = [...new Set(options.names || [])].filter((name) => typeof name === 'string');
+  const creditSources = [...new Set(options.creditSources || [])].filter((name) => typeof name === 'string');
   const observed = new Set(names.map(artistKey));
 
   function matches(index: ProfileIndex, name: string): { entries: Set<IdentityRecord>; confidence: ArtistConfidence } | undefined {
@@ -288,7 +304,8 @@ export function createArtistIdentityResolver(options: ArtistIdentityOptions = {}
       owned.formatted.has(artistKey(name)) || fallback.exact.has(normalizeArtistKey(name)) || fallback.formatted.has(artistKey(name)) ||
       verifiedArtist(name) || compoundNames.has(artistKey(name)));
   }
-  const independent = new Set(names.filter((name) => atomic(name) || creditParts(name).length === 1).map(artistKey));
+  const independent = new Set([...names, ...creditSources]
+    .filter((name) => atomic(name) || creditParts(name).length === 1).map(artistKey));
   function anchor(name: string): boolean {
     const identity = resolve(name);
     return !!identity && identity.confidence !== 'ambiguous' && (identity.preferredName || atomic(name) || independent.has(artistKey(name)));

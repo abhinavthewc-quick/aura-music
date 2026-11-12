@@ -393,7 +393,7 @@ import { $, getPlayCount, persistLikedHistory, rebuildSongs, recordPlayCount, sa
       profiles: Record<string, ArtistMeta>;
       directory: ReturnType<typeof getCachedArtistDirectory>;
       metadataRevision: number;
-      inputs: { song: any; id: any; artist: any; img: any }[];
+      inputs: { song: any; id: any; artist: any; img: any; hfPath: any }[];
       groups: ArtistGroup[];
     } | undefined;
     export function getArtistGroups(){
@@ -404,14 +404,14 @@ import { $, getPlayCount, persistLikedHistory, rebuildSongs, recordPlayCount, sa
       if(previous && previous.profiles === profiles && previous.directory === directory && previous.metadataRevision === metadataRevision &&
         previous.inputs.length === state.songs.length && state.songs.every((song, i) => {
           const before = previous.inputs[i];
-          return before.song === song && before.id === song?.id && before.artist === song?.artist && before.img === song?.img;
+          return before.song === song && before.id === song?.id && before.artist === song?.artist && before.img === song?.img && before.hfPath === song?.hfPath;
         })) return previous.groups;
       const groups = buildArtistGroups(state.songs, profiles, {
         authoritativeProfiles: directory.artists, authoritativeNames: Object.values(directory.trackArtists),
         automaticMetadata: getAutomaticArtistMetadata,
       });
       artistGroupingSnapshot = { profiles, directory, metadataRevision, groups,
-        inputs: state.songs.map(song => ({ song, id: song?.id, artist: song?.artist, img: song?.img })) };
+        inputs: state.songs.map(song => ({ song, id: song?.id, artist: song?.artist, img: song?.img, hfPath: song?.hfPath })) };
       return groups;
     }
 

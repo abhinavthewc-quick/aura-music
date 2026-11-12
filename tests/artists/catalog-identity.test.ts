@@ -107,3 +107,48 @@ test('literal metadata keys cannot read inherited object properties', () => {
   assert.equal(catalog.getArtistMeta('constructor')?.key, 'literal constructor artist');
   assert.equal(catalog.getArtistMeta('toString'), undefined);
 });
+
+test('fresh and cached filename-supported collaborations split without rewriting their saved attribution or playlist bytes', async () => {
+  const paths = ['Hamsika Iyer - Be Notorious [zlbuOJoeo0E].opus',
+    'Narayani Gopan - Topic - Uyire [Dor5wduf14w].opus',
+    'Siri Xander - Topic - Pesamale.mp3'];
+  const directory = { artists: {}, trackArtists: {}, revision: ++revision };
+  const playlist = JSON.stringify([{ id: 'collaborations', tracks: ['vid:zlbuOJoeo0E', 'lk:pesamale|siri xander'] }]);
+  storage.set('auraPlaylists', playlist);
+  const originalFetch = globalThis.fetch;
+  const requests: string[] = [];
+  globalThis.fetch = (async (url: string) => {
+    requests.push(String(url));
+    if (url === '/api/artists') return Response.json(directory);
+    if (String(url).endsWith('manifest.json')) return Response.json({ artists: {}, tracks: {
+      zlbuOJoeo0E: { a: 'Hamsika Iyer & Yogi B', t: 'Be Notorious' },
+      Dor5wduf14w: { a: 'Narayani Gopan & Mithun Jayaraj', t: 'Uyire' },
+    } });
+    if (String(url).includes('/tree?')) return Response.json(paths.map((path) => ({ type: 'file', path, size: 100 })));
+    throw new Error('Unexpected catalogue request: ' + url);
+  }) as typeof fetch;
+  try {
+    const fresh = await catalog.fetchHfCatalog();
+    const keys = fresh.map(trackKey), attribution = fresh.map((track) => track.artist), ids = fresh.map((track) => track.id);
+    assert.equal(fresh.length, 3);
+    assert.equal(keys[2], 'lk:pesamale|siri xander');
+    for (const tracks of [fresh, catalog.readCatalogCache()]) {
+      const groups = buildArtistGroups(tracks, catalog.readArtistsCache(), { authoritativeProfiles: directory.artists });
+      assert.equal(groups.length, 5);
+      for (const name of ['Hamsika Iyer', 'Yogi B', 'Narayani Gopan', 'Mithun Jayaraj', 'Siri Xander']) {
+        assert.equal(groups.find((group) => group.name === name)?.songs.length, 1, name);
+      }
+      assert.deepEqual(tracks.map((track) => track.artist), attribution);
+      assert.deepEqual(tracks.map((track) => track.id), ids);
+      assert.deepEqual(tracks.map(trackKey), keys);
+    }
+    catalog.cacheArtistDirectory({ ...directory, trackArtists: { 'vid:zlbuOJoeo0E': 'Intentional Joint & Project' }, revision: ++revision });
+    const edited = catalog.applyArtistTrackOverrides(fresh);
+    const groups = buildArtistGroups(edited, {}, { authoritativeProfiles: {}, authoritativeNames: Object.values(catalog.getCachedArtistDirectory().trackArtists) });
+    assert.equal(groups.find((group) => group.name === 'Intentional Joint & Project')?.songs[0], edited[0]);
+    assert.equal(groups.some((group) => group.name === 'Hamsika Iyer'), false);
+    assert.deepEqual(edited.map(trackKey), keys);
+    assert.equal(storage.get('auraPlaylists'), playlist);
+    assert.equal(requests.length, 3, 'grouping and metadata composition make no additional remote requests');
+  } finally { globalThis.fetch = originalFetch; }
+});

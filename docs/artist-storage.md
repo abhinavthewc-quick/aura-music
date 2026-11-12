@@ -24,8 +24,9 @@ artist pages through aliases when cloud profiles first load or names change.
 
 `src/core/artistIdentity.ts` resolves credits before `artistGroups.ts` builds
 pages. Home, Library, artist details, portraits and artist counts use that same
-snapshot. Track attribution and persistence keys remain independent of the
-display grouping.
+snapshot. Admin uses those memberships too, adding saved zero-track owners and
+unattributed files for editing. Track attribution and persistence keys remain
+independent of the display grouping.
 
 - Exact D1 aliases and intentional track corrections take precedence. Ambiguous
   aliases do not pick the first similar profile.
@@ -37,6 +38,15 @@ display grouping.
 - Collaboration parsing requires independent artist evidence or an explicit
   featured credit. Compound band names and explicitly owned joint projects stay
   intact. Each recording is counted once per credited artist.
+- Original audio filenames provide additional independent splitting evidence
+  through `artistSourceCredit()`, even when a performer has no solo recording or
+  saved profile. Filename/channel labels never add performers or identity
+  aliases. List separators require a supported member; weak `and`, `with` and
+  `x` separators still require anchors on both sides.
+- The reviewed `Anirudh Ravichandran` spelling shares Anirudh Ravichander's
+  page, while Dhanush receives the same collaborative recording on his own page.
+  Short `Anirudh`, `MG` and `M G` remain distinct; only the full
+  `M. G. Sreekumar` name is verified.
 - The two observed natural Rahman profile keys are explicitly listed as
   equivalent display identities. Both D1 records survive; an admin owner takes
   precedence over an imported owner, then whole-profile recency resolves peers.
@@ -48,7 +58,8 @@ display grouping.
   cannot create aliases, split collaboration credits or alter saved track keys.
 
 Grouping is deterministic across catalogue/profile iteration order. Cached
-snapshots are invalidated by profile revisions and local metadata edits;
+snapshots are invalidated by profile revisions and local metadata edits,
+including filename evidence changes;
 selection reconciliation preserves open pages without reloading active audio.
 The identity and catalogue tests include distinct-owner conflicts, compound
 credits, Unicode, no-ID keys, stale metadata and a thousand similar names.
@@ -84,6 +95,13 @@ Artist editors capture the profile version when opened. A stale save returns
 renames also check the directory revision. Individual track corrections beat
 earlier renames; a later intentional rename replaces corrections only on the
 tracks still attributed to that artist. Large writes are parameter-batched.
+Admin Tracks filters by exact resolved membership rather than a name substring;
+editing the search returns to ordinary library filtering. Editors open by the
+selected display identity and save to the actual profile key, so same-name
+owners stay separate. The rename checkbox shows only currently eligible
+whole-credit tracks and is disabled for collaboration-only artists. Saving a
+collaborator profile does not rename the complete collaboration credit or copy
+another performer's saved portrait.
 
 ### Node regressions
 
@@ -106,7 +124,11 @@ npm audit
 - [Identity](../tests/artists/identity.test.ts) and
   [catalogue identity](../tests/artists/catalog-identity.test.ts): D1 ownership,
   cleared metadata, aliases, Unicode, compound/collaboration credits, deterministic
-  groups and selections, literal metadata keys and stable fresh/cached track keys.
+  groups and selections, bounded filename evidence, the observed collaboration
+  credits, literal metadata keys and stable fresh/cached track keys.
+- [Admin identity](../tests/artists/admin-identity.test.ts): listener/admin
+  membership parity, independent collaborator profiles, whole-credit rename
+  eligibility, protected joint projects, ambiguous owners and zero-track profiles.
 - [Automatic composition](../tests/artists/metadata-composition.test.ts),
   [provider matching](../tests/artists/metadata-provider.test.ts) and
   [metadata storage](../tests/artists/metadata-store.test.ts): independent field
@@ -159,6 +181,51 @@ Info/Share actions. It observes playback callbacks and uses programmatic clicks,
 synthetic reorder keys and a Share stub. See the
 [native keyboard checks](../tests/playlists/README.md#native-keyboard-checks)
 for real browser key input.
+
+### Collaboration credits
+
+Import `/tests/artists/browser-credit-regressions.js` on a fresh fixture for
+each row, then call the indicated export:
+
+| Fixture query | Export |
+| --- | --- |
+| `?credits&cloud` | `runArtistCreditRegressions()` |
+| `?page=admin&credits` | `runAdminArtistCreditRegressions()` |
+
+These exercise separate Anirudh/Dhanush pages and filename-supported
+collaborations, preserved bands/joint owners, per-artist recording counts,
+independent automatic portraits, unchanged active audio and playlist bytes,
+exact admin Tracks filtering and correct same-name owner targeting. Admin
+profile saves and safe whole-credit renames are mocked locally; the storage
+suite verifies the unchanged server rename rules against SQLite.
+
+#### Collaboration verification — 12 November 2026
+
+Pre-release checks passed **242 Node tests**, typecheck, lint, production build,
+Pages Functions compilation and dependency audit. DevTools credit suites passed
+**50 listener + 58 admin assertions per layout**, **216 total**, at 390×844 and
+1440×960. The broader 44-suite browser run also passed; its earlier credit totals
+are superseded by these final suites.
+
+The immutable 407-track production snapshot produces **182 artist groups**
+(previously 170), with all **162 unaffected artists unchanged**. Built listener
+and admin views agree: Anirudh has 63 recordings, Dhanush 3, Arra Aria Khayal 1
+and Bindu Anirudhan 1. Native Enter/Space each target the original shared recording
+once; artist navigation preserves its source, position and complete credit.
+Built responsive checks passed at widths 320, 360, 390, 768 and 1440.
+
+Fresh-document DevTools interaction traces observed 134 ms desktop INP and
+154 ms mobile INP at 4× CPU slowdown, both with zero layout shift; the previous
+build observed 84 ms and 177 ms respectively. Earlier candidate observations
+(378/333 ms) are retained in the evidence. These are limited lab observations,
+not field data or a statistically demonstrated improvement.
+
+Full axe checks including WCAG 2.1 A found no admin violations. Existing listener
+track/player `label-content-name-mismatch` warnings remain separately recorded;
+Lighthouse snapshot category scores of 100 do **not** make that failed audit a
+pass. No label overhaul or warning suppression is part of this artist-only fix.
+Live authenticated admin saving remains unverified without a usable credential;
+local mocked saves and SQLite tests cover ownership and safe rename behavior.
 
 ### Automatic artist metadata
 

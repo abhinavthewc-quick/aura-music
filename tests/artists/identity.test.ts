@@ -54,6 +54,99 @@ test('production duplicates have one page per artist, with every collaboration c
   assert.equal(JSON.stringify({ tracks, profiles }), before);
 });
 
+test('Anirudh spelling variants and Dhanush stay separate while sharing each collaborative recording once', () => {
+  const tracks = [
+    song('Anirudh Ravichander', 'solo'),
+    song('Anirudh Ravichandran', 'spelling'),
+    song('Dhanush', 'dhanush'),
+    song('Anirudh Ravichander & Dhanush', 'duet'),
+    song('Anirudh Ravichandran and Dhanush', 'other-duet'),
+    song('Anirudh Ravichander, Anirudh Ravichandran & Dhanush', 'repeated-credit'),
+  ].map(Object.freeze);
+  const before = JSON.stringify(tracks), keys = tracks.map(trackKey);
+  const groups = buildArtistGroups([...tracks, tracks[3]], profiles);
+  assert.equal(groups.length, 2);
+  assert.deepEqual(named(groups, 'Anirudh Ravichander').songs.map((track) => track.id),
+    ['solo', 'spelling', 'duet', 'other-duet', 'repeated-credit']);
+  assert.deepEqual(named(groups, 'Dhanush').songs.map((track) => track.id),
+    ['dhanush', 'duet', 'other-duet', 'repeated-credit']);
+  assert.equal(named(groups, 'Anirudh Ravichander').profile?.key, 'anirudh ravichander');
+  assert.equal(named(groups, 'Dhanush').profile, undefined);
+  assert.equal(named(groups, 'Dhanush').songs[1], named(groups, 'Anirudh Ravichander').songs[2]);
+  assert.deepEqual(tracks.map(trackKey), keys);
+  assert.equal(JSON.stringify(tracks), before);
+});
+
+test('source filename credits support the other observed collaborations without needing solo tracks or profiles', () => {
+  /* Read-only production catalogue observations, 2026-11-12. The filename
+     supports the primary credit; it never replaces the richer track credit. */
+  const cases = [
+    ['A. R. Ameen', "Sita's Aspiration", 'kKRLf9a0NWQ',
+      'A.R. Ameen, Vaishali Samant, Rakshita Suresh & Antara Nandy',
+      ['A.R. Ameen', 'Vaishali Samant', 'Rakshita Suresh', 'Antara Nandy']],
+    ['Hamsika Iyer', 'Be Notorious (Title Track)', 'zlbuOJoeo0E',
+      'Hamsika Iyer & Yogi B', ['Hamsika Iyer', 'Yogi B']],
+    ['MG', 'Digi Rigi Dum Dum', 'ksVpx-O2ODY',
+      'M. G. Sreekumar & Bindu Anirudhan', ['M. G. Sreekumar', 'Bindu Anirudhan']],
+    ['Manikandan Ayyappa', 'Aadame', 'uU7y15P0zOk',
+      'Manikandan Ayyappa, Chemban Vinod Jose, Himna Hilari & Hinitha Hilary',
+      ['Manikandan Ayyappa', 'Chemban Vinod Jose', 'Himna Hilari', 'Hinitha Hilary']],
+    ['Narayani Gopan', 'Uyire', 'Dor5wduf14w',
+      'Narayani Gopan & Mithun Jayaraj', ['Narayani Gopan', 'Mithun Jayaraj']],
+    ['Nihal Sadiq', 'Chirapunji', 'XO-KOtJD7WM',
+      'Nihal Sadiq & Hanan Shaah', ['Nihal Sadiq', 'Hanan Shaah']],
+    ['Saurav Srisan', 'Rathinamo (Female Version)', 'GTDJcvAcQAw',
+      'Saurav Srisan & Tanisha Gnanavel', ['Saurav Srisan', 'Tanisha Gnanavel']],
+    ['Siri Xander', 'Pesamale', 'jifBuWCqGJ8',
+      'Siri Xander & Arra Aria Khayal', ['Siri Xander', 'Arra Aria Khayal']],
+  ] as const;
+  const tracks = cases.map(([source, title, videoId, artist]) => {
+    const hfPath = `${source} - ${title} [${videoId}].opus`;
+    return Object.freeze(song(artist, 'hf:' + hfPath, { hfPath, videoId, title }));
+  });
+  const before = JSON.stringify(tracks), keys = tracks.map(trackKey);
+  const groups = buildArtistGroups(tracks, {}, { authoritativeProfiles: {} });
+  assert.equal(groups.length, cases.reduce((count, item) => count + item[4].length, 0));
+  for (const [index, [, , , combined, names]] of cases.entries()) {
+    assert.equal(groups.some((group) => group.name === combined), false, combined);
+    for (const name of names) assert.deepEqual(named(groups, name)?.songs, [tracks[index]], name);
+  }
+  assert.equal(groups.some((group) => group.name === 'MG'), false, 'an uploader label is not an extra performer');
+  assert.deepEqual(snapshot(buildArtistGroups(tracks.slice().reverse(), {})), snapshot(groups));
+  assert.deepEqual(tracks.map(trackKey), keys);
+  assert.equal(JSON.stringify(tracks), before);
+});
+
+test('filename evidence cannot invent credits, split bands or override saved joint identities and corrections', () => {
+  const hf = (artist: string, source: string, id: string) => song(artist, 'hf:' + id + '.opus', {
+    hfPath: source + ' - Recording [' + id + '].opus', videoId: id,
+  });
+  const tracks = [
+    hf('Strangers & Friends', 'Strangers & Friends', 'abcdefghijk'),
+    hf('Unknown One & Unknown Two', 'Record Label', 'bcdefghijkl'),
+    hf('Earth, Wind & Fire', 'Earth', 'cdefghijklm'),
+    hf('Tyler, The Creator & New Guest', 'Tyler, The Creator', 'defghijklmn'),
+    hf('Local One & Local Two', 'Local One', 'efghijklmno'),
+    hf('Edited One & Edited Two', 'Edited One', 'fghijklmnop'),
+    hf('Unanchored One and Unanchored Two', 'Unanchored One', 'ghijklmnopq'),
+    hf('VEDAN with word', 'VEDAN', 'hijklmnopqr'),
+    hf('One (Band & Choir)', 'One', 'ijklmnopqrs'),
+    hf('Broken One & & Broken Two', 'Broken One', 'jklmnopqrst'),
+    song('M G', 'short-one'), song('MG', 'short-two'),
+  ];
+  const joint = { 'local one & local two': { key: 'joint project', name: 'Local One & Local Two', img: 'joint:portrait' } };
+  const groups = buildArtistGroups(tracks, joint, { authoritativeProfiles: joint, authoritativeNames: ['Edited One & Edited Two'] });
+  for (const name of ['Strangers & Friends', 'Unknown One & Unknown Two', 'Earth, Wind & Fire',
+    'Local One & Local Two', 'Edited One & Edited Two', 'Unanchored One and Unanchored Two',
+    'VEDAN with word', 'One (Band & Choir)', 'Broken One & & Broken Two', 'M G', 'MG']) assert.ok(named(groups, name), name);
+  assert.deepEqual(named(groups, 'Tyler, The Creator').songs, [tracks[3]]);
+  assert.deepEqual(named(groups, 'New Guest').songs, [tracks[3]]);
+  assert.equal(named(groups, 'Local One & Local Two').cover, 'joint:portrait');
+  assert.ok(groups.every((group) => !['Record Label', 'Earth', 'Local One', 'Edited One', 'Unanchored One', 'VEDAN', 'One', 'Broken One'].includes(group.name)));
+  assert.equal(artistNamesMatch('MG', 'M. G. Sreekumar'), false);
+  assert.equal(artistNamesMatch('M G', 'M. G. Sreekumar'), false);
+});
+
 test('Unicode presentation and initials normalize without changing storage keys', () => {
   for (const variants of [
     ['A. R. Rahman', 'A.R.Rahman', 'A R Rahman', 'AR Rahman', 'Ａ．Ｒ． Ｒａｈｍａｎ', 'A\u200b.R. Rahman'],
