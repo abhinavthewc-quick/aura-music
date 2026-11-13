@@ -111,7 +111,7 @@ export async function runBrowserRegressions() {
     home.openArtistDetail('Old Artist', false);
     library.setLibView('artists');
     library.openArtist(library.getArtistGroups().findIndex((group) => group.name === 'Old Artist'));
-    check(text('.artist-hero-name') === 'Old Artist' && text('.artist-page-name') === 'Old Artist', 'Home and Library can open the same uncached artist');
+    check(text('#artistName') === 'Old Artist' && text('#libraryArtistName') === 'Old Artist', 'Home and Library can open the same uncached artist');
 
     state.audio.muted = true;
     player.playSong(state.songs.indexOf(handUpload));
@@ -135,12 +135,12 @@ export async function runBrowserRegressions() {
     for (const event of ['loadstart', 'emptied', 'pause', 'seeking']) state.audio.addEventListener(event, onReset);
     try {
       await fixture.publish({ ...fixture.cloud(1), trackArtists: {} });
-      check(text('.artist-hero-name') === 'New Artist' && text('.artist-page-name') === 'New Artist', 'first cloud load preserves both open artist pages');
-      check(document.querySelectorAll('#artistSongsList .artist-song-row').length === 2 && document.querySelectorAll('.artist-page .song-item').length === 2, 'profile-only rename keeps both tracks on the open pages');
+      check(text('#artistName') === 'New Artist' && text('#libraryArtistName') === 'New Artist', 'first cloud load preserves both open artist pages');
+      check(document.querySelectorAll('#artistSongsList .artist-song-row').length === 2 && document.querySelectorAll('#libraryArtistSongsList .artist-song-row').length === 2, 'profile-only rename keeps both tracks on the open pages');
       check(text('#artistHeroCard .artist-bio') === text('.artist-page .artist-bio'), 'Home and Library share biography details');
       await fixture.publish(fixture.cloud(2, 'Renamed Artist', '/api/artist-image?id=two.jpg'));
-      check(text('.artist-hero-name') === 'Renamed Artist' && text('.artist-page-name') === 'Renamed Artist', 'track rename preserves the selected artist through aliases');
-      check(document.querySelector('.artist-hero-img').getAttribute('src') === '/api/artist-image?id=two.jpg' && document.querySelector('.artist-page-avatar').getAttribute('src') === '/api/artist-image?id=two.jpg', 'portrait replacement updates both open artist pages');
+      check(text('#artistName') === 'Renamed Artist' && text('#libraryArtistName') === 'Renamed Artist', 'track rename preserves the selected artist through aliases');
+      check(document.querySelector('#artistHeroCard .artist-hero-image').getAttribute('src') === '/api/artist-image?id=two.jpg' && document.querySelector('#libraryArtistHeroCard .artist-hero-image').getAttribute('src') === '/api/artist-image?id=two.jpg', 'portrait replacement updates both open artist pages');
       check(document.getElementById('artistSpotlightContainer').textContent.includes('Renamed Artist'), 'Home spotlight receives profile changes too');
       const variant = library.getArtistGroups().find((group) => group.name === 'Anirudh Ravichander');
       check(variant.songs.length === 2 && variant.cover === '/api/artist-image?id=anirudh.jpg', 'managed spelling variants share one portrait and track group');
@@ -167,14 +167,14 @@ export async function runBrowserRegressions() {
       localStorage.setItem(catalog.CLOUD_ARTISTS_CACHE_KEY, JSON.stringify(fixture.directory));
       window.dispatchEvent(new StorageEvent('storage', { key: catalog.CLOUD_ARTISTS_CACHE_KEY, storageArea: localStorage }));
       await flush();
-      check(text('.artist-page-name') === 'Cross-tab Artist' && text('.artist-hero-name') === 'Cross-tab Artist', 'cross-tab cache updates preserve both selections');
+      check(text('#libraryArtistName') === 'Cross-tab Artist' && text('#artistName') === 'Cross-tab Artist', 'cross-tab cache updates preserve both selections');
       check(resets === 0 && !state.audio.paused && state.isPlaying && state.audio.getAttribute('src') === playback.src && state.audio.playbackRate === playback.rate && state.songs[state.currentIndex].id === playback.id && state.audio.currentTime >= playback.time && state.audio.currentTime < playback.time + 3, 'artist refresh never reloads, pauses or seeks active audio');
     } finally {
       for (const event of ['loadstart', 'emptied', 'pause', 'seeking']) state.audio.removeEventListener(event, onReset);
     }
 
     home.openArtistDetail('Old Artist', false);
-    check(text('.artist-hero-name') === 'Cross-tab Artist', 'old readable names still open the renamed profile');
+    check(text('#artistName') === 'Cross-tab Artist', 'old readable names still open the renamed profile');
     playlists.openPlaylistPage('fixture-playlist');
     check(document.querySelectorAll('#tabPlaylist [data-play-index]').length === 3, 'existing playlist resolves no-ID, video-ID and local entries');
     check(document.getElementById('tabPlaylist').textContent.includes('Cross-tab Artist'), 'open playlist displays corrected artist names');
@@ -193,7 +193,7 @@ export async function runBrowserRegressions() {
     check(typeof window.playArtist === 'function', 'Library artist play handler is exposed');
     library.setLibView('artists');
     library.openArtist(library.getArtistGroups().findIndex((group) => group.key === 'profile:old artist'));
-    document.querySelector('.artist-page-actions button').click();
+    document.getElementById('libraryArtistPlayAllBtn').click();
     await state.audio.play();
     check(state.songs[state.currentIndex].artist === 'Final Artist', 'Library artist play button uses its current reconciled group');
     document.getElementById('closeFullPlayerBtn').click();

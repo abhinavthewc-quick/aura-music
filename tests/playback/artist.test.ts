@@ -1,0 +1,153 @@
+import assert from 'node:assert/strict';
+import { test } from 'node:test';
+import { advanceArtistPlayback, createArtistPlayback, previewArtistPlayback, reorderArtistUpcoming, setArtistShuffle } from '../../src/core/artistPlayback.js';
+import { AUDIO, AUDIO_TWO, VIDEO_A, VIDEO_B, createPlaybackHarness, flush } from './harness.js';
+
+const options = { source: 'artist', collectionId: 'artist:test', label: 'Test artist' };
+const currentId = h => h.state.songs[h.state.currentIndex]?.id;
+test('artist collection creation deduplicates IDs, selects a requested row and shuffles without mutation', () => {
+  const ids = ['a', 'b', 'c', 'b'];
+  const context = createArtistPlayback(ids, { ...options, startId: 'b', shuffle: true, random: () => 0 })!;
+  assert.deepEqual(context.order, ['a', 'b', 'c']);
+  assert.deepEqual(context.playOrder, ['b', 'c', 'a']);
+  assert.equal(context.currentId, 'b');
+  setArtistShuffle(context, false);
+  assert.equal(context.cursor, 1);
+  assert.deepEqual(ids, ['a', 'b', 'c', 'b']);
+  assert.equal(createArtistPlayback([], options), null);
+});
+test('artist traversal honors boundaries, repeat-all, deletions and manual Next during repeat-one', () => {
+  const context = createArtistPlayback(['a', 'b', 'c', 'd'], options)!;
+  assert.equal(advanceArtistPlayback(context, 1, 'off', id => id !== 'b'), 'c');
+  assert.equal(advanceArtistPlayback(context, 1, 'one'), 'd');
+  assert.equal(advanceArtistPlayback(context, 1, 'off'), null);
+  assert.equal(advanceArtistPlayback(context, 1, 'all'), 'a');
+  assert.equal(advanceArtistPlayback(context, -1, 'all'), 'd');
+});
+test('artist preview and reordered interruptions follow actual history without consuming a saved order', () => {
+  const context = createArtistPlayback(['a', 'b', 'c', 'd'], options)!;
+  context.queue.push('x', 'y');
+  const before = JSON.stringify(context);
+  assert.deepEqual(previewArtistPlayback(context, 'off', 10, () => true), ['x', 'y', 'b', 'c', 'd']);
+  assert.equal(JSON.stringify(context), before);
+  reorderArtistUpcoming(context, ['c', 'x', 'b', 'y', 'd'], 'off');
+  assert.deepEqual(previewArtistPlayback(context, 'off', 10, () => true), ['c', 'x', 'b', 'y', 'd']);
+  const forward = Array.from({ length: 5 }, () => advanceArtistPlayback(context, 1, 'off'));
+  assert.deepEqual(forward, ['c', 'x', 'b', 'y', 'd']);
+  assert.equal(advanceArtistPlayback(context, 1, 'off'), null);
+  assert.equal(advanceArtistPlayback(context, -1, 'off'), 'y');
+  assert.equal(advanceArtistPlayback(context, -1, 'off'), 'b');
+  assert.equal(advanceArtistPlayback(context, 1, 'off'), 'y');
+  assert.deepEqual(context.order, ['a', 'b', 'c', 'd']);
+});
+test('artist playback retains the production manual queue and returns to its collection, never the library', async () => {
+  const h = createPlaybackHarness();
+  h.queue.manualQueue.push(VIDEO_A.id);
+  assert.equal(h.queue.playTrackSequence([AUDIO.id, AUDIO_TWO.id], options), true);
+  assert.equal(currentId(h), AUDIO.id);
+  assert.deepEqual(Array.from(h.queue.manualQueue), [VIDEO_A.id]);
+  assert.deepEqual(Array.from(h.queue.getRollingUpNextItems(), song => song.id), [VIDEO_A.id, AUDIO_TWO.id]);
+  await h.queue.playNext(); await flush();
+  assert.equal(currentId(h), VIDEO_A.id);
+  const yt = h.instances.at(-1)!; yt.ready(); yt.transition(h.PlayerState.PLAYING);
+  await h.queue.playNext();
+  assert.equal(currentId(h), AUDIO_TWO.id);
+  const plays = h.audio.plays;
+  await h.queue.playNext();
+  assert.equal(currentId(h), AUDIO_TWO.id);
+  assert.equal(h.state.isPlaying, false);
+  assert.equal(h.audio.plays, plays);
+  assert.equal(h.queue.getRollingUpNextItems().length, 0);
+  await h.queue.playPrevious(); await flush();
+  assert.equal(currentId(h), VIDEO_A.id, 'Previous includes the manual interruption');
+  await h.queue.playPrevious();
+  assert.equal(currentId(h), AUDIO.id);
+});
+test('artist autoplay crosses native and retained YouTube backends without changing artist labels or IDs', async () => {
+  const h = createPlaybackHarness();
+  const video = h.state.songs.find(song => song.id === VIDEO_A.id)!;
+  video.artist = 'Credited performer'; video.title = 'Track - Part Two';
+  const before = JSON.stringify(h.state.songs), count = h.state.songs.length;
+  h.queue.playTrackSequence([AUDIO.id, video.id, AUDIO_TWO.id], options);
+  h.audio.end(); await flush();
+  assert.equal(currentId(h), video.id);
+  assert.equal(h.$('fullArtist').textContent, 'Credited performer');
+  assert.equal(h.$('fullTitle').textContent, 'Track - Part Two');
+  const yt = h.instances.at(-1)!; yt.ready(); yt.transition(h.PlayerState.PLAYING); yt.transition(h.PlayerState.ENDED);
+  h.clock.advance(250); await flush();
+  assert.equal(currentId(h), AUDIO_TWO.id);
+  assert.equal(h.state.songs.length, count);
+  assert.equal(JSON.stringify(h.state.songs), before);
+  h.audio.end(); await flush();
+  assert.equal(currentId(h), AUDIO_TWO.id);
+  assert.equal(h.state.isPlaying, false);
+});
+test('artist shuffled play visits every track once and Previous follows its actual order', async () => {
+  const h = createPlaybackHarness();
+  h.queue.playTrackSequence([AUDIO.id, VIDEO_A.id, VIDEO_B.id, AUDIO_TWO.id], { ...options, shuffle: true, random: () => 0 });
+  const expected = Array.from(h.queue.getArtistPlayback().playOrder);
+  const heard = [currentId(h)];
+  for(let i = 1; i < expected.length; i++) { await h.queue.playNext(); await flush(); heard.push(currentId(h)); }
+  assert.deepEqual(heard, expected);
+  for(let i = expected.length - 2; i >= 0; i--) {
+    await h.queue.playPrevious(); await flush();
+    assert.equal(currentId(h), expected[i]);
+  }
+  assert.equal(new Set(heard).size, expected.length);
+});
+test('deleted and unavailable artist tracks are skipped without letting unrelated library songs take their turn', async () => {
+  const h = createPlaybackHarness();
+  h.queue.playTrackSequence([AUDIO.id, VIDEO_A.id, AUDIO_TWO.id], options);
+  h.state.songs = h.state.songs.filter(song => song.id !== VIDEO_A.id);
+  await h.queue.playNext();
+  assert.equal(currentId(h), AUDIO_TWO.id);
+  h.state.songs.find(song => song.id === AUDIO.id)!.missing = true;
+  h.state.repeatMode = 'all';
+  await h.queue.playNext();
+  assert.equal(currentId(h), AUDIO_TWO.id);
+  assert.equal(h.queue.getArtistPlayback().collectionId, options.collectionId);
+});
+test('direct library, playlist and search selection retire artist transport without rewriting their existing queues', async () => {
+  const h = createPlaybackHarness();
+  h.queue.playTrackSequence([AUDIO.id, AUDIO_TWO.id], options);
+  h.player.playSong(1);
+  assert.equal(h.queue.getArtistPlayback(), null);
+  h.queue.playTrackSequence([AUDIO.id, AUDIO_TWO.id], options);
+  h.queue.playTrackSequence([AUDIO.id, VIDEO_A.id]);
+  assert.equal(h.queue.getArtistPlayback(), null);
+  assert.deepEqual(Array.from(h.queue.manualQueue), [VIDEO_A.id]);
+  h.queue.manualQueue.splice(0);
+  h.queue.playTrackSequence([AUDIO.id, AUDIO_TWO.id], options);
+  await h.player.playYouTubeInsideAura(VIDEO_B.videoId, VIDEO_B.title, VIDEO_B.img);
+  assert.equal(h.queue.getArtistPlayback(), null);
+});
+test('reordered manual interruptions survive artist retirement and shuffle changes until actually consumed', async () => {
+  const h = createPlaybackHarness();
+  h.queue.manualQueue.push(VIDEO_A.id, VIDEO_B.id);
+  h.queue.playTrackSequence([AUDIO.id, AUDIO_TWO.id], options);
+  h.queue.promoteVisibleOrder([AUDIO_TWO.id, VIDEO_B.id, VIDEO_A.id]);
+  assert.deepEqual(Array.from(h.queue.getRollingUpNextItems(), song => song.id), [AUDIO_TWO.id, VIDEO_B.id, VIDEO_A.id]);
+  assert.deepEqual(Array.from(h.queue.manualQueue), [VIDEO_B.id, VIDEO_A.id]);
+  h.state.isShuffle = true;
+  h.queue.renderUpNext();
+  h.queue.getRollingUpNextItems();
+  assert.deepEqual(Array.from(h.queue.manualQueue), [VIDEO_B.id, VIDEO_A.id]);
+  h.player.playSong(h.state.songs.findIndex(song => song.id === AUDIO.id));
+  assert.equal(h.queue.getArtistPlayback(), null);
+  await h.queue.playNext(); await flush();
+  assert.equal(currentId(h), VIDEO_B.id);
+  assert.deepEqual(Array.from(h.queue.manualQueue), [VIDEO_A.id]);
+});
+test('artist repeat-one, explicit stop and stale iframe ends retain production playback-intent protections', async () => {
+  const h = createPlaybackHarness();
+  h.queue.playTrackSequence([VIDEO_A.id, AUDIO.id], options); await flush();
+  const yt = h.instances.at(-1)!; yt.ready(); yt.transition(h.PlayerState.PLAYING);
+  h.state.repeatMode = 'one'; yt.transition(h.PlayerState.ENDED); h.clock.advance(250);
+  assert.equal(currentId(h), VIDEO_A.id);
+  assert.deepEqual(yt.seeks, [0]);
+  h.state.repeatMode = 'off'; yt.transition(h.PlayerState.PLAYING); yt.transition(h.PlayerState.ENDED);
+  const stale = h.clock.timer(250)!;
+  h.player.stopAuraYouTube(); stale(); await flush();
+  assert.equal(h.queue.getArtistPlayback(), null);
+  assert.equal(h.audio.plays, 0);
+});

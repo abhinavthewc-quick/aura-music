@@ -42,11 +42,11 @@ export async function runAutomaticMetadataRegressions() {
   library.setLibView('artists');
   library.openArtist(library.getArtistGroups().findIndex(artist => artist.key === group.key));
   const homeRow = document.querySelector('#artistSongsList .artist-song-row');
-  let libraryRow = document.querySelector('.artist-page .song-item-play');
+  let libraryRow = document.querySelector('#libraryArtistSongsList .artist-song-row');
   check(homeRow instanceof HTMLButtonElement && libraryRow instanceof HTMLButtonElement, 'both open artist pages have native track controls');
-  check(document.querySelector('.artist-hero-img').getAttribute('src') === metadata.DEFAULT_ARTIST_PORTRAIT && !!document.querySelector('.artist-page .artist-avatar-fallback'), 'missing artist portraits use a neutral silhouette or initial, never album artwork');
+  check(document.querySelector('#artistHeroCard .artist-hero-image').getAttribute('src') === metadata.DEFAULT_ARTIST_PORTRAIT && document.querySelector('#libraryArtistHeroCard .artist-hero-image').getAttribute('src') === metadata.DEFAULT_ARTIST_PORTRAIT, 'both missing artist portraits use a neutral silhouette, never album artwork');
   const homeCover = document.querySelector('#artistSongsList .artist-song-cover').getAttribute('src');
-  const libraryCover = document.querySelector('.artist-page .song-info img').getAttribute('src');
+  const libraryCover = document.querySelector('#libraryArtistSongsList .artist-song-cover').getAttribute('src');
   check(homeCover === group.songs[0].img && libraryCover === group.songs[0].img, 'actual track artwork is retained in both artist pages');
 
   const original = {
@@ -71,9 +71,9 @@ export async function runAutomaticMetadataRegressions() {
     const first = fixture.readyMetadata(group.name, { bio: 'Verified text <img data-provider-injection="yes"> stays plain.' });
     await fixture.publishMetadata(group.name, first);
     check(document.activeElement === homeRow && homeRow.isConnected && document.querySelector('#artistSongsList .artist-song-row') === homeRow, 'a late automatic arrival retains the focused Home track button without replacing it');
-    check(libraryRow.isConnected && document.querySelector('.artist-page .song-item-play') === libraryRow, 'the hidden Library artist page also keeps its original track controls');
+    check(libraryRow.isConnected && document.querySelector('#libraryArtistSongsList .artist-song-row') === libraryRow, 'the hidden Library artist page also keeps its original track controls');
     check(window.scrollX === scroll.x && window.scrollY === scroll.y, 'metadata-only paint does not scroll the focused Home page');
-    check(document.querySelector('.artist-hero-img').getAttribute('src') === first.metadata.img && document.querySelector('.artist-page-avatar').getAttribute('src') === first.metadata.img, 'both open artist pages receive the verified portrait');
+    check(document.querySelector('#artistHeroCard .artist-hero-image').getAttribute('src') === first.metadata.img && document.querySelector('#libraryArtistHeroCard .artist-hero-image').getAttribute('src') === first.metadata.img, 'both open artist pages receive the verified portrait');
     check(document.querySelector('#artistHeroCard .artist-bio').textContent === first.metadata.bio && document.querySelector('.artist-page .artist-bio').textContent === first.metadata.bio && !document.querySelector('[data-provider-injection]'), 'biographies are shared, bounded plaintext rather than provider HTML');
     check(document.querySelectorAll('#artistHeroCard [data-artist-credit]').length === 2 && document.querySelectorAll('.artist-page [data-artist-credit]').length === 2, 'only used automatic image and biography fields show credits');
     check([...document.querySelectorAll('[data-artist-credit] a')].every(link => link.protocol === 'https:' && link.rel.includes('noopener') && link.rel.includes('noreferrer')), 'source links are HTTPS and safely isolated');
@@ -87,17 +87,17 @@ export async function runAutomaticMetadataRegressions() {
     check(document.activeElement instanceof HTMLAnchorElement && document.activeElement.href === bioLicense.href && document.activeElement.closest('[data-artist-credit]')?.dataset.artistCredit === 'bio', 'a refreshed biography keeps its focused license link rather than jumping to the photo’s identical license');
 
     goTab('tabLibrary');
-    libraryRow = document.querySelector('.artist-page .song-item-play');
+    libraryRow = document.querySelector('#libraryArtistSongsList .artist-song-row');
     libraryRow.focus({ preventScroll: true });
     const imageOnly = fixture.readyMetadata(group.name, { img: '/api/artist-image?id=image-only.jpg', bio: undefined });
     await fixture.publishMetadata(group.name, imageOnly);
-    check(document.activeElement === libraryRow && libraryRow.isConnected && document.querySelector('.artist-page .song-item-play') === libraryRow, 'an image-only arrival retains the focused Library track button');
+    check(document.activeElement === libraryRow && libraryRow.isConnected && document.querySelector('#libraryArtistSongsList .artist-song-row') === libraryRow, 'an image-only arrival retains the focused Library track button');
     check(!!document.querySelector('.artist-page [data-artist-credit="image"]') && !document.querySelector('.artist-page .artist-bio, .artist-page [data-artist-credit="bio"]'), 'image-only metadata still has a photo credit without an unused biography credit');
 
     const bioOnly = fixture.readyMetadata(group.name, { img: undefined, bio: 'A biography without a verified portrait.' });
     await fixture.publishMetadata(group.name, bioOnly);
-    check(document.activeElement === libraryRow && !!document.querySelector('.artist-page .artist-avatar-fallback'), 'a bio-only arrival keeps focus and restores a neutral artist initial');
-    check(document.querySelector('.artist-hero-img').getAttribute('src') === metadata.DEFAULT_ARTIST_PORTRAIT && !document.querySelector('.artist-page [data-artist-credit="image"]') && !!document.querySelector('.artist-page [data-artist-credit="bio"]'), 'bio-only metadata never falls back to an album cover or shows a misleading photo credit');
+    check(document.activeElement === libraryRow && document.querySelector('#libraryArtistHeroCard .artist-hero-image').getAttribute('src') === metadata.DEFAULT_ARTIST_PORTRAIT, 'a bio-only arrival keeps focus and restores a neutral artist silhouette');
+    check(document.querySelector('#artistHeroCard .artist-hero-image').getAttribute('src') === metadata.DEFAULT_ARTIST_PORTRAIT && !document.querySelector('.artist-page [data-artist-credit="image"]') && !!document.querySelector('.artist-page [data-artist-credit="bio"]'), 'bio-only metadata never falls back to an album cover or shows a misleading photo credit');
 
     goTab('tabHome');
     home.openHomeArtistsTab();
@@ -148,9 +148,9 @@ export async function runMetadataLookupRegressions() {
   await fixture.publishMetadata(name, latest);
   fixture.releaseMetadata(name);
   await flush();
-  check(metadata.getAutomaticArtistMetadata(name)?.img === latest.metadata.img && document.querySelector('.artist-hero-img').getAttribute('src') === latest.metadata.img, 'a held older GET cannot overwrite a newer accepted cross-tab portrait');
+  check(metadata.getAutomaticArtistMetadata(name)?.img === latest.metadata.img && document.querySelector('#artistHeroCard .artist-hero-image').getAttribute('src') === latest.metadata.img, 'a held older GET cannot overwrite a newer accepted cross-tab portrait');
   check(document.activeElement === track && track.isConnected, 'late request completion retains focus on the same artist track');
-  check(document.querySelector('.artist-hero-name').textContent === name && same(state.songs.map(song => [song.id, song.artist, song.img]), members), 'late provider results never rename artists or tracks');
+  check(document.getElementById('artistName').textContent === name && same(state.songs.map(song => [song.id, song.artist, song.img]), members), 'late provider results never rename artists or tracks');
   const requests = fixture.requests.filter(request => request.path === '/api/artist-metadata');
   check(requests.filter(request => request.queryName === name).length === 1, 'opening an already in-flight artist reuses its single request');
   check(requests.every(request => request.method === 'GET' && request.appVisible && !!request.queryName), 'automatic GETs use canonical names only after the signed-in library is visible');

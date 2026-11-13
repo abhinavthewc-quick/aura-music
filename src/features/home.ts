@@ -5,7 +5,8 @@ import { escapeHtml } from './radio';
 import { DEFAULT_COVER } from '../core/catalog';
 import { DEFAULT_ARTIST_PORTRAIT, observeArtistMetadataCards, prioritizeArtistMetadata, setArtistPortraitSource } from '../core/artistMetadata';
 import { $, state } from '../core/state';
-import { getArtistGroups, artistProfileDetailsHTML, updateArtistProfileDetails } from './library';
+import { getArtistGroups } from './library';
+import { playArtistCollection, refreshArtistPageMetadata, renderArtistPage } from './artist-page';
 import { goTab } from '../ui/nav';
 /* ===== 3075-3096 ===== */
     export function setGreeting(){
@@ -221,6 +222,7 @@ import { goTab } from '../ui/nav';
     }
 
     export function showArtistsView() {
+      $('tabHome')?.classList.remove('artist-detail-open');
       const mainView = $('homeMainView');
       const artistsView = $('homeArtistsView');
       const detailView = $('homeArtistDetailView');
@@ -233,6 +235,7 @@ import { goTab } from '../ui/nav';
     }
 
     export function showDefaultHomeView() {
+      $('tabHome')?.classList.remove('artist-detail-open');
       const mainView = $('homeMainView');
       const artistsView = $('homeArtistsView');
       const detailView = $('homeArtistDetailView');
@@ -251,8 +254,6 @@ import { goTab } from '../ui/nav';
       }
       openArtistSelection = selectArtist(group);
       if(interactive && !group.key.startsWith('unresolved:')) prioritizeArtistMetadata(group.name, 'open');
-      const artist = { ...group, img: group.cover || DEFAULT_ARTIST_PORTRAIT };
-      const profile = group.profile;
 
       const mainView = $('homeMainView');
       const artistsView = $('homeArtistsView');
@@ -260,59 +261,17 @@ import { goTab } from '../ui/nav';
       if (mainView) mainView.style.display = 'none';
       if (artistsView) artistsView.style.display = 'none';
       if (detailView) detailView.style.display = 'block';
-
-      // Render hero card
-      const heroCard = $('artistHeroCard');
-      if (heroCard) {
-        heroCard.innerHTML = `
-          <div class="artist-hero-backdrop"></div>
-          <div class="artist-hero-content">
-            <img class="artist-hero-img" data-artist-portrait src="${escapeHtml(artist.img)}" alt="${escapeHtml(artist.name)}" loading="lazy">
-            <div class="artist-hero-meta">
-              <h2 class="artist-hero-name">${escapeHtml(artist.name)}</h2>
-              <p class="artist-hero-count">${artist.songs.length} song${artist.songs.length !== 1 ? 's' : ''} in your music</p>
-              ${artistProfileDetailsHTML(profile)}
-            </div>
-          </div>
-        `;
+      $('tabHome')?.classList.add('artist-detail-open');
+      if(detailView) renderArtistPage(detailView, group, { prefix: 'artist', onBack: () => {
+        closeArtistDetail();
+        openHomeArtistsTab();
+        $('homeArtistsChip')?.focus({ preventScroll: true });
+      } });
+      if(scroll) {
+        const reduced = window.matchMedia('(prefers-reduced-motion: reduce)').matches || document.body.classList.contains('aura-reduce-motion');
+        window.scrollTo({ top: 0, behavior: reduced ? 'auto' : 'smooth' });
+        detailView?.querySelector<HTMLElement>('.artist-hero-name')?.focus({ preventScroll: true });
       }
-
-      // Setup play all / shuffle buttons
-      const playAllBtn = $('artistPlayAllBtn');
-      if (playAllBtn) {
-        playAllBtn.onclick = () => playArtistSongs(artist.key, false);
-      }
-      const shuffleBtn = $('artistShuffleBtn');
-      if (shuffleBtn) {
-        shuffleBtn.onclick = () => playArtistSongs(artist.key, true);
-      }
-
-      // Render song rows
-      const songsList = $('artistSongsList');
-      if (songsList) {
-        if (!artist.songs.length) {
-          songsList.innerHTML = '<div style="color:var(--text-sub);padding:24px;font-size:14px">No tracks found for this artist.</div>';
-          return;
-        }
-
-        songsList.innerHTML = artist.songs.map((s, idx) => {
-          const globalIdx = state.songs.findIndex(x => x.id === s.id);
-          const isPlaying = state.currentIndex === globalIdx && state.isPlaying;
-          return `
-            <button type="button" class="artist-song-row ${isPlaying ? 'is-playing' : ''}" aria-label="Play ${escapeHtml(s.title || 'Untitled')} by ${escapeHtml(s.artist || 'Unknown Artist')}" onclick="playSong(${globalIdx})" ${globalIdx < 0 ? 'disabled' : ''}>
-              <span class="artist-song-num" aria-hidden="true">${isPlaying ? '<i class="fa-solid fa-volume-high"></i>' : (idx + 1)}</span>
-              <img class="artist-song-cover" src="${escapeHtml(s.img || DEFAULT_COVER)}" alt="" loading="lazy">
-              <span class="artist-song-info">
-                <span class="artist-song-title">${escapeHtml(s.title || 'Untitled')}</span>
-                <span class="artist-song-sub">${escapeHtml(s.artist || '')}</span>
-              </span>
-              <span class="artist-song-play-btn" aria-hidden="true"><i class="fa-solid fa-play"></i></span>
-            </button>
-          `;
-        }).join('');
-      }
-
-      if(scroll) window.scrollTo({ top: 0, behavior: 'smooth' });
     }
 
     export function refreshArtistViews() {
@@ -333,11 +292,8 @@ import { goTab } from '../ui/nav';
         if(group) setArtistPortraitSource(image, group.cover || DEFAULT_ARTIST_PORTRAIT);
       });
       if(!openArtistSelection || $('homeArtistDetailView')?.style.display !== 'block') return;
-      const group = resolveArtistSelection(groups, openArtistSelection), hero = $('artistHeroCard');
-      if(!group || !hero) return;
-      const image = hero.querySelector<HTMLImageElement>('.artist-hero-img'), details = hero.querySelector<HTMLElement>('.artist-hero-meta');
-      if(image) setArtistPortraitSource(image, group.cover || DEFAULT_ARTIST_PORTRAIT);
-      if(details) updateArtistProfileDetails(details, group.profile, undefined, image);
+      const group = resolveArtistSelection(groups, openArtistSelection), page = $('homeArtistDetailView');
+      if(group && page) refreshArtistPageMetadata(page, group);
       // Names, selection, song rows and playback callbacks remain mounted.
     }
 
@@ -361,18 +317,7 @@ import { goTab } from '../ui/nav';
     export function playArtistSongs(artistName: string, shuffle = false) {
       const artist = resolveArtistSelection(getArtistGroups(), artistName);
       if (!artist || !artist.songs.length) return;
-
-      const songsToPlay = [...artist.songs];
-      if (shuffle) {
-        songsToPlay.sort(() => Math.random() - 0.5);
-      }
-
-      const firstSong = songsToPlay[0];
-      const idx = state.songs.findIndex(s => s.id === firstSong.id);
-      if (idx >= 0) {
-        playSong(idx);
-        toast(`Playing ${artist.name}`, 'play');
-      }
+      if(playArtistCollection(artist, shuffle)) toast(`Playing ${artist.name}`, 'play');
     }
 
     if (typeof window !== 'undefined') {

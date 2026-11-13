@@ -2,10 +2,11 @@ import { escapeHtml, stateHTML, toast } from '../core/dom';
 import { buildArtistGroups, resolveArtistSelection, selectArtist, type ArtistGroup, type ArtistSelection } from '../core/artistGroups';
 import { DEFAULT_COVER, fetchHfCatalog, getCachedArtistDirectory, readArtistsCache, type ArtistMeta } from '../core/catalog';
 import {
-  artistMetadataCreditHTML, getArtistMetadataRevision, getAutomaticArtistMetadata,
+  getArtistMetadataRevision, getAutomaticArtistMetadata,
   observeArtistMetadataCards, prioritizeArtistMetadata, setArtistMetadataCatalog, setArtistPortraitSource,
 } from '../core/artistMetadata';
-import type { DisplayArtistProfile } from '../../lib/artistMetadata';
+export { artistProfileDetailsHTML, updateArtistProfileDetails } from '../core/artistPresentation';
+import { playArtistCollection, refreshArtistPageFavorites, refreshArtistPageMetadata, renderArtistPage } from './artist-page';
 import { beginPlaybackIntent } from '../core/playbackIntent';
 import { refreshArtistViews, renderAuraPicks, renderQuickAccess, renderQuickPicks } from './home';
 import { filterSongs, loadSong, playSong, resetFullPlayerArtToImage, stopAuraYouTube, updateMainMediaSession, updatePlayState } from './player';
@@ -292,9 +293,10 @@ import { $, getPlayCount, persistLikedHistory, rebuildSongs, recordPlayCount, sa
       renderQuickAccess();
       if($('tabLibrary').classList.contains('active')) renderLibrary();
       if($('tabSearch').classList.contains('active')) filterSearchTab();
+      document.querySelectorAll<HTMLElement>('.artist-detail-page').forEach(refreshArtistPageFavorites);
       if(focusList){
-        const rows = [...focusList.querySelectorAll<HTMLElement>('.song-item')];
-        const sameTrack = rows.find(row => row.dataset.songId === String(song.id));
+        const rows = [...focusList.querySelectorAll<HTMLElement>('.song-item, .artist-song-item')];
+        const sameTrack = rows.find(row => (row.dataset.songId || row.dataset.artistSongId) === String(song.id));
         const next = (sameTrack || rows[Math.min(focusIndex, rows.length - 1)])?.querySelector<HTMLElement>('.song-item-like');
         if(next) next.focus({preventScroll:true});
         else { focusList.tabIndex = -1; focusList.focus({preventScroll:true}); }
@@ -421,44 +423,6 @@ import { $, getPlayCount, persistLikedHistory, rebuildSongs, recordPlayCount, sa
       return `<span class="artist-avatar artist-avatar-fallback ${cls || ''}">${escapeHtml(artistInitial(g.name))}</span>`;
     }
 
-    export function artistProfileDetailsHTML(profile?: DisplayArtistProfile): string {
-      if(!profile) return '';
-      const bio = typeof profile.bio === 'string' && profile.bio.trim() ? `<p class="artist-bio">${escapeHtml(profile.bio.slice(0, 2000))}</p>` : '';
-      const genres = Array.isArray(profile.genres) && profile.genres.length
-        ? `<div class="artist-genres">${profile.genres.slice(0, 20).map(g => `<span>${escapeHtml(String(g).slice(0, 120))}</span>`).join('')}</div>` : '';
-      const credits = (profile.img ? artistMetadataCreditHTML(profile.imageCredit, 'image') : '') +
-        (bio ? artistMetadataCreditHTML(profile.bioCredit, 'bio') : '');
-      let social = '';
-      try{
-        const url = new URL(profile.social || '');
-        if(url.protocol === 'https:' && !url.username && !url.password){
-          social = `<a class="artist-social-link" href="${escapeHtml(url.href)}" target="_blank" rel="noopener noreferrer">Artist website <i class="fa-solid fa-arrow-up-right-from-square" aria-hidden="true"></i></a>`;
-        }
-      }catch{ /* no external link */ }
-      return bio || genres || social || credits ? `<div class="artist-profile-details">${bio}${credits}${genres}${social}</div>` : '';
-    }
-
-    /** Automatic arrivals cannot replace track/artist buttons. Only this
-        reading block changes; keep an equivalent source link focused too. */
-    export function updateArtistProfileDetails(container: HTMLElement, profile?: DisplayArtistProfile, before?: Element, portrait?: HTMLImageElement) {
-      const previous = [...container.children].find(element => element.classList.contains('artist-profile-details')) as HTMLElement | undefined;
-      const template = document.createElement('template');
-      template.innerHTML = artistProfileDetailsHTML(profile);
-      const next = template.content.firstElementChild as HTMLElement | null;
-      if(portrait?.dataset.coverFallback) next?.querySelector<HTMLElement>('[data-artist-credit="image"]')?.setAttribute('hidden', '');
-      if(previous?.isEqualNode(next) || !previous && !next) return;
-      const focused = document.activeElement as HTMLElement | null;
-      const sourceHref = previous?.contains(focused) && focused instanceof HTMLAnchorElement ? focused.href : '';
-      const sourceField = sourceHref ? focused?.closest('[data-artist-credit]')?.getAttribute('data-artist-credit') : undefined;
-      if(previous) { if(next) previous.replaceWith(next); else previous.remove(); }
-      else if(next) container.insertBefore(next, before || null);
-      if(sourceHref) {
-        const equivalent = [...(next?.querySelectorAll<HTMLAnchorElement>('a') || [])].find(link =>
-          link.href === sourceHref && link.closest('[data-artist-credit]')?.getAttribute('data-artist-credit') === sourceField);
-        if(equivalent) equivalent.focus({ preventScroll: true });
-      }
-    }
-
     export function artistTileHTML(g, i){
       return `<button type="button" class="artist-tile" data-artist-key="${escapeHtml(g.key)}" data-artist-metadata-name="${g.key.startsWith('unresolved:') ? '' : escapeHtml(g.name)}" onclick="openArtist(${i})">${artistAvatarHTML(g, '')}<span class="artist-name">${escapeHtml(g.name)}</span></button>`;
     }
@@ -478,23 +442,16 @@ import { $, getPlayCount, persistLikedHistory, rebuildSongs, recordPlayCount, sa
       if(heading){ heading.style.display = ''; heading.textContent = 'Artists'; }
       if(currentArtist != null){
         const g = resolveArtistSelection(artistGroupsCache, currentArtist);
-        const gi = g ? artistGroupsCache.indexOf(g) : -1;
         if(g){
           currentArtist = selectArtist(g);
-          const n = g.songs.length;
-          c.innerHTML = `<div class="artist-page">
-            <button type="button" class="artist-page-back" onclick="setLibView('artists')"><i class="fa-solid fa-arrow-left"></i> Artists</button>
-            <div class="artist-page-head">
-              ${artistAvatarHTML(g, 'artist-page-avatar')}
-              <div class="artist-page-meta"><div class="artist-page-name">${escapeHtml(g.name)}</div><div class="lib-group-sub">${n} song${n !== 1 ? 's' : ''}</div></div>
-              <div class="artist-page-actions">
-                <button type="button" onclick="playArtist(${gi})"><i class="fa-solid fa-play"></i> Play</button>
-                <button type="button" onclick="shuffleArtist(${gi})"><i class="fa-solid fa-shuffle"></i> Shuffle</button>
-              </div>
-            </div>
-            ${artistProfileDetailsHTML(g.profile)}
-            <div class="song-list">${g.songs.map(songItemHTML).join('')}</div>
-          </div>`;
+          if(heading) heading.style.display = 'none';
+          $('tabLibrary')?.classList.add('artist-detail-open');
+          let page = c.querySelector<HTMLElement>('.artist-page');
+          if(!page) { c.innerHTML = '<div class="artist-page"></div>'; page = c.querySelector('.artist-page'); }
+          renderArtistPage(page, g, { prefix: 'libraryArtist', onBack: () => {
+            setLibView('artists');
+            document.querySelector<HTMLButtonElement>('#libViewSeg [data-view="artists"]')?.focus({ preventScroll: true });
+          }, onFavorite: toggleFavorite });
           return;
         }
         currentArtist = null;
@@ -521,8 +478,7 @@ import { $, getPlayCount, persistLikedHistory, rebuildSongs, recordPlayCount, sa
       if(currentArtist) {
         const group = resolveArtistSelection(groups, currentArtist), page = container.querySelector<HTMLElement>('.artist-page');
         if(!group || !page) return;
-        updateAvatar(page.querySelector('.artist-page-avatar'), group, 'artist-page-avatar');
-        updateArtistProfileDetails(page, group.profile, page.querySelector('.song-list'), page.querySelector<HTMLImageElement>('.artist-page-avatar'));
+        refreshArtistPageMetadata(page, group);
       } else {
         const byKey = new Map(groups.map(group => [group.key, group]));
         container.querySelectorAll<HTMLElement>('.artist-tile').forEach(tile => {
@@ -543,6 +499,7 @@ import { $, getPlayCount, persistLikedHistory, rebuildSongs, recordPlayCount, sa
       });
       goTab('tabLibrary');
       renderLibrary();
+      $('libraryArtistName')?.focus({ preventScroll: true });
     }
 
     export function playArtist(i, shuffle){
@@ -550,14 +507,7 @@ import { $, getPlayCount, persistLikedHistory, rebuildSongs, recordPlayCount, sa
       artistGroupsCache = groups;
       const g = groups[i];
       if(!g || !g.songs.length) return;
-      const idxs = g.songs.map(s => state.songs.findIndex(x => x.id === s.id)).filter(x => x >= 0);
-      if(!idxs.length) return;
-      if(shuffle){
-        if(!state.isShuffle){ state.isShuffle = true; const sb = $('shuffleBtn'); if(sb) sb.classList.add('mode-active'); }
-      }
-      const pick = shuffle ? idxs[Math.floor(Math.random() * idxs.length)] : idxs[0];
-      playSong(pick);
-      $('fullPlayerOverlay').classList.add('active');
+      if(playArtistCollection(g, !!shuffle)) $('fullPlayerOverlay').classList.add('active');
     }
     export function shuffleArtist(i){ playArtist(i, true); }
 
@@ -624,6 +574,8 @@ import { $, getPlayCount, persistLikedHistory, rebuildSongs, recordPlayCount, sa
     export function renderLibrary(){
       const c=$('librarySongList');
       const heading=$('allTracksSection');
+      $('tabLibrary')?.classList.remove('artist-detail-open');
+      if(heading) heading.style.display = '';
       if(heading) heading.textContent = libView==='artists'?'Artists':libView==='albums'?'Albums':libView==='films'?'Films':'All tracks';
       if(!state.songs.length){
         if(state.catalogLoading) c.innerHTML = skeletonRows(8);

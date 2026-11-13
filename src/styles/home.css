@@ -80,32 +80,6 @@
 .ytm-artists-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(130px, 1fr)); gap: 24px 16px; padding: 12px 0 32px; }
 .ytm-artist-card.grid-card { width: 100%; }
 .ytm-artist-card.grid-card .ytm-artist-art-wrap { width: 110px; height: 110px; max-width: 100%; }
-.artist-detail-back-btn { display: inline-flex; align-items: center; gap: 8px; min-height: var(--tap); margin-bottom: 20px; padding: 8px 0; border: 0; background: transparent; color: var(--text-sub); font-size: 13px; }
-.artist-detail-back-btn:hover { color: var(--text); }
-.artist-hero-card { display: flex; align-items: center; min-height: 184px; margin-bottom: 28px; padding: 24px; border-radius: var(--radius-md); background: var(--surface-1); }
-.artist-hero-content { display: flex; align-items: flex-start; gap: 24px; width: 100%; min-width: 0; }
-.artist-hero-img { flex: 0 0 120px; width: 120px; height: 120px; border-radius: 50%; object-fit: cover; }
-.artist-hero-meta { flex: 1; min-width: 0; }
-.artist-hero-name { margin: 0 0 8px; color: var(--text); font-size: clamp(28px, 3.5vw, 40px); font-weight: 600; letter-spacing: -.035em; overflow-wrap: anywhere; }
-.artist-hero-count { color: var(--text-sub); font-size: 13px; }
-.artist-songs-header { display: flex; align-items: center; justify-content: space-between; gap: 16px; margin-bottom: 16px; }
-.artist-songs-title { font-size: 20px; font-weight: 600; }
-.artist-songs-actions { display: flex; align-items: center; gap: 8px; }
-.artist-action-pill { display: inline-flex; align-items: center; gap: 8px; min-height: var(--tap); padding: 8px 16px; border: 1px solid var(--line); border-radius: var(--radius-xs); background: transparent; color: var(--text); font-size: 13px; font-weight: 600; }
-.artist-action-pill.play-pill { border-color: var(--accent); background: var(--accent); color: var(--accent-ink); }
-.artist-action-pill.shuffle-pill:hover { background: var(--hover); }
-.artist-songs-list { display: flex; flex-direction: column; gap: 4px; }
-.artist-song-row { display: flex; align-items: center; gap: 12px; width: 100%; min-width: 0; min-height: 68px; padding: 8px 12px; border: 0; border-radius: var(--radius-xs); background: transparent; color: var(--text); text-align: left; cursor: pointer; }
-.artist-song-row:hover, .artist-song-row.is-playing { background: var(--hover); }
-.artist-song-num { flex: 0 0 24px; width: 24px; color: var(--text-dim); font-size: 12px; text-align: center; font-variant-numeric: tabular-nums; }
-.artist-song-cover { flex: 0 0 44px; width: 44px; height: 44px; border-radius: var(--radius-xs); object-fit: cover; }
-.artist-song-info { flex: 1; min-width: 0; }
-.artist-song-title, .artist-song-sub { display: block; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
-.artist-song-title { color: var(--text); font-size: 14px; font-weight: 600; }
-.artist-song-sub { margin-top: 3px; color: var(--text-sub); font-size: 12px; }
-.artist-song-row.is-playing .artist-song-title, .artist-song-row.is-playing .artist-song-num { color: var(--accent); }
-.artist-song-play-btn { display: grid; place-items: center; flex: 0 0 var(--tap); width: var(--tap); height: var(--tap); border: 0; border-radius: 50%; background: transparent; color: var(--text-sub); }
-.artist-song-play-btn:hover { color: var(--text); background: var(--surface-2); }
 @media (max-width: 1100px) { .ytm-quick-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
 @media (max-width: 680px) { .ytm-quick-grid { grid-template-columns: 1fr; } }
 @media (max-width: 600px) {
@@ -119,12 +93,6 @@
   .aura-pick { flex-basis: 158px; height: 180px; }
   .recent-card, .spotlight-card { flex-basis: 120px; width: 120px; }
   .recent-card img, .spotlight-card img { width: 120px; height: 120px; }
-  .artist-hero-card { padding: 20px 16px; }
-  .artist-hero-content { flex-wrap: wrap; gap: 16px; }
-  .artist-hero-img { flex-basis: 88px; width: 88px; height: 88px; }
-  .artist-hero-meta { flex-basis: 100%; }
-  .artist-songs-header { flex-wrap: wrap; }
-  .artist-song-row { gap: 10px; padding: 8px 4px; }
   .ytm-artists-grid { grid-template-columns: repeat(auto-fill, minmax(100px, 1fr)); }
 }
 @media (max-width: 420px) { .ytm-section-head { flex-wrap: wrap; gap: 8px; } .ytm-head-actions { margin-left: auto; } }

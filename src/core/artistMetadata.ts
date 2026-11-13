@@ -505,7 +505,7 @@ export function installArtistPortraitFallback() {
     image.dataset.artistPortraitSource ||= image.getAttribute('src') || DEFAULT_ARTIST_PORTRAIT;
     image.dataset.coverFallback = '1';
     if (image.getAttribute('src') !== DEFAULT_ARTIST_PORTRAIT) image.src = DEFAULT_ARTIST_PORTRAIT;
-    const page = image.closest('.artist-page, #artistHeroCard, .adm-automatic-preview');
+    const page = image.closest('.artist-detail-page, .artist-page, #artistHeroCard, .adm-automatic-preview');
     page?.querySelector<HTMLElement>('[data-artist-credit="image"]')?.setAttribute('hidden', '');
   }, true);
 }

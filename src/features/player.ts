@@ -1,7 +1,7 @@
 import { auraMasterCtx, effectCtx } from './ambience';
 import { fmt, toast } from '../core/dom';
 import { addToRecent, renderSongs, updateLibCount, updateLibNowPlaying } from './library';
-import { closeUpNext, playNext, playPrevious, renderUpNext } from './queue';
+import { clearArtistPlayback, closeUpNext, playNext, playPrevious, renderUpNext } from './queue';
 import { currentRadioStation, escapeHtml, radioAudio, stopRadio, toggleRadioPlay, updateRadioPlayerUI } from './radio';
 import { auraYTQueue, extractYouTubeId } from './search';
 import { auraSettings } from './settings';
@@ -297,12 +297,14 @@ import { fetchLyricsForTrack, renderLyrics, updateLyricsProgress, prepareLyricsF
     }
 
     export function stopAuraYouTube(){
+      clearArtistPlayback();
       if(youtubePlayback || auraYTPlayer || auraYTVideoId) beginPlaybackIntent();
       retireAuraYouTube();
     }
 
-    export async function playYouTubeInsideAura(videoId,title,poster,liked=false,autoPlay=true){
+    export async function playYouTubeInsideAura(videoId,title,poster,liked=false,autoPlay=true, options: { catalogSong?: any; preserveArtist?: boolean } = {}){
       if(!videoId){toast('YouTube video ID was missing','triangle-exclamation');return;}
+      if(!options.preserveArtist) clearArtistPlayback();
       stopRadio();
       const playback: YouTubePlayback = {
         intent: beginPlaybackIntent(), videoId: String(videoId), player: null,
@@ -321,18 +323,23 @@ import { fetchLyricsForTrack, renderLyrics, updateLyricsProgress, prepareLyricsF
 
       let ytArtist = 'YouTube Music';
       let ytTitle = title || 'YouTube Music';
-      if (ytTitle.includes(' - ')) {
+      const catalogSong = options.catalogSong && state.songs.includes(options.catalogSong) && String(options.catalogSong.videoId) === String(videoId)
+        ? options.catalogSong : null;
+      if(catalogSong) {
+        ytArtist = catalogSong.artist || 'YouTube Music';
+        ytTitle = catalogSong.title || ytTitle;
+      } else if (ytTitle.includes(' - ')) {
         const parts = ytTitle.split(' - ');
         ytArtist = parts[0].trim();
         ytTitle = parts.slice(1).join(' - ').trim();
       }
       auraYTTitle = ytTitle;
 
-      let idx=state.songs.findIndex(x=>String(x.id)===`youtube-${auraYTVideoId}`);
+      let idx=catalogSong ? state.songs.indexOf(catalogSong) : state.songs.findIndex(x=>String(x.id)===`youtube-${auraYTVideoId}`);
       if(idx===-1){
         state.songs.push({id:`youtube-${auraYTVideoId}`,title:ytTitle,artist:ytArtist,img:auraYTPoster,url:'',favorite:!!liked,isLocal:false,missing:false,isYouTube:true,videoId:auraYTVideoId});
         idx=state.songs.length-1;
-      }else{
+      }else if(!catalogSong){
         state.songs[idx].title=ytTitle;
         state.songs[idx].artist=ytArtist;
         state.songs[idx].img=auraYTPoster||state.songs[idx].img;
@@ -340,7 +347,7 @@ import { fetchLyricsForTrack, renderLyrics, updateLyricsProgress, prepareLyricsF
         state.songs[idx].videoId=auraYTVideoId;
       }
       state.currentIndex=idx;
-      state.songs[idx].favorite = !!savedLikeMap[String(state.songs[idx].id)];
+      if(!catalogSong) state.songs[idx].favorite = !!savedLikeMap[String(state.songs[idx].id)];
       $('currentImg').src=auraYTPoster;
       $('currentTitle').textContent=ytTitle;
       $('currentArtist').textContent=ytArtist;
@@ -657,13 +664,14 @@ import { fetchLyricsForTrack, renderLyrics, updateLyricsProgress, prepareLyricsF
     state.audio.addEventListener('durationchange', refreshDurationDisplay);
 
     export let lastPlayRequestAt=0;
-    export function playSong(i, keepFull=false){
+    export function playSong(i, keepFull=false, preserveArtist=false){
       const s=state.songs[i];
       if(!s) return;
+      if(!preserveArtist) clearArtistPlayback();
       lastPlayRequestAt=Date.now();
       if(s.isYouTube && s.videoId){
         state.currentIndex=i;
-        playYouTubeInsideAura(s.videoId,s.title,s.img,!!s.favorite,true);
+        playYouTubeInsideAura(s.videoId,s.title,s.img,!!s.favorite,true, { catalogSong: s, preserveArtist });
         if(keepFull && !window.matchMedia('(min-width:900px)').matches){
           $('fullPlayerOverlay').classList.add('active');
         }
@@ -703,6 +711,7 @@ import { fetchLyricsForTrack, renderLyrics, updateLyricsProgress, prepareLyricsF
       $('playPauseBtn')?.setAttribute('aria-label', label);
       // Apple-Music artwork pulse: springs between scale(1) and scale(.8)
       $('fullPlayerOverlay').classList.toggle('art-paused', !state.isPlaying);
+      window.dispatchEvent?.(new Event('aura:playback-changed'));
     }
 
     // AURA play/pause controls — explicitly wired here so both the mini
@@ -754,6 +763,12 @@ import { fetchLyricsForTrack, renderLyrics, updateLyricsProgress, prepareLyricsF
     export function togglePlay(){
       const playing = activePlaybackSource === 'youtube' ? auraYTDesiredPlaying || state.isPlaying : state.isPlaying;
       setMainPlaybackPlaying(!playing);
+    }
+
+    export function pauseMainPlayback(){ setMainPlaybackPlaying(false); }
+    export function isMainPlaybackPlaying(): boolean {
+      if(currentRadioStation || roomModeActive()) return false;
+      return activePlaybackSource === 'youtube' ? auraYTDesiredPlaying || state.isPlaying : state.isPlaying;
     }
     
     state.audio.addEventListener('loadedmetadata', ()=>{

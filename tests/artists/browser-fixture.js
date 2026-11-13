@@ -7,6 +7,14 @@
   const signedOut = options.has('signed-out');
   const metadataKey = (name) => String(name).normalize('NFKC').trim().replace(/\s+/g, ' ').toLowerCase();
   const metadataCacheKey = 'auraAutomaticArtistMetadata_v1';
+  const vevoPairs = [
+    ['Kendrick Lamar', 'KendrickLamarVEVO', 3],
+    ['Lewis Capaldi', 'LewisCapaldiVEVO', 2],
+    ['Post Malone', 'PostMaloneVEVO', 3],
+    ['The Kid LAROI.', 'TheKidLAROIVEVO', 2],
+    ['The Neighbourhood', 'TheNeighbourhoodVEVO', 2],
+    ['Travis Scott', 'TravisScottVEVO', 2],
+  ];
   const tracks = [
     ['Old Artist', 'Hand upload', ''],
     ['Old Artist', 'After the rain', 'abcdefghijk'],
@@ -20,6 +28,8 @@
     ['Vishnu Vijay', 'Stay a while', 'ijklmnopqrs'],
     ['Jakes Bejoy', 'First light', 'jklmnopqrst'],
     ['Local Ensemble', 'Night drive', 'klmnopqrstu'],
+    ...(options.has('artist-page') ? vevoPairs.flatMap(([name, channel, total]) =>
+      Array.from({ length: total }, (_, index) => [index === 0 ? name : channel, `${name} recording ${index + 1}`, ''])) : []),
     ...(options.has('credits') ? [
       ['Dhanush', 'Separate voice', 'lmnopqrstu1'],
       ['Anirudh Ravichander & Dhanush', 'Shared recording', 'lmnopqrstu2', 'Anirudh Ravichander'],
@@ -62,7 +72,7 @@
 
   const fixture = window.__auraFixture = {
     directory: { artists: {}, trackArtists: {}, revision: 0 },
-    requests: [], errors: [], playlist, tracks, page,
+    requests: [], errors: [], playlist, tracks, page, vevoPairs,
     metadataCases: new Map(), metadataPending: new Map(), adminGateConfirmed: false,
     adminGate: options.get('admin-gate') || 'ready', releaseAdminGate: null,
     readyMetadata(name, fields = {}) {

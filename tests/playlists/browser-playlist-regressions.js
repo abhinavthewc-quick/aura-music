@@ -154,9 +154,11 @@ export async function runPlaylistSharingRegressions() {
 
     $('miniExpandBtn').click();
     const fullPlayer = $('fullPlayerOverlay');
-    await until(() => fullPlayer.contains(document.activeElement), 'full-player focus');
+    const playerOwnsFocus = () => (matchMedia('(min-width:900px)').matches ? [fullPlayer, $('upNextSheet'), $('miniPlayer')] : [fullPlayer])
+      .some(root => root.contains(document.activeElement));
+    await until(playerOwnsFocus, 'full-player workspace focus');
     arrive(link, true);
-    check(fullPlayer.classList.contains('active') && fullPlayer.contains(document.activeElement), 'received inline preview respects focus in the open full-player dialog');
+    check(fullPlayer.classList.contains('active') && playerOwnsFocus(), 'received inline preview respects focus in the open full-player workspace');
     if (matchMedia('(min-width:900px)').matches) {
       for (const id of ['playPauseBtn', 'ytmTabLyricsBtn']) {
         $(id).focus();

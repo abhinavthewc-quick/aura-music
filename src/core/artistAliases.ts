@@ -30,6 +30,14 @@ export const VERIFIED_ARTISTS: readonly VerifiedArtist[] = [
   },
   { id: 'imagine-dragons', name: 'Imagine Dragons', aliases: ['ImagineDragons'] },
   { id: 'arctic-monkeys', name: 'Arctic Monkeys', aliases: ['Official Arctic Monkeys'] },
+  // Reviewed catalogue/channel pairs. Do not remove arbitrary spaces or VEVO
+  // suffixes globally: these aliases never override an explicit cloud owner.
+  { id: 'kendrick-lamar', name: 'Kendrick Lamar', aliases: ['KendrickLamarVEVO'] },
+  { id: 'lewis-capaldi', name: 'Lewis Capaldi', aliases: ['LewisCapaldiVEVO'] },
+  { id: 'post-malone', name: 'Post Malone', aliases: ['PostMaloneVEVO'] },
+  { id: 'the-kid-laroi', name: 'The Kid LAROI.', aliases: ['TheKidLAROIVEVO'] },
+  { id: 'the-neighbourhood', name: 'The Neighbourhood', aliases: ['TheNeighbourhoodVEVO'] },
+  { id: 'travis-scott', name: 'Travis Scott', aliases: ['TravisScottVEVO'] },
   { id: 'beyonce', name: 'Beyoncé', aliases: ['Beyonce'] },
   { id: 'bjork', name: 'Björk', aliases: ['Bjork'] },
   { id: 'she-and-him', name: 'She & Him', aliases: ['She and Him', 'SheandHimOfficial'] },

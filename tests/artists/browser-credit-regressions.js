@@ -39,8 +39,10 @@ export async function runArtistCreditRegressions() {
   const player = await import('/src/features/player.ts');
   const metadata = await import('/src/core/artistMetadata.ts');
   const { goTab } = await import('/src/ui/nav.ts');
-  await until(() => !state.catalogLoading && catalog.getCachedArtistDirectory().revision === 1 &&
-    state.songs.some(song => song.title === 'Shared recording'), 'loaded collaboration catalogue and cloud profiles');
+  await until(() => !document.getElementById('musicApp').hidden && !state.catalogLoading && catalog.getCachedArtistDirectory().revision === 1 &&
+    state.hfSongs.length && state.hfSongs.every(song => song.hfUrl) &&
+    state.songs.some(song => song.title === 'Shared recording') && state.songs.some(song => song.isLocal && song.url?.startsWith('blob:')),
+    'fully reconciled collaboration catalogue, cloud profiles and local hydration');
   const songs = state.songs.slice(), keys = songs.map(trackKey), before = JSON.stringify(songs);
   const profilesBefore = JSON.stringify(catalog.getCachedArtistDirectory());
   const shared = songs.find(song => song.title === 'Shared recording');
@@ -82,31 +84,32 @@ export async function runArtistCreditRegressions() {
   let resets = 0;
   const reset = () => resets++;
   for (const event of ['loadstart', 'emptied', 'pause', 'seeking']) state.audio.addEventListener(event, reset);
-  const originalPlay = window.playSong, calls = [];
+  const originalSequence = window.playTrackSequence, calls = [];
   try {
     goTab('tabHome');
     home.openArtistDetail(group('Dhanush').key, false);
-    check(document.querySelector('.artist-hero-name')?.textContent === 'Dhanush' &&
+    check(document.getElementById('artistName')?.textContent === 'Dhanush' &&
       document.querySelectorAll('#artistSongsList .artist-song-row').length === 4,
       'Home opens Dhanush with solo and collaborative songs, not Anirudh’s solo catalogue');
     goTab('tabLibrary');
     library.setLibView('artists');
     library.openArtist(library.getArtistGroups().findIndex(artist => artist.name === 'Dhanush'));
-    check(document.querySelector('.artist-page-name')?.textContent === 'Dhanush' &&
-      document.querySelectorAll('.artist-page .song-item').length === 4,
+    check(document.getElementById('libraryArtistName')?.textContent === 'Dhanush' &&
+      document.querySelectorAll('#libraryArtistSongsList .artist-song-item').length === 4,
       'Library opens the same four Dhanush recordings');
-    window.playSong = (...args) => calls.push(args);
-    const sharedRow = [...document.querySelectorAll('.artist-page .song-item')].find(row => row.querySelector('.song-title')?.textContent === shared.title);
-    sharedRow?.querySelector('.song-item-play')?.click();
-    check(calls.length === 1 && calls[0][0] === state.songs.indexOf(shared),
-      'a shared recording’s play control uses its original library index exactly once');
-    window.playSong = originalPlay;
+    window.playTrackSequence = (...args) => { calls.push(args); return true; };
+    const sharedRow = [...document.querySelectorAll('#libraryArtistSongsList .artist-song-item')].find(row => row.querySelector('.artist-song-title')?.textContent === shared.title);
+    sharedRow?.querySelector('.artist-song-row')?.click();
+    check(calls.length === 1 && calls[0][1].startId === String(shared.id) && calls[0][1].collectionId === group('Dhanush').key &&
+      same(calls[0][0], group('Dhanush').songs.map(song => song.id)),
+      'a shared recording’s play control keeps its original identity within the artist sequence exactly once');
+    window.playTrackSequence = originalSequence;
     await fixture.publishMetadata('Dhanush', fixture.readyMetadata('Dhanush', { img: '/api/artist-image?id=dhanush-automatic.jpg', bio: 'A distinct verified performer.' }));
     check(group('Dhanush').cover === '/api/artist-image?id=dhanush-automatic.jpg' &&
       group('Anirudh Ravichander').cover === '/api/artist-image?id=anirudh.jpg',
       'automatic metadata is requested/composed for Dhanush independently, leaving Anirudh’s saved portrait unchanged');
-    check(document.querySelector('.artist-page-avatar')?.getAttribute('src') === group('Dhanush').cover &&
-      document.querySelector('.artist-hero-img')?.getAttribute('src') === group('Dhanush').cover,
+    check(document.querySelector('#libraryArtistHeroCard .artist-hero-image')?.getAttribute('src') === group('Dhanush').cover &&
+      document.querySelector('#artistHeroCard .artist-hero-image')?.getAttribute('src') === group('Dhanush').cover,
       'automatic arrival refreshes both open artist portraits without replacing the selected person');
     check(document.getElementById('currentArtist').textContent === shared.artist && document.getElementById('fullArtist').textContent === shared.artist,
       'player attribution still shows the original complete collaboration credit');
@@ -116,7 +119,7 @@ export async function runArtistCreditRegressions() {
       state.currentIndex === audio.index && state.audio.currentTime >= audio.time && state.audio.playbackRate === audio.rate,
       'artist navigation and enrichment never reload, pause, seek or replace the playing recording');
   } finally {
-    window.playSong = originalPlay;
+    window.playTrackSequence = originalSequence;
     for (const event of ['loadstart', 'emptied', 'pause', 'seeking']) state.audio.removeEventListener(event, reset);
     state.audio.pause();
     player.updatePlayState();

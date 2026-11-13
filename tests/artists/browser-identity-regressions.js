@@ -1,6 +1,6 @@
 /* Run after the shared regressions in the dedicated main-page local fixture:
    (await import('/tests/artists/browser-identity-regressions.js')).runArtistIdentityRegressions()
-   No remote writes. Common/Home playback callbacks are observed. Queue checks
+   No remote writes. Common/artist playback boundaries are observed. Queue checks
    restore the manual order and never activate its directly imported play action;
    artwork sharing is captured locally. Native key activation is audited centrally. */
 export async function runArtistIdentityRegressions() {
@@ -12,11 +12,15 @@ export async function runArtistIdentityRegressions() {
   const library = await import('/src/features/library.ts');
   const home = await import('/src/features/home.ts');
   const { goTab } = await import('/src/ui/nav.ts');
+  // The preceding suite now opts into artist transport. These legacy Up Next
+  // checks deliberately exercise the ordinary library queue without playback.
+  (await import('/src/features/queue.ts')).clearArtistPlayback();
   const initialPlayback = { src: state.audio.getAttribute('src'), index: state.currentIndex, playing: state.isPlaying, rate: state.audio.playbackRate };
-  const originalPlay = window.playSong, originalLike = window.toggleFavorite;
-  const plays = [], likes = [];
+  const originalPlay = window.playSong, originalLike = window.toggleFavorite, originalSequence = window.playTrackSequence;
+  const plays = [], likes = [], sequences = [];
   window.playSong = (...args) => plays.push(args);
   window.toggleFavorite = (...args) => likes.push(args);
+  window.playTrackSequence = (...args) => { sequences.push(args); return true; };
   try {
     goTab('tabLibrary');
     library.setLibView('tracks');
@@ -51,7 +55,10 @@ export async function runArtistIdentityRegressions() {
     const artistRow = document.querySelector('#artistSongsList .artist-song-row');
     check(artistRow instanceof HTMLButtonElement && !!artistRow.getAttribute('aria-label') && !artistRow.querySelector('button, a, [tabindex]'), 'Home artist tracks are single named native buttons');
     artistRow.click();
-    check(plays.length === 2, 'Home artist row invokes playback exactly once');
+    check(sequences.length === 1 && plays.length === 1 && sequences[0][1].source === 'artist' &&
+      sequences[0][1].collectionId === groups[0].key && sequences[0][1].startId === artistRow.dataset.artistTrackId &&
+      JSON.stringify(sequences[0][0]) === JSON.stringify(groups[0].songs.map(song => song.id)),
+      'Home artist row invokes its original recording once through the artist playback boundary');
     await checkUpNextControls(check, state);
     await checkArtworkActions(check, state);
     const audio = state.audio;
@@ -59,6 +66,7 @@ export async function runArtistIdentityRegressions() {
   } finally {
     window.playSong = originalPlay;
     window.toggleFavorite = originalLike;
+    window.playTrackSequence = originalSequence;
     home.closeArtistDetail();
     goTab('tabHome');
   }
@@ -197,7 +205,9 @@ export async function runQueuePlaybackRegressions() {
       await new Promise(requestAnimationFrame);
     }
   };
-  await until(() => !state.catalogLoading && state.songs.some((song) => song.isLocal && song.url?.startsWith('blob:')), 'local fixture hydration');
+  await until(() => !document.getElementById('musicApp').hidden && !state.catalogLoading && state.hfSongs.length &&
+    state.hfSongs.every(song => song.hfUrl) && state.songs.some((song) => song.isLocal && song.url?.startsWith('blob:')),
+    'initial catalogue reconciliation and local fixture hydration');
   const [a, d, b, c] = state.songs.filter((song) => !song.isLocal && !song.isYouTube && !song.missing && song.url);
   const local = state.songs.find((song) => song.isLocal && !song.missing && song.url?.startsWith('blob:'));
   if (!c || !local) throw new Error('Queue playback needs four catalogue tracks and one hydrated local track.');

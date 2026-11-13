@@ -1,29 +1,65 @@
 import { copyToClipboard, showTrackSheet, toast } from '../core/dom';
-import { deleteTrack, openEditModal, renderLibrary } from './library';
-import { auraYTVideoId, filterSongs, playSong, playYouTubeProResult, refreshLyricsForOpenSheet } from './player';
-import { escapeHtml } from './radio';
+import { deleteTrack, openEditModal, renderLibrary, toggleFavorite } from './library';
+import { auraYTVideoId, filterSongs, pauseMainPlayback, playSong, playYouTubeProResult, refreshLyricsForOpenSheet } from './player';
+import { currentRadioStation, escapeHtml } from './radio';
 import { auraYTQueue, extractYouTubeId, filterSearchTab } from './search';
-import { $, persistLikedHistory, savedLikeMap, state } from '../core/state';
+import { $, state } from '../core/state';
+import { isPlaylistTrackAvailable } from '../core/playlist-sharing';
+import { roomModeActive } from '../rooms/roomFlag';
+import {
+  advanceArtistPlayback, createArtistPlayback, previewArtistPlayback, reorderArtistUpcoming, setArtistShuffle,
+  type ArtistPlayback, type ArtistPlaybackOptions,
+} from '../core/artistPlayback';
 /* ===== 3474-3570 ===== */
     /* ---------- Track action bottom sheet (the "..." menu) ---------- */
     export let manualQueue = [];      // ids queued via "Play Next" / "Add to Queue"
     export let trackSheetSongId = null;
+    let artistPlayback: ArtistPlayback | null = null;
+
+    export function clearArtistPlayback(){ artistPlayback = null; }
+    export function getArtistPlayback(): ArtistPlayback | null {
+      if(currentRadioStation || roomModeActive()) { clearArtistPlayback(); return null; }
+      if(artistPlayback && String(state.songs[state.currentIndex]?.id) !== artistPlayback.currentId) clearArtistPlayback();
+      return artistPlayback;
+    }
+    const artistTrackAvailable = (id: string) => isPlaylistTrackAvailable(findSongById(id));
+    function syncArtistQueue(context: ArtistPlayback){
+      context.queue = manualQueue.map(String);
+      if(context.shuffle !== !!state.isShuffle) setArtistShuffle(context, !!state.isShuffle);
+    }
+    function retainArtistQueue(context: ArtistPlayback){
+      manualQueue = context.queue.map(id => findSongById(id)?.id ?? id);
+    }
 
     export function findSongById(id){
       return state.songs.find(s => String(s.id) === String(id));
     }
 
-    export function playTrackSequence(ids: Array<string | number>){
+    export function playTrackSequence(ids: Array<string | number>, options?: ArtistPlaybackOptions & { source: 'artist' }){
+      if(options?.source === 'artist') {
+        const context = createArtistPlayback(ids.filter(id => artistTrackAvailable(String(id))), options);
+        if(!context) { toast('No playable songs by this artist.', 'circle-info'); return false; }
+        artistPlayback = context;
+        state.isShuffle = context.shuffle;
+        for(const id of ['shuffleBtn', 'miniShuffleBtn']) $(id)?.classList.toggle(id === 'shuffleBtn' ? 'mode-active' : 'active', context.shuffle);
+        syncArtistQueue(context);
+        const index = state.songs.findIndex(song => String(song.id) === context.currentId);
+        playSong(index, false, true);
+        renderUpNext();
+        return true;
+      }
+      clearArtistPlayback();
       const sequence = ids
         .map(id => findSongById(id))
         .filter(Boolean)
         .map(song => song.id);
-      if(!sequence.length) return;
+      if(!sequence.length) return false;
       const firstId = sequence.shift();
       manualQueue = sequence;
       renderUpNext();
       const index = state.songs.findIndex(song => String(song.id) === String(firstId));
       if(index !== -1) playSong(index);
+      return index !== -1;
     }
 
     export function openTrackMenu(e, id){
@@ -77,26 +113,19 @@ import { $, persistLikedHistory, savedLikeMap, state } from '../core/state';
         if(state.currentIndex>=0 && state.songs[state.currentIndex] && String(state.songs[state.currentIndex].id)===String(id)) return toast('That song is already playing','circle-info');
         manualQueue = manualQueue.filter(qid => String(qid) !== String(id));
         manualQueue.unshift(id);
+        if(artistPlayback) { syncArtistQueue(artistPlayback); artistPlayback.future = []; }
         renderUpNext();
         toast(`"${song.title}" will play next`, 'circle-check');
       } else if(action === 'addQueue'){
         if(state.currentIndex>=0 && state.songs[state.currentIndex] && String(state.songs[state.currentIndex].id)===String(id)) return toast('That song is already playing','circle-info');
         manualQueue=manualQueue.filter(qid=>String(qid)!==String(id));
         manualQueue.push(id);
+        if(artistPlayback) { syncArtistQueue(artistPlayback); artistPlayback.future = []; }
         renderUpNext();
         toast(`Added "${song.title}" to queue`, 'circle-check');
       } else if(action === 'favorite'){
-        song.favorite = !song.favorite;
-        if(song.favorite) savedLikeMap[String(song.id)]=true; else delete savedLikeMap[String(song.id)];
-        persistLikedHistory();
-        if(state.currentIndex >= 0 && state.songs[state.currentIndex] && String(state.songs[state.currentIndex].id)===String(song.id)){
-          $('fullLikeBtn').className=`like-btn ${song.favorite?'active':''}`;
-          $('fullLikeBtn').innerHTML=`<i class="fa-${song.favorite?'solid':'regular'} fa-heart"></i>`;
-        }
-        filterSongs();
-        if($('tabLibrary').classList.contains('active')) renderLibrary();
-        if($('tabSearch').classList.contains('active')) filterSearchTab();
-        toast(song.favorite ? 'Added to Favorites' : 'Removed from Favorites', 'circle-check');
+        toggleFavorite(null, String(song.id));
+        renderUpNext();
       } else if(action === 'edit'){
         openEditModal(null, song.id);
       } else if(action === 'playlist'){
@@ -143,6 +172,13 @@ import { $, persistLikedHistory, savedLikeMap, state } from '../core/state';
 
     export function getRollingUpNextItems(){
       const UP_NEXT_LIMIT = upNextLimit();
+      const context = getArtistPlayback();
+      if(context) {
+        syncArtistQueue(context);
+        const seen = new Set([context.currentId]);
+        return previewArtistPlayback(context, state.repeatMode, UP_NEXT_LIMIT, artistTrackAvailable)
+          .filter(id => { if(seen.has(id)) return false; seen.add(id); return true; }).map(findSongById);
+      }
       const result=[];
       const seen=new Set();
       const currentId = state.currentIndex>=0 && state.songs[state.currentIndex] ? String(state.songs[state.currentIndex].id) : null;
@@ -201,6 +237,19 @@ import { $, persistLikedHistory, savedLikeMap, state } from '../core/state';
           const id=row.dataset.upNextId;
           const idx=state.songs.findIndex(x=>String(x.id)===String(id));
           if(idx!==-1){
+            const context = getArtistPlayback();
+            if(context) {
+              syncArtistQueue(context);
+              const upcoming = previewArtistPlayback(context, state.repeatMode, upNextLimit(), artistTrackAvailable);
+              const position = upcoming.indexOf(String(id));
+              if(position < 0) return;
+              for(let n = 0; n <= position; n++) advanceArtistPlayback(context, 1, state.repeatMode, artistTrackAvailable);
+              retainArtistQueue(context);
+              closeUpNext();
+              playSong(idx, false, true);
+              renderUpNext();
+              return;
+            }
             manualQueue=manualQueue.filter(q=>String(q)!==String(id));
             closeUpNext();
             playSong(idx);
@@ -213,12 +262,8 @@ import { $, persistLikedHistory, savedLikeMap, state } from '../core/state';
           const row=btn.closest('.up-next-row');
           const idx=state.songs.findIndex(x=>String(x.id)===String(row.dataset.upNextId));
           if(idx===-1) return;
-          state.songs[idx].favorite=!state.songs[idx].favorite;
-          if(state.songs[idx].favorite) savedLikeMap[String(state.songs[idx].id)]=true; else delete savedLikeMap[String(state.songs[idx].id)];
-          persistLikedHistory();
+          toggleFavorite(null, String(state.songs[idx].id));
           renderUpNext();
-          filterSongs();
-          if($('tabLibrary').classList.contains('active')) renderLibrary();
         });
       });
       list.querySelectorAll('.up-next-action.reorder').forEach(handle=>initUpNextReorder(handle));
@@ -226,6 +271,13 @@ import { $, persistLikedHistory, savedLikeMap, state } from '../core/state';
     }
 
     export function promoteVisibleOrder(ids){
+      const context = getArtistPlayback();
+      if(context) {
+        syncArtistQueue(context);
+        reorderArtistUpcoming(context, ids.map(String), state.repeatMode);
+        retainArtistQueue(context);
+        return;
+      }
       const unique=[]; const seen=new Set();
       ids.forEach(id=>{ const s=findSongById(id); if(s && !seen.has(String(id))){seen.add(String(id));unique.push(s.id);} });
       const visibleIds=new Set(unique.map(id=>String(id)));
@@ -322,6 +374,7 @@ import { $, persistLikedHistory, savedLikeMap, state } from '../core/state';
 
 
     export async function playPrevious(keepFull=false){
+      if(advanceArtistTransport(-1, keepFull)) return;
       if(keepFull && !window.matchMedia('(min-width:900px)').matches){
         $('fullPlayerOverlay').classList.add('active');
       }
@@ -354,6 +407,7 @@ import { $, persistLikedHistory, savedLikeMap, state } from '../core/state';
     }
 
     export async function playNext(keepFull=false){
+      if(advanceArtistTransport(1, keepFull)) return;
       // Deleted tracks and unavailable local files cannot make later queued
       // tracks lose their turn to the library/YouTube fallback.
       while(manualQueue.length){
@@ -395,6 +449,20 @@ import { $, persistLikedHistory, savedLikeMap, state } from '../core/state';
         $('fullPlayerOverlay').classList.add('active');
       }
       renderUpNext();
+    }
+
+    function advanceArtistTransport(direction: 1 | -1, keepFull: boolean): boolean {
+      const context = getArtistPlayback();
+      if(!context) return false;
+      syncArtistQueue(context);
+      const id = advanceArtistPlayback(context, direction, state.repeatMode, artistTrackAvailable);
+      retainArtistQueue(context);
+      if(id) {
+        const index = state.songs.findIndex(song => String(song.id) === id);
+        playSong(index, keepFull, true);
+      } else if(direction === 1) pauseMainPlayback();
+      renderUpNext();
+      return true;
     }
 
     function openCurrentTrackMenu(e){
