@@ -5,7 +5,7 @@ import { navClick, goTab, openMobileSearch, closeMobileSearch, mobileSearchOnInp
 import { playSong } from './features/player';
 import { openTrackMenu, playTrackSequence, queueTrackAction } from './features/queue';
 import {
-  closeEditModal, retryCatalog, saveEditedTrack,
+  closeEditModal, importLocalAudio, retryCatalog, saveEditedTrack,
   setLibView, toggleFavorite, toggleStatsPanel,
 } from './features/library';
 import {
@@ -41,7 +41,7 @@ Object.assign(globalThis, {
   openPlaylistPicker, closePlaylistPicker, playlistPageShare, playlistPageMore, drawerPlaylistTap,
   playSong,
   queueTrackAction, openTrackMenu, playTrackSequence,
-  closeEditModal, retryCatalog, saveEditedTrack,
+  closeEditModal, importLocalAudio, retryCatalog, saveEditedTrack,
   setLibView, toggleFavorite, toggleStatsPanel,
   goToSearchCategory, runSearchChip,
   renderAuraPicks, resumeLastPlayed, shuffleAll,

@@ -1,6 +1,33 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
+<<<<<<< HEAD
+=======
+<style id="aura-loader-css">
+html.aura-loading,html.aura-loading body{overflow:hidden}
+#auraLoader{position:fixed;inset:0;z-index:2147483000;background:#000000;display:flex;align-items:center;justify-content:center;overflow:hidden;will-change:opacity,transform;animation:auraLoaderFailsafe 0s linear 8s forwards;transition:opacity .45s cubic-bezier(.16,1,.3,1),transform .45s cubic-bezier(.16,1,.3,1)}
+body.light-theme #auraLoader{background:#e2e2e5}
+#auraLoader.leaving{opacity:0;transform:scale(1.05);pointer-events:none}
+.aura-startup-stage{display:flex;flex-direction:column;align-items:center;justify-content:center;width:100%;max-width:540px;height:100%;max-height:540px;position:relative;user-select:none}
+.aura-startup-art{position:relative;width:min(90vw,480px);height:min(90vw,480px);display:flex;align-items:center;justify-content:center}
+.aura-liquid-canvas{position:absolute;inset:0;width:100%;height:100%;display:block}
+.aura-startup-fallback{display:none;position:absolute;inset:0;align-items:center;justify-content:center;pointer-events:none}
+#auraLoader:not([data-ready]) .aura-startup-fallback{display:flex}
+#auraLoader[data-ready] .aura-startup-fallback{display:none}
+#auraLoaderText{margin-top:14px;text-align:center;color:rgba(255,255,255,.78);font:700 11px/1.4 "DM Sans",system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;letter-spacing:.24em;text-transform:uppercase;pointer-events:none;animation:auraLoaderTextIn .7s ease .2s backwards;transition:opacity .3s ease,transform .3s ease}
+body.light-theme #auraLoaderText{color:rgba(25,26,30,.78)}
+#auraLoaderText.leaving{opacity:0;transform:translateY(8px);animation:none}
+#auraLoaderText .d{display:inline-block;opacity:.25;animation:auraDot 1.2s ease-in-out infinite}
+#auraLoaderText .d:nth-child(2){animation-delay:.2s}
+#auraLoaderText .d:nth-child(3){animation-delay:.4s}
+@keyframes auraLoaderTextIn{from{opacity:0;transform:translateY(6px)}}
+@keyframes auraDot{0%,80%,100%{opacity:.25}40%{opacity:1}}
+@media (prefers-reduced-motion:reduce){#auraLoaderText .d{animation:none;opacity:.7}#auraLoader.leaving{transition:opacity .2s ease;transform:none}}
+@keyframes auraLoaderFailsafe{to{opacity:0;visibility:hidden;pointer-events:none}}
+</style>
+<script>window.__aura={sheets:0,fire:function(){this.sheets++;}};</script>
+<link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://cdnjs.cloudflare.com" crossorigin><link rel="preconnect" href="https://huggingface.co" crossorigin><link rel="preconnect" href="https://cdn-lfs.huggingface.co" crossorigin><link rel="dns-prefetch" href="https://i.ytimg.com"><link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=Cormorant+Garamond:wght@600&display=swap" rel="stylesheet" media="print" onload="this.media='all';__aura.fire()" onerror="__aura.fire()"><noscript><link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=Cormorant+Garamond:wght@600&display=swap" rel="stylesheet"></noscript>
+>>>>>>> 62cde5b (Private recovery snapshot before local/production reconciliation (not for deployment))
   <meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Aura Music</title>
   <meta name="description" content="Your personal space for music. Enjoy your library, playlists, live radio and ambient soundscapes, or listen together with friends on Aura Music.">
@@ -298,11 +325,11 @@
     <aside class="desktop-sidebar" id="desktopSidebar" aria-label="Desktop navigation">
       <div class="desktop-brand"><button class="sidebar-toggle" id="sidebarToggle" type="button" aria-label="Toggle menu" title="Menu"><i class="fa-solid fa-bars"></i></button><div class="desktop-brand-mark"><img src="./src/assets/brand-logo.webp" alt="Aura Music vinyl logo" width="512" height="512" loading="lazy" decoding="async"></div><div><strong>AURA</strong><span>MUSIC</span></div></div>
       <div class="desktop-nav-label">Menu</div>
-      <button type="button" class="desktop-nav-btn active" data-tab="tabHome" onclick="navClick(this,'tabHome')"><i class="fa-solid fa-house"></i><span>Home</span></button>
-      <button type="button" class="desktop-nav-btn" data-tab="tabSearch" onclick="navClick(this,'tabSearch')"><i class="fa-solid fa-magnifying-glass"></i><span>Search</span></button>
-      <button type="button" class="desktop-nav-btn" data-tab="tabLibrary" onclick="navClick(this,'tabLibrary')"><i class="fa-solid fa-layer-group"></i><span>Library</span></button>
-      <button type="button" class="desktop-nav-btn" data-tab="tabPlaylists" onclick="navClick(this,'tabPlaylists')"><i class="fa-solid fa-bars-staggered"></i><span>Playlists</span></button>
-      <button type="button" class="desktop-nav-btn" data-tab="tabRadio" onclick="navClick(this,'tabRadio')"><i class="fa-solid fa-radio"></i><span>Radio</span></button>
+      <button type="button" class="desktop-nav-btn active" data-tab="tabHome" aria-label="Home" onclick="navClick(this,'tabHome')"><i class="fa-solid fa-house"></i><span>Home</span></button>
+      <button type="button" class="desktop-nav-btn" data-tab="tabSearch" aria-label="Search" onclick="navClick(this,'tabSearch')"><i class="fa-solid fa-magnifying-glass"></i><span>Search</span></button>
+      <button type="button" class="desktop-nav-btn" data-tab="tabLibrary" aria-label="Library" onclick="navClick(this,'tabLibrary')"><i class="fa-solid fa-layer-group"></i><span>Library</span></button>
+      <button type="button" class="desktop-nav-btn" data-tab="tabPlaylists" aria-label="Playlists" onclick="navClick(this,'tabPlaylists')"><i class="fa-solid fa-bars-staggered"></i><span>Playlists</span></button>
+      <button type="button" class="desktop-nav-btn" data-tab="tabRadio" aria-label="Radio" onclick="navClick(this,'tabRadio')"><i class="fa-solid fa-radio"></i><span>Radio</span></button>
       <a class="desktop-nav-btn desktop-nav-link" href="/rooms"><i class="fa-solid fa-headphones"></i><span>Rooms</span></a>
 
       <button type="button" class="ytm-new-playlist-btn" onclick="openPlaylistModal()">
@@ -361,7 +388,11 @@
       <div class="ytm-top-search-wrap">
         <div class="ytm-top-search">
           <i class="fa-solid fa-magnifying-glass"></i>
+<<<<<<< HEAD
           <input type="text" id="headerSearchInput" placeholder="Search your library" autocomplete="off" aria-label="Search your library">
+=======
+          <input type="text" id="headerSearchInput" placeholder="Search your Aura library" autocomplete="off" aria-label="Search">
+>>>>>>> 62cde5b (Private recovery snapshot before local/production reconciliation (not for deployment))
         </div>
       </div>
 
@@ -393,20 +424,14 @@
       <div class="ytm-chips-bar" id="ytmMoodChips">
         <button type="button" class="ytm-chip active" data-mood="all">All</button>
         <button type="button" class="ytm-chip" data-mood="artists" id="homeArtistsChip">Artists</button>
-        <button type="button" class="ytm-chip" data-mood="romance">Romance</button>
-        <button type="button" class="ytm-chip" data-mood="feel good">Feel good</button>
-        <button type="button" class="ytm-chip" data-mood="relax">Relax</button>
-        <button type="button" class="ytm-chip" data-mood="energise">Energise</button>
-        <button type="button" class="ytm-chip" data-mood="party">Party</button>
-        <button type="button" class="ytm-chip" data-mood="commute">Commute</button>
-        <button type="button" class="ytm-chip" data-mood="workout">Work out</button>
-        <button type="button" class="ytm-chip" data-mood="focus">Focus</button>
+        <button type="button" class="ytm-chip" data-mood="favorites">Favorites</button>
+        <button type="button" class="ytm-chip" data-mood="recent">Recently played</button>
       </div>
 
       <!-- View 1: Main Home Content -->
       <div id="homeMainView">
         <!-- The greeting ids stay: four modules write the signed-in name and the time of day into them. -->
-        <h2 class="home-greeting" style="margin-bottom:18px"><em id="greetingLabel">Good evening</em><span id="displayUserName">User</span></h2>
+        <h2 class="home-greeting"><em id="greetingLabel">Good evening</em><span id="displayUserName">User</span></h2>
 
         <!-- Featured Artists Shelf (Always visible on home) -->
         <div class="ytm-section-head" style="margin-top:4px">
@@ -457,7 +482,11 @@
         <div class="song-list" id="songList"></div>
         <div class="more-songs-note">
           <i class="fa-solid fa-magnifying-glass"></i>
+<<<<<<< HEAD
           <span>Find songs, artists and albums in your library with <button type="button" onclick="goTab('tabSearch')">Search</button>.</span>
+=======
+          <span>Find a track in your library using <button type="button" class="ytm-section-link" onclick="goTab('tabSearch')">Search</button>.</span>
+>>>>>>> 62cde5b (Private recovery snapshot before local/production reconciliation (not for deployment))
         </div>
       </div>
 
@@ -472,7 +501,11 @@
       </div>
 
       <!-- View 3: Artist Songs Drill-Down View -->
+<<<<<<< HEAD
       <div id="homeArtistDetailView" style="display:none"></div>
+=======
+      <section class="artist-detail-page" id="homeArtistDetailView" style="display:none"></section>
+>>>>>>> 62cde5b (Private recovery snapshot before local/production reconciliation (not for deployment))
     </div>
 
     <div class="tab-content" id="tabSearch">
@@ -492,9 +525,10 @@
         <button type="button" class="browse-tile cat-all active" data-filter="all"><i class="fa-solid fa-music"></i>All tracks</button>
         <button type="button" class="browse-tile cat-favorites" data-filter="favorites"><i class="fa-solid fa-heart"></i>Favorites</button>
         <button type="button" class="browse-tile cat-recent" data-filter="recent"><i class="fa-solid fa-clock-rotate-left"></i>Recently played</button>
+        <button type="button" class="browse-tile cat-local" data-filter="local"><i class="fa-solid fa-file-audio"></i>Local files</button>
       </div>
 
-      <p class="srch-section" id="searchResultsLabel">All tracks</p>
+      <div class="search-results-head"><p class="srch-section" id="searchResultsLabel">All tracks</p><button id="importLocalAudioBtn" class="playlist-secondary-btn" type="button" onclick="importLocalAudio()" hidden>Add local audio</button></div>
       <div class="song-list" id="searchResultsList"></div>
 
     </div>
@@ -503,29 +537,33 @@
       <h2 style="margin-bottom:15px">Library</h2>
 
       <div class="lib-menu-group">
+<<<<<<< HEAD
         <div class="lib-menu-row" onclick="if(songs[currentIndex] && !songs[currentIndex].missing){$('fullPlayerOverlay').classList.add('active')}else{toast('Nothing playing right now','circle-info')}">
+=======
+        <div class="lib-menu-row" role="button" tabindex="0" onclick="if(state.activeTrack && !state.activeTrack.missing){$('fullPlayerOverlay').classList.add('active')}else{toast('Nothing playing right now','circle-info')}">
+>>>>>>> 62cde5b (Private recovery snapshot before local/production reconciliation (not for deployment))
           <div class="lib-menu-icon"><i class="fa-solid fa-music"></i></div>
           <div class="lib-menu-label">Now playing<div class="lib-menu-sub" id="libNowPlayingSub">Nothing playing</div></div>
         </div>
-        <div class="lib-menu-row" onclick="goToSearchCategory('recent')">
+        <div class="lib-menu-row" role="button" tabindex="0" onclick="goToSearchCategory('recent')">
           <div class="lib-menu-icon"><i class="fa-solid fa-clock-rotate-left"></i></div>
           <div class="lib-menu-label">Recently played</div>
         </div>
       </div>
 
       <div class="lib-menu-group">
-        <div class="lib-menu-row" onclick="goToSearchCategory('favorites')">
+        <div class="lib-menu-row" role="button" tabindex="0" onclick="goToSearchCategory('favorites')">
           <div class="lib-menu-icon"><i class="fa-solid fa-heart"></i></div>
           <div class="lib-menu-label">Favorites</div>
         </div>
-        <div class="lib-menu-row" onclick="document.getElementById('allTracksSection').scrollIntoView({behavior:'smooth'})">
+        <div class="lib-menu-row" role="button" tabindex="0" onclick="document.getElementById('allTracksSection').scrollIntoView({behavior:'smooth'})">
           <div class="lib-menu-icon"><i class="fa-solid fa-bars-staggered"></i></div>
           <div class="lib-menu-label">All tracks</div>
         </div>
       </div>
 
       <div class="lib-menu-group">
-        <div class="lib-menu-row" onclick="toggleStatsPanel()">
+        <div class="lib-menu-row" role="button" tabindex="0" onclick="toggleStatsPanel()">
           <div class="lib-menu-icon"><i class="fa-solid fa-chart-line"></i></div>
           <div class="lib-menu-label">Listening stats</div>
           <i class="fa-solid fa-chevron-right" id="statsChevron" aria-hidden="true"></i>
@@ -615,7 +653,7 @@
       <div class="mini-right desk-only">
         <button class="mini-icon-btn" id="miniLikeBtn" type="button" aria-label="Like" aria-pressed="false"><i class="fa-regular fa-heart"></i></button>
         <button class="mini-icon-btn" id="miniShuffleBtn" type="button" aria-label="Shuffle"><i class="fa-solid fa-shuffle"></i></button>
-        <button class="mini-icon-btn" id="miniRepeatBtn" type="button" aria-label="Repeat this song"><i class="fa-solid fa-repeat"></i></button>
+        <button class="mini-icon-btn" id="miniRepeatBtn" type="button" aria-label="Repeat off"><i class="fa-solid fa-repeat"></i></button>
         <div class="mini-vol">
           <button class="mini-icon-btn" id="miniVolBtn" type="button" aria-label="Mute"><i class="fa-solid fa-volume-high" id="miniVolIcon"></i></button>
           <input type="range" class="mini-volume" id="miniVolume" min="0" max="100" value="80" aria-label="Volume">
@@ -658,6 +696,7 @@
   <div class="full-player-overlay" id="fullPlayerOverlay" role="dialog" aria-modal="true" aria-label="Now playing" aria-hidden="true">
     <div class="fp-bg" aria-hidden="true"><div class="fp-bg-layer" id="fpBgA"></div><div class="fp-bg-layer" id="fpBgB"></div></div>
     <div class="full-player-header">
+<<<<<<< HEAD
       <i class="fa-solid fa-chevron-down" id="closeFullPlayerBtn" role="button" tabindex="0" aria-label="Close player" style="font-size:20px;cursor:pointer"></i>
       <span id="fullHeaderTitle">Track</span>
       <i class="fa-solid fa-ellipsis" id="fullHeaderMenuBtn" role="button" tabindex="0" aria-label="More options"></i>
@@ -669,11 +708,23 @@
         <button type="button" class="ytm-art-tool-btn" id="artLikeBtn" title="Like song" onclick="document.getElementById('fullLikeBtn').click()"><i class="fa-regular fa-heart" id="artLikeIcon"></i></button>
         <button type="button" class="ytm-art-tool-btn" id="artShareBtn" title="Share track"><i class="fa-solid fa-share-nodes"></i></button>
       </div>
+=======
+      <button class="full-header-control" id="closeFullPlayerBtn" type="button" aria-label="Close player"><i class="fa-solid fa-chevron-down" aria-hidden="true"></i></button>
+      <span id="fullHeaderTitle" class="full-header-title">Track</span>
+      <button class="full-header-control" id="fullHeaderMenuBtn" type="button" aria-label="More track options"><i class="fa-solid fa-ellipsis" aria-hidden="true"></i></button>
+    </div>
+    <div class="full-player-art" id="fullPlayerArt">
+      <img id="fullImg" src="" alt="" decoding="async">
+>>>>>>> 62cde5b (Private recovery snapshot before local/production reconciliation (not for deployment))
     </div>
     <div class="youtube-mode-badge" id="youtubeModeBadge">Official YouTube player • playing inside AURA</div>
     <div class="full-player-body">
       <div class="full-player-meta">
+<<<<<<< HEAD
         <div><div id="fullTitle">Track</div><div id="fullArtist">Artist</div></div>
+=======
+        <div><div id="fullTitle" class="full-track-title">Track</div><div id="fullArtist" class="full-track-artist">Artist</div></div>
+>>>>>>> 62cde5b (Private recovery snapshot before local/production reconciliation (not for deployment))
         <button class="like-btn" id="fullLikeBtn" type="button" aria-label="Like current song" aria-pressed="false"><i class="fa-regular fa-heart"></i></button>
       </div>
       <div class="full-seek-slider-wrap">
@@ -694,24 +745,26 @@
         <button class="player-tab-pill" id="playerTabRelatedBtn" type="button" aria-label="Related" onclick="openPlayerSheet('related')">
           <i class="fa-solid fa-wand-magic-sparkles"></i> <span>Related</span>
         </button>
+        <button class="player-tab-pill" id="playerTabQueueBtn" type="button" aria-label="Up next" onclick="openPlayerSheet('queue')"><i class="fa-solid fa-list-ol"></i><span>Up next</span></button>
       </div>
 
     </div>
   </div>
 
 
-  <div class="up-next-sheet" id="upNextSheet" role="dialog" aria-modal="true" aria-label="Lyrics and Related" aria-hidden="true">
+  <div class="up-next-sheet" id="upNextSheet" role="dialog" aria-modal="true" aria-label="Lyrics, related tracks and queue" aria-hidden="true" data-tab="lyrics">
     <div class="sheet-drag-handle" aria-hidden="true"></div>
     <div class="ytm-right-tab-bar">
       <div class="ytm-tab-toggle-group">
-        <button type="button" class="ytm-tab-toggle active" id="ytmTabLyricsBtn" onclick="switchRightPanelTab('lyrics')">LYRICS</button>
-        <button type="button" class="ytm-tab-toggle" id="ytmTabRelatedBtn" onclick="switchRightPanelTab('related')">RELATED</button>
+        <button type="button" class="ytm-tab-toggle active" id="ytmTabLyricsBtn" onclick="switchRightPanelTab('lyrics')">Lyrics</button>
+        <button type="button" class="ytm-tab-toggle" id="ytmTabRelatedBtn" onclick="switchRightPanelTab('related')">Related</button>
+        <button type="button" class="ytm-tab-toggle" id="ytmTabQueueBtn" onclick="switchRightPanelTab('queue')">Up next</button>
       </div>
       <button class="up-next-sheet-close" id="upNextCloseBtn" type="button" aria-label="Close" onclick="closePlayerSheet()"><i class="fa-solid fa-xmark"></i></button>
     </div>
 
     <!-- Panel 1: BetterLyrics Synced Lyrics -->
-    <div id="ytmLyricsPanel" style="display:flex;flex-direction:column;flex:1;min-height:0;height:calc(100% - 55px);position:relative;overflow:hidden">
+    <div id="ytmLyricsPanel" class="player-sheet-panel" role="region" aria-label="Lyrics">
       <div class="bl-lyrics-backdrop" id="blLyricsBackdrop" aria-hidden="true"></div>
       <div class="bl-lyrics-toolbar">
         <div class="bl-status-badge" id="blProviderBadge">
@@ -728,23 +781,27 @@
           <button type="button" class="bl-tool-pill sync-adj" onclick="setSyncOffset(0.5)" title="Offset +0.5s">+0.5s</button>
         </div>
       </div>
-      <div id="fullPlayerLyricsContainer" style="display:flex;flex-direction:column;flex:1;min-height:0;height:100%;overflow:hidden;position:relative"></div>
+      <div id="fullPlayerLyricsContainer" class="lyrics-container"></div>
       <button type="button" class="bl-auto-scroll-btn" id="blAutoScrollBtn" onclick="resumeLyricsAutoScroll()" style="display:none">
         <i class="fa-solid fa-arrow-down"></i> Sync to audio
       </button>
     </div>
 
     <!-- Panel 2: Related -->
-    <div id="ytmRelatedPanel" style="display:none;flex-direction:column;flex:1;min-height:0;height:calc(100% - 55px);padding:20px;overflow-y:auto">
+    <div id="ytmRelatedPanel" class="player-sheet-panel" role="region" aria-label="Related tracks" hidden>
       <div id="ytmRelatedList"></div>
+    </div>
+    <div id="ytmQueuePanel" class="player-sheet-panel" role="region" aria-label="Up next" hidden>
+      <div class="queue-panel-head"><h3 id="queueContextLabel">Up next</h3><button id="clearQueueBtn" type="button">Clear queued tracks</button></div>
+      <div id="upNextList"></div>
     </div>
   </div>
 
   <div class="radio-full-overlay" id="radioFullPlayerOverlay" role="dialog" aria-modal="true" aria-label="Radio player" aria-hidden="true">
     <div class="radio-full-header">
-      <i class="fa-solid fa-chevron-down" id="closeRadioFullPlayerBtn" role="button" tabindex="0" aria-label="Close radio player" style="font-size:20px;cursor:pointer"></i>
+      <button class="full-header-control" id="closeRadioFullPlayerBtn" type="button" aria-label="Close radio player"><i class="fa-solid fa-chevron-down" aria-hidden="true"></i></button>
       <span style="font-weight:600">Radio</span>
-      <i class="fa-solid fa-ellipsis" id="radioHeaderMenuBtn" role="button" aria-label="More options"></i>
+      <button class="full-header-control" id="radioHeaderMenuBtn" type="button" aria-label="More radio options"><i class="fa-solid fa-ellipsis" aria-hidden="true"></i></button>
     </div>
     <div class="radio-vinyl-stage">
       <div class="radio-vinyl-record" id="radioVinylRecord">

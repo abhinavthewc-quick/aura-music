@@ -3,7 +3,7 @@
 There are three configuration surfaces:
 
 1. **Compile-time constants** in `src/core/config.ts` (public, shipped to the browser).
-2. **Cloudflare Pages environment variables** (server-side secrets for `/api/admin` and `/api/rooms`).
+2. **Cloudflare Pages environment variables** (server-side secrets for `/api/admin`, `/api/audio`, `/api/bot`, and `/api/rooms`).
 3. **GitHub repository secrets** (consumed by the upload/manage workflows).
 
 Plus a few values that are currently hard-coded in more than one place — those
@@ -42,7 +42,13 @@ Production (and Preview if used):
 | `GOOGLE_CLIENT_ID` | ✅ | `/api/admin` | Audience check for Google ID tokens. |
 | `ADMIN_PASSWORD` | optional | `/api/admin` | Enables the email/password admin login. If unset, only Google sign-in works. |
 | `HF_TOKEN` | for bucket mutations | `/api/admin` | Hugging Face token for rename/delete/cover/manifest actions. |
-| `HF_BUCKET_ID` | for bucket mutations | `/api/admin` | e.g. `Angelrider/sonora`; must match the client bucket. |
+| `HF_BUCKET_ID` | for bucket mutations / custom archive | `/api/admin`, `/api/audio` | e.g. `Angelrider/sonora`; must match the client bucket. `/api/audio` uses its public default if unset. |
+| `OCI_NAMESPACE` | optional hot cache, all five OCI fields together | `/api/audio` | OCI object-storage namespace, not a URL. |
+| `OCI_BUCKET_NAME` | optional hot cache | `/api/audio` | Dedicated cache bucket; never mix it with valuable or unrelated storage. |
+| `OCI_REGION` | optional hot cache | `/api/audio` | OCI region identifier. |
+| `OCI_ACCESS_KEY` | optional hot cache | `/api/audio` | Server-only S3-compatible access key, restricted to the dedicated cache bucket. |
+| `OCI_SECRET_KEY` | optional hot cache | `/api/audio` | Server-only S3-compatible secret key; no source fallback exists. |
+| `AUDIO_ADMIN_TOKEN` | optional diagnostics | `/api/audio?action=status` | High-entropy bearer token for private, non-cacheable aggregate diagnostics. Without it the route returns 404. |
 | `ROOMS_WORKER_URL` | for rooms | `functions/api/rooms.ts` | Public URL of `rooms-worker`, e.g. `https://aura-rooms.<sub>.workers.dev`. Without it `/api/rooms` returns 503. |
 | `BOT_WORKER_URL` | for the Discord tab | `functions/api/bot.ts` | Base URL of the Aura Farmer Worker, e.g. `https://aura-farmer.<sub>.workers.dev`. |
 | `BOT_ADMIN_TOKEN` | for the Discord tab | `functions/api/bot.ts` | Shared secret the Worker expects on `/v1/admin` (the Worker's `BOT_ADMIN_TOKEN`). |
@@ -51,6 +57,42 @@ Production (and Preview if used):
 `GH_TOKEN` must not be exposed to the browser. The admin panel never receives
 it: it sends either a Google ID token or a `v1.<exp>.<hmac>` session token, and
 the function performs GitHub/HF calls itself.
+
+### Optional audio hot cache
+
+All five OCI variables must be present and valid together. Missing, partial,
+blank, or malformed OCI configuration makes **zero OCI requests or writes**;
+`/api/audio` continues streaming the public Hugging Face archive instead. This
+is a disabled optional cache, not permission to use old embedded credentials.
+Do not put OCI keys or `AUDIO_ADMIN_TOKEN` in `src/`, a `VITE_*` variable, the
+browser, a query string, or a committed `.dev.vars` file.
+
+The endpoint supports GET, HEAD, and one valid byte range. File-key segments are
+RFC 3986 encoded so Unicode, `+`, `%`, `?`, `#`, and `&` remain part of a track
+name rather than altering the outbound URL. Invalid paths/ranges fail locally.
+Archive errors are sanitized; a missing track remains 404 and an unsatisfiable
+range remains 416. Responses force the validated audio MIME type and `nosniff`
+rather than serving an upstream HTML label on the application's origin.
+
+Diagnostics require `Authorization: Bearer <AUDIO_ADMIN_TOKEN>`. Unauthenticated
+requests return the same 404 regardless of cache configuration. Authenticated
+responses contain aggregate counts/bytes, not track keys or credentials, and use
+`Cache-Control: private, no-store`. Do not paste a real token into terminal
+history or issue a live status request merely to test this implementation; the
+unit suite mocks every upstream call.
+
+Cache uploads require the host's `waitUntil` lifetime, serialize maintenance
+within one Worker isolate, and refuse oversized/truncated audio or failed
+capacity checks. The target of 30 audio objects is **best effort across
+isolates**, not a global distributed quota. Unknown-length responses stop reading
+at 25 MiB. Configure storage quotas/alerts and a dedicated bucket for any strict
+infrastructure budget.
+
+**Infrastructure action required:** revoke/rotate the OCI customer secret key
+that appeared in historical source, set a replacement in both Production and
+Preview environments, and review bucket/IAM activity. Deleting defaults from
+this checkout does not revoke a deployed key or erase Git history. No remote
+rotation or deployment is performed by the remediation code.
 
 ## 3. GitHub Actions secrets
 
@@ -113,7 +155,7 @@ Stored in the browser, not in the repo:
 | `auraTheme` | `light` or `dark`; applied before first paint. |
 | `auraSettings_v1` | Autoplay, volume memory, and reduced-motion preference. |
 | `auraVolume` | Last volume (when remember-volume is on). |
-| `auraPlaylists` | Device-local playlists and stable track keys. |
+| `auraPlaylists` | Version-2 browser-local playlist store with durable track references; see [data model](data-model.md#playlists-and-export-files). |
 
 ## 6. Custom domain checklist
 
@@ -132,13 +174,19 @@ Stored in the browser, not in the repo:
 
 These are public/keyless and are called directly from the browser:
 
-- `https://huggingface.co` — catalogue tree, manifest, audio/cover bytes.
+- `https://huggingface.co` — catalogue tree, manifest, and cover bytes. Catalogue
+  audio normally starts through `/api/audio`, with a direct HF fallback.
 - `https://de1.api.radio-browser.info` — radio directory.
-- `https://itunes.apple.com`, `https://api.deezer.com`, `https://api.audius.co`,
-  `https://api.jamendo.com`, `https://archive.org`, `https://api.openverse.org`,
-  `https://ccmixter.org` — search providers.
-- `https://www.youtube.com/oembed` — pasted-link metadata.
-- Google Fonts, Font Awesome CDN, jsmediatags CDN — UI assets.
+- `https://www.youtube.com/oembed` and the official IFrame API — metadata and
+  playback for supported legacy/deep-linked YouTube tracks.
+- Google Fonts and Font Awesome CDN — UI assets; Google Identity Services for
+  sign-in.
+- Lyrics provider endpoints used by the active lyrics module.
+
+Listener search is library-only; there is no public podcast search or online
+acquisition/provider fan-out. Ingestion remains the separate Discord/admin
+pipeline. The Telepathy prototype is quarantined under `experiments/telepathy/`;
+its API files are **not** under `functions/` and are not deployed by Pages.
 
 If a network blocks any of them, the corresponding feature degrades with a toast
 or an empty result; the rest of the app keeps working.
@@ -148,6 +196,7 @@ or an empty result; the rest of the app keeps working.
 ```bash
 npm run typecheck
 npm run lint
+npm test
 npm run build
 ```
 

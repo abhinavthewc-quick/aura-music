@@ -8,8 +8,10 @@ shaped that way.
 
 ## Design constraints
 
-1. **Playback is client-side.** The site streams audio directly from public
-   bucket URLs and YouTube's official embedded player. There is no media proxy.
+1. **Playback transport is client-side.** Catalogue audio normally starts through
+   the Pages `/api/audio` archive proxy, with direct public HF fallback. The
+   optional OCI cache is an acceleration layer, not a separate streaming
+   catalogue. YouTube uses the official embedded player.
 2. **Personal data stays in the browser.** Likes, local uploads, queue state,
    playlists, preferences and profile names live in `localStorage`/IndexedDB.
    There is no user table anywhere.
@@ -55,8 +57,13 @@ Pages redirects `*.html` to the clean URL (e.g. `/rooms.html` → 308 →
 
 ```text
 index.html
+<<<<<<< HEAD
   ├─ entry.css + local fonts
   ├─ saved-session paint hint + reload fallback
+=======
+  ├─ inline loader CSS + theme bootstrap (reads localStorage auraTheme)
+  ├─ main.css (tokens/base, shell, content, player, overlays and responsive owners)
+>>>>>>> 62cde5b (Private recovery snapshot before local/production reconciliation (not for deployment))
   └─ /src/main.ts
        ├─ core/session + ui/login
        └─ core/bootstrap.loadApplication() [valid session]
@@ -89,6 +96,7 @@ stays independent of the music store; `runtime.ts` owns the full-app imports.
 | Module | Responsibility |
 | --- | --- |
 | `config.ts` | Site constants: Google client id and admin allow-list |
+<<<<<<< HEAD
 | `bootstrap.ts` | Guarded lazy runtime load and ready/session checks |
 | `state.ts` | Single mutable `state` object, favourites, catalogue rebuild |
 | `trackIdentity.ts` | Stable track keys and legacy-key matching, re-exported by state |
@@ -96,6 +104,13 @@ stays independent of the music store; `runtime.ts` owns the full-app imports.
 | `artistIdentity.ts`, `artistAliases.ts`, `artistGroups.ts` | Shared read-side artist resolution, reviewed aliases and group construction |
 | `artistMetadata.ts` | Lazy automatic-profile scheduling, bounded client cache and display refresh events |
 | `playlist-sharing.ts` | Bounded snapshot codec, URL construction, omissions and recipient library matching |
+=======
+| `state.ts` | Shared store, catalogue dedupe/favourites/rebuild and active playback context |
+| [playback-context.ts](../src/core/playback-context.ts) | Pure traversal, shuffle/repeat, queue interruptions and history restored by stable track/anchor identity |
+| [playlist-data.ts](../src/core/playlist-data.ts) | Strict store/file schemas, validated migration/import/export and corrupt/unsupported format errors |
+| [track-identity.ts](../src/core/track-identity.ts) | Direct canonical source identity, legacy-placeholder-only fallback, safe snapshots/artwork and availability |
+| `catalog.ts` | Hugging Face tree + manifest fetch, filename parsing, title cleaning, cover pairing, cache |
+>>>>>>> 62cde5b (Private recovery snapshot before local/production reconciliation (not for deployment))
 | `session.ts` | Google session, 7-day token exchange, per-email usernames |
 | `google-auth.ts` | Browser-side Google ID-token verification (RS256/JWKS) |
 | `local-auth.ts` | Device-local PBKDF2 email/password accounts |
@@ -107,11 +122,16 @@ stays independent of the music store; `runtime.ts` owns the full-app imports.
 | Module | Responsibility |
 | --- | --- |
 | `player.ts` | HTML audio playback, YouTube IFrame player, seek/volume, dynamic colours, Media Session |
-| `queue.ts` | Up-next queue, play next/previous, track sheet actions, queue persistence in memory |
+| `queue.ts` | Personal transport/context integration, Up Next, Play next/Add to queue and track actions |
 | `library.ts` | Library/home song lists, legacy saved-track hydration, likes, stats, catalogue retry |
 | `search.ts` | Aura catalogue filtering and search categories |
+<<<<<<< HEAD
 | `playlists.ts` | Browser-local playlist CRUD, inline sharing, received previews and explicit local imports |
 | `radio.ts` | radio-browser search, station playback, custom streams, radio sheet |
+=======
+| `playlists.ts` | Versioned local-first playlists, durable references, missing-track recovery, reorder, import/export and cross-tab views |
+| [radio.ts](../src/features/radio.ts) | Validated live sources, request/intent guards, radio Media Session ownership and paused restoration |
+>>>>>>> 62cde5b (Private recovery snapshot before local/production reconciliation (not for deployment))
 | `home.ts` | Greeting, quick-access tiles, Aura Picks, artist spotlight |
 | `ambience.ts` | Web Audio ambient layers, spatial/muffle effects, focus timer |
 | `settings.ts` | Settings modal, help, profile popup, sidebar and preference storage |
@@ -133,8 +153,15 @@ stays independent of the music store; `runtime.ts` owns the full-app imports.
 | Path | Responsibility |
 | --- | --- |
 | `functions/api/admin.ts` | Authenticated admin API: search, bucket mutations, workflow dispatch, secrets |
+<<<<<<< HEAD
 | `functions/api/artists.ts`, `functions/api/artist-image.ts` | Public artist metadata/images and authenticated admin edits backed by D1 |
 | `functions/api/artist-metadata.ts`, `functions/lib/artistMetadata*.ts` | Cached Wikimedia lookups, identity checks, source credits and shared request budgets |
+=======
+| `functions/api/audio.ts` | GET/HEAD archive streaming, optional environment-only OCI cache, private aggregate status |
+| `functions/lib/ociS3.ts` | RFC 3986 object keys, SigV4 signing, bounded paged listings and cache eviction |
+| `functions/api/bot.ts` | Authenticated bridge to the separate Aura Farmer Worker |
+| `experiments/telepathy/` | Quarantined browser/API/Python prototype; not bundled or deployed |
+>>>>>>> 62cde5b (Private recovery snapshot before local/production reconciliation (not for deployment))
 | `functions/api/rooms.ts` | Thin Pages proxy to the rooms Worker; adds share URLs |
 | `rooms-worker/src/index.ts` | Worker routing, room id/admin key minting, CORS |
 | `rooms-worker/src/room.ts` | Durable Object plumbing: sockets, persistence, alarms |
@@ -171,8 +198,9 @@ flowchart TD
 3. `fetchHfCatalog()` lists bucket files (paged via `Link: rel="next"`, max 20
    pages), reads `manifest.json`, pairs covers by basename, dedupes by song and
    writes the cache.
-4. `setHfTracks()` merges in manually added/local tracks, preserves the current
-   song by id then by identity key, and re-renders.
+4. `setHfTracks()` merges in manually added/local tracks and re-renders. Current
+   canonical references are resolved by stable/source identity, not a matching
+   title/artist or legacy alias.
 5. Failure keeps the cached list (if any) and exposes a retry state when the
    list is empty.
 
@@ -216,13 +244,15 @@ There is no framework and no virtual DOM:
 - New dynamic text **must** be escaped with `escapeHtml()` (from `core/dom.ts`,
   re-exported by `features/radio.ts` for legacy imports) before it enters an
   HTML string. Attributes need the same treatment.
-- Keyboard behaviour is centralized in [`src/ui/a11y.ts`](../src/ui/a11y.ts):
-  overlays expose `[aria-modal="true"]`, rows/cards use
-  `role="button" tabindex="0"`, and Escape closes only the top overlay.
-- CSS is one cascade: [`src/styles/main.css`](../src/styles/main.css) imports
-  every stylesheet in order; later files intentionally override earlier ones
-  (`overrides-*.css`). Add new page styles near the end rather than relying on
-  `!important` in a random file.
+- Prefer real button/link elements for interactive rows/cards. Legacy custom
+  buttons still use the centralized keyboard layer in
+  [`src/ui/a11y.ts`](../src/ui/a11y.ts); do not add a second Enter/Space handler
+  that can double-activate a nested control. Escape closes only the top overlay.
+- CSS ownership starts at [`src/styles/main.css`](../src/styles/main.css). The
+  canonical product language is true black, graphite and restrained brass;
+  artwork supplies player color. Numbered patch sheets and separate polish/
+  quality/YTM layers are retired. Fix a component in its owner rather than
+  adding another final override layer; see [remediation](remediation.md).
 - Images get `alt`, `loading="lazy"` and `decoding="async"` unless they are
   above the fold. Failed covers fall back to the vinyl `DEFAULT_COVER` via one
   capture-phase error listener.
@@ -231,15 +261,96 @@ There is no framework and no virtual DOM:
 
 | Source | Engine | Progress / seek | Notes |
 | --- | --- | --- | --- |
-| Bucket track | `HTMLAudioElement` (`#audioPlayer`) | native `currentTime` / `duration` | streams public bucket URLs |
-| Local upload | `HTMLAudioElement` + IndexedDB blob | same | blob URL is session-only |
-| Manual URL | `HTMLAudioElement` | same | must be `http(s)` |
-| YouTube | official IFrame Player API | `getCurrentTime()` polled every 500 ms | audio is never extracted |
+| Bucket track | `HTMLAudioElement` (`#audioPlayer`) | native `currentTime` / `duration` | `/api/audio` → optional OCI → public HF; direct HF fallback |
+| Local file (import/restore) | `HTMLAudioElement` + IndexedDB blob | same | filename metadata; blob URL is session-only |
+| Legacy added URL | `HTMLAudioElement` | same | existing supported `http(s)` entries |
+| YouTube | official IFrame Player API | `getCurrentTime()` | a playback backend inside the same personal collection context; audio is never extracted |
 | Radio | separate `Audio` object | live; no duration | radio-browser.info or custom URL |
 | Listen Together | Web Audio `AudioBufferSourceNode` | scheduled clock / explicit seek | separate page and bundle |
 
-Media Session metadata is updated for the main player and radio, so OS media
-keys and lock-screen controls work without any server involvement.
+Media Session controls use the personal transport just like full/mini-player
+buttons and natural end. Radio installs live play/pause/stop handlers, clears
+next/previous/seeks and restores the personal handlers when stopped. Rooms keep
+server-authoritative transport. A YouTube iframe is a backend, not a dormant
+search-result queue or a reason to leave a playlist.
+
+### Personal playback domain
+
+The pure domain stores the collection source/id/label, canonical and effective
+orders, cursor/current track, explicit queued interruptions, listening history
+and future visits. The integration layer resolves IDs against the current
+catalogue at activation time. Numeric render positions are not durable identity.
+
+- A library/playlist/artist/search selection establishes a collection and cursor.
+- Next/autoplay moves within it; repeat-all wraps it, repeat-off stops at its end,
+  and repeat-one applies to natural end rather than trapping manual Next.
+- Shuffle creates a permutation of that collection, not global random picks.
+- Queue items interrupt then resume the collection. Previous replays actual
+  history, including interruptions; Next after Previous replays future visits
+  before pending queued items. Up Next previews that same traversal.
+- Visits retain track identity and optional `anchorId` for queued overrides.
+  Restoring a visit rebases its cursor by track/anchor identity against the current
+  permutation, rather than trusting an old index after shuffle or live reorder.
+- Saved playlist order and temporary Up Next order are different concerns.
+- Missing tracks are skipped in a bounded traversal, never by falling into an
+  unrelated library collection.
+
+### Local playlist persistence
+
+`auraPlaylists` is a version-2 store with per-playlist schema versions and
+snapshot-bearing durable track references. Canonical `id:`/`video:` references
+resolve only to direct stable/source identity; unique alias/metadata fallback is
+reserved for unresolved `legacy:` placeholders. Strict parsing rejects malformed,
+duplicate or unsupported imports, with limits of 16 MiB per import, 2,000 tracks
+per playlist and 200 collections. Corrupt saved data freezes writes with a raw
+recovery download rather than being discarded. Legacy title/artist strings
+migrate safely before metadata edits; unknown references remain placeholders.
+Web Locks or a short IndexedDB transaction lock serialize writes; if neither
+mechanism is available the app refuses unsafe writes. Storage/BroadcastChannel
+update all same-origin views and reconcile active name/order without restarting
+audio. A deleted playlist's playback detaches as a labeled snapshot. Export/import
+is an explicit file transfer, not cloud/public ACLs or cross-device sync. Local
+audio import uses filename metadata; Restore retains the existing local identity.
+Details: [data model](data-model.md#playlists-and-export-files).
+
+### Live radio ownership
+
+[Radio](../src/features/radio.ts) owns a separate `Audio` object and live transport:
+
+- Validate absolute, credential-free HTTP(S) stream URLs before changing sources;
+  discard unsafe directory streams and unsafe optional homepage/favicon URLs.
+- Stop active/pending personal YouTube playback and pause personal HTML audio
+  without changing the saved collection, cursor, queue or listening history.
+- Guard station play promises/errors by current selection and request generation.
+  Explicit Pause/Stop clears intent and cancels queued foreground recovery.
+- Install live play/pause/stop Media Session handlers on selection/resume/restore;
+  clear next/previous/all seeks and position state. Stop restores personal handlers
+  and metadata. Restoration selects a validated station paused, never autoplaying
+  a browser reload.
+
+[Foreground recovery](../src/features/player.ts) uses the guarded radio request
+path only if playback was previously active and intent still permits it. Tab
+navigation does not itself pause radio; this code cannot override OS/browser
+background, codec or autoplay policy.
+
+### Rooms join boundary
+
+[The rooms controller](../src/rooms/page.ts) checks HTTP success before consuming
+create/join service data. `exists: false` stops the join, and the returned
+WebSocket base must be a credential-free `ws:`/`wss:` URL before transport creation.
+Create/join errors appear in the visible `joinBanner`; room-view errors use its
+own banner. These are client-side failure boundaries, not evidence that deployed
+Workers, live authentication or multi-device synchronization were verified.
+
+### Audio cache boundary
+
+The public archive proxy makes no OCI calls with absent/partial/invalid OCI env.
+All errors and logs are sanitized, byte ranges/HEAD remain meaningful, object
+keys are encoded by segment, and unknown-length uploads stop at 25 MiB. Cache
+writers serialize per isolate, validate capacity before PUT, and skip work if
+maintenance fails. The 30-object target is not a globally distributed lock;
+strict quotas belong to infrastructure. Diagnostics require a separate bearer
+token and expose aggregates only. See [security](security.md#audio-cache-security).
 
 ## Presence bridge
 
@@ -260,6 +371,8 @@ documented in [presence.md](presence.md); the site-side implementation lives in
 | Endpoint | Host | Purpose |
 | --- | --- | --- |
 | `/api/admin` | Pages Function | authenticated admin actions (no GET) |
+| `/api/audio` | Pages Function → optional OCI / HF | public GET/HEAD archive stream; authorized no-store status aggregates |
+| `/api/bot` | Pages Function → separate Worker | authenticated Aura Farmer administration bridge |
 | `/api/rooms` | Pages Function → Worker | create/join room, WebSocket upgrade, share URLs |
 | `https://aura-rooms.<subdomain>.workers.dev` | Worker + Durable Object | room authority |
 | `huggingface.co/api/buckets/.../tree` | HF | catalogue listing |
@@ -280,11 +393,18 @@ dist/
 ├── index.html
 ├── admin.html
 ├── rooms.html
+<<<<<<< HEAD
 ├── assets/main-*.js      # sign-in/session entry
 ├── assets/runtime-*.js   # lazy signed-in runtime
 ├── assets/admin-*.js
 ├── assets/rooms-*.js
 ├── assets/*.css          # entry/runtime/page styles
+=======
+├── assets/main-*.js      # actual sizes are reported by each Vite build
+├── assets/admin-*.js
+├── assets/rooms-*.js
+├── assets/main-*.css
+>>>>>>> 62cde5b (Private recovery snapshot before local/production reconciliation (not for deployment))
 ├── aura-logo.png         # copied from public/
 └── aura-thumbnail.png
 ```
@@ -301,10 +421,19 @@ assets. Fonts and icons are bundled locally under `assets/`.
 | Catalogue unreachable, cache exists | Cached tracks remain; toast explains |
 | Broken cover | Capture-phase error listener swaps in the vinyl placeholder |
 | Audio error / autoplay block | UI resets, toast explains; `play()` rejections are caught |
+<<<<<<< HEAD
 | Public Search has no matches | Local empty state; search filters the loaded library only |
 | Playlist link invalid / storage unavailable | Visible preview/import error; saving remains an explicit action |
 | Native share / clipboard unavailable | Inline status with copy/manual-copy fallback; cancellation stays distinct |
+=======
+| Search has no matches | Library-only empty state; no online acquisition/provider fan-out |
+| Optional OCI cache outage/config absent | Public HF archive fallback; no credentials/defaults leaked |
+| Playlist reference unavailable | Preserve position and metadata as a remove/relink placeholder |
+>>>>>>> 62cde5b (Private recovery snapshot before local/production reconciliation (not for deployment))
 | YouTube API blocked | Embedded player error is caught and shown as a toast |
+| Invalid radio URL | Reject before pausing/changing the currently playing source |
+| Radio canceled or station changed | Stale requests cannot revive playback or overwrite the newer selection |
+| Room create/join fails or reports missing | Visible join banner; no false-success join or invalid WebSocket transport |
 | Rooms disconnect | Client reconnects with backoff; sync engine pauses and re-converges |
 | Entry/runtime fails or stalls | Loading status exposes **Reload Aura**; an invalid session returns to sign-in |
 
@@ -313,7 +442,10 @@ assets. Fonts and icons are bundled locally under `assets/`.
 | Decision | Reason |
 | --- | --- |
 | Vanilla TS + inline handlers | The app grew from a single HTML file; `expose.ts` keeps that model working without a framework refactor. |
-| Static SPA, no app server | Playback and library reads are public; only admin mutations need a server. |
+| Static SPA, minimal backends | Normal transport/state stay client-side; Pages supplies public archive streaming and authenticated admin mutations. |
+| Pure playback context | Collection identity/order/history are independent of whether audio uses HTML audio or a YouTube iframe. |
+| File export rather than fake sharing ACLs | Local playlists can be transferred without inventing a server-side user/storage service. |
+| Quarantine experiments | Incomplete recommendation clients/endpoints cannot accidentally bundle or deploy with the listener app. |
 | Bucket + manifest instead of a DB | Cheap, simple, and the upload pipeline already produces files; metadata is keyed by video id. |
 | GitHub Actions for ingestion | Downloading/tagging is batch work with ffmpeg/yt-dlp, not something a Pages Function can do. |
 | Separate rooms Worker | Cloudflare does not allow a Durable Object in a Pages project. |

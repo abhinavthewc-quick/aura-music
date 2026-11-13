@@ -11,12 +11,18 @@
     "test:artists:browser": "vite --config tests/artists/vite.config.ts",
     "artists:migrate": "node --import tsx scripts/migrate-artists.ts",
     "artists:bind": "node --import tsx scripts/bind-artist-storage.ts",
-    "typecheck": "tsc --noEmit",
-    "lint": "node scripts/lint.mjs"
+    "typecheck": "tsc --noEmit && tsc -p tsconfig.tests.json --noEmit",
+    "lint": "node scripts/lint.mjs",
+    "test": "playwright test",
+    "test:unit": "playwright test tests/unit",
+    "test:e2e": "playwright test tests/e2e",
+    "test:telepathy": "bash experiments/telepathy/run-tests.sh -q",
+    "test:playback": "node --import tsx --test tests/playback/*.test.ts",
+    "test:playlists": "node --import tsx --test tests/playlists/*.test.ts"
   },
   "devDependencies": {
-    "@types/react": "^19.3.0",
-    "@types/react-dom": "^19.3.0",
+    "@playwright/test": "^1.65.0",
+    "@types/node": "^26.6.6",
     "libsodium-wrappers": "^0.8.4",
     "tsx": "^4.23.15",
     "typescript": "^5.9.3",
@@ -24,8 +30,6 @@
   },
   "dependencies": {
     "@noble/hashes": "^2.4.0",
-    "react": "^19.3.1",
-    "react-dom": "^19.3.1",
     "tweetnacl": "^1.0.3"
   }
 }

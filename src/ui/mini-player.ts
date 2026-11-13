@@ -1,7 +1,7 @@
 import { toast } from '../core/dom';
 import { toggleFavorite } from '../features/library';
-import { auraYTPlayer, auraYTPlayerReady } from '../features/player';
-import { playPrevious, renderUpNext } from '../features/queue';
+import { auraYTPlayer, auraYTPlayerReady, openPlayerSheet } from '../features/player';
+import { playPrevious, renderUpNext, syncPlaybackShuffle } from '../features/queue';
 import { auraSettings } from '../features/settings';
 import { state } from '../core/state';
 (function(){
@@ -12,17 +12,30 @@ import { state } from '../core/state';
   const isOn = el => el && el.classList.contains('active');
 
   /* ---- body state classes (drive the CSS) ---- */
+  let wasTrackOpen = false, wasDesktop = mq.matches;
   function syncBody(){
+    [overlay,radioOverlay,$('upNextSheet')].forEach((panel) => panel?.setAttribute('aria-modal',mq.matches ? 'false' : 'true'));
     document.body.classList.toggle('np-track-open', isOn(overlay));
     document.body.classList.toggle('np-open', isOn(overlay) || isOn(radioOverlay));
     document.body.classList.toggle('has-mini', isOn(mini) || isOn(radioMini));
     const ex = $('miniExpandBtn'); if(ex) ex.classList.toggle('open', isOn(overlay));
+<<<<<<< HEAD
     for(const id of ['miniExpandBtn', 'miniTrackOpenBtn']) $(id)?.setAttribute('aria-expanded', String(Boolean(isOn(overlay))));
     $('radioMiniOpenBtn')?.setAttribute('aria-expanded', String(Boolean(isOn(radioOverlay))));
     if(isOn(overlay) && mq.matches){ try{ renderUpNext(); }catch(e){} }
+=======
+    const trackOpen = !!isOn(overlay);
+    if (trackOpen && mq.matches && (!wasTrackOpen || !wasDesktop)) {
+      const selected = $('upNextSheet')?.dataset.tab;
+      openPlayerSheet(selected === 'queue' || selected === 'related' ? selected : 'lyrics');
+    }
+    wasTrackOpen = trackOpen; wasDesktop = mq.matches;
+    if(trackOpen && mq.matches){ try{ renderUpNext(); }catch(e){} }
+>>>>>>> 62cde5b (Private recovery snapshot before local/production reconciliation (not for deployment))
   }
   const mo = new MutationObserver(syncBody);
-  [overlay, radioOverlay, mini, radioMini].forEach(el => el && mo.observe(el, {attributes:true, attributeFilter:['class']}));
+  [overlay, radioOverlay, mini, radioMini, $('upNextSheet')].forEach(el => el && mo.observe(el, {attributes:true, attributeFilter:['class']}));
+  mq.addEventListener('change',syncBody);
   syncBody();
 
   /* keep the docked queue fresh when the track changes */
@@ -34,23 +47,32 @@ import { state } from '../core/state';
 
   /* ---- big-player buttons that had no handler at all ---- */
   function syncModes(){
-    const rep = state.repeatMode === 'one';
-    [['shuffleBtn','mode-active',state.isShuffle],['repeatBtn','mode-active',rep],['repeatBtn','repeat-one',rep]].forEach(([id,cls,on])=>{
+    const repeatOn = state.repeatMode !== 'off';
+    const repeatOne = state.repeatMode === 'one';
+    [['shuffleBtn','mode-active',state.isShuffle],['repeatBtn','mode-active',repeatOn],['repeatBtn','repeat-one',repeatOne]].forEach(([id,cls,on])=>{
       const el=$(id as string); if(el) el.classList.toggle(cls as string, !!on);
     });
     $('miniShuffleBtn').classList.toggle('active', state.isShuffle);
-    $('miniRepeatBtn').classList.toggle('active', rep);
-    $('miniRepeatBtn').classList.toggle('repeat-one', rep);
+    $('miniRepeatBtn').classList.toggle('active', repeatOn);
+    $('miniRepeatBtn').classList.toggle('repeat-one', repeatOne);
+    const repeatLabel=repeatOne?'Repeat one':repeatOn?'Repeat all':'Repeat off';
+    $('repeatBtn')?.setAttribute('aria-label',repeatLabel);
+    $('miniRepeatBtn')?.setAttribute('aria-label',repeatLabel);
   }
   function toggleShuffle(e){
     if(e) e.stopPropagation();
-    state.isShuffle = !state.isShuffle; syncModes();
+    state.isShuffle = !state.isShuffle;
+    syncPlaybackShuffle(state.isShuffle);
+    syncModes();
     toast(state.isShuffle ? 'Shuffle on' : 'Shuffle off', 'shuffle');
   }
   function toggleRepeat(e){
     if(e) e.stopPropagation();
-    state.repeatMode = state.repeatMode === 'one' ? 'all' : 'one'; syncModes();
-    toast(state.repeatMode === 'one' ? 'Repeating this song' : 'Repeat off', 'repeat');
+    state.repeatMode = state.repeatMode === 'off' ? 'all' : state.repeatMode === 'all' ? 'one' : 'off';
+    syncModes();
+    renderUpNext();
+    const message=state.repeatMode==='one'?'Repeating this track':state.repeatMode==='all'?'Repeating this collection':'Repeat off';
+    toast(message, 'repeat');
   }
   function likeCurrent(e){
     if(e) e.stopPropagation();

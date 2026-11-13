@@ -35,6 +35,7 @@ queue, settings) stays in your browser.
   See [automatic artist profiles](docs/artist-metadata.md).
 - **Library search** — filters the Aura catalogue by title, artist, album,
   film, favourites, and recent plays. It never mixes preview tracks from other
+<<<<<<< HEAD
   services into the library.
 - **Playlists** — create, edit, delete, play, and manage device-local playlists;
   share a snapshot link that recipients preview and explicitly save in their own
@@ -44,6 +45,21 @@ queue, settings) stays in your browser.
   screen with **Reload Aura** recovery; expired sessions return to sign-in.
 - **Player** — full player, playlist sequencing, shuffle/repeat, media keys, art-derived
   theming, YouTube's official embedded player for YouTube tracks.
+=======
+  services into the library. Local files is an actual filter; search does not
+  promise podcasts or a new acquisition service.
+- **Local audio** — import device files into IndexedDB with filename-based
+  title/artist metadata; Restore reconnects a missing blob without losing its
+  playlist identity. This is personal audio, not shared-catalogue acquisition.
+- **Playlists** — ordered local collections with scoped transport, missing-track
+  recovery, pointer/keyboard reorder, and versioned JSON export/import. Sharing
+  transfers an importable file, not a misleading public/private cloud link.
+  Strict validation/recovery protects saved data; Web Locks or short IndexedDB
+  transaction locks coordinate cross-tab writes.
+- **Player** — one collection/queue/history domain for Next/Previous, shuffle,
+  off/all/one repeat, natural end and media keys; HTML audio and the official
+  YouTube iframe remain playback backends inside that domain.
+>>>>>>> 62cde5b (Private recovery snapshot before local/production reconciliation (not for deployment))
 - **Live radio** — thousands of stations via radio-browser.info plus custom
   stream URLs.
 - **Listen Together** — synchronized rooms over WebSocket + a Cloudflare
@@ -52,12 +68,23 @@ queue, settings) stays in your browser.
 - **Discord presence** — a companion [PreMiD activity](premid/README.md) shows
   the current track, artist, cover art and progress, with a deep link back to
   the exact song.
+<<<<<<< HEAD
 - **Submission pipeline** — intentionally submit YouTube links in Discord via
   [AURA FARMER](https://github.com/angel2rider/AURA-FARMER), maintained in its own
   repository. The private admin panel moderates the queue and GitHub Actions
   downloads, tags, uploads, and updates `manifest.json`.
 - **True-black interface** — a `#000` canvas, neutral controls, artwork colour,
   and locally bundled fonts and icons.
+=======
+- **Archive streaming** — catalogue audio normally starts through `/api/audio`,
+  with direct Hugging Face fallback. OCI hot caching is optional, uses server
+  environment credentials only, and exposes private aggregate diagnostics.
+- **Canonical design** — true black, graphite surfaces and restrained brass;
+  artwork supplies the player color instead of competing glass/gradient themes.
+- **Submission pipeline** — AURA FARMER accepts YouTube links in Discord, while
+  the private admin panel moderates the queue and GitHub Actions downloads,
+  tags, uploads, and updates `manifest.json`.
+>>>>>>> 62cde5b (Private recovery snapshot before local/production reconciliation (not for deployment))
 
 ## Stack
 
@@ -97,6 +124,9 @@ work with no provider keys. Rooms need the worker running locally — see
 | `npm run preview` | Preview the built site |
 | `npm run typecheck` | `tsc --noEmit` |
 | `npm run lint` | Zero-dependency project lint ([`scripts/lint.mjs`](scripts/lint.mjs)) |
+| `npm test` | Playwright domain/security tests and isolated browser regressions |
+| `npm run test:unit` / `npm run test:e2e` | Focused frontend subsets |
+| `bash experiments/telepathy/run-tests.sh -q` | Optional isolated/offline Python research tests after `.venv` setup |
 
 ## Repository map
 
@@ -116,12 +146,15 @@ aura-music/
 │   ├── rooms/            # room client, referee, sync, Web Audio engine
 │   ├── admin/            # admin panel logic
 │   └── styles/           # CSS, imported in one cascade order
-├── functions/api/        # Cloudflare Pages Functions: /api/admin, /api/rooms
+├── functions/api/        # Pages: /api/admin, /api/audio, /api/bot, /api/rooms
+├── functions/lib/        # server-only OCI signing/cache helpers
 ├── lib/                  # sealed-box helper for GitHub secret encryption
 ├── rooms-worker/         # Cloudflare Worker + Durable Object for rooms
 ├── scripts/              # manifest/tagging Python + project lint
 ├── premid/               # PreMiD activity source and setup guide
 ├── public/               # stable assets (logo, thumbnail)
+├── tests/                # pure-domain/security and browser regressions
+├── experiments/telepathy/# quarantined research service (not bundled/deployed)
 └── docs/                 # this documentation
 ```
 
@@ -144,13 +177,15 @@ Start at the [documentation index](docs/README.md).
 | [Admin panel](docs/admin.md) | queue, download and curate the library |
 | [Admin API](docs/admin-api.md) | call or extend `/api/admin` |
 | [Security](docs/security.md) | review auth, secrets, XSS handling and privacy |
+| [Remediation](docs/remediation.md) | review the scoped playback/playlist/design changes, verification gate, and remaining owner infrastructure actions |
 | [Troubleshooting](docs/troubleshooting.md) | diagnose a broken deploy, playback or room |
 | [Contributing](docs/contributing.md) | make a safe change and ship it |
 
 ## Deployment at a glance
 
 - **Site** — build with `npm run build`, publish `dist/` on Cloudflare Pages;
-  `functions/` supplies `/api/admin` and `/api/rooms`.
+  `functions/` supplies the archive, admin, bot and rooms endpoints. Experimental
+  Telepathy endpoints are deliberately outside that deployment directory.
 - **Rooms** — deploy `rooms-worker/` with Wrangler, then point the Pages
   environment variable `ROOMS_WORKER_URL` at it.
 - **Uploads** — the admin panel dispatches the `upload-music.yml` GitHub Action,
@@ -163,6 +198,10 @@ Detailed steps, env vars and verification checklists live in
 
 ## Screenshots
 
+These are earlier documentation captures; they are not release-verification
+evidence for the current remediation. Use the current browser suite and its
+reviewed desktop/mobile captures when judging the latest interface.
+
 | Desktop library | Settings | Mobile |
 | --- | --- | --- |
 | <img src="docs/assets/library-desktop.webp" width="420" alt="Library with track list"> | <img src="docs/assets/settings-desktop.webp" width="420" alt="Settings dialog"> | <img src="docs/assets/home-mobile.webp" width="200" alt="Mobile home"> |
@@ -173,7 +212,20 @@ This is a personal project, not a multi-tenant product. There is no user
 database: a Google (or local) sign-in only gates the local profile and the
 admin allow-list. The library bucket and the Pages deployment are configured
 for one owner; a fork needs its own bucket, Google client ID, Pages env vars and
-worker URL. No license file is currently declared in the repository.
+worker URL. An application-wide license is not declared; bundled third-party
+code and the project-local design skill retain their own notices. The unused
+React wrapper was removed; the licensed vanilla loader renderer remains.
+
+The [Telepathy experiment](experiments/telepathy/README.md) is kept only for
+research, with explicit packaging, pinned tested dependencies and **14 passing
+offline Python tests** in a CPython 3.12 virtual environment. It is not imported
+by the listener app or deployed by Pages.
+
+**Owner infrastructure action remains:** revoke/rotate the OCI customer key
+that appeared in historical source, set new environment-only values in
+Production/Preview, and review IAM/storage activity. Removing defaults locally
+neither revokes a remote credential nor deploys the changes; see
+[security](docs/security.md#audio-cache-security).
 
 Useful references:
 

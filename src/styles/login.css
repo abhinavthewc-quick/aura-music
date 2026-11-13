@@ -1,9 +1,16 @@
+<<<<<<< HEAD
 /* The sign-in record is graphite and silver, like the rest of the room. */
 .welcome-screen { position: fixed; z-index: 1000; inset: 0; display: flex; overflow-y: auto; overflow-x: hidden; overscroll-behavior: contain; padding: calc(24px + var(--safe-top)) 24px calc(24px + var(--safe-bottom)); background: var(--bg); color: var(--text); opacity: 1; visibility: visible; transition: opacity var(--dur), visibility var(--dur); }
+=======
+/* A single subject-specific sign-in moment: the record and its tonearm.
+   Metallic gradients are confined to this illustration, never to UI controls. */
+.welcome-screen { --lg-ivory: var(--text); --lg-mute: var(--text-sub); --lg-gold: var(--accent); --lg-gold-hi: var(--accent-strong); --lg-line: var(--line); position: fixed; z-index: 1000; inset: 0; display: flex; overflow-y: auto; overflow-x: hidden; overscroll-behavior: contain; padding: calc(24px + var(--safe-top)) 24px calc(24px + var(--safe-bottom)); background: var(--bg); color: var(--text); opacity: 1; visibility: visible; transition: opacity var(--dur), visibility var(--dur); }
+>>>>>>> 62cde5b (Private recovery snapshot before local/production reconciliation (not for deployment))
 .welcome-screen.hidden { opacity: 0; visibility: hidden; pointer-events: none; }
 .welcome-screen.hidden * { animation-play-state: paused; }
 .lg-shell { position: relative; width: min(420px, 100%); margin: auto; display: flex; flex-direction: column; align-items: center; text-align: center; }
 .lg-stage { --lg-d: clamp(132px, min(40vw, 22vh), 220px); position: relative; flex: 0 0 auto; width: var(--lg-d); height: var(--lg-d); margin: 12px 0 32px; transform: translateX(-7%); }
+<<<<<<< HEAD
 .lg-vinyl { position: absolute; inset: 0; border: 1px solid var(--line-strong); border-radius: 50%; background: repeating-radial-gradient(circle, rgba(255,255,255,.05) 0 .7px, transparent .7px 3px), radial-gradient(circle, #1a1a1a, #080808 68%); box-shadow: var(--shadow-art); }
 .lg-vinyl::before { content: ""; position: absolute; inset: 8%; border: 1px solid rgba(255,255,255,.04); border-radius: 50%; }
 .lg-label { position: absolute; left: 50%; top: 50%; display: grid; place-items: end center; width: 34%; height: 34%; border-radius: 50%; background: conic-gradient(from 30deg, #f5f5f5, #bcbcbc 24%, #747474 48%, #f5f5f5 72%, #bcbcbc); transform: translate(-50%, -50%); }
@@ -13,18 +20,40 @@
 .lg-arm { width: 52.5%; height: calc(var(--lg-d) * .02); margin-top: calc(var(--lg-d) * -.01); border-radius: 3px; background: linear-gradient(90deg, #f5f5f5, #808080); transform-origin: 0 50%; transform: rotate(130.4deg); }
 .lg-arm::after { content: ""; position: absolute; right: -1%; top: 50%; width: calc(var(--lg-d) * .075); height: calc(var(--lg-d) * .05); border-radius: 3px; background: #bcbcbc; transform: translateY(-50%) rotate(-14deg); }
 .lg-pivot { z-index: 1; width: calc(var(--lg-d) * .11); height: calc(var(--lg-d) * .11); margin: calc(var(--lg-d) * -.055) 0 0 calc(var(--lg-d) * -.055); border: 2px solid #808080; border-radius: 50%; background: #bcbcbc; }
+=======
+.lg-aura, .lg-sheen { display: none; }
+.lg-vinyl { position: absolute; inset: 0; border-radius: 50%; background: repeating-radial-gradient(circle, rgba(255,255,255,.05) 0 .7px, transparent .7px 3px), radial-gradient(circle, #1a1a1d, #080809 68%); box-shadow: 0 0 0 1px rgba(216,170,112,.5), var(--shadow-art); }
+.lg-vinyl::before { content: ""; position: absolute; inset: 8%; border: 1px solid rgba(255,255,255,.04); border-radius: 50%; }
+.lg-label { position: absolute; left: 50%; top: 50%; display: grid; place-items: end center; width: 34%; height: 34%; border-radius: 50%; background: conic-gradient(from 30deg, #efc58e, #d8aa70 24%, #b68249 48%, #efc58e 72%, #d8aa70); transform: translate(-50%, -50%); }
+.lg-label::before { content: ""; position: absolute; inset: 13%; border: 1px solid rgba(32,22,13,.3); border-radius: 50%; }
+.lg-mono { padding-bottom: 14%; color: #392716; font: 600 calc(var(--lg-d) * .085)/1 var(--font-brand); }
+.lg-arm, .lg-pivot { position: absolute; left: 112%; top: -6%; }
+.lg-arm { width: 52.5%; height: calc(var(--lg-d) * .02); margin-top: calc(var(--lg-d) * -.01); border-radius: 3px; background: linear-gradient(90deg, #efc58e, #b68249); transform-origin: 0 50%; transform: rotate(130.4deg); }
+.lg-arm::after { content: ""; position: absolute; right: -1%; top: 50%; width: calc(var(--lg-d) * .075); height: calc(var(--lg-d) * .05); border-radius: 3px; background: #d8aa70; transform: translateY(-50%) rotate(-14deg); }
+.lg-pivot { z-index: 1; width: calc(var(--lg-d) * .11); height: calc(var(--lg-d) * .11); margin: calc(var(--lg-d) * -.055) 0 0 calc(var(--lg-d) * -.055); border: 2px solid #b68249; border-radius: 50%; background: #d8aa70; }
+>>>>>>> 62cde5b (Private recovery snapshot before local/production reconciliation (not for deployment))
 .lg-copy { display: flex; flex-direction: column; align-items: center; width: 100%; }
 .lg-brand { margin: 0; color: var(--text); font: 600 clamp(48px, 12vw, 64px)/.95 var(--font-brand); letter-spacing: -.025em; }
 .lg-tag { max-width: 36ch; margin: 16px 0 28px; color: var(--text-sub); font-size: 15px; line-height: 1.6; text-wrap: balance; }
 .lg-form, .lg-google, .lg-picker, .lg-emailauth { display: flex; flex-direction: column; gap: 12px; width: 100%; }
 .lg-field { display: flex; align-items: center; gap: 12px; width: 100%; min-height: 56px; padding: 0 16px 0 12px; border: 1px solid var(--line-strong); border-radius: var(--radius-sm); background: var(--surface-1); text-align: left; cursor: text; transition: border-color var(--dur-fast); }
 .lg-field:focus-within { border-color: var(--accent); }
+<<<<<<< HEAD
+=======
+.wc-avatar { display: grid; place-items: center; width: 36px; height: 36px; flex: 0 0 36px; border-radius: 50%; background: var(--accent-soft); color: var(--accent); font-size: 18px; }
+.wc-avatar i { font-size: 14px; }
+>>>>>>> 62cde5b (Private recovery snapshot before local/production reconciliation (not for deployment))
 .lg-field input { flex: 1; min-width: 0; width: 100%; padding: 16px 0; border: 0; outline: none; border-radius: 0; background: transparent; color: var(--text); font-size: 16px; caret-color: var(--accent); }
 .lg-field input::placeholder { color: var(--text-dim); }
 .lg-field input:-webkit-autofill { -webkit-text-fill-color: var(--text); box-shadow: 0 0 0 1000px var(--surface-1) inset; }
 .lg-cta { display: flex; align-items: center; justify-content: center; gap: 10px; width: 100%; min-height: 56px; margin: 0; padding: 12px 20px; border: 1px solid var(--accent); border-radius: var(--radius-sm); background: var(--accent); color: var(--accent-ink); font-size: 15px; font-weight: 600; }
+<<<<<<< HEAD
 .lg-cta:hover:not(:disabled) { background: #dedede; }
 .lg-cta:active:not(:disabled) { transform: translateY(1px); }
+=======
+.lg-cta:hover { filter: brightness(1.06); }
+.lg-cta:active { transform: translateY(1px); }
+>>>>>>> 62cde5b (Private recovery snapshot before local/production reconciliation (not for deployment))
 .lg-cta i { font-size: 15px; }
 .lg-points { display: flex; flex-wrap: wrap; justify-content: center; gap: 12px; margin: 24px 0 16px; color: var(--text-sub); font-size: 12px; }
 .lg-points span { display: inline-flex; align-items: center; gap: 6px; }
@@ -46,7 +75,11 @@
 .lg-pick-back:hover { color: var(--text); }
 #emailAuthToggle { margin-top: 4px; }
 
+<<<<<<< HEAD
 /* Entry restoration uses this same neutral surface from the first paint. */
+=======
+/* Sign-in and sign-out animate only after the listener takes that action. */
+>>>>>>> 62cde5b (Private recovery snapshot before local/production reconciliation (not for deployment))
 .login-overlay, .logout-overlay { position: fixed; z-index: 1100; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 20px; background: var(--bg); color: var(--text); overflow: hidden; opacity: 0; visibility: hidden; pointer-events: none; transition: opacity var(--dur), visibility var(--dur); }
 .login-overlay.active, .logout-overlay.active { opacity: 1; visibility: visible; pointer-events: auto; }
 .lo-mark, .logout-scene { position: relative; width: 108px; height: 108px; }
@@ -55,19 +88,33 @@
 .lo-draw { fill: none; stroke: var(--accent); stroke-width: 2.2; stroke-linecap: round; stroke-dasharray: 327; stroke-dashoffset: 327; }
 .login-overlay.active .lo-draw { animation: loDraw 800ms var(--ease-out) forwards; }
 @keyframes loDraw { to { stroke-dashoffset: 0; } }
+<<<<<<< HEAD
 .lo-disc, .logout-disc { position: absolute; inset: 15px; border: 1px solid var(--line-strong); border-radius: 50%; background: repeating-radial-gradient(circle, #181818 0 1.4px, #080808 1.4px 3px); }
 .lo-disc::after, .logout-disc::after { content: ""; position: absolute; top: 50%; left: 50%; width: 36%; height: 36%; border-radius: 50%; background: #bcbcbc; transform: translate(-50%, -50%); }
 .login-overlay.active .lo-disc { animation: lgSpin 2.4s linear; }
 @keyframes lgSpin { to { transform: rotate(360deg); } }
 .lo-needle, .logout-needle { position: absolute; top: -9px; right: -13px; width: 44px; height: 5px; border-radius: 3px; background: #bcbcbc; transform-origin: 100% 50%; transform: rotate(-58deg); }
+=======
+.lo-disc, .logout-disc { position: absolute; inset: 15px; border: 1px solid rgba(216,170,112,.5); border-radius: 50%; background: repeating-radial-gradient(circle, #181819 0 1.4px, #080809 1.4px 3px); }
+.lo-disc::after, .logout-disc::after { content: ""; position: absolute; top: 50%; left: 50%; width: 36%; height: 36%; border-radius: 50%; background: #d8aa70; transform: translate(-50%, -50%); }
+.login-overlay.active .lo-disc { animation: lgSpin 2.4s linear; }
+@keyframes lgSpin { to { transform: rotate(360deg); } }
+.lo-needle, .logout-needle { position: absolute; top: -9px; right: -13px; width: 44px; height: 5px; border-radius: 3px; background: #d8aa70; transform-origin: 100% 50%; transform: rotate(-58deg); }
+>>>>>>> 62cde5b (Private recovery snapshot before local/production reconciliation (not for deployment))
 .login-overlay.active .lo-needle { animation: loNeedle 400ms var(--ease-out) forwards; }
 @keyframes loNeedle { to { transform: rotate(-16deg); } }
 .logout-needle { transform: rotate(-16deg); }
 .logout-overlay.active .logout-needle { animation: logoutNeedleLift 400ms var(--ease-out) forwards; }
 @keyframes logoutNeedleLift { to { transform: rotate(-58deg); } }
 .logout-overlay.active .logout-disc { opacity: .4; }
+<<<<<<< HEAD
 .login-caption, .logout-caption { max-width: 80vw; color: var(--text); font-size: clamp(22px, 5vw, 32px); font-weight: 500; text-align: center; overflow-wrap: anywhere; }
 .login-subcaption { max-width: min(44ch, calc(100% - 48px)); color: var(--text-sub); font-size: 13px; line-height: 1.55; text-align: center; }
+=======
+.lo-ripple, .logout-ring { display: none; }
+.login-caption, .logout-caption { max-width: 80vw; color: var(--text); font-size: clamp(22px, 5vw, 32px); font-weight: 500; text-align: center; overflow-wrap: anywhere; }
+.login-subcaption { color: var(--text-sub); font-size: 13px; }
+>>>>>>> 62cde5b (Private recovery snapshot before local/production reconciliation (not for deployment))
 @media (min-width: 900px), (max-height: 520px) and (orientation: landscape) {
   .welcome-screen { padding: 32px 48px; }
   .lg-shell { display: grid; grid-template-columns: auto minmax(280px, 400px); align-items: center; gap: clamp(64px, 10vw, 140px); width: auto; max-width: 1100px; text-align: left; }

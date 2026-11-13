@@ -5,7 +5,11 @@
 .effects-head { display: flex; align-items: center; justify-content: space-between; gap: 16px; margin-bottom: 20px; }
 .effects-title-wrap { display: flex; align-items: center; gap: 12px; min-width: 0; }
 .effects-title-wrap h3 { font-size: 22px; font-weight: 600; }
+<<<<<<< HEAD
 .effects-icon { display: grid; place-items: center; flex: 0 0 44px; width: 44px; height: 44px; border-radius: var(--radius-sm); background: var(--accent-soft); color: var(--accent); }
+=======
+.effects-icon { display: grid; place-items: center; width: 44px; height: 44px; flex: 0 0 44px; border-radius: var(--radius-sm); background: var(--accent-soft); color: var(--accent); }
+>>>>>>> 62cde5b (Private recovery snapshot before local/production reconciliation (not for deployment))
 .effects-close { display: grid; place-items: center; flex: 0 0 var(--tap); width: var(--tap); height: var(--tap); padding: 0; border: 0; border-radius: 50%; background: transparent; color: var(--text-sub); }
 .effects-close:hover { background: var(--hover); color: var(--text); }
 .effects-sub { max-width: 52ch; margin-top: 4px; color: var(--text-sub); font-size: 12px; line-height: 1.45; }
@@ -14,9 +18,15 @@
 .effect-choice i { margin-right: 8px; color: var(--accent); }
 .effect-choice b { font-size: 13px; font-weight: 600; }
 .effect-choice span { display: block; margin-top: 4px; color: var(--text-sub); font-size: 12px; }
+<<<<<<< HEAD
 .effect-choice.active { border-color: var(--line-strong); background: var(--accent-soft); }
 .effect-row { display: flex; flex-direction: column; gap: 6px; min-width: 0; padding: 8px 12px; border: 1px solid var(--line); border-radius: var(--radius-sm); background: var(--surface-1); }
 .effect-row.active { border-color: var(--line-strong); background: var(--accent-soft); }
+=======
+.effect-choice.active { border-color: rgba(var(--accent-rgb), .4); background: var(--accent-soft); }
+.effect-row { display: flex; flex-direction: column; gap: 6px; min-width: 0; padding: 8px 12px; border: 1px solid var(--line); border-radius: var(--radius-sm); background: var(--surface-1); }
+.effect-row.active { border-color: rgba(var(--accent-rgb), .4); background: var(--accent-soft); }
+>>>>>>> 62cde5b (Private recovery snapshot before local/production reconciliation (not for deployment))
 .effect-row-top { display: flex; align-items: center; gap: 8px; min-height: var(--tap); cursor: pointer; }
 .effect-row-top i { flex: 0 0 18px; width: 18px; color: var(--text-sub); font-size: 16px; text-align: center; }
 .effect-row.active .effect-row-top i { color: var(--accent); }
@@ -35,7 +45,11 @@
 .effects-toggle-row { display: flex; gap: 8px; margin-bottom: 16px; }
 .effects-toggle-item { display: flex; align-items: center; justify-content: space-between; flex: 1; min-width: 0; gap: 12px; padding: 12px; border: 1px solid var(--line); border-radius: var(--radius-sm); background: var(--surface-1); }
 .effects-toggle-item b { display: block; font-size: 13px; font-weight: 600; }
+<<<<<<< HEAD
 .effects-toggle-item > div > span { display: block; margin-top: 4px; color: var(--text-sub); font-size: 11px; line-height: 1.35; }
+=======
+.effects-toggle-item span { display: block; margin-top: 4px; color: var(--text-sub); font-size: 11px; line-height: 1.35; }
+>>>>>>> 62cde5b (Private recovery snapshot before local/production reconciliation (not for deployment))
 .effects-switch { position: relative; display: inline-block; width: 44px; height: 26px; flex: 0 0 44px; }
 .effects-switch input { position: absolute; opacity: 0; width: 100%; height: 100%; margin: 0; }
 .effects-switch-track { position: absolute; inset: 0; border: 1px solid var(--line-strong); border-radius: var(--radius-pill); background: var(--surface-3); cursor: pointer; transition: background-color var(--dur-fast); }

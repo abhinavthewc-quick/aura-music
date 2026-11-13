@@ -1,3 +1,4 @@
+<<<<<<< HEAD
 /* One labeled phone dock and an ordinary, scrollable drawer. */
 .mobile-dock { position: fixed; z-index: 90; bottom: calc(10px + var(--safe-bottom)); left: 50%; display: flex; align-items: center; gap: 8px; width: calc(100% - 24px); max-width: 520px; height: var(--mobile-dock-h); transform: translateX(-50%); }
 .nav-bar { position: relative; display: flex; align-items: center; flex: 1; min-width: 0; height: 100%; padding: 6px; border: 1px solid var(--line-strong); border-radius: var(--radius-pill); background: var(--surface-1); box-shadow: 0 8px 28px rgba(0, 0, 0, .25); }
@@ -20,3 +21,31 @@
 .room-link-dot { width: 6px; height: 6px; flex: 0 0 6px; margin-left: auto; border-radius: 50%; background: var(--text-sub); }
 @media (min-width: 900px) { .mobile-dock { display: none; } }
 @media (max-width: 360px) { .mobile-dock { gap: 6px; width: calc(100% - 16px); } .nav-fab { flex-basis: 52px; width: 52px; height: 52px; } .nav-label { font-size: 9px; } }
+=======
+/* Navigation: one labeled mobile dock, one ordinary drawer. */
+.mobile-dock { position: fixed; z-index: 90; bottom: calc(10px + var(--safe-bottom)); left: 50%; display: flex; align-items: center; gap: 8px; width: calc(100% - 24px); max-width: 520px; height: var(--mobile-dock-h); transform: translateX(-50%); }
+.nav-bar { position: relative; display: flex; align-items: center; flex: 1; min-width: 0; height: 100%; padding: 6px; border: 1px solid var(--line-strong); border-radius: var(--radius-pill); background: var(--surface-1); box-shadow: 0 8px 28px rgba(0, 0, 0, .25); }
+.nav-indicator { position: absolute; z-index: 0; top: 0; left: 0; width: 64px; height: 60px; border: 1px solid rgba(var(--accent-rgb), .2); border-radius: var(--radius-pill); background: var(--accent-soft); transform: translate3d(var(--nav-indicator-x, 0px), var(--nav-indicator-y, 0px), 0); transition: transform var(--dur) var(--ease-out); pointer-events: none; }
+.nav-bar .nav-btn { position: relative; z-index: 1; display: flex; flex-direction: column; align-items: center; justify-content: center; flex: 1; gap: 6px; min-width: 0; height: 60px; padding: 0 2px; border: 0; border-radius: var(--radius-pill); background: transparent; color: var(--text-sub); font-size: 18px; line-height: 1; transition: color var(--dur-fast); }
+.nav-bar .nav-btn:hover { background: transparent; color: var(--text); }
+.nav-bar .nav-btn.active { color: var(--accent); }
+.nav-btn i { display: grid; place-items: center; width: 20px; height: 20px; font-size: 18px; }
+.nav-label { font-size: 10px; font-weight: 600; line-height: 1.2; }
+.nav-fab { display: grid; place-items: center; flex: 0 0 60px; width: 60px; height: 60px; border: 1px solid var(--line-strong); border-radius: 50%; background: var(--surface-1); color: var(--text); font-size: 19px; box-shadow: 0 8px 28px rgba(0, 0, 0, .25); }
+.nav-fab:hover { color: var(--accent); }
+.nav-fab.active { border-color: var(--accent); background: var(--accent-soft); color: var(--accent); }
+@media (min-width: 900px) { .mobile-dock { display: none; } }
+
+.side-menu { position: fixed; z-index: 1300; inset: 0; display: none; background: var(--overlay-scrim); }
+.side-menu-content { width: min(320px, 86vw); height: 100%; padding: calc(24px + var(--safe-top)) 20px calc(24px + var(--safe-bottom)); border-right: 1px solid var(--line); background: var(--surface-1); overflow-y: auto; }
+.side-menu-content h3 { margin: 0 0 20px; font-size: 20px; }
+.menu-item { display: flex; align-items: center; gap: 14px; min-height: var(--tap); padding: 10px 12px; border-radius: var(--radius-xs); color: var(--text); font-size: 14px; transition: background-color var(--dur-fast); }
+.menu-item:hover { background: var(--hover); }
+.menu-item i { width: 20px; flex: 0 0 20px; color: var(--text-sub); font-size: 17px; text-align: center; }
+.menu-divider { height: 1px; margin: 12px; background: var(--line); }
+.menu-item-danger, .menu-item-danger i { color: var(--danger); }
+.menu-item-danger:hover { background: var(--danger-soft); }
+.menu-item-link { text-decoration: none; }
+.room-link-dot { width: 6px; height: 6px; margin-left: auto; border-radius: 50%; background: var(--accent); }
+a.desktop-nav-link { text-decoration: none; }
+>>>>>>> 62cde5b (Private recovery snapshot before local/production reconciliation (not for deployment))

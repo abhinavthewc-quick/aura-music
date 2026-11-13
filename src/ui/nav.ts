@@ -13,8 +13,11 @@ import { $ } from '../core/state';
 
 /* Playlist pseudo-tab — activates a generated tab without touching nav highlight */
     export function showPlaylistTab(tabId: string){
+      const tab=$(tabId);
+      if(!tab) return;
+      document.body.classList.remove('tab-search-active');
       document.querySelectorAll('.tab-content').forEach(t=>t.classList.remove('active'));
-      $(tabId).classList.add('active');
+      tab.classList.add('active');
       document.querySelectorAll('.desktop-nav-btn[data-tab], .nav-bar .nav-btn, .nav-fab').forEach(b=>{
         const on = (b as HTMLElement).dataset.tab === 'tabPlaylists' || (b as HTMLElement).id === 'navPlaylistsBtn';
         b.classList.toggle('active', on);

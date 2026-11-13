@@ -4,12 +4,19 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>Listen Together — AURA Music</title>
+<<<<<<< HEAD
 <meta name="description" content="One room, a shared queue, and your favorite people. Listen to music together on AURA.">
 <meta name="theme-color" content="#000000">
 <link rel="canonical" href="https://aura-music-01g.pages.dev/rooms">
 <link rel="icon" type="image/png" sizes="96x96" href="/src/assets/favicon.png">
 <link rel="preload" href="/src/assets/fonts/dm-sans-latin.woff2" as="font" type="font/woff2" crossorigin>
 <link rel="preload" href="/src/assets/fonts/cormorant-garamond-latin.woff2" as="font" type="font/woff2" crossorigin>
+=======
+<meta name="description" content="Listen to music with friends, in sync.">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;600;700&family=Cormorant+Garamond:wght@600&display=swap" rel="stylesheet">
+>>>>>>> 62cde5b (Private recovery snapshot before local/production reconciliation (not for deployment))
 <link rel="stylesheet" href="/src/rooms/rooms.css">
 </head>
 <body>
@@ -30,6 +37,7 @@
 </svg>
 
 <main class="join" id="joinView">
+<<<<<<< HEAD
   <header class="join-header">
     <a class="brand" href="/" aria-label="AURA Music home"><span class="brand-mark">AURA</span><span class="brand-sub">Listening rooms</span></a>
     <a class="back-link" href="/">Your library</a>
@@ -57,6 +65,39 @@
       </form>
       <p class="join-note"><svg class="ic" aria-hidden="true"><use href="#i-headphone"/></svg><span>For the closest sync, use wired headphones or your device’s speakers.</span></p>
     </section>
+=======
+  <div class="join-inner">
+    <div class="brand">
+      <span class="brand-mark">AURA</span>
+      <span class="brand-sub">listen together</span>
+    </div>
+
+    <h1 class="join-title" id="joinTitle">Join a room</h1>
+    <p class="join-sub" id="joinSub">Enter the code a friend shared with you.</p>
+
+    <label class="field">
+      <span class="field-label">Room code</span>
+      <input id="codeInput" class="field-input code" maxlength="12" autocomplete="off"
+             spellcheck="false" placeholder="e.g. k7m2pq" aria-label="Room code">
+    </label>
+
+    <label class="field">
+      <span class="field-label">Your name</span>
+      <input id="nameInput" class="field-input" maxlength="20" autocomplete="off"
+             placeholder="how friends will see you" aria-label="Your name">
+      <button class="linkish" id="shuffleName" type="button">pick another</button>
+    </label>
+
+    <button class="primary big" id="joinBtn" type="button">Join room</button>
+    <button class="ghost big" id="createBtn" type="button">Start a new room instead</button>
+
+    <div class="banner" id="joinBanner" role="alert" hidden></div>
+    <p class="join-note">
+      <svg class="ic"><use href="#i-headphone"/></svg>
+      Use your device's built-in speakers. Bluetooth headphones add enough
+      delay to pull you out of sync.
+    </p>
+>>>>>>> 62cde5b (Private recovery snapshot before local/production reconciliation (not for deployment))
   </div>
   <footer class="join-footer"><span>Good company. No distance.</span><span>Made for listening.</span></footer>
 </main>
@@ -66,10 +107,59 @@
     <div class="topbar-left"><a class="brand-mark room-brand" href="/" aria-label="AURA Music home">AURA</a><div class="room-identity"><span class="room-label">Listening room</span><span class="room-code" id="roomCode">—</span></div></div>
     <div class="topbar-right"><span class="connection"><span class="dot" id="liveDot" aria-hidden="true"></span><span id="connectionLabel" role="status">Connecting</span></span><button class="ghost invite-trigger" id="inviteBtn" type="button" aria-expanded="false" aria-controls="invitePanel"><svg class="ic" aria-hidden="true"><use href="#i-plus"/></svg>Invite friends</button><button class="linkish leave-btn" id="leaveBtn" type="button">Leave room</button></div>
   </header>
+<<<<<<< HEAD
   <section class="invite-panel" id="invitePanel" aria-labelledby="inviteTitle" hidden>
     <div class="invite-copy"><h2 id="inviteTitle">Save a place for someone.</h2><p>This link joins as a listener. Admins can share the controls inside the room.</p></div>
     <div class="invite-fields"><label class="sr-only" for="inviteLink">Listener invite link</label><input class="field-input" id="inviteLink" readonly spellcheck="false"><button class="primary" id="copyBtn" type="button"><svg class="ic" aria-hidden="true"><use href="#i-copy"/></svg><span id="copyLabel">Copy link</span></button><p id="inviteStatus" role="status"></p></div>
     <button class="icon-btn" id="inviteCloseBtn" type="button" aria-label="Close invite panel"><svg class="ic" aria-hidden="true"><use href="#i-x"/></svg></button>
+=======
+
+  <!-- shared, identical-on-every-device confirmation that we are together -->
+  <div class="syncbar" id="syncbar" hidden>
+    <div class="pills" id="pills" aria-hidden="true"></div>
+    <div class="syncmeta">
+      <span id="syncLabel">in sync</span>
+      <span class="dotsep">·</span>
+      <span id="driftLabel">0 ms</span>
+    </div>
+  </div>
+
+  <div class="banner" id="banner" role="alert" hidden></div>
+
+  <section class="stage">
+    <div class="art" id="art"><img id="artImg" alt="" decoding="async"></div>
+    <h2 class="title" id="nowTitle">Nothing playing</h2>
+    <p class="artist" id="nowArtist">—</p>
+
+    <div class="progress" id="progressWrap">
+      <div class="bar seekable" id="seekBar" role="slider" tabindex="0"
+           aria-label="Seek" aria-valuemin="0" aria-valuenow="0" aria-valuemax="100" aria-valuetext="0:00">
+        <div class="fill" id="fill"></div>
+        <div class="knob" id="knob"></div>
+      </div>
+      <div class="times"><span id="tCur">0:00</span><span id="tDur">0:00</span></div>
+    </div>
+
+    <div class="controls">
+      <button class="ctl" id="prevBtn" type="button" aria-label="Previous in queue">⏮</button>
+      <button class="ctl big" id="playBtn" type="button" aria-label="Play or pause">
+        <svg class="ic"><use href="#i-play" id="playIcon"/></svg>
+      </button>
+      <button class="ctl" id="nextBtn" type="button" aria-label="Next in queue">
+        <svg class="ic"><use href="#i-next"/></svg>
+      </button>
+    </div>
+
+    <p class="hint" id="listenHint" hidden>Click anywhere to start the sound</p>
+    <p class="hint" id="loadHint" hidden>Getting the track ready…</p>
+
+    <!-- Everyone counts down to the same instant, so the room starts as one
+         rather than whenever each device finished downloading. -->
+    <div class="countdown" id="countdown" hidden aria-live="polite">
+      <b id="countdownNum">3</b>
+      <small>starting together</small>
+    </div>
+>>>>>>> 62cde5b (Private recovery snapshot before local/production reconciliation (not for deployment))
   </section>
   <div class="banner" id="banner" hidden><p id="bannerText" role="status"></p><button class="ghost" id="reconnectBtn" type="button" hidden>Reconnect</button></div>
   <nav class="room-jumps" aria-label="In this room"><a href="#queueSection">Queue <span id="queueNavCount">0</span></a><a href="#peopleSection">People <span id="peopleNavCount">0</span></a><a href="#chatSection">Chat</a></nav>

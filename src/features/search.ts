@@ -3,59 +3,36 @@ import { songIndexById, songItemHTML } from './library';
 import { goTab } from '../ui/nav';
 import { $, state } from '../core/state';
 
+// Compatibility for retained YouTube selections. Search itself stays library-only;
+// this transient queue is never populated by a remote acquisition/search service.
+export const auraYTQueue: any[] = [];
+export function extractYouTubeId(meta: any): string | null {
+  const id = meta?._auraYoutubeId || meta?.videoId || meta?.id;
+  if (/^[A-Za-z0-9_-]{11}$/.test(String(id || ''))) return String(id);
+  try {
+    const url = new URL(String(meta?.url || meta?.webpage_url || ''));
+    const candidate = url.hostname === 'youtu.be' ? url.pathname.slice(1)
+      : /^(?:www\.|music\.)?youtube\.com$/.test(url.hostname) ? url.searchParams.get('v') || url.pathname.split('/')[2] : '';
+    return /^[A-Za-z0-9_-]{11}$/.test(candidate || '') ? candidate : null;
+  } catch { return null; }
+}
+
 /* Search is intentionally library-only. Music acquisition belongs to the
    Discord submission pipeline; Aura Music is the place where the finished
    library is browsed and played. */
 
-export const auraYTQueue: any[] = [];
 export let searchCategory = 'all';
 
 export const categoryLabels: Record<string, string> = {
   all: 'All tracks',
   favorites: 'Favorites',
   recent: 'Recently played',
+  local: 'Local files',
 };
-
-export function getYouTubeIdFromUrl(value: unknown): string | null {
-  const url = String(value || '');
-  let match = url.match(/[?&]v=([A-Za-z0-9_-]{6,})/);
-  if (match) return match[1];
-  match = url.match(/youtu\.be\/([A-Za-z0-9_-]{6,})/);
-  if (match) return match[1];
-  match = url.match(/youtube\.com\/(?:embed|shorts|live)\/([A-Za-z0-9_-]{6,})/);
-  return match ? match[1] : null;
-}
-
-export function extractYouTubeId(stream: any): string | null {
-  if (!stream) return null;
-  const source = stream.source || stream;
-  const direct = source.ytId || source.yt_id || stream.ytId || stream.yt_id;
-  if (direct) return String(direct).split(':').pop() || null;
-
-  const candidates = [
-    stream.url,
-    stream.externalUrl,
-    source.url,
-    source.externalUrl,
-    stream.content,
-    source.content,
-    stream.id,
-    source.id,
-  ];
-  for (const raw of candidates) {
-    if (!raw) continue;
-    const value = String(raw);
-    const fromUrl = getYouTubeIdFromUrl(value);
-    if (fromUrl) return fromUrl;
-    const tagged = value.match(/(?:^|:)yt_id:([A-Za-z0-9_-]{6,})$/i);
-    if (tagged) return tagged[1];
-    if (/^yt_id[:_]/i.test(value)) return value.split(/[:_]/).pop() || null;
-  }
-  return null;
-}
 
 export function songsForCategory(): any[] {
   if (searchCategory === 'favorites') return state.songs.filter((song: any) => song.favorite);
+  if (searchCategory === 'local') return state.songs.filter((song: any) => song.isLocal);
   if (searchCategory === 'recent') {
     return state.recentlyPlayed
       .map((recent: any) => state.songs.find((song: any) => String(song.id) === String(recent.id)))
@@ -87,6 +64,8 @@ export function filterSearchTab(): void {
   const browse = $('browseGrid');
   if (!input || !searchTab) return;
 
+  const localImport = $('importLocalAudioBtn');
+  if (localImport) localImport.hidden = searchCategory !== 'local';
   const query = normalized(input.value);
   searchTab.classList.toggle('searching', Boolean(query));
 
@@ -110,6 +89,11 @@ export function filterSearchTab(): void {
 
 export function goToSearchCategory(category: string): void {
   searchCategory = categoryLabels[category] ? category : 'all';
+  for (const id of ['searchTabInput','headerSearchInput','mobileSearchInput']) {
+    const input = $(id) as HTMLInputElement | null;
+    if (input) input.value = '';
+  }
+  syncSearchChrome();
   goTab('tabSearch');
   $('browseGrid')?.querySelectorAll<HTMLElement>('.browse-tile').forEach((tile) => {
     tile.classList.toggle('active', tile.dataset.filter === searchCategory);
@@ -161,12 +145,7 @@ syncSearchChrome();
 };
 
 $('browseGrid')?.querySelectorAll<HTMLElement>('.browse-tile').forEach((tile) => {
-  tile.onclick = () => {
-    searchCategory = tile.dataset.filter || 'all';
-    $('browseGrid')?.querySelectorAll('.browse-tile').forEach((item) => item.classList.remove('active'));
-    tile.classList.add('active');
-    filterSearchTab();
-  };
+  tile.onclick = () => goToSearchCategory(tile.dataset.filter || 'all');
 });
 
 const SpeechRecognitionCtor = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition;

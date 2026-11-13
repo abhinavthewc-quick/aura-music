@@ -14,11 +14,6 @@ export default defineConfig({
         target: 'https://aura-music-01g.pages.dev',
         changeOrigin: true,
       },
-      // Local dev: forward telepathy / telemetry API
-      '/api/v1': {
-        target: 'https://aura-music-01g.pages.dev',
-        changeOrigin: true,
-      },
       // Local dev: rooms run against a local Durable Object
       // (`cd rooms-worker && npm run dev`). Set ROOMS_DEV_URL to change the
       // port. In production this path is served by functions/api/rooms.ts.

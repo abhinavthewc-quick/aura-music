@@ -2,10 +2,13 @@
 
 ## Prerequisites
 
-- Node.js **20 LTS or newer** (the current build was tested on Node 26; Vite 7
-  prefers 20.19+/22.12+).
+- Node.js **20.19+ or 22.12+** (or a compatible later release) for Vite 7.
 - npm (the repo has `package-lock.json`; `npm ci` is fine).
-- A modern Chromium/Firefox/Safari for testing.
+- A modern Chromium/Firefox/Safari for device-specific smoke testing. Automated
+  Playwright tests use the browser configured in the Playwright config (local
+  Google Chrome by default); install that browser before running the suite.
+- Optional experiment tests: CPython **3.12** and an isolated virtual environment;
+  no global pip installation is required.
 - For rooms: Docker is **not** required; `wrangler` runs the Worker locally.
 - For the admin API locally: either use the proxy to the deployed Pages Function
   (default) or run `wrangler pages dev` with the env vars (see below).
@@ -30,6 +33,10 @@ serves those clean URLs too).
 | `npm run preview` | Serve the built site |
 | `npm run typecheck` | TypeScript check only |
 | `npm run lint` | Project invariants (see below) |
+| `npm test` | Playwright pure-domain/server security tests and browser regressions |
+| `npm run test:unit` | Unit/domain/security subset |
+| `npm run test:e2e` | Isolated browser-flow subset |
+| `bash experiments/telepathy/run-tests.sh -q` | Optional offline Python experiment suite, using its own `.venv` |
 
 The lint is intentionally small: no ESLint toolchain exists in this project, so
 [`scripts/lint.mjs`](../scripts/lint.mjs) enforces the rules that caused real
@@ -143,32 +150,77 @@ Rooms exposes drift/clock diagnostics in its own UI; the `SyncEngine` keeps
 
 ## Testing
 
-There is no committed unit/UI test framework. The minimum gate is:
+The automated gate is:
 
 ```bash
 npm run typecheck
 npm run lint
+npm test
 npm run build
 ```
 
-Manual smoke checklist before shipping:
+Playwright tests seed an isolated local catalogue/profile and use local fixtures,
+not the owner's production catalogue or accounts. Audio security tests substitute
+all fetches and use explicit fake credentials; they cover disabled/partial OCI
+env, status authorization, URI-key signing, ranges/HEAD, bounded uploads, sanitized
+errors, pagination and failed-capacity behavior. Do not inject real keys or
+live endpoints into test fixtures.
 
-1. Home paints with cached or remote tracks; skeleton appears on a cold cache.
-2. Play a bucket track; pause/resume; seek; next/previous; like.
-3. Play a YouTube track (or paste a link); the official iframe opens.
-4. Play a radio station; stop it.
-5. Add a local file; reload; it still plays from IndexedDB.
-6. Search 1 character (no online fan-out), 3+ characters (online results),
-   pasted links, “Try again” after blocking the network.
-7. Open Settings; Tab stays inside; Escape closes; theme survives reload.
-8. Open the row “…” menu on a bucket track (string id), Escape closes it.
-9. Rooms: create, join from a second tab, play/pause/seek/queue/chat, leave.
-10. Mobile viewport: no horizontal overflow; dock controls are tappable.
-11. PreMiD: activity updates, buttons/links behave (see [presence](presence.md)).
+Run the full frontend suite once at a time: its managed development server uses
+port 5199. Concurrent independent unit/e2e invocations can race the same port or
+Vite's optimizer cache. Traces/screenshots under `test-results/` are generated
+failure evidence and ignored by Git, not source deliverables.
 
-A headless smoke can be scripted with Chrome DevTools Protocol; keep such
-scripts out of the production bundle and never ship assertions that depend on
-the live catalogue.
+### Optional Python research tests
+
+Telepathy is quarantined, not a prerequisite for running/building the listener
+app. Its package has explicit setuptools discovery and a `test` extra including
+pytest/pytest-asyncio and SQLAlchemy's asyncio dependencies.
+
+```bash
+python3.12 -m venv experiments/telepathy/.venv
+experiments/telepathy/.venv/bin/python -m pip install \
+  -r experiments/telepathy/requirements-test.lock
+experiments/telepathy/.venv/bin/python -m pip install --no-deps \
+  -e experiments/telepathy
+bash experiments/telepathy/run-tests.sh -q
+```
+
+The runner refuses a global interpreter. It and the test bootstrap replace an
+inherited `DATABASE_URL` with in-memory SQLite before importing the singleton,
+clear provider credentials, supply deterministic metadata/lyrics, block external
+HTTP and Internet sockets, and use ASGITransport for in-process API tests. No
+live database, metadata provider or deployed Function is contacted. Exact
+verified dependencies and **14 passing research tests** are documented in
+[the experiment README](../experiments/telepathy/README.md). Scientific packages
+need compatible wheels; CPython 3.12 was verified, unlike the host's newest
+interpreter.
+
+### Deployment/device smoke checklist
+
+1. Home/catalogue loading, cache and retry states.
+2. Library/playlist/artist transport, queue interruptions, Next/Previous,
+   off/all/one repeat, shuffle, seek, like, and media keys.
+3. Export/import round-trip, missing placeholders/relink, metadata edits, ordered
+   membership, cross-tab updates and deletion while detail/picker is open.
+4. A supported legacy/deep-linked YouTube track uses the official iframe; natural
+   end follows its active collection. Confirm real mobile autoplay policy.
+5. Radio play/pause/stop and supported live codec; rooms create/join/chat/transport
+   with two clients and the real Worker when configured.
+6. Import device audio using filename metadata; reload to hydrate it. A missing
+   blob exposes Restore and does not strand autoplay. No jsmediatags/tagging
+   provider is promised; shared catalogue acquisition still belongs to Discord.
+7. Library-only search categories, including Local files; no podcast wording or
+   online acquisition fan-out. Search → playlist clears Search body/layout state.
+8. Settings/dialog keyboard focus, topmost Escape, reduced motion and theme;
+   390 px touch/overflow, desktop full player and all icon-only accessible names.
+9. PreMiD activity and deep links against the extension/device environment.
+10. Audio proxy behavior in an owner-approved staging environment. **Do not
+    probe a production status route or use historical credentials as a test.**
+
+Third-party lyrics/radio/YouTube/Google, room deployment, and the external PreMiD
+extension cannot be exhaustively verified by mocked local tests. See
+[remediation](remediation.md) for release boundaries.
 
 ## Code conventions
 
@@ -189,8 +241,9 @@ code should prefer `addEventListener` inside a module.
 ### Accessibility
 
 - Dialogs use `role="dialog" aria-modal="true"` and a visible close control.
-- Clickable non-buttons use `role="button" tabindex="0"`; the global a11y layer
-  handles Enter/Space.
+- Prefer native buttons/links for interactive rows and nested actions. Legacy
+  custom buttons use `role="button" tabindex="0"` and the global a11y activation;
+  do not layer another Enter/Space handler on top of it.
 - Icon-only controls need `aria-label`; toggles need `aria-pressed`.
 - Never hide a focused subtree with `aria-hidden` before restoring focus
   (the a11y layer already orders this correctly).
@@ -200,21 +253,35 @@ code should prefer `addEventListener` inside a module.
 
 ### CSS
 
-- `src/styles/main.css` controls import order. Later files override earlier ones
-  deliberately (`overrides-*`, `mobile-dock`, `vinyl-final`).
-- New components should use the tokens in `:root` (`--radius-*`, `--ease-out`,
-  `--dur`, `--focus-ring`, `--skeleton`) instead of one-off values.
-- Keep mobile rules inside `@media (max-width:899px)` (or the existing smaller
-  breakpoints) and test at 390 px.
-- Do not use `!important` unless overriding a legacy rule in an `overrides-*.css`
-  file.
+- `src/styles/main.css` declares component ownership and layer/import order.
+  Numbered patches and the separate YTM/polish/quality passes are retired; do not
+  add another final override file.
+- Canonical listener palette: true black, graphite elevations, legible neutral
+  text, restrained brass interaction states, and artwork-led player color.
+- Use shared color/radius/type/motion/focus tokens rather than per-component
+  gradients, arbitrary radii, or scattered `!important` fights.
+- Keep mobile rules in their responsive owner and test at 390 px. Structural
+  tokens are shared between desktop/mobile; layouts can differ deliberately.
+- A component change belongs in that component's stylesheet. Remove superseded
+  declarations rather than hiding them under a new patch.
 
 ### State & persistence
 
 - Add new persisted keys with a version suffix (`*_v1`) and document them in
   [data-model](data-model.md).
 - Never rename/remove a key without a migration; users keep local data forever.
-- Catalogue dedupe identity is `trackKey()`; don’t invent a second identifier.
+- `trackKey()` is catalogue dedupe/migration, not playlist identity. Persist
+  durable video/id references with snapshots, and preserve unresolved entries.
+- Every collection selection must establish a playback context. Engine-specific
+  code must not invent its own Next/Previous/shuffle path or a fallback into the
+  global library at a playlist boundary.
+- Use strict `playlist-data.ts` parsing; unsupported/corrupt saved formats freeze
+  writes with recovery rather than becoming empty storage. Prepare migration
+  before track metadata edits.
+- Web Locks or a short IndexedDB transaction coordination lock protect playlist
+  writes; if neither is available, refuse unsafe saving. BroadcastChannel/storage
+  update all same-origin views and active collection metadata/order without
+  restarting current audio. These mechanisms are not a cloud service.
 
 ### Performance
 
@@ -226,14 +293,13 @@ code should prefer `addEventListener` inside a module.
 
 ## Common tasks
 
-### Add a search provider
+### Extend library search
 
-1. Write `searchX(query)` returning objects with
-   `{ source, id, title, artist, img, preview?, full? }`.
-2. Add it to the `Promise.allSettled` array in `searchYouTubePro`.
-3. Add its badge/branch in `outsideResultRowHTML`.
-4. If playback differs, handle it in `playOutsideResult`.
-5. Add it to the provider table in [features](features.md#online-search).
+Listener search filters the existing Aura library only. Add a category/filter in
+`search.ts`, label it truthfully, establish a matching playback context on row
+activation, and add a browser regression. Do not restore removed preview
+providers, podcast promises, or acquisition forms without an explicit product
+scope decision. Music acquisition belongs to the separate Discord/admin pipeline.
 
 ### Add a setting
 

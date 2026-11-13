@@ -1,4 +1,5 @@
 import { trackKey, trackMatchesKey } from './trackIdentity';
+import { resolveTrackSnapshot, type TrackSnapshot } from './track-identity';
 
 /* A link carries a small, versioned snapshot in its fragment. Fragments are
    not sent to the web server. Only display text and library keys cross devices;
@@ -93,22 +94,25 @@ export function isPlaylistTrackAvailable(song: any): boolean {
 /** Snapshot construction never changes the source playlist or library. Resolve
     legacy display-name aliases to trackKey, retaining the catalog identity. */
 export function createPlaylistShare(
-  playlist: { title: string; description: string; tracks: readonly string[]; shared?: SharedPlaylist },
+  playlist: { title: string; description: string; tracks: readonly (string | TrackSnapshot)[]; shared?: SharedPlaylist },
   songs: readonly any[],
 ): SharedPlaylist {
-  const keys = [...new Set(playlist.tracks)];
+  const keys = [...new Map(playlist.tracks.map(track => [typeof track === 'string' ? track : track.ref, track])).values()];
   if (keys.length > MAX_SHARED_TRACKS) throw new PlaylistShareError(TOO_LARGE);
   const snapshot: SharedPlaylist = {
     v: 1, title: clipText(playlist.title, 60), description: clipText(playlist.description, 140),
     tracks: [], omitted: { local: 0, unavailable: 0 },
   };
   const seen = new Set<string>();
-  for (const originalKey of keys) {
-    const song = songs.find((candidate) => trackMatchesKey(candidate, originalKey));
+  for (const entry of keys) {
+    const ref = typeof entry === 'string' ? null : entry;
+    const originalKey = typeof entry === 'string' ? entry : entry.legacyKey ||
+      (entry.ref.startsWith('video:') ? `vid:${entry.ref.slice(6)}` : entry.ref.replace(/^legacy:/, ''));
+    const song = ref ? resolveTrackSnapshot(ref, songs as any[]) : songs.find((candidate) => trackMatchesKey(candidate, originalKey));
     const key = song ? trackKey(song) : originalKey;
     if (seen.has(key)) continue;
     seen.add(key);
-    if (song && (song.isLocal || /^(?:blob|data|file):/i.test(String(song.url || '')))) {
+    if (ref?.source === 'local' || song && (song.isLocal || /^(?:blob|data|file):/i.test(String(song.url || '')))) {
       snapshot.omitted.local++;
     } else if (song && isSharedTrackKey(key)) {
       snapshot.tracks.push({ key, title: clipText(song.title || 'Untitled track', 160), artist: clipText(song.artist, 160) });

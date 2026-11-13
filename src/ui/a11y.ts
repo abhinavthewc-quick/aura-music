@@ -163,8 +163,43 @@ function closeOverlay(el: HTMLElement): void {
 }
 
 /* ---------- focus restoration + initial focus ---------- */
+<<<<<<< HEAD
 interface DialogFocus { modal: HTMLElement; opener: HTMLElement | null }
 let dialogStack: DialogFocus[] = [];
+=======
+let activeDialog: HTMLElement | null = null;
+const dialogOrigins = new WeakMap<HTMLElement,HTMLElement | null>();
+let latestLauncher: HTMLElement | null = null;
+document.addEventListener('pointerdown',(event) => {
+  latestLauncher = (event.target as Element | null)?.closest<HTMLElement>(FOCUSABLE) || null;
+},true);
+document.addEventListener('keydown',(event) => {
+  if (event.key === 'Enter' || event.key === ' ') latestLauncher = (event.target as HTMLElement)?.closest<HTMLElement>(FOCUSABLE) || null;
+},true);
+
+function reachable(target: HTMLElement | null): boolean {
+  if (!target?.isConnected || !isVisible(target) || target.closest('[hidden]')) return false;
+  return OVERLAY_PRIORITY.every((selector) => {
+    const overlay = document.querySelector<HTMLElement>(selector);
+    return !overlay?.contains(target) || isOverlayOpen(overlay);
+  });
+}
+function restoredTarget(origin: HTMLElement | null): HTMLElement | null {
+  if (reachable(origin)) return origin;
+  if (origin?.id) {
+    const target = document.getElementById(origin.id);
+    if (reachable(target)) return target;
+  }
+  if (origin && Object.keys(origin.dataset).length) {
+    const target = Array.from(document.querySelectorAll<HTMLElement>(FOCUSABLE)).find((element) =>
+      Object.entries(origin.dataset).every(([key,value]) => element.dataset[key] === value) && reachable(element));
+    if (target) return target;
+  }
+  const heading = document.querySelector<HTMLElement>('.tab-content.active h2,.tab-content.active h3');
+  if (heading) { heading.tabIndex = -1; return heading; }
+  return null;
+}
+>>>>>>> 62cde5b (Private recovery snapshot before local/production reconciliation (not for deployment))
 
 function focusFirst(modal: HTMLElement): void {
   const items = focusableItems(modal);
@@ -181,6 +216,7 @@ function syncDialog(): void {
   // into an older custom overlay here would fight the browser's top layer.
   if (browserOwnsModalFocus()) { syncPlayerSemantics(true); return; }
   const modal = topDialog();
+<<<<<<< HEAD
   if (modal !== (dialogStack[dialogStack.length - 1]?.modal || null)) {
     const resume = dialogStack.findIndex(frame => frame.modal === modal);
     let restore: HTMLElement | null = null;
@@ -205,13 +241,53 @@ function syncDialog(): void {
     } else {
       restore = dialogStack[0]?.opener || null;
       dialogStack = [];
+=======
+  if (modal !== activeDialog) {
+    const previous = activeDialog, previousOrigin = previous ? dialogOrigins.get(previous) || null : null;
+    activeDialog = modal;
+    if (modal) {
+      const returning = reachable(previousOrigin) && modal.contains(previousOrigin);
+      if (!returning) {
+        const focused = document.activeElement instanceof HTMLElement ? document.activeElement : null;
+        let origin = focused && focused !== document.body && !modal.contains(focused) ? focused : latestLauncher;
+        // Replacing a closed menu with a picker inherits the menu's real launcher,
+        // not the now-hidden option button in that menu.
+        if (previous && origin && previous.contains(origin) && !reachable(origin)) origin = previousOrigin;
+        dialogOrigins.set(modal,origin);
+      }
+      requestAnimationFrame(() => {
+        if (activeDialog !== modal) return;
+        if (returning) previousOrigin.focus({preventScroll:true});
+        else if (!modal.contains(document.activeElement)) focusFirst(modal);
+      });
+    } else {
+      restoredTarget(previousOrigin)?.focus({preventScroll:true});
+>>>>>>> 62cde5b (Private recovery snapshot before local/production reconciliation (not for deployment))
     }
     if (restore?.isConnected && isVisible(restore) && (!modal || containsFocus(modal, restore))) {
       restore.focus({ preventScroll: true });
     } else if (modal) focusFirst(modal);
     else if (document.activeElement instanceof HTMLElement && !isVisible(document.activeElement)) document.activeElement.blur();
   }
+<<<<<<< HEAD
   syncPlayerSemantics(true);
+=======
+
+  for (const selector of OVERLAY_PRIORITY) {
+    const overlay = document.querySelector<HTMLElement>(selector);
+    if (overlay) overlay.inert = !isOverlayOpen(overlay);
+  }
+
+  /* Always run — this is independent of whether the active dialog changed.
+     Done after focus restoration: hiding a subtree that still owns focus makes
+     browsers refuse the aria-hidden update (and log a warning). */
+  for (const selector of ['#fullPlayerOverlay', '#radioFullPlayerOverlay']) {
+    const el = document.querySelector<HTMLElement>(selector);
+    if (!el) continue;
+    const hidden = isOverlayOpen(el) ? 'false' : 'true';
+    if (el.getAttribute('aria-hidden') !== hidden) el.setAttribute('aria-hidden', hidden);
+  }
+>>>>>>> 62cde5b (Private recovery snapshot before local/production reconciliation (not for deployment))
 }
 
 let dialogRaf = 0;

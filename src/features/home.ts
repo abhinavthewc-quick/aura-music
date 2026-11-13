@@ -1,4 +1,5 @@
 import { timeGreeting, toast } from '../core/dom';
+<<<<<<< HEAD
 import { resolveArtistSelection, selectArtist, type ArtistSelection } from '../core/artistGroups';
 import { playSong } from './player';
 import { escapeHtml } from './radio';
@@ -7,7 +8,16 @@ import { DEFAULT_ARTIST_PORTRAIT, observeArtistMetadataCards, prioritizeArtistMe
 import { $, state } from '../core/state';
 import { getArtistGroups } from './library';
 import { playArtistCollection, refreshArtistPageMetadata, renderArtistPage } from './artist-page';
+=======
+import { artistMatchKey } from '../core/artist-names';
+import { playSong } from './player';
+import { escapeHtml } from './radio';
+import { DEFAULT_COVER } from '../core/catalog';
+import { $, state } from '../core/state';
+import { getArtistGroups } from './library';
+>>>>>>> 62cde5b (Private recovery snapshot before local/production reconciliation (not for deployment))
 import { goTab } from '../ui/nav';
+import { playArtistCollection, renderArtistPage, type ArtistPageEntry } from './artist-page';
 /* ===== 3075-3096 ===== */
     export function setGreeting(){
       $('greetingLabel').textContent = timeGreeting();
@@ -60,40 +70,22 @@ import { goTab } from '../ui/nav';
       $('quickGrid').innerHTML = tiles.join('');
     }
 
-    /* Better YouTube Music: 3-Column Quick Picks Grid */
+    /* Actual library collections, not speculative mood recommendations. */
     let currentMood = 'all';
     let currentQuickPage = 0;
-
-    const MOOD_KEYWORDS: Record<string, string[]> = {
-      'romance': ['love', 'romance', 'dil', 'ishq', 'heart', 'kadhal', 'prema', 'romantic', 'priye'],
-      'feel good': ['feel', 'good', 'happy', 'smile', 'joy', 'vibe', 'celebrate', 'fun'],
-      'relax': ['relax', 'chill', 'calm', 'peace', 'sleep', 'acoustic', 'lo-fi', 'lofi'],
-      'energise': ['dance', 'beat', 'remix', 'fast', 'rock', 'energy', 'edm', 'fire'],
-      'party': ['party', 'punjab', 'dj', 'bass', 'club', 'celebration', 'dheem'],
-      'commute': ['journey', 'drive', 'travel', 'way', 'road'],
-      'workout': ['power', 'gym', 'run', 'fire', 'strong', 'beast'],
-      'focus': ['instrumental', 'piano', 'ambient', 'focus', 'study', 'violin']
-    };
 
     export function renderQuickPicks(page?: number){
       const container = $('ytmQuickGrid');
       if(!container) return;
       if(!state.songs || !state.songs.length){
-        container.innerHTML = '<div style="color:var(--text-sub);padding:14px;font-size:13px">Loading library tracks…</div>';
+        container.innerHTML = '<p class="home-empty">No library tracks are available yet. Add local audio or check the catalogue connection.</p>';
         return;
       }
 
-      let pool = state.songs;
-      if(currentMood !== 'all' && MOOD_KEYWORDS[currentMood]){
-        const kw = MOOD_KEYWORDS[currentMood];
-        const filtered = state.songs.filter(s => {
-          const t = ((s.title || '') + ' ' + (s.artist || '')).toLowerCase();
-          return kw.some(k => t.includes(k));
-        });
-        if(filtered.length >= 4) {
-          pool = filtered;
-        }
-      }
+      let pool = state.songs.filter((song) => !song.missing);
+      if (currentMood === 'favorites') pool = pool.filter((song) => song.favorite);
+      if (currentMood === 'recent') pool = state.recentlyPlayed.map((recent) => pool.find((song) => String(song.id) === String(recent.id))).filter(Boolean);
+      if (!pool.length) { container.innerHTML = '<p class="home-empty">No tracks in this collection yet. Choose All or add a favorite from your library.</p>'; return; }
 
       const pageSize = 12; // 3 columns x 4 rows
       const totalPages = Math.max(1, Math.ceil(pool.length / pageSize));
@@ -107,7 +99,7 @@ import { goTab } from '../ui/nav';
         const globalIdx = state.songs.findIndex(x => x.id === s.id);
         const isPlaying = state.currentIndex === globalIdx && state.isPlaying;
         return `
-          <div class="ytm-track-card ${isPlaying ? 'is-playing' : ''}" role="button" tabindex="0" onclick="playSong(${globalIdx >= 0 ? globalIdx : 0})" title="${escapeHtml(s.title || '')}">
+          <div class="ytm-track-card ${isPlaying ? 'is-playing' : ''}" role="button" tabindex="0" data-play-song-id="${escapeHtml(s.id)}" title="${escapeHtml(s.title || '')}">
             <div class="ytm-track-art">
               <img src="${escapeHtml(s.img || DEFAULT_COVER)}" alt="" loading="lazy" decoding="async">
               <div class="ytm-play-hover">
@@ -151,6 +143,7 @@ import { goTab } from '../ui/nav';
       });
     }
 
+<<<<<<< HEAD
     export interface ArtistDirectoryEntry {
       key: string;
       name: string;
@@ -166,6 +159,23 @@ import { goTab } from '../ui/nav';
         count: g.songs.length, songs: g.songs,
         metadataName: g.key.startsWith('unresolved:') ? '' : g.name,
       }));
+=======
+    export interface ArtistDirectoryEntry extends ArtistPageEntry {
+      count: number;
+    }
+
+    export function getAllArtists(): ArtistDirectoryEntry[] {
+      return getArtistGroups().map(group => ({
+        key: group.key, name: group.name, img: group.cover || DEFAULT_COVER,
+        bio: group.bio, count: group.songs.length, songs: group.songs,
+      }));
+    }
+
+    function artistForName(artists: ArtistDirectoryEntry[], name: string): ArtistDirectoryEntry | undefined {
+      const match = artistMatchKey(name);
+      return artists.find(artist => artist.name.toLowerCase() === name.toLowerCase()) ||
+        artists.find(artist => match && (artistMatchKey(artist.key) === match || artistMatchKey(artist.name) === match));
+>>>>>>> 62cde5b (Private recovery snapshot before local/production reconciliation (not for deployment))
     }
 
     export function renderFeaturedArtistsShelf() {
@@ -179,14 +189,18 @@ import { goTab } from '../ui/nav';
 
       const topArtists = artists.slice(0, 16);
       shelf.innerHTML = topArtists.map(a => `
+<<<<<<< HEAD
         <div class="ytm-artist-card" role="button" tabindex="0" data-artist-open="${escapeHtml(a.key)}" data-artist-metadata-name="${escapeHtml(a.metadataName)}" title="${escapeHtml(a.name)}">
+=======
+        <button type="button" class="ytm-artist-card" data-open-artist="${escapeHtml(a.key)}" title="${escapeHtml(a.name)}">
+>>>>>>> 62cde5b (Private recovery snapshot before local/production reconciliation (not for deployment))
           <div class="ytm-artist-art-wrap">
             <img class="ytm-artist-avatar" data-artist-portrait src="${escapeHtml(a.img)}" alt="${escapeHtml(a.name)}" loading="lazy" decoding="async">
             <div class="ytm-artist-play-overlay"><i class="fa-solid fa-play"></i></div>
           </div>
           <div class="ytm-artist-name">${escapeHtml(a.name)}</div>
           <div class="ytm-artist-sub">${a.count} song${a.count !== 1 ? 's' : ''}</div>
-        </div>
+        </button>
       `).join('');
       observeArtistMetadataCards(shelf);
     }
@@ -201,14 +215,18 @@ import { goTab } from '../ui/nav';
       }
 
       grid.innerHTML = artists.map(a => `
+<<<<<<< HEAD
         <div class="ytm-artist-card grid-card" role="button" tabindex="0" data-artist-open="${escapeHtml(a.key)}" data-artist-metadata-name="${escapeHtml(a.metadataName)}" title="${escapeHtml(a.name)}">
+=======
+        <button type="button" class="ytm-artist-card grid-card" data-open-artist="${escapeHtml(a.key)}" title="${escapeHtml(a.name)}">
+>>>>>>> 62cde5b (Private recovery snapshot before local/production reconciliation (not for deployment))
           <div class="ytm-artist-art-wrap">
             <img class="ytm-artist-avatar" data-artist-portrait src="${escapeHtml(a.img)}" alt="${escapeHtml(a.name)}" loading="lazy" decoding="async">
             <div class="ytm-artist-play-overlay"><i class="fa-solid fa-play"></i></div>
           </div>
           <div class="ytm-artist-name">${escapeHtml(a.name)}</div>
           <div class="ytm-artist-sub">${a.count} song${a.count !== 1 ? 's' : ''}</div>
-        </div>
+        </button>
       `).join('');
       observeArtistMetadataCards(grid);
     }
@@ -226,6 +244,7 @@ import { goTab } from '../ui/nav';
       const mainView = $('homeMainView');
       const artistsView = $('homeArtistsView');
       const detailView = $('homeArtistDetailView');
+      $('tabHome')?.classList.remove('artist-detail-open');
       if (mainView) mainView.style.display = 'none';
       if (detailView) detailView.style.display = 'none';
       if (artistsView) {
@@ -239,11 +258,13 @@ import { goTab } from '../ui/nav';
       const mainView = $('homeMainView');
       const artistsView = $('homeArtistsView');
       const detailView = $('homeArtistDetailView');
+      $('tabHome')?.classList.remove('artist-detail-open');
       if (artistsView) artistsView.style.display = 'none';
       if (detailView) detailView.style.display = 'none';
       if (mainView) mainView.style.display = 'block';
     }
 
+<<<<<<< HEAD
     let openArtistSelection: ArtistSelection | null = null;
     export function openArtistDetail(artistName: string | ArtistSelection, scroll = true, interactive = true) {
       const group = resolveArtistSelection(getArtistGroups(), artistName);
@@ -254,13 +275,26 @@ import { goTab } from '../ui/nav';
       }
       openArtistSelection = selectArtist(group);
       if(interactive && !group.key.startsWith('unresolved:')) prioritizeArtistMetadata(group.name, 'open');
+=======
+    export function openArtistDetail(artistName: string) {
+      const artists = getAllArtists();
+      const artist = artistForName(artists, artistName) || {
+        key: artistName.toLowerCase().trim(),
+        name: artistName,
+        img: DEFAULT_COVER,
+        count: 0,
+        songs: state.songs.filter(s => (s.artist || '').toLowerCase().includes(artistName.toLowerCase()))
+      };
+>>>>>>> 62cde5b (Private recovery snapshot before local/production reconciliation (not for deployment))
 
       const mainView = $('homeMainView');
       const artistsView = $('homeArtistsView');
       const detailView = $('homeArtistDetailView');
+      $('tabHome')?.classList.add('artist-detail-open');
       if (mainView) mainView.style.display = 'none';
       if (artistsView) artistsView.style.display = 'none';
       if (detailView) detailView.style.display = 'block';
+<<<<<<< HEAD
       $('tabHome')?.classList.add('artist-detail-open');
       if(detailView) renderArtistPage(detailView, group, { prefix: 'artist', onBack: () => {
         closeArtistDetail();
@@ -272,6 +306,13 @@ import { goTab } from '../ui/nav';
         window.scrollTo({ top: 0, behavior: reduced ? 'auto' : 'smooth' });
         detailView?.querySelector<HTMLElement>('.artist-hero-name')?.focus({ preventScroll: true });
       }
+=======
+
+      if (detailView) renderArtistPage(detailView, artist, { prefix: 'artist', onBack: closeArtistDetail });
+      goTab('tabHome');
+      window.scrollTo({ top: 0, behavior: 'instant' });
+      $('artistName')?.focus({ preventScroll: true });
+>>>>>>> 62cde5b (Private recovery snapshot before local/production reconciliation (not for deployment))
     }
 
     export function refreshArtistViews() {
@@ -303,6 +344,7 @@ import { goTab } from '../ui/nav';
     });
 
     export function closeArtistDetail() {
+<<<<<<< HEAD
       openArtistSelection = null;
       const activeChip = document.querySelector('#ytmMoodChips .ytm-chip.active') as HTMLElement | null;
       const mood = activeChip?.dataset.mood || 'all';
@@ -318,7 +360,33 @@ import { goTab } from '../ui/nav';
       const artist = resolveArtistSelection(getArtistGroups(), artistName);
       if (!artist || !artist.songs.length) return;
       if(playArtistCollection(artist, shuffle)) toast(`Playing ${artist.name}`, 'play');
+=======
+      openHomeArtistsTab();
+      $('homeArtistsChip')?.focus({ preventScroll: true });
     }
+
+    export function playArtistSongs(artistName: string, shuffle = false, startId?: string) {
+      const artists = getAllArtists();
+      const artist = artistForName(artists, artistName);
+      if (!artist || !artist.songs.length) return;
+
+      playArtistCollection(artist, shuffle, startId);
+>>>>>>> 62cde5b (Private recovery snapshot before local/production reconciliation (not for deployment))
+    }
+
+    document.addEventListener('click', (event) => {
+      const button = (event.target as Element).closest<HTMLElement>('[data-open-artist]');
+      if (!button) return;
+      const artist = getAllArtists().find(entry => entry.key === button.dataset.openArtist);
+      if (artist) openArtistDetail(artist.name);
+    });
+
+    window.addEventListener('aura:library-changed', () => {
+      if (!$('tabHome')?.classList.contains('artist-detail-open')) return;
+      const name = $('artistName')?.textContent;
+      const artist = getAllArtists().find(entry => entry.name === name);
+      if (artist) renderArtistPage($('homeArtistDetailView'), artist, { prefix: 'artist', onBack: closeArtistDetail });
+    });
 
     if (typeof window !== 'undefined') {
       (window as any).openHomeArtistsTab = openHomeArtistsTab;
@@ -394,10 +462,16 @@ import { goTab } from '../ui/nav';
       }
     }
 
+<<<<<<< HEAD
     /* Home and Library use the same identities, including collaborations and
        authoritative cloud profiles. A shared credit appears once per artist. */
     export function renderArtistSpotlight(){
       const artists = getArtistGroups().filter(g => g.songs.length >= 2);
+=======
+    /* Spotlights use the same artist names and collections as the directory. */
+    export function renderArtistSpotlight(){
+      const artists = getArtistGroups().filter(group => group.songs.length >= 2);
+>>>>>>> 62cde5b (Private recovery snapshot before local/production reconciliation (not for deployment))
       const container = $('artistSpotlightContainer');
       if(!container) return;
 
@@ -409,12 +483,17 @@ import { goTab } from '../ui/nav';
         const cards = g.songs.map(s=>{
           const idx = indexById.get(String(s.id)) ?? -1;
           if(idx < 0) return '';
-          return `<div class="spotlight-card" role="button" tabindex="0" aria-label="Play ${escapeHtml(s.title||'')}" onclick="playSong(${idx})"><img src="${escapeHtml(s.img||DEFAULT_COVER)}" alt="" loading="lazy" decoding="async"><p class="sc-title">${escapeHtml(s.title)}</p><p class="sc-sub">${escapeHtml(s.artist)}</p></div>`;
+          return `<div class="spotlight-card" role="button" tabindex="0" aria-label="Play ${escapeHtml(s.title||'')}" data-play-song-id="${escapeHtml(s.id)}"><img src="${escapeHtml(s.img||DEFAULT_COVER)}" alt="" loading="lazy" decoding="async"><p class="sc-title">${escapeHtml(s.title)}</p><p class="sc-sub">${escapeHtml(s.artist)}</p></div>`;
         }).join('');
         return `<div class="artist-spotlight-block" style="margin-bottom:24px">
           <div class="spotlight-header">
+<<<<<<< HEAD
             <img class="spotlight-avatar" data-artist-portrait data-artist-key="${escapeHtml(g.key)}" data-artist-metadata-name="${g.key.startsWith('unresolved:') ? '' : escapeHtml(g.name)}" src="${escapeHtml(g.cover || DEFAULT_ARTIST_PORTRAIT)}" alt="" loading="lazy" decoding="async">
             <div><p>More from</p><p>${escapeHtml(g.name)}</p></div>
+=======
+            <img class="spotlight-avatar" src="${escapeHtml(g.cover||DEFAULT_COVER)}" alt="" loading="lazy" decoding="async">
+            <div><p style="font-size:11px;color:var(--text-sub)">More from</p><p style="font-size:16px;font-weight:800">${escapeHtml(g.name)}</p></div>
+>>>>>>> 62cde5b (Private recovery snapshot before local/production reconciliation (not for deployment))
           </div>
           <div class="recent-scroll">${cards}</div>
         </div>`;
@@ -444,7 +523,7 @@ import { goTab } from '../ui/nav';
       }
       c.innerHTML=auraPickIds.map(id=>{
         const i=state.songs.findIndex(s=>s.id===id), s=state.songs[i]; if(!s) return '';
-        return `<div class="aura-pick" role="button" tabindex="0" aria-label="Play ${escapeHtml(s.title||'')}" onclick="playSong(${i})"><img src="${escapeHtml(s.img||DEFAULT_COVER)}" alt="" loading="lazy" decoding="async"><span class="aura-pick-play"><i class="fa-solid fa-play"></i></span><div class="aura-pick-info"><b>${escapeHtml(s.title||'')}</b><span>${escapeHtml(s.artist||'')}</span></div></div>`;
+        return `<div class="aura-pick" role="button" tabindex="0" aria-label="Play ${escapeHtml(s.title||'')}" data-play-song-id="${escapeHtml(s.id)}"><img src="${escapeHtml(s.img||DEFAULT_COVER)}" alt="" loading="lazy" decoding="async"><span class="aura-pick-play"><i class="fa-solid fa-play"></i></span><div class="aura-pick-info"><b>${escapeHtml(s.title||'')}</b><span>${escapeHtml(s.artist||'')}</span></div></div>`;
       }).join('');
     }
     setTimeout(()=>renderAuraPicks(),0);

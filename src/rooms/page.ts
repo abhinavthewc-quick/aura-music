@@ -97,10 +97,149 @@ function rememberRoom(id: string, key: string | null): void {
 }
 
 function rememberedKey(id: string): string | null {
+<<<<<<< HEAD
   try {
     const value = JSON.parse(localStorage.getItem(ROOM_KEY) || '{}')?.[id];
     return typeof value === 'string' ? value : null;
   } catch { return null; }
+=======
+  try { return (JSON.parse(localStorage.getItem(ROOM_KEY) || '{}'))[id] || null; }
+  catch { return null; }
+}
+
+function setPlayIcon(playing: boolean) {
+  const icon = document.getElementById('playIcon');
+  if (icon) icon.setAttribute('href', playing ? '#i-pause' : '#i-play');
+}
+
+function banner(text: string) {
+  const el = $($('roomView').hidden ? 'joinBanner' : 'banner');
+  el.textContent = text;
+  el.hidden = !text;
+}
+
+function buildPills() {
+  const wrap = $('pills');
+  wrap.innerHTML = '';
+  pills = [];
+  for (let i = 0; i < PILL_COUNT; i++) {
+    const el = document.createElement('i');
+    wrap.appendChild(el);
+    pills.push(el);
+  }
+}
+
+
+/* ---------------- library explorer ----------------
+ * Search runs entirely on this device against the catalogue already in memory,
+ * so results are instant and cost nothing. Filtering happens through
+ * resolveTrack(), so anything listed here is guaranteed to be playable by
+ * every listener — no "not in your library" dead ends. */
+
+const MAX_RESULTS = 60;
+let libIndex: { key: string; title: string; artist: string; img: string }[] = [];
+
+function rebuildLibIndex(): void {
+  libIndex = [];
+  const seen = new Set<string>();
+  for (const song of state.songs) {
+    const key = trackKey(song);
+    if (seen.has(key)) continue;
+    if (!resolveTrack(key)) continue;   // must be shareable
+    seen.add(key);
+    libIndex.push({
+      key,
+      title: String(song.title || 'Unknown'),
+      artist: String(song.artist || 'Unknown artist'),
+      img: String(song.img || ''),
+    });
+  }
+  const el = $('libTotal');
+  if (el) el.textContent = libIndex.length ? String(libIndex.length) : '';
+}
+
+/** Split on the query so we can highlight the matched part without innerHTML. */
+function matches(title: string, artist: string, q: string): boolean {
+  return title.toLowerCase().includes(q) || artist.toLowerCase().includes(q);
+}
+
+function renderResults(q: string): void {
+  const ul = $('libResults');
+  ul.innerHTML = '';
+  const query = q.trim().toLowerCase();
+
+  if (!query) {
+    const li = document.createElement('li');
+    li.className = 'lib-empty';
+    li.textContent = 'Type to search. Results update as you type.';
+    ul.appendChild(li);
+    return;
+  }
+
+  const hits = libIndex.filter((t) => matches(t.title, t.artist, query)).slice(0, MAX_RESULTS);
+
+  if (!hits.length) {
+    const li = document.createElement('li');
+    li.className = 'lib-empty';
+    li.textContent = `Nothing in the library matches “${q.trim()}”.`;
+    ul.appendChild(li);
+    return;
+  }
+
+  const isAdmin = client?.isAdmin ?? false;
+
+  for (const t of hits) {
+    const li = document.createElement('li');
+
+    if (t.img) {
+      const img = document.createElement('img');
+      img.className = 'art-sm';
+      img.src = t.img;
+      img.alt = '';
+      img.loading = 'lazy';
+      img.decoding = 'async';
+      li.appendChild(img);
+    }
+
+    const txt = document.createElement('span');
+    txt.className = 'txt';
+    const t1 = document.createElement('span');
+    t1.className = 't';
+    t1.textContent = t.title;
+    const t2 = document.createElement('span');
+    t2.className = 'a';
+    t2.textContent = t.artist;
+    txt.appendChild(t1);
+    txt.appendChild(t2);
+    li.appendChild(txt);
+
+    const btn = document.createElement('button');
+    btn.className = 'add-btn';
+    btn.textContent = 'Add';
+    // Listeners can browse but not change the queue.
+    if (!isAdmin) {
+      btn.disabled = true;
+      btn.title = 'Only admins can change the queue';
+    } else {
+      btn.onclick = () => {
+        client?.queueAdd(t.key);
+        btn.textContent = 'Added';
+        btn.disabled = true;
+        setTimeout(() => { btn.textContent = 'Add'; btn.disabled = false; }, 1100);
+      };
+    }
+    li.appendChild(btn);
+    ul.appendChild(li);
+  }
+}
+
+/* ---------------- join screen ---------------- */
+
+function showJoin() {
+  $('joinView').hidden = false;
+  $('roomView').hidden = true;
+  $('codeInput').value = '';
+>>>>>>> 62cde5b (Private recovery snapshot before local/production reconciliation (not for deployment))
 }
 
 function randomName(): string {
@@ -229,8 +368,18 @@ async function enter(mode: 'join' | 'create', invite: RoomInvite | null, name: s
         if (!s.pending) banner('');
       },
     });
+<<<<<<< HEAD
     s.audio.setVolume(Number(input('volumeInput').value) / 100);
     void s.audio.unlock();
+=======
+    if (!res.ok) throw new Error('Room service unavailable');
+    const info = await res.json();
+    if (info.exists === false) { banner('Room not found. Check the code and try again.'); return; }
+    const address = new URL(info.wsBase || '');
+    if (!['ws:','wss:'].includes(address.protocol) || address.username || address.password) throw new Error('Invalid room service');
+    wsBase = address.href;
+  } catch { /* reported below without exposing an upstream exception */ }
+>>>>>>> 62cde5b (Private recovery snapshot before local/production reconciliation (not for deployment))
 
     if (mode === 'create') {
       text('joinStatus', 'Making a place for your people…');

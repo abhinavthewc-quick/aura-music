@@ -1,3 +1,4 @@
+<<<<<<< HEAD
 import { escapeHtml, stateHTML, toast } from '../core/dom';
 import { buildArtistGroups, resolveArtistSelection, selectArtist, type ArtistGroup, type ArtistSelection } from '../core/artistGroups';
 import { DEFAULT_COVER, fetchHfCatalog, getCachedArtistDirectory, readArtistsCache, type ArtistMeta } from '../core/catalog';
@@ -10,6 +11,16 @@ import { playArtistCollection, refreshArtistPageFavorites, refreshArtistPageMeta
 import { beginPlaybackIntent } from '../core/playbackIntent';
 import { refreshArtistViews, renderAuraPicks, renderQuickAccess, renderQuickPicks } from './home';
 import { filterSongs, loadSong, playSong, resetFullPlayerArtToImage, stopAuraYouTube, updateMainMediaSession, updatePlayState } from './player';
+=======
+import { artistMergeKey, escapeHtml, stateHTML, toast } from '../core/dom';
+import { artistKey, preferredArtistName } from '../core/artist-names';
+import { DEFAULT_COVER, fetchHfCatalog, getArtistMeta, readArtistsCache } from '../core/catalog';
+import { renderArtistSpotlight, renderAuraPicks, renderQuickAccess } from './home';
+import { filterSongs, loadSong, playSong, refreshTrackMetadata, resetFullPlayerArtToImage, stopAuraYouTube, updatePlayState } from './player';
+import { preparePlaylistTrackEdit } from './playlists';
+import { snapshotTrack, stableTrackRef, trackAvailable, type TrackSnapshot } from '../core/track-identity';
+import { playTrackSequence } from './queue';
+>>>>>>> 62cde5b (Private recovery snapshot before local/production reconciliation (not for deployment))
 import { filterSearchTab } from './search';
 import { applyPlayDeepLink } from './deeplink';
 import { refreshPlaylistViews } from './playlists';
@@ -17,6 +28,7 @@ import { renderUpNext } from './queue';
 import { currentRadioStation } from './radio';
 import { goTab } from '../ui/nav';
 import { $, getPlayCount, persistLikedHistory, rebuildSongs, recordPlayCount, savedLikeMap, setHfTracks, state, trackKey } from '../core/state';
+import { playArtistCollection, refreshArtistPageFavorites, renderArtistPage } from './artist-page';
 /* ===== 3006-3012 ===== */
     /* Library Count */
     /* Home sections rebuild a lot of markup; coalesce the many callers
@@ -89,7 +101,7 @@ import { $, getPlayCount, persistLikedHistory, rebuildSongs, recordPlayCount, sa
         let idx = state.songs.findIndex(item=>item.id===s.id);
         if(idx===-1 && s.title) idx = state.songs.findIndex(item=>item.title===s.title && item.artist===s.artist);
         if(idx===-1) return;
-        cards.push(`<div class="recent-card" role="button" tabindex="0" aria-label="Play ${escapeHtml(s.title||'track')}" onclick="playSong(${idx})"><img src="${escapeHtml(s.img||DEFAULT_COVER)}" alt="" loading="lazy" decoding="async"><p>${escapeHtml(s.title)}</p></div>`);
+        cards.push(`<div class="recent-card" role="button" tabindex="0" aria-label="Play ${escapeHtml(s.title||'track')}" data-play-song-id="${escapeHtml(state.songs[idx].id)}"><img src="${escapeHtml(s.img||DEFAULT_COVER)}" alt="" loading="lazy" decoding="async"><p>${escapeHtml(s.title)}</p></div>`);
       });
       c.innerHTML=cards.join('');
       renderQuickAccess();
@@ -98,12 +110,20 @@ import { $, getPlayCount, persistLikedHistory, rebuildSongs, recordPlayCount, sa
 /* ===== 3162-3473 ===== */
     /* Persist added tracks. Local file blobs live in IndexedDB, so we
        strip the (session-only) blob URL before saving to localStorage. */
-    export function persistAddedSongs(){
-      const serializable = state.addedSongs.map(s => {
-        if(s.isLocal){ const {url, missing, ...rest} = s; return rest; }
-        return s;
-      });
-      localStorage.setItem('addedTracks', JSON.stringify(serializable));
+    export function persistAddedSongs(list = state.addedSongs): boolean {
+      try {
+        const raw = localStorage.getItem('addedTracks');
+        if (raw && !Array.isArray(JSON.parse(raw))) throw new Error('invalid stored library');
+        const serializable = list.map((song) => {
+          if (song.isLocal) { const {url,missing,...rest} = song; return rest; }
+          return song;
+        });
+        localStorage.setItem('addedTracks',JSON.stringify(serializable));
+        return true;
+      } catch {
+        toast('The local library could not be saved. Check browser storage before trying again.', 'triangle-exclamation');
+        return false;
+      }
     }
 
     /* IndexedDB storage for locally-uploaded state.audio files */
@@ -147,16 +167,64 @@ import { $, getPlayCount, persistLikedHistory, rebuildSongs, recordPlayCount, sa
 
     /* Restore local file blobs from IndexedDB on load */
     export async function hydrateLocalTracks(){
-      if(!hasIndexedDB) return;
-      for(const s of state.addedSongs){
-        if(s.isLocal){
-          try{
-            const blob = await getLocalBlob(s.id);
-            if(blob) s.url = URL.createObjectURL(blob);
-            else s.missing = true;
-          }catch(err){ s.missing = true; }
-        }
+      for (const song of state.addedSongs) {
+        if (!song.isLocal) continue;
+        try {
+          const blob = hasIndexedDB ? await getLocalBlob(song.id) : null;
+          if (blob instanceof Blob) { song.url = URL.createObjectURL(blob); song.missing = false; }
+          else { song.url = ''; song.missing = true; }
+        } catch { song.url = ''; song.missing = true; }
       }
+      window.dispatchEvent(new CustomEvent('aura:library-changed'));
+    }
+
+    function localAudioPicker(onFiles: (files: File[]) => Promise<void>, multiple = false): void {
+      const input = document.createElement('input');
+      input.type = 'file'; input.accept = 'audio/*,.mp3,.opus,.m4a,.aac,.ogg,.flac,.wav,.webm'; input.multiple = multiple;
+      input.onchange = () => { void onFiles([...input.files]); };
+      input.click();
+    }
+    async function storeLocalAudio(file: File, id: string | number, metadata?: TrackSnapshot): Promise<boolean> {
+      if (!/\.(mp3|opus|m4a|aac|ogg|flac|wav|webm)$/i.test(file.name) && !file.type.startsWith('audio/')) {
+        toast('Choose a browser-supported audio file.', 'triangle-exclamation'); return false;
+      }
+      if (file.size > 250 * 1024 * 1024) { toast('This audio file is larger than the 250 MB local-file limit.', 'triangle-exclamation'); return false; }
+      const existing = state.addedSongs.find((song) => String(song.id) === String(id));
+      const key = existing?.id ?? id;
+      let previous: Blob | null = null;
+      try {
+        previous = await getLocalBlob(key) || null;
+        await saveLocalBlob(key,file);
+        const name = file.name.replace(/\.[^.]+$/,'');
+        const parts = name.split(' - ');
+        const url = URL.createObjectURL(file);
+        const song = {...existing,id:key,title:metadata?.title || existing?.title || (parts.length > 1 ? parts.slice(1).join(' - ') : name),
+          artist:metadata?.artist || existing?.artist || (parts.length > 1 ? parts[0] : 'Local audio'),
+          img:metadata?.img || existing?.img || DEFAULT_COVER,duration:metadata?.duration || existing?.duration || 0,
+          url,isLocal:true,isHf:false,isYouTube:false,missing:false,favorite:!!existing?.favorite};
+        const next = state.addedSongs.filter((item) => String(item.id) !== String(key)); next.push(song);
+        if (!persistAddedSongs(next)) {
+          if (previous) await saveLocalBlob(key,previous); else await deleteLocalBlob(key);
+          URL.revokeObjectURL(url); return false;
+        }
+        if (existing?.url?.startsWith('blob:') && state.activeTrack !== existing) URL.revokeObjectURL(existing.url);
+        state.addedSongs = next; rebuildSongs(); updateLibCount();
+        if ($('tabLibrary')?.classList.contains('active')) renderLibrary();
+        if ($('tabSearch')?.classList.contains('active')) filterSearchTab();
+        return true;
+      } catch { toast('This file could not be stored in this browser. Check device storage and try again.', 'triangle-exclamation'); return false; }
+    }
+    export function importLocalAudio(): void {
+      localAudioPicker(async (files) => {
+        let added = 0;
+        for (const file of files) if (await storeLocalAudio(file,`local_${crypto.randomUUID()}`)) added += 1;
+        if (added) { toast(`Added ${added} local audio file${added === 1 ? '' : 's'}.`, 'circle-check'); goTab('tabSearch'); (globalThis as any).goToSearchCategory?.('local'); }
+      },true);
+    }
+    export function restoreLocalFile(id: string, metadata?: TrackSnapshot): void {
+      localAudioPicker(async (files) => {
+        if (files[0] && await storeLocalAudio(files[0],id,metadata)) toast('Local file restored. Its playlist reference is unchanged.', 'circle-check');
+      });
     }
 
     /* Edit track (title / artist / cover) */
@@ -198,28 +266,32 @@ import { $, getPlayCount, persistLikedHistory, rebuildSongs, recordPlayCount, sa
       reader.readAsDataURL(file);
     };
 
-    export function saveEditedTrack(){
-      const song = state.addedSongs.find(s => s.id === editingId);
+    export async function saveEditedTrack(){
+      const song = state.addedSongs.find(s => String(s.id) === String(editingId));
       if(!song) return closeEditModal();
-      const newTitle = $('editTitleInput').value.trim();
-      const newArtist = $('editArtistInput').value.trim();
-      song.title = newTitle || song.title;
-      song.artist = newArtist || song.artist;
-      song.img = editPendingImg || song.img;
-
-      persistAddedSongs();
+      const next = {...song,title:$('editTitleInput').value.trim() || song.title,artist:$('editArtistInput').value.trim() || song.artist,img:editPendingImg || song.img};
+      if (!await preparePlaylistTrackEdit()) return;
+      const list = state.addedSongs.map((item) => item === song ? next : item);
+      if (!persistAddedSongs(list)) return;
+      const wasSelected = state.activeTrack && String(state.activeTrack.id) === String(song.id);
+      state.addedSongs = list; rebuildSongs();
+      if (wasSelected) { state.activeTrack = next; refreshTrackMetadata(next); }
       filterSongs();
       if($('tabLibrary').classList.contains('active')) renderLibrary();
       if($('tabSearch').classList.contains('active')) filterSearchTab();
-      if(state.songs[state.currentIndex] && state.songs[state.currentIndex].id === song.id) loadSong(state.currentIndex);
       renderRecent();
+<<<<<<< HEAD
       scheduleHomeSections();
       toast('Track updated', 'circle-check');
+=======
+      toast('Track updated without changing playback or playlist identity.', 'circle-check');
+>>>>>>> 62cde5b (Private recovery snapshot before local/production reconciliation (not for deployment))
       closeEditModal();
     }
 
     /* Delete track */
     export async function deleteTrack(e, id){
+<<<<<<< HEAD
       if(e) e.stopPropagation();
       const song = state.addedSongs.find(s => String(s.id) === String(id));
       if(!song) return;
@@ -258,9 +330,38 @@ import { $, getPlayCount, persistLikedHistory, rebuildSongs, recordPlayCount, sa
         $('miniPlayer').classList.remove('active');
         if(removedMainPlayback && 'mediaSession' in navigator){ navigator.mediaSession.metadata = null; navigator.mediaSession.playbackState = 'none'; }
         updatePlayState();
+=======
+      e?.stopPropagation();
+      const song = state.addedSongs.find((item) => String(item.id) === String(id));
+      if (!song || !confirm(`Remove “${song.title}” from your library?`)) return;
+      if (!await preparePlaylistTrackEdit()) return;
+      const next = state.addedSongs.filter((item) => String(item.id) !== String(id));
+      const recent = state.recentlyPlayed.filter((item) => String(item.id) !== String(id));
+      let previousRecent: string | null;
+      try {
+        previousRecent = localStorage.getItem('recentlyPlayed');
+        localStorage.setItem('recentlyPlayed',JSON.stringify(recent));
+      } catch { toast('The library could not be changed because browser storage is unavailable.', 'triangle-exclamation'); return; }
+      if (!persistAddedSongs(next)) {
+        try { if (previousRecent === null) localStorage.removeItem('recentlyPlayed'); else localStorage.setItem('recentlyPlayed',previousRecent); } catch { /* metadata and audio are still intact */ }
+        return;
       }
-
+      const wasSelected = state.activeTrack && String(state.activeTrack.id) === String(id);
+      if (wasSelected) {
+        state.audio.pause(); state.audio.removeAttribute('src'); state.audio.load();
+        stopAuraYouTube(); state.isPlaying=false; state.activeTrack=null; state.currentIndex=-1;
+        resetFullPlayerArtToImage('');
+        for (const title of ['currentTitle','fullTitle','fullHeaderTitle']) { $(title).textContent='Select track'; $(title).dataset.rawTitle='Select track'; }
+        $('currentArtist').textContent=$('fullArtist').textContent=''; $('currentImg').src='';
+        $('fullPlayerOverlay').classList.remove('active'); updatePlayState();
+>>>>>>> 62cde5b (Private recovery snapshot before local/production reconciliation (not for deployment))
+      }
+      state.addedSongs = next; state.recentlyPlayed = recent; rebuildSongs();
+      // File destruction is deliberately after durable metadata commit.
+      if (song.isLocal && hasIndexedDB) { try { await deleteLocalBlob(song.id); } catch { /* unused blob can be cleaned up later */ } }
+      if (song.url?.startsWith('blob:')) URL.revokeObjectURL(song.url);
       filterSongs();
+<<<<<<< HEAD
       if($('tabLibrary').classList.contains('active')) renderLibrary();
       if($('tabSearch').classList.contains('active')) filterSearchTab();
       updateLibCount();
@@ -268,20 +369,35 @@ import { $, getPlayCount, persistLikedHistory, rebuildSongs, recordPlayCount, sa
       renderUpNext();
       refreshPlaylistViews();
       toast('Track removed from your library', 'circle-check');
+=======
+      if ($('tabLibrary').classList.contains('active')) renderLibrary();
+      if ($('tabSearch').classList.contains('active')) filterSearchTab();
+      updateLibCount(); renderRecent(); toast('Track removed from your library.', 'circle-check');
+>>>>>>> 62cde5b (Private recovery snapshot before local/production reconciliation (not for deployment))
     }
 
 /* ===== 4925-4991 ===== */
     export function toggleFavorite(e, id) {
       if(e) e.stopPropagation();
-      const song = typeof id === 'number' ? state.songs[id] : state.songs.find(s => String(s.id) === String(id));
+      const song = state.songs.find(s => String(s.id) === String(id));
       if(!song) return;
+<<<<<<< HEAD
       const focused = document.activeElement as HTMLElement | null;
       const focusList = focused?.matches('.song-item-like')
         ? focused.closest<HTMLElement>('#songList, #librarySongList, #searchResultsList') : null;
       const focusIndex = focusList ? [...focusList.querySelectorAll('.song-item-like')].indexOf(focused) : -1;
       song.favorite = !song.favorite;
+=======
+      const previous = !!song.favorite;
+      song.favorite = !previous;
+>>>>>>> 62cde5b (Private recovery snapshot before local/production reconciliation (not for deployment))
       if(song.favorite) savedLikeMap[String(song.id)]=true; else delete savedLikeMap[String(song.id)];
-      persistLikedHistory();
+      if (!persistLikedHistory()) {
+        song.favorite = previous;
+        if (previous) savedLikeMap[String(song.id)] = true; else delete savedLikeMap[String(song.id)];
+        toast('Favorites could not be saved. Free browser storage and try again.', 'triangle-exclamation');
+        return;
+      }
       // Keep the full-player heart in sync immediately.
       if(state.currentIndex >= 0 && state.songs[state.currentIndex] && String(state.songs[state.currentIndex].id)===String(song.id)){
         $('fullLikeBtn').className=`like-btn ${song.favorite?'active':''}`;
@@ -291,7 +407,11 @@ import { $, getPlayCount, persistLikedHistory, rebuildSongs, recordPlayCount, sa
       toast(song.favorite ? 'Saved to Liked Songs' : 'Removed from Liked Songs', song.favorite ? 'heart' : 'heart-crack');
       filterSongs();
       renderQuickAccess();
-      if($('tabLibrary').classList.contains('active')) renderLibrary();
+      if($('tabLibrary').classList.contains('active')) {
+        const artistPage = $('librarySongList').querySelector<HTMLElement>('.artist-detail-page');
+        if (artistPage) refreshArtistPageFavorites(artistPage);
+        else renderLibrary();
+      }
       if($('tabSearch').classList.contains('active')) filterSearchTab();
       document.querySelectorAll<HTMLElement>('.artist-detail-page').forEach(refreshArtistPageFavorites);
       if(focusList){
@@ -316,6 +436,7 @@ import { $, getPlayCount, persistLikedHistory, rebuildSongs, recordPlayCount, sa
         </div>`).join('');
     }
 
+<<<<<<< HEAD
     export function songItemHTML(s, songIdx?){
       let index = -1;
       if(typeof songIdx === 'number' && songIdx >= 0 && songIdx < state.songs.length){
@@ -343,6 +464,18 @@ import { $, getPlayCount, persistLikedHistory, rebuildSongs, recordPlayCount, sa
             <button type="button" class="song-item-menu-btn" data-song-menu="${escapeHtml(String(s.id))}" aria-label="More options for ${title}"><i class="fa-solid fa-ellipsis" aria-hidden="true"></i></button>
           </div>
         </div>`;
+=======
+    export function songItemHTML(song: any, _songIdx?: number, artistKey?: string){
+      const title = escapeHtml(song.title || 'Untitled'), artist = escapeHtml(song.artist || 'Unknown artist');
+      const current = state.activeTrack || state.songs[state.currentIndex];
+      return `<div class="song-item ${current && stableTrackRef(current) === stableTrackRef(song) ? 'active' : ''}">
+        <button class="song-info" type="button" data-play-song-id="${escapeHtml(String(song.id))}" ${typeof artistKey === 'string' ? `data-artist-key="${escapeHtml(artistKey)}"` : ''} aria-label="Play ${title} by ${artist}" ${trackAvailable(song) ? '' : 'disabled'}>
+          <img src="${escapeHtml(song.img || DEFAULT_COVER)}" alt="" loading="lazy" decoding="async"><span><span class="song-title">${title}</span><span class="song-artist">${artist}${song.missing ? ' (file unavailable)' : ''}</span></span>
+        </button><div class="song-item-actions">
+          <button type="button" class="song-item-like ${song.favorite ? 'active' : ''}" data-like-song-id="${escapeHtml(String(song.id))}" aria-label="${song.favorite ? 'Unlike' : 'Like'} ${title}" aria-pressed="${!!song.favorite}"><i class="fa-${song.favorite ? 'solid' : 'regular'} fa-heart" aria-hidden="true"></i></button>
+          <button type="button" class="song-item-menu-btn" data-song-menu="${escapeHtml(String(song.id))}" aria-label="More options for ${title}"><i class="fa-solid fa-ellipsis" aria-hidden="true"></i></button>
+        </div></div>`;
+>>>>>>> 62cde5b (Private recovery snapshot before local/production reconciliation (not for deployment))
     }
 
     export function renderSongs(list){
@@ -354,7 +487,11 @@ import { $, getPlayCount, persistLikedHistory, rebuildSongs, recordPlayCount, sa
           return;
         }
         if(!state.songs.length){
+<<<<<<< HEAD
           c.innerHTML = stateHTML('empty','Your library is empty','Your saved music will appear here after the catalogue refreshes.','Refresh library','retryCatalog()');
+=======
+          c.innerHTML = stateHTML('empty','Your library is empty','Music enters the shared catalogue through Discord. You can also listen to audio files from this device.','Add local audio',"importLocalAudio()");
+>>>>>>> 62cde5b (Private recovery snapshot before local/production reconciliation (not for deployment))
           return;
         }
         c.innerHTML = stateHTML('noresults','No tracks found','Try a different spelling or another filter.');
@@ -384,11 +521,12 @@ import { $, getPlayCount, persistLikedHistory, rebuildSongs, recordPlayCount, sa
 
     export function playLibGroup(key){
       const idxs = libGroupIndex.get(key);
-      if(idxs && idxs.length) playSong(idxs[0]);
+      if(idxs && idxs.length) playTrackSequence(idxs.map(index=>state.songs[index]?.id).filter(Boolean), {source:'library',collectionId:key,label:key});
     }
 
     /* ---------- Artists: library-wide grouping, circle tiles, detail page ----------
        One source of truth for Home (scrolling row) and Library (grid tab):
+<<<<<<< HEAD
        verified aliases, conservative credit parsing and cloud ownership all
        resolve before grouping. The catalogue's attribution stays untouched. */
     let artistGroupingSnapshot: {
@@ -414,10 +552,43 @@ import { $, getPlayCount, persistLikedHistory, rebuildSongs, recordPlayCount, sa
       });
       artistGroupingSnapshot = { profiles, directory, metadataRevision, groups,
         inputs: state.songs.map(song => ({ song, id: song?.id, artist: song?.artist, img: song?.img, hfPath: song?.hfPath })) };
+=======
+       groups merge artist variants via artistMergeKey, label each group with
+       a normal artist credit rather than a channel handle, sort busiest-first,
+       and prefer saved profiles over track artwork. */
+    export function getArtistGroups(){
+      const keys: string[] = [];
+      const groups: any[] = [];
+      const profiles = readArtistsCache();
+      state.songs.forEach(s => {
+        const a = (s.artist || '').trim();
+        if(!a || a.toLowerCase() === 'unknown artist') return;
+        const k = artistMergeKey(keys, a);
+        let g = groups.find(x => x.key === k);
+        if(!g){ g = { key:k, name:'', names:new Map(), songs:[], cover:'' }; groups.push(g); keys.push(k); }
+        g.songs.push(s);
+        g.names.set(a, (g.names.get(a) || 0) + 1);
+        if(!g.cover && s.img) g.cover = s.img;
+      });
+      groups.forEach(g => {
+        g.name = preferredArtistName(g.names);
+        g.key = artistKey(g.name);
+        const custom = getArtistMeta(g.name, profiles) || [...g.names.keys()].map(name => getArtistMeta(name, profiles)).find(Boolean);
+        const sample = g.songs.find(song => song.img && !song.img.includes('default') && !song.img.includes('data:image')) || g.songs[0];
+        if (custom?.name) g.name = preferredArtistName([[custom.name, 1], [g.name, 0]]);
+        g.cover = custom?.img || sample?.img || g.cover;
+        g.bio = custom?.bio || '';
+      });
+      groups.sort((a, b) => b.songs.length - a.songs.length || a.name.localeCompare(b.name));
+>>>>>>> 62cde5b (Private recovery snapshot before local/production reconciliation (not for deployment))
       return groups;
     }
 
     function artistInitial(name){ return String(name || '').trim().charAt(0) || '#'; }
+<<<<<<< HEAD
+=======
+    function artistFallbackColor(_name){ return 'var(--surface-2)'; }
+>>>>>>> 62cde5b (Private recovery snapshot before local/production reconciliation (not for deployment))
     function artistAvatarHTML(g, cls){
       if(g.cover) return `<img class="artist-avatar ${cls || ''}" data-artist-portrait src="${escapeHtml(g.cover)}" alt="">`;
       return `<span class="artist-avatar artist-avatar-fallback ${cls || ''}">${escapeHtml(artistInitial(g.name))}</span>`;
@@ -443,6 +614,7 @@ import { $, getPlayCount, persistLikedHistory, rebuildSongs, recordPlayCount, sa
       if(currentArtist != null){
         const g = resolveArtistSelection(artistGroupsCache, currentArtist);
         if(g){
+<<<<<<< HEAD
           currentArtist = selectArtist(g);
           if(heading) heading.style.display = 'none';
           $('tabLibrary')?.classList.add('artist-detail-open');
@@ -452,6 +624,14 @@ import { $, getPlayCount, persistLikedHistory, rebuildSongs, recordPlayCount, sa
             setLibView('artists');
             document.querySelector<HTMLButtonElement>('#libViewSeg [data-view="artists"]')?.focus({ preventScroll: true });
           }, onFavorite: toggleFavorite });
+=======
+          if(heading) heading.style.display = 'none';
+          c.innerHTML = '<section class="artist-detail-page"></section>';
+          renderArtistPage(c.firstElementChild as HTMLElement, { key: g.key, name: g.name, img: g.cover, bio: g.bio, songs: g.songs }, {
+            prefix: 'libraryArtist', trackActions: true,
+            onBack: () => { setLibView('artists'); document.querySelector<HTMLElement>('#libViewSeg [data-view="artists"]')?.focus({ preventScroll: true }); },
+          });
+>>>>>>> 62cde5b (Private recovery snapshot before local/production reconciliation (not for deployment))
           return;
         }
         currentArtist = null;
@@ -499,7 +679,17 @@ import { $, getPlayCount, persistLikedHistory, rebuildSongs, recordPlayCount, sa
       });
       goTab('tabLibrary');
       renderLibrary();
+<<<<<<< HEAD
       $('libraryArtistName')?.focus({ preventScroll: true });
+=======
+      window.scrollTo({ top: 0, behavior: 'instant' });
+      $('libraryArtistName')?.focus({ preventScroll: true });
+    }
+
+    export function playArtistByKey(key: string, startId: string): void {
+      const group = getArtistGroups().find((item) => item.key === key);
+      if (group) playArtistCollection({ key: group.key, name: group.name, img: group.cover, songs: group.songs }, false, startId);
+>>>>>>> 62cde5b (Private recovery snapshot before local/production reconciliation (not for deployment))
     }
 
     export function playArtist(i, shuffle){
@@ -507,7 +697,12 @@ import { $, getPlayCount, persistLikedHistory, rebuildSongs, recordPlayCount, sa
       artistGroupsCache = groups;
       const g = groups[i];
       if(!g || !g.songs.length) return;
+<<<<<<< HEAD
       if(playArtistCollection(g, !!shuffle)) $('fullPlayerOverlay').classList.add('active');
+=======
+      playArtistCollection({ key: g.key, name: g.name, img: g.cover, songs: g.songs }, !!shuffle);
+      $('fullPlayerOverlay').classList.add('active');
+>>>>>>> 62cde5b (Private recovery snapshot before local/production reconciliation (not for deployment))
     }
     export function shuffleArtist(i){ playArtist(i, true); }
 
@@ -525,7 +720,15 @@ import { $, getPlayCount, persistLikedHistory, rebuildSongs, recordPlayCount, sa
         if(!g){ g = {name, songs: []}; groups.set(key, g); }
         g.songs.push(s);
       };
+<<<<<<< HEAD
       if(view === 'albums'){
+=======
+      if(view === 'artists'){
+        for(const group of getArtistGroups()){
+          groups.set(group.key, {name: group.name, songs: group.songs});
+        }
+      }else if(view === 'albums'){
+>>>>>>> 62cde5b (Private recovery snapshot before local/production reconciliation (not for deployment))
         state.songs.forEach(s => {
           const al = (s.album||'').trim();
           push(al ? 'album:'+al : 'album:', al || 'Singles & extras', s);
@@ -574,13 +777,20 @@ import { $, getPlayCount, persistLikedHistory, rebuildSongs, recordPlayCount, sa
     export function renderLibrary(){
       const c=$('librarySongList');
       const heading=$('allTracksSection');
+<<<<<<< HEAD
       $('tabLibrary')?.classList.remove('artist-detail-open');
+=======
+>>>>>>> 62cde5b (Private recovery snapshot before local/production reconciliation (not for deployment))
       if(heading) heading.style.display = '';
       if(heading) heading.textContent = libView==='artists'?'Artists':libView==='albums'?'Albums':libView==='films'?'Films':'All tracks';
       if(!state.songs.length){
         if(state.catalogLoading) c.innerHTML = skeletonRows(8);
         else if(state.catalogError) c.innerHTML = stateHTML('error','Couldn\'t load your library','The remote catalogue is unreachable. Check your connection and try again.','Try again','retryCatalog()');
+<<<<<<< HEAD
         else c.innerHTML=stateHTML('empty','Your library is empty','Your saved music will appear here after the catalogue refreshes.','Refresh library','retryCatalog()');
+=======
+        else c.innerHTML=stateHTML('empty','Your library is empty','Shared catalogue music arrives through Discord. You can also add audio files from this device.','Add local audio',"importLocalAudio()");
+>>>>>>> 62cde5b (Private recovery snapshot before local/production reconciliation (not for deployment))
       }else if(libView==='tracks'){
         // Sort most played songs at the top, rest downwards
         const sorted = [...state.songs].sort((a, b) => {
@@ -594,6 +804,7 @@ import { $, getPlayCount, persistLikedHistory, rebuildSongs, recordPlayCount, sa
       }else{
         renderGroups(libView);
       }
+      $('tabLibrary')?.classList.toggle('artist-detail-open', libView === 'artists' && currentArtistKey != null && !!c.querySelector('.artist-detail-page'));
       updateLibNowPlaying();
       if($('statsPanel').style.display!=='none') renderStatsPanel();
     }

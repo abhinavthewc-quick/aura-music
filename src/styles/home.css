@@ -1,12 +1,20 @@
 /* Home is a record shelf, not a dashboard of decorative panels. */
 .home-greeting { display: flex; flex-wrap: wrap; align-items: baseline; gap: 8px; margin: 0 0 24px; color: var(--text); font-size: clamp(24px, 2.6vw, 32px); font-weight: 600; letter-spacing: -.035em; line-height: 1.25; }
+<<<<<<< HEAD
 .home-greeting em { font: inherit; }
+=======
+.home-greeting em { color: var(--text-sub); font: inherit; font-weight: 400; }
+>>>>>>> 62cde5b (Private recovery snapshot before local/production reconciliation (not for deployment))
 .home-greeting em::after { content: ","; }
 .ytm-chips-bar { display: flex; gap: 8px; overflow-x: auto; margin: 0 0 24px; padding: 2px 0 6px; scrollbar-width: none; }
 .ytm-chips-bar::-webkit-scrollbar { display: none; }
 .ytm-chip { flex: 0 0 auto; min-height: var(--tap); padding: 6px 14px; border: 1px solid var(--line); border-radius: var(--radius-xs); background: transparent; color: var(--text-sub); font-size: 13px; font-weight: 500; white-space: nowrap; transition: background-color var(--dur-fast), color var(--dur-fast); }
 .ytm-chip:hover { background: var(--hover); color: var(--text); }
+<<<<<<< HEAD
 .ytm-chip.active { border-color: var(--line-strong); background: var(--accent-soft); color: var(--accent); }
+=======
+.ytm-chip.active { border-color: rgba(var(--accent-rgb), .3); background: var(--accent-soft); color: var(--accent); }
+>>>>>>> 62cde5b (Private recovery snapshot before local/production reconciliation (not for deployment))
 .ytm-section-head, .aura-picks-head { display: flex; align-items: baseline; justify-content: space-between; gap: 16px; margin-bottom: 16px; }
 .ytm-section-title, .aura-picks-head h3 { color: var(--text); font-size: 22px; font-weight: 600; letter-spacing: -.025em; }
 .ytm-section-link { min-height: var(--tap); padding: 4px 0; border: 0; background: transparent; color: var(--text-sub); font-size: 13px; }
@@ -47,7 +55,11 @@
 .aura-picks-scroll::-webkit-scrollbar, .recent-scroll::-webkit-scrollbar { display: none; }
 .aura-pick { position: relative; flex: 0 0 180px; height: 200px; overflow: hidden; border: 1px solid var(--line); border-radius: var(--radius-sm); background: var(--surface-1); cursor: pointer; scroll-snap-align: start; }
 .aura-pick img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; }
+<<<<<<< HEAD
 /* Image-legibility gradients are not application surface colors. */
+=======
+/* This gradient belongs to image legibility, not to the application's surface palette. */
+>>>>>>> 62cde5b (Private recovery snapshot before local/production reconciliation (not for deployment))
 .aura-pick::after { content: ""; position: absolute; inset: 0; background: linear-gradient(180deg, transparent 30%, rgba(0, 0, 0, .86)); pointer-events: none; }
 .aura-pick-play { position: absolute; z-index: 2; top: 12px; right: 12px; display: grid; place-items: center; width: 36px; height: 36px; border-radius: 50%; background: rgba(0, 0, 0, .62); color: #fff; }
 .aura-pick-info { position: absolute; z-index: 2; right: 12px; bottom: 12px; left: 12px; color: #fff; }
@@ -65,9 +77,16 @@
 .spotlight-avatar { width: 36px; height: 36px; border-radius: 50%; object-fit: cover; }
 .more-songs-note { display: flex; align-items: center; gap: 12px; margin-top: 16px; padding: 16px; border-top: 1px solid var(--line); color: var(--text-sub); font-size: 13px; }
 .more-songs-note i { color: var(--accent); }
+<<<<<<< HEAD
 .more-songs-note button { min-height: var(--tap); padding: 0 4px; border: 0; background: transparent; color: var(--text); font-weight: 600; }
 .more-songs-note button:hover { text-decoration: underline; }
 
+=======
+.more-songs-note strong { color: var(--text); cursor: pointer; }
+.more-songs-note strong:hover { text-decoration: underline; }
+
+/* Artist imagery is common to the Home shelf and the artist drill-down. */
+>>>>>>> 62cde5b (Private recovery snapshot before local/production reconciliation (not for deployment))
 .ytm-artists-shelf { display: flex; gap: 24px; overflow-x: auto; margin-bottom: 28px; padding: 4px 2px 12px; scrollbar-width: none; }
 .ytm-artists-shelf::-webkit-scrollbar { display: none; }
 .ytm-artist-card { display: flex; flex-direction: column; align-items: center; flex: 0 0 112px; min-width: 0; padding: 0; border: 0; background: transparent; color: var(--text); text-align: center; cursor: pointer; }
@@ -80,6 +99,10 @@
 .ytm-artists-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(130px, 1fr)); gap: 24px 16px; padding: 12px 0 32px; }
 .ytm-artist-card.grid-card { width: 100%; }
 .ytm-artist-card.grid-card .ytm-artist-art-wrap { width: 110px; height: 110px; max-width: 100%; }
+<<<<<<< HEAD
+=======
+.ytm-listen-kicker { display: none; }
+>>>>>>> 62cde5b (Private recovery snapshot before local/production reconciliation (not for deployment))
 @media (max-width: 1100px) { .ytm-quick-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
 @media (max-width: 680px) { .ytm-quick-grid { grid-template-columns: 1fr; } }
 @media (max-width: 600px) {

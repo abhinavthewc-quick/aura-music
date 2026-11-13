@@ -1,4 +1,8 @@
+<<<<<<< HEAD
 /* Library-only search: categories are filters, not acquisition tiles. */
+=======
+/* Library-only search. Categories are filters, not decorative acquisition tiles. */
+>>>>>>> 62cde5b (Private recovery snapshot before local/production reconciliation (not for deployment))
 .srch-head { margin-bottom: 24px; }
 .srch-title { margin-bottom: 6px; color: var(--text); font-size: 28px; font-weight: 600; letter-spacing: -.035em; }
 .srch-sub { max-width: 64ch; color: var(--text-sub); font-size: 13px; line-height: 1.55; }
@@ -8,7 +12,11 @@
 .search-bar > i { color: var(--text-sub); font-size: 17px; }
 .search-bar input { flex: 1; min-width: 0; width: 100%; padding: 12px 0; border: 0; outline: none; background: transparent; color: var(--text); font-size: 15px; }
 .search-bar input::placeholder { color: var(--text-dim); }
+<<<<<<< HEAD
 .srch-clear { display: none; place-items: center; width: var(--tap); height: var(--tap); flex: 0 0 var(--tap); padding: 0; border: 0; border-radius: 50%; background: transparent; color: var(--text-sub); }
+=======
+.srch-clear { display: none; place-items: center; width: 36px; height: 36px; flex: 0 0 36px; padding: 0; border: 0; border-radius: 50%; background: transparent; color: var(--text-sub); }
+>>>>>>> 62cde5b (Private recovery snapshot before local/production reconciliation (not for deployment))
 .search-bar.has-text .srch-clear { display: grid; }
 .srch-clear:hover { background: var(--hover); color: var(--text); }
 .srch-mic { flex: 0 0 52px; width: 52px; height: 52px; border: 1px solid var(--line); border-radius: var(--radius-sm); background: var(--surface-2); color: var(--text-sub); font-size: 18px; }
@@ -18,7 +26,11 @@
 .browse-tile { display: inline-flex; align-items: center; gap: 8px; min-height: var(--tap); padding: 8px 14px; border: 1px solid var(--line); border-radius: var(--radius-xs); background: transparent; color: var(--text-sub); font-size: 13px; font-weight: 500; }
 .browse-tile i { font-size: 13px; }
 .browse-tile:hover { background: var(--hover); color: var(--text); }
+<<<<<<< HEAD
 .browse-tile.active { border-color: var(--line-strong); background: var(--accent-soft); color: var(--accent); }
+=======
+.browse-tile.active { border-color: rgba(var(--accent-rgb), .35); background: var(--accent-soft); color: var(--accent); }
+>>>>>>> 62cde5b (Private recovery snapshot before local/production reconciliation (not for deployment))
 .srch-section { margin-bottom: 12px; color: var(--text); font-size: 15px; font-weight: 600; }
 .srch-hint { color: var(--text-sub); font-size: 12px; }
 #tabSearch.searching .browse-grid { display: none; }

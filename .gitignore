@@ -11,8 +11,26 @@ __pycache__/
 rooms-worker/node_modules/
 rooms-worker/.wrangler/
 
-# Python / Telepathy
+# Python / quarantined Telepathy experiment
 .venv/
 *.db
+*.db-*
+*.sqlite
+*.sqlite-*
+*.egg-info/
 .pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.coverage
+htmlcov/
 tsconfig.tsbuildinfo
+
+# Frontend regression outputs (keep test sources and approved snapshots tracked)
+test-results/
+playwright-report/
+blob-report/
+
+# Local Pages secrets must never be committed
+.dev.vars
+.dev.vars.*
+!.dev.vars.example
