@@ -21,7 +21,7 @@ test('admin and listener artist memberships agree for aliases and every collabor
     track('Anirudh Ravichandran & Dhanush', 'Anirudh Ravichander', 'efghijklmno'),
     track('Anirudh Ravichander, Anirudh Ravichandran & Dhanush', 'Anirudh Ravichander', 'fghijklmnop'),
     track('Siri Xander & Arra Aria Khayal', 'Siri Xander', 'ghijklmnopq'),
-  ].map(Object.freeze);
+  ].map(song => Object.freeze(song));
   const before = JSON.stringify({ tracks, profiles }), keys = tracks.map(trackKey);
   const admin = buildAdminArtistGroups([...tracks, tracks[3]], profiles);
   const listeners = buildArtistGroups([...tracks, tracks[3]], profiles, { authoritativeProfiles: profiles });

@@ -20,7 +20,7 @@ export const legacyPlaylists = [
   {id:'p3',title:'Recovery',description:'Missing track fixture',privacy:'Private',year:2026,createdAt:3,tracks:['lk:lost song|unknown artist']},
 ];
 
-export async function seedAura(page: Page, options: {missingLocal?:boolean; fallbackLock?:boolean} = {}) {
+export async function seedAura(page: Page, options: {missingLocal?:boolean; fallbackLock?:boolean; repeat?:'off'|'all'|'one'} = {}) {
   const audio = silentAudio();
   const lyricsRequests: string[] = [], pageErrors: string[] = [];
   page.on('pageerror',(error) => pageErrors.push(error.message));
@@ -79,37 +79,60 @@ export async function seedAura(page: Page, options: {missingLocal?:boolean; fall
       };
     });
   },{songs:tracks.map((track) => ({...track})),playlists:legacyPlaylists.map((playlist) => ({...playlist,tracks:[...playlist.tracks]})),audioBase64:audio.toString('base64'),missingLocal:options.missingLocal});
+  const playlistSeed = await page.evaluate(() => localStorage.getItem('auraPlaylists'));
   await page.goto('/');
   await expect(page.locator('#welcomeScreen')).toHaveClass(/hidden/);
-  await page.waitForFunction(() => !!(globalThis as any).openPlaylistPage && !!(globalThis as any).state?.songs?.length);
-  // The intro removes itself; dismiss it only if it is still mounted.
-  await page.evaluate(() => document.getElementById('auraLoader')?.click());
-  await expect(page.locator('#auraLoader')).toHaveCount(0);
-  await expect.poll(() => page.evaluate(() => JSON.parse(localStorage.getItem('auraPlaylists') || '{}').version)).toBe(2);
-  return {lyricsRequests,pageErrors};
+  await page.waitForFunction(() => !!(globalThis as any).openPlaylistPage && !!(globalThis as any).state?.songs?.length && !document.getElementById('musicApp')?.hidden);
+  await page.evaluate(async () => { await (await import('/src/app.ts' as string)).ready; });
+  await page.waitForFunction(() => (globalThis as any).state.songs.some((song:any) => song.id === 4 && song.url?.startsWith('blob:')));
+  expect(await page.evaluate(() => localStorage.getItem('auraPlaylists'))).toBe(playlistSeed);
+  if (options.repeat !== undefined) await page.evaluate(repeat => {
+    for (let i = 0; i < 3 && (globalThis as any).state.repeatMode !== repeat; i++) document.getElementById('miniRepeatBtn')?.click();
+  }, options.repeat);
+  return {lyricsRequests,pageErrors,playlistSeed};
 }
 
 export const currentTitle = (page: Page): Promise<string> => page.evaluate(() => (globalThis as any).state.activeTrack?.title || '');
-export const store = (page: Page): Promise<any> => page.evaluate(() => JSON.parse(localStorage.getItem('auraPlaylists') || '{}'));
+export const store = (page: Page): Promise<any> => page.evaluate(() => {
+  const value = JSON.parse(localStorage.getItem('auraPlaylists') || '{}');
+  return Array.isArray(value) ? {version:1,revision:0,playlists:value} : value;
+});
 export async function openPlaylist(page: Page,id = 'p1') { await page.evaluate((id) => (globalThis as any).openPlaylistPage(id),id); }
 export async function resetPosition(page: Page) { await page.evaluate(() => {(globalThis as any).state.audio.currentTime=0;}); }
+export async function openPlayerSheet(page: Page, tab: 'queue' | 'lyrics' | 'related') {
+  await page.evaluate(async tab => { (await import('/src/features/player.ts' as string)).openPlayerSheet(tab); }, tab);
+}
+export async function endNativeAudio(page: Page) {
+  await page.waitForFunction(() => Number.isFinite((globalThis as any).state.audio.duration) && (globalThis as any).state.audio.duration > 0);
+  await page.evaluate(async () => {
+    const audio = (globalThis as any).state.audio as HTMLAudioElement;
+    const ended = new Promise<void>(resolve => audio.addEventListener('ended', () => resolve(), {once:true}));
+    audio.currentTime = Math.max(0, audio.duration - .05);
+    await audio.play();
+    await ended;
+  });
+}
 
 export async function mockYouTube(page: Page) {
   await page.evaluate(() => {
     const players: any[] = [];
-    const states = {PLAYING:1,PAUSED:2,ENDED:0};
+    const states = {UNSTARTED:-1,PLAYING:1,PAUSED:2,ENDED:0,BUFFERING:3,CUED:5};
     (window as any).__youtubePlayers = players;
     (window as any).YT = {PlayerState:states,Player:class {
-      options:any; time=0; state=2;
-      constructor(_host:string,options:any) { this.options=options;players.push(this);queueMicrotask(() => options.events.onReady({target:this})); }
+      options:any; time=0; state=2; frame:HTMLIFrameElement;
+      constructor(host:HTMLElement,options:any) {
+        this.options=options; this.frame=document.createElement('iframe'); this.frame.title='Isolated YouTube player'; this.frame.id=host.id; host.replaceWith(this.frame);
+        players.push(this);queueMicrotask(() => options.events.onReady({target:this}));
+      }
       getPlayerState(){return this.state;}
       getCurrentTime(){return this.time;}
       getDuration(){return 60;}
       seekTo(time:number){this.time=time;}
-      playVideo(){this.state=1;this.options.events.onStateChange({data:1});}
-      pauseVideo(){this.state=2;this.options.events.onStateChange({data:2});}
+      transition(state:number){this.state=state;this.options.events.onStateChange({target:this,data:state});}
+      playVideo(){this.transition(1);}
+      pauseVideo(){this.transition(2);}
       stopVideo(){this.state=2;}
-      destroy(){}
+      destroy(){this.frame.remove();}
       setVolume(){}
     }};
   });

@@ -330,6 +330,7 @@ $('radioStopBtn')?.addEventListener('click', stopRadio);
 $('customRadioPlayBtn')?.addEventListener('click', playCustomRadio);
 $('customRadioUrl')?.addEventListener('keydown', event => { if ((event as KeyboardEvent).key === 'Enter') playCustomRadio(); });
 $('radioMiniPlayer')?.addEventListener('click', event => { if (!(event.target as HTMLElement).closest('button, input, a')) openRadioFullPlayer(); });
+$('radioMiniOpenBtn')?.addEventListener('click', event => { event.stopPropagation(); openRadioFullPlayer(); });
 $('radioMiniPlayBtn')?.addEventListener('click', event => { event.stopPropagation(); toggleRadioPlay(); });
 $('radioMiniStopBtn')?.addEventListener('click', event => { event.stopPropagation(); stopRadio(); });
 $('radioFullPlayBtn')?.addEventListener('click', toggleRadioPlay);

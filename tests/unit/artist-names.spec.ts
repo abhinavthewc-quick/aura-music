@@ -1,6 +1,6 @@
 import { expect, test } from '@playwright/test';
 import { artistKey, artistMatchKey, artistMergeKey, preferredArtistName } from '../../src/core/artist-names';
-import { getArtistMeta } from '../../src/core/catalog';
+import { createArtistIdentityResolver } from '../../src/core/artistIdentity';
 
 const pairs = [
   ['Kendrick Lamar', 'KendrickLamarVEVO'],
@@ -20,8 +20,8 @@ for (const [name, channel] of pairs) {
     expect(preferredArtistName([[channel, 3], [name, 1]])).toBe(name);
     expect(preferredArtistName([[name, 1], [channel, 3]])).toBe(name);
     const profile = { name, bio: 'Saved artist biography.' };
-    expect(getArtistMeta(channel, { [name.toLowerCase()]: profile })).toBe(profile);
-    expect(getArtistMeta(name, { [channel.toLowerCase()]: profile })).toBe(profile);
+    expect(createArtistIdentityResolver({ profiles: { [name.toLowerCase()]: profile } }).resolve(channel)?.profile).toBe(profile);
+    expect(createArtistIdentityResolver({ profiles: { [channel.toLowerCase()]: profile } }).resolve(name)?.profile).toBe(profile);
   });
 }
 
@@ -52,11 +52,12 @@ test('distinct artists, collaborations and non-suffix VEVO text stay distinct', 
   expect(artistKey('VEVO')).toBe('vevo');
   expect(artistKey('VEVO Music')).toBe('vevo music');
   expect(artistKey('Vevolution')).toBe('vevolution');
-  expect(getArtistMeta('Travis Barker', { 'travis scott': { name: 'Travis Scott' } })).toBeUndefined();
+  expect(createArtistIdentityResolver({ profiles: { 'travis scott': { name: 'Travis Scott' } } }).resolve('Travis Barker')?.profile).toBeUndefined();
 });
 
 test('a directly saved canonical profile takes priority over a channel alias', () => {
-  const canonical = { name: 'Post Malone', bio: 'Canonical biography.' };
+  const canonical = { key: 'post malone', name: 'Post Malone', bio: 'Canonical biography.' };
   const channel = { name: 'PostMaloneVEVO', bio: 'Old channel profile.' };
-  expect(getArtistMeta('Post Malone', { postmalonevevo: channel, 'post malone': canonical })).toBe(canonical);
+  const owned = { 'post malone': canonical };
+  expect(createArtistIdentityResolver({ profiles: { postmalonevevo: channel, ...owned }, authoritativeProfiles: owned }).resolve('Post Malone')?.profile).toBe(canonical);
 });

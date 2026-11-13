@@ -144,10 +144,10 @@ export async function runLibraryRaceRegressions() {
       if (phase === 'paused') { radio.toggleRadioPlay(); await flush(); }
       const deletion = await delayDelete(local);
       if (phase === 'starts-during-delete') await startRadio();
-      const before = { intent: getPlaybackIntent(), src: radio.radioAudio.src, paused: radio.radioAudio.paused, title: navigator.mediaSession.metadata?.title, playbackState: navigator.mediaSession.playbackState };
+      const before = { intent: getPlaybackIntent(), station: radio.currentRadioStation, src: radio.radioAudio.src, paused: radio.radioAudio.paused, title: navigator.mediaSession.metadata?.title, playbackState: navigator.mediaSession.playbackState };
       deletion.release(); await deletion.done; await flush();
       check(!state.songs.some(song => song.id === local.id) && !state.addedSongs.some(song => song.id === local.id) && state.currentIndex === -1, `deleting the last local selection during ${phase} radio removes its ephemeral identity`);
-      check(getPlaybackIntent() === before.intent && radio.currentRadioStation === station && radio.radioAudio.src === before.src && radio.radioAudio.paused === before.paused, `local deletion preserves ${phase} radio ownership and playback intent`);
+      check(getPlaybackIntent() === before.intent && radio.currentRadioStation === before.station && radio.radioAudio.src === before.src && radio.radioAudio.paused === before.paused, `local deletion preserves ${phase} radio ownership and playback intent`);
       check(navigator.mediaSession.metadata?.title === before.title && navigator.mediaSession.playbackState === before.playbackState && before.title === station.name, `local deletion preserves ${phase} radio media-session controls`);
       radio.stopRadio();
     }

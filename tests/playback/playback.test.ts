@@ -345,10 +345,17 @@ test('artwork tools retain node identity, bound Info/Share handlers and attached
     await change();
     assert.equal(h.$('fullPlayerArt').querySelector('.ytm-art-overlay-tools'), tools);
     assert.deepEqual(controls.map((node) => h.$(node.id) === node), [true, true, true]);
+    const shareCount = h.shares.length;
     controls.forEach((node) => node.click());
     assert.equal(h.trackSheets[h.trackSheets.length - 1].title, h.state.songs[h.state.currentIndex].title);
     const song = h.state.songs[h.state.currentIndex];
-    assert.equal(h.shares[h.shares.length - 1].url, song.isYouTube ? 'https://youtu.be/' + song.videoId : song.url);
+    if (song.isLocal) {
+      assert.equal(h.shares.length, shareCount, 'local URLs are never sent to native sharing');
+      assert.match(h.toasts[h.toasts.length - 1], /Local files stay on this device/);
+    } else {
+      assert.equal(h.shares.length, shareCount + 1);
+      assert.equal(h.shares[h.shares.length - 1].url, song.isYouTube ? 'https://youtu.be/' + song.videoId : song.url);
+    }
   }
   assert.equal(likes, 5);
 });

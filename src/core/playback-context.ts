@@ -83,10 +83,12 @@ export function setContextShuffle(
   // A queued track is an interruption, not a new collection anchor.
   const anchor = context.overrideActive ? context.playOrder[context.cursor] : context.currentId;
   const nextOrder = enabled ? shuffledAfterStart(context.order, anchor, random) : [...context.order];
-  return {
+  const shuffled = {
     ...context, playOrder: nextOrder, cursor: nextOrder.indexOf(anchor),
-    history: [...context.history], future: [], queue: [...context.queue],
+    history: [...context.history], future: [...context.future], queue: [...context.queue],
   };
+  retainContextInterruptions(shuffled);
+  return shuffled;
 }
 
 /** Peek without mutating; manual Next does not obey repeat-one. */
@@ -120,9 +122,15 @@ function remember(context: PlaybackContext): void {
 }
 
 export function enqueueContext(context: PlaybackContext, id: string | number, next = false): void {
+  retainContextInterruptions(context);
   const value = playbackId(id);
   context.queue = context.queue.filter((item) => item !== value);
   if (next) context.queue.unshift(value); else context.queue.push(value);
+}
+
+/** A new schedule may retire forward history, but not its pending interruptions. */
+export function retainContextInterruptions(context: PlaybackContext): void {
+  context.queue = uniquePlaybackIds([...context.future.filter(entry => entry.override).map(entry => entry.id), ...context.queue]);
   context.future = [];
 }
 
@@ -218,7 +226,7 @@ export function reorderContextUpcoming(context: PlaybackContext, ids: string[], 
     const rest = context.playOrder.slice(context.cursor + 1).filter((id) => !unique.includes(id));
     context.playOrder = [...before, ...unique, ...rest];
   }
-  context.future = [];
+  retainContextInterruptions(context);
 }
 
 export function clonePlaybackContext(context: PlaybackContext): PlaybackContext {

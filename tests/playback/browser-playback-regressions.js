@@ -92,8 +92,11 @@ export async function runPlaybackRegressions() {
     controls[0].click();
     check(queue.trackSheetSongId === song.id && $('trackSheetOverlay').classList.contains('active'), mode + ' Info opens the current track menu');
     queue.closeTrackMenu();
+    const sharesBefore = shares.length;
     controls[2].click();
-    check(shares[shares.length - 1]?.url === (song.isYouTube ? 'https://youtu.be/' + song.videoId : song.url), mode + ' Share uses the current track');
+    check(song.isLocal ? shares.length === sharesBefore && $('toastContainer').textContent.includes('Local files stay on this device. Download the audio to share the file.')
+      : shares.length === sharesBefore + 1 && shares.at(-1)?.url === (song.isYouTube ? 'https://youtu.be/' + song.videoId : song.hfUrl || song.url),
+      mode + ' Share preserves attribution without exposing device-local audio');
     const favorite = song.favorite;
     controls[1].click();
     check(song.favorite === !favorite && intent.getPlaybackIntent() === before, mode + ' original inline Like listener works without toggling playback');
@@ -271,7 +274,7 @@ export async function runPlaybackRegressions() {
 
     const radioRetired = await startVideo();
     radio.radioAudio.muted = true;
-    radio.playRadioStation({ name: 'Local playback fixture', url: '/__fixture_audio.wav' });
+    radio.playRadioStation({ name: 'Local playback fixture', url: location.origin + '/__fixture_audio.wav' });
     await until(() => !radio.radioAudio.paused && state.radioIsPlaying, 'local radio fixture');
     radioRetired.ready(); radioRetired.transition(PlayerState.ENDED);
     check(radio.currentRadioStation?.name === 'Local playback fixture' && player.getActivePlaybackTime() === 0 && !player.seekActivePlayback(12), 'radio source ownership rejects stale music lyrics and iframe callbacks');

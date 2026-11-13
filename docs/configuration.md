@@ -152,7 +152,7 @@ Stored in the browser, not in the repo:
 
 | Key | Purpose |
 | --- | --- |
-| `auraTheme` | `light` or `dark`; applied before first paint. |
+| `auraTheme` | Legacy `light`/`dark` values are retained but ignored by the neutral-black interface. |
 | `auraSettings_v1` | Autoplay, volume memory, and reduced-motion preference. |
 | `auraVolume` | Last volume (when remember-volume is on). |
 | `auraPlaylists` | Version-2 browser-local playlist store with durable track references; see [data model](data-model.md#playlists-and-export-files). |
@@ -179,8 +179,8 @@ These are public/keyless and are called directly from the browser:
 - `https://de1.api.radio-browser.info` — radio directory.
 - `https://www.youtube.com/oembed` and the official IFrame API — metadata and
   playback for supported legacy/deep-linked YouTube tracks.
-- Google Fonts and Font Awesome CDN — UI assets; Google Identity Services for
-  sign-in.
+- Google Identity Services — loaded on demand for sign-in. Fonts and Font Awesome
+  SVG-mask icons are bundled locally, with no runtime font/icon CDN requests.
 - Lyrics provider endpoints used by the active lyrics module.
 
 Listener search is library-only; there is no public podcast search or online

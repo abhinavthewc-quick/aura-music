@@ -1,29 +1,16 @@
-<<<<<<< HEAD
 /* Radio uses the same matte surfaces. Its photograph supplies the color. */
 .radio-tea-hero { position: relative; min-height: 230px; margin-bottom: 24px; overflow: hidden; border-radius: var(--radius-md); background: var(--surface-1); color: #fff; }
 .radio-tea-hero-img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; }
 .radio-tea-hero-fade { position: absolute; inset: 0; background: linear-gradient(180deg, rgba(0,0,0,.08) 10%, rgba(0,0,0,.8)); }
 .radio-tea-hero-content { position: relative; z-index: 1; display: flex; flex-direction: column; justify-content: flex-end; min-height: 230px; padding: 28px; }
 .radio-tea-hero-content h2 { margin: 0 0 8px; color: #fff; font-size: 32px; font-weight: 600; letter-spacing: -.035em; }
-=======
-/* Radio shares Aura's matte surfaces; the photograph and record are the content. */
-.radio-tea-hero { position: relative; min-height: 230px; margin-bottom: 24px; overflow: hidden; border-radius: var(--radius-md); background: #080809; color: #fff; }
-.radio-tea-hero-img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; }
-.radio-tea-hero-fade { position: absolute; inset: 0; background: linear-gradient(180deg, rgba(0,0,0,.08) 10%, rgba(0,0,0,.8)); }
-.radio-tea-hero-content { position: relative; z-index: 1; display: flex; flex-direction: column; justify-content: flex-end; min-height: 230px; padding: 28px; }
-.radio-tea-hero-content h3 { margin: 0 0 8px; color: #fff; font-size: 32px; font-weight: 600; letter-spacing: -.035em; }
->>>>>>> 62cde5b (Private recovery snapshot before local/production reconciliation (not for deployment))
 .radio-tea-sub { max-width: 58ch; margin: 0; color: rgba(255,255,255,.85); font-size: 13px; line-height: 1.55; }
 .radio-live-badge { position: absolute; z-index: 1; top: 16px; right: 16px; display: inline-flex; align-items: center; gap: 8px; min-height: 32px; padding: 6px 10px; border: 1px solid rgba(255,255,255,.15); border-radius: var(--radius-pill); background: rgba(0,0,0,.5); color: #fff; font-size: 12px; }
 .radio-live-dot { display: inline-block; width: 6px; height: 6px; border-radius: 50%; background: var(--accent); }
 .radio-segment-row { display: flex; gap: 8px; margin-bottom: 20px; }
 .radio-segment-btn { display: inline-flex; align-items: center; justify-content: center; gap: 8px; min-height: var(--tap); padding: 8px 16px; border: 1px solid var(--line); border-radius: var(--radius-xs); background: transparent; color: var(--text-sub); font-size: 13px; font-weight: 500; }
 .radio-segment-btn:hover { background: var(--hover); color: var(--text); }
-<<<<<<< HEAD
 .radio-segment-btn.active { border-color: var(--line-strong); background: var(--accent-soft); color: var(--accent); }
-=======
-.radio-segment-btn.active { border-color: rgba(var(--accent-rgb), .35); background: var(--accent-soft); color: var(--accent); }
->>>>>>> 62cde5b (Private recovery snapshot before local/production reconciliation (not for deployment))
 .radio-search { display: flex; align-items: center; gap: 12px; min-height: 52px; margin-bottom: 16px; padding: 4px 8px 4px 16px; border: 1px solid var(--line-strong); border-radius: var(--radius-sm); background: var(--surface-1); }
 .radio-search:focus-within { border-color: var(--accent); }
 .radio-search input { flex: 1; min-width: 0; width: 100%; padding: 12px 0; border: 0; outline: none; background: transparent; color: var(--text); font-size: 15px; }
@@ -34,26 +21,15 @@
 .radio-presets::-webkit-scrollbar { display: none; }
 .radio-chip { flex: 0 0 auto; min-height: var(--tap); padding: 8px 12px; border: 1px solid var(--line); border-radius: var(--radius-xs); background: transparent; color: var(--text-sub); font-size: 13px; font-weight: 500; }
 .radio-chip:hover { background: var(--hover); color: var(--text); }
-<<<<<<< HEAD
 .radio-chip.active { border-color: var(--line-strong); background: var(--accent-soft); color: var(--accent); }
 .radio-list { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 4px 20px; min-width: 0; }
 .radio-station { display: flex; align-items: center; gap: 12px; min-width: 0; min-height: 72px; padding: 12px; border: 0; border-radius: var(--radius-xs); background: transparent; color: var(--text); text-align: left; cursor: pointer; transition: background-color var(--dur-fast); }
-=======
-.radio-chip.active { border-color: rgba(var(--accent-rgb), .35); background: var(--accent-soft); color: var(--accent); }
-.radio-list { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 4px 20px; min-width: 0; }
-.radio-station { display: flex; align-items: center; gap: 12px; min-width: 0; min-height: 72px; padding: 12px; border-radius: var(--radius-xs); background: transparent; cursor: pointer; transition: background-color var(--dur-fast); }
->>>>>>> 62cde5b (Private recovery snapshot before local/production reconciliation (not for deployment))
 .radio-station:hover { background: var(--hover); }
 .radio-station-art { display: grid; place-items: center; flex: 0 0 48px; width: 48px; height: 48px; overflow: hidden; border-radius: var(--radius-xs); background: var(--surface-2); color: var(--text-sub); font-size: 20px; }
 .radio-station-art img { width: 100%; height: 100%; object-fit: cover; }
 .radio-station-main { flex: 1; min-width: 0; }
-<<<<<<< HEAD
 .radio-station-name { display: block; overflow: hidden; color: var(--text); font-size: 14px; font-weight: 600; white-space: nowrap; text-overflow: ellipsis; }
 .radio-station-meta { display: block; overflow: hidden; margin-top: 4px; color: var(--text-sub); font-size: 12px; white-space: nowrap; text-overflow: ellipsis; }
-=======
-.radio-station-name { overflow: hidden; color: var(--text); font-size: 14px; font-weight: 600; white-space: nowrap; text-overflow: ellipsis; }
-.radio-station-meta { overflow: hidden; margin-top: 4px; color: var(--text-sub); font-size: 12px; white-space: nowrap; text-overflow: ellipsis; }
->>>>>>> 62cde5b (Private recovery snapshot before local/production reconciliation (not for deployment))
 .radio-play-btn, .radio-stop-btn { display: grid; place-items: center; flex: 0 0 var(--tap); width: var(--tap); height: var(--tap); padding: 0; border: 1px solid var(--line); border-radius: 50%; background: transparent; color: var(--text); }
 .radio-play-btn:hover { border-color: var(--accent); color: var(--accent); }
 .radio-play-btn.active { border-color: var(--accent); background: var(--accent-soft); color: var(--accent); }
@@ -64,11 +40,7 @@
 .radio-now-name { overflow: hidden; font-size: 14px; font-weight: 600; white-space: nowrap; text-overflow: ellipsis; }
 .radio-stop-btn:hover { color: var(--danger); }
 .radio-custom { margin-top: 28px; padding-top: 24px; border-top: 1px solid var(--line); }
-<<<<<<< HEAD
 .radio-custom h3 { margin: 0 0 8px; font-size: 16px; font-weight: 600; }
-=======
-.radio-custom h4 { margin: 0 0 8px; font-size: 16px; font-weight: 600; }
->>>>>>> 62cde5b (Private recovery snapshot before local/production reconciliation (not for deployment))
 .radio-custom p { max-width: 72ch; margin: 0 0 16px; color: var(--text-sub); font-size: 13px; line-height: 1.6; }
 .radio-custom-row { display: flex; align-items: stretch; gap: 8px; }
 .radio-custom-row input { flex: 1; min-width: 0; min-height: 48px; padding: 12px; border: 1px solid var(--line-strong); border-radius: var(--radius-xs); background: var(--surface-1); color: var(--text); font-size: 14px; }
@@ -76,33 +48,21 @@
 
 .radio-mini-art { display: grid; place-items: center; flex: 0 0 48px; width: 48px; height: 48px; overflow: hidden; border-radius: var(--radius-xs); background: var(--surface-2); color: var(--text-sub); font-size: 20px; }
 .radio-mini-art img { width: 100%; height: 100%; object-fit: cover; }
-<<<<<<< HEAD
 .radio-mini-info { flex: 1; min-width: 0; min-height: var(--tap); padding: 0; border: 0; background: transparent; color: inherit; text-align: left; cursor: pointer; }
 .radio-mini-label { display: none; }
 .radio-mini-name, .radio-mini-meta { display: block; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
-=======
-.radio-mini-info { flex: 1; min-width: 0; cursor: pointer; }
-.radio-mini-label { display: none; }
-.radio-mini-name, .radio-mini-meta { overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
->>>>>>> 62cde5b (Private recovery snapshot before local/production reconciliation (not for deployment))
 .radio-mini-name { color: var(--text); font-size: 14px; font-weight: 600; }
 .radio-mini-meta { margin-top: 3px; color: var(--text-sub); font-size: 12px; }
 .radio-mini-controls { display: flex; align-items: center; gap: 4px; flex: 0 0 auto; }
 .radio-mini-btn { display: grid; place-items: center; width: var(--tap); height: var(--tap); padding: 0; border: 0; border-radius: 50%; background: transparent; color: var(--text); font-size: 17px; }
 .radio-mini-btn:hover { background: var(--hover); }
 .radio-mini-btn.primary { background: var(--accent); color: var(--accent-ink); }
-<<<<<<< HEAD
 .radio-full-overlay { position: fixed; z-index: 510; inset: 0; display: flex; flex-direction: column; justify-content: space-between; padding: calc(20px + var(--safe-top)) 24px calc(24px + var(--safe-bottom)); overflow-y: auto; background: var(--full-player-bg); color: var(--text); opacity: 0; visibility: hidden; pointer-events: none; transform: translateY(100%); transition: transform var(--dur) var(--ease-out), opacity var(--dur), visibility var(--dur); }
 .radio-full-overlay.active { opacity: 1; visibility: visible; pointer-events: auto; transform: none; }
-=======
-.radio-full-overlay { position: fixed; z-index: 510; inset: 0; display: flex; flex-direction: column; justify-content: space-between; padding: calc(20px + var(--safe-top)) 24px calc(24px + var(--safe-bottom)); overflow-y: auto; background: var(--full-player-bg); color: var(--text); opacity: 0; pointer-events: none; transform: translateY(100%); transition: transform var(--dur) var(--ease-out), opacity var(--dur); }
-.radio-full-overlay.active { opacity: 1; pointer-events: auto; transform: none; }
->>>>>>> 62cde5b (Private recovery snapshot before local/production reconciliation (not for deployment))
 .radio-full-header { display: flex; align-items: center; justify-content: space-between; gap: 12px; min-height: var(--tap); color: var(--text-sub); font-size: 13px; }
 .radio-full-header > [role="button"], .radio-full-header > button { display: grid; place-items: center; width: var(--tap); height: var(--tap); padding: 0; border: 0; border-radius: 50%; background: transparent; color: var(--text-sub); font-size: 18px; cursor: pointer; }
 .radio-full-header > [role="button"]:hover, .radio-full-header > button:hover { background: var(--hover); }
 .radio-vinyl-stage { position: relative; width: min(78vw, 42vh, 420px); aspect-ratio: 1; margin: 20px auto; }
-<<<<<<< HEAD
 .radio-vinyl-record { position: relative; width: 100%; height: 100%; border: 1px solid var(--line-strong); border-radius: 50%; background: repeating-radial-gradient(circle, #151515 0 1px, #080808 1px 4px); box-shadow: var(--shadow-art); }
 .radio-vinyl-record.spinning { animation: radioVinylSpin 6s linear infinite; }
 @keyframes radioVinylSpin { to { transform: rotate(360deg); } }
@@ -113,18 +73,6 @@
 .radio-vinyl-arm { position: absolute; z-index: 2; top: 2%; right: 0; width: 42%; height: 82%; pointer-events: none; }
 .radio-vinyl-arm-base { position: absolute; top: 0; right: 0; width: 22%; aspect-ratio: 1; border: 3px solid #080808; border-radius: 50%; background: #bcbcbc; }
 .radio-vinyl-arm-bar { position: absolute; top: 7%; right: 18%; width: 6%; height: 72%; border-radius: var(--radius-pill); background: #bcbcbc; transform: rotate(26deg); transform-origin: top; }
-=======
-.radio-vinyl-record { position: relative; width: 100%; height: 100%; border: 1px solid rgba(255,255,255,.15); border-radius: 50%; background: repeating-radial-gradient(circle, #151516 0 1px, #080809 1px 4px); box-shadow: var(--shadow-art); }
-.radio-vinyl-record.spinning { animation: radioVinylSpin 6s linear infinite; }
-@keyframes radioVinylSpin { to { transform: rotate(360deg); } }
-.radio-vinyl-label { position: absolute; top: 34%; left: 34%; display: grid; place-items: center; width: 32%; height: 32%; overflow: hidden; border-radius: 50%; background: #d8aa70; }
-.radio-vinyl-label img { display: block; width: 72%; height: 72%; border-radius: 50%; object-fit: cover; }
-.radio-vinyl-label::after { content: ""; position: absolute; top: 50%; left: 50%; width: 6px; height: 6px; border-radius: 50%; background: #080809; transform: translate(-50%, -50%); }
-.radio-vinyl-shine { position: absolute; inset: 0; border-radius: 50%; background: linear-gradient(115deg, rgba(255,255,255,.06), transparent 28%, transparent 64%, rgba(255,255,255,.025)); pointer-events: none; }
-.radio-vinyl-arm { position: absolute; z-index: 2; top: 2%; right: 0; width: 42%; height: 82%; pointer-events: none; }
-.radio-vinyl-arm-base { position: absolute; top: 0; right: 0; width: 22%; aspect-ratio: 1; border: 3px solid #080809; border-radius: 50%; background: #d8aa70; }
-.radio-vinyl-arm-bar { position: absolute; top: 7%; right: 18%; width: 6%; height: 72%; border-radius: var(--radius-pill); background: #d8aa70; transform: rotate(26deg); transform-origin: top; }
->>>>>>> 62cde5b (Private recovery snapshot before local/production reconciliation (not for deployment))
 .radio-full-body { width: 100%; max-width: 420px; margin: 0 auto; }
 .radio-full-meta { text-align: center; }
 .radio-live-pill { display: inline-flex; align-items: center; gap: 8px; margin-bottom: 8px; color: var(--text-sub); font-size: 12px; }

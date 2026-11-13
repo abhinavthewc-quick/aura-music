@@ -1,14 +1,10 @@
 # Features
 
-<<<<<<< HEAD
-This guide describes the user flows in the source tree. Paths point at the
-owning module.
-=======
-This documents the supported listener surfaces and their local-first boundaries.
+This guide describes the source tree's listener flows and local-first boundaries.
+Paths point at the owning module.
 It is not a claim that every third-party provider or live deployment was tested.
 See [remediation](remediation.md) for the verification gate and infrastructure
 work that cannot be completed by a source-only change.
->>>>>>> 62cde5b (Private recovery snapshot before local/production reconciliation (not for deployment))
 
 ## Authentication & profile
 
@@ -46,21 +42,13 @@ username entry, then opens its preview. See [startup recovery](troubleshooting.m
 
 ## Library
 
-<<<<<<< HEAD
-The library views share the same track data:
+Four library views share the same track data:
 
 - **Tracks** — the full list (catalogue + added/local tracks), virtual one row
   per song, heart and “…” actions.
 - **Artists** — grouped by centralized artist identities; open an artist to
-  browse their credited tracks.
-=======
-Four views share the library data:
-
-- **Tracks** — the full list (catalogue + added/local tracks), virtual one row
-  per song, heart and “…” actions.
-- **Artists** — grouped by normalised artist name; group play starts a scoped
-  artist collection instead of falling through to unrelated library tracks.
->>>>>>> 62cde5b (Private recovery snapshot before local/production reconciliation (not for deployment))
+  browse their credited tracks. Artist playback is opt-in and stays within that
+  collection instead of falling through to unrelated library tracks.
 - **Albums** — grouped by album metadata from `manifest.json`.
 - **Films** — extracts `(From "Film")` credits from titles/albums.
 
@@ -81,11 +69,6 @@ Other library features:
   video id or title+artist when the source changes.
 - **Recently played** — last 10, persisted in `recentlyPlayed`; used by home and
   the search “Recently Played” category.
-<<<<<<< HEAD
-- **Local files** — drag/drop or picker; ID3/MP4/FLAC tags are read with
-  jsmediatags, audio blobs stored in IndexedDB (`auraMusicDB` / `audioFiles`),
-  metadata in `addedTracks`.
-=======
 - **Local audio** — import device files into IndexedDB (`auraMusicDB` /
   `audioFiles`), with metadata in `addedTracks`. Title/artist are derived from
   the filename (for example, `Artist - Title.mp3`); this does not promise ID3 tag
@@ -96,7 +79,6 @@ Other library features:
   links remain playable; YouTube uses the official embedded player. Shared
   catalogue acquisition remains the Discord/admin pipeline, not a public URL/
   preview acquisition form.
->>>>>>> 62cde5b (Private recovery snapshot before local/production reconciliation (not for deployment))
 - **Edit/delete** — rename title/artist, replace cover from a URL or uploaded
   file, delete from the library (also deletes the IndexedDB blob for local files).
 - **Stats** — total tracks, favourites, local files, distinct artists.
@@ -104,7 +86,7 @@ Other library features:
   locally as you type.
 
 **Empty/loading/error:** skeleton rows while the remote catalogue loads; designed
-empty-library state with a “Search music” CTA; retryable error state when the
+empty-library state with an “Add local audio” CTA; retryable error state when the
 catalogue is unreachable.
 
 ## Search
@@ -134,8 +116,10 @@ an empty search never submits music or injects third-party previews.
   title/artist/artwork snapshots. Canonical references resolve only by direct
   stable/source identity, never by a matching legacy alias or title/artist.
   Only unresolved `legacy:` placeholders get unique alias/metadata fallback.
-  Old string-key playlists migrate without discarding unresolved entries;
-  metadata edits do not become track identities.
+   Old string-key playlists migrate without discarding unresolved entries;
+   metadata edits do not become track identities. Migration happens only during
+   an explicit mutation after the required verbatim backup; startup, previews,
+   refreshes and library deletion never rewrite playlist bytes.
 - Missing tracks are visible placeholders with remove/relink recovery. Export
   and import preserve their place in the order even if the receiving library
   does not yet contain the audio.
@@ -159,8 +143,9 @@ an empty search never submits music or injects third-party previews.
   restarting the current audio. Deleting the playlist detaches playback as a
   labeled snapshot instead of preserving a stale collection ID.
 - This is **same-origin browser synchronization**, not cloud or cross-device sync.
-- There are no backend Public/Unlisted/Private ACLs or permanent share links.
-  Collections stay in this browser until you explicitly transfer an export.
+- There are no backend Public/Unlisted/Private ACLs or synchronized cloud
+  collections. Existing privacy/year/shared metadata remains intact; explicit
+  snapshot links and file exports transfer a copy.
 
 ### Sharing a playlist
 
@@ -195,21 +180,25 @@ downloads. Playlists remain local to each browser. Owners:
 - **Full player** opens from the mini player or a song; background gradients and
   control colours are derived from the cover art, contrast-checked against white
   text. Paused artwork uses a spring animation.
-- **Collection playback** — library, playlist, artist, and scoped search
+- **Collection playback** — playlist, artist, and explicit ordered-collection
   selections establish an ordered playback context with a cursor, queue
   interruptions, and listening history. Reaching a playlist boundary never
-  falls through to the global catalogue.
+  falls through to the global catalogue. Ordinary library/search selection
+  keeps the existing fallback behaviour and retires artist playback.
 - **Up Next / queue** — queued items interrupt without replacing the collection;
   Previous follows actual listening history, including those interruptions.
   Next after Previous replays future visits before pending queued items, and Up
   Next previews that same order. Visits carry stable track/override-anchor identity,
   so cursors rebase after shuffle or live reorder instead of trusting old indices.
-  Reordering Up Next is temporary and does not rewrite a saved playlist.
+   Reordering Up Next is temporary and does not rewrite a saved playlist.
+   Handoffs, row selection, retirement and shuffle keep unheard interruptions,
+   including those held in forward history. The preview limit is 4 phone / 30 desktop.
 - **Seek** — range slider plus the mobile bottom-edge progress line; seeks work
-  for HTML audio and YouTube.
+  for the active, ready HTML audio or YouTube source. Pending YouTube reports
+  time zero, rejects seeking and never resumes the previous HTML audio.
 - **Shuffle/repeat** — shuffle remains within the active collection. Repeat
   cycles off → all → one, mirrored between full and mini players; manual Next
-  remains a navigation action even when repeat-one is enabled.
+  remains a navigation action even when repeat-one is enabled. Initial repeat mode is all.
 - **Volume** — persisted when “Remember volume” is enabled; muted state restores
   the previous level.
 - **Media Session** — personal play/pause/previous/next/seek and metadata for HTML
@@ -241,7 +230,9 @@ removed; the existing licensed vanilla canvas loader renderer remains.
   URLs. Invalid input is rejected before disturbing playing audio; unsafe
   directory streams and optional homepage/favicon URLs are discarded.
 - Selecting radio pauses personal audio and stops active/pending YouTube playback
-  without changing the personal collection, queue or listening history.
+  without consuming the personal queue or changing saved playlists. Artist
+  transport retires with unheard interruptions retained; scoped playlist
+  traversal and its listening history stay intact.
 - Pause/resume/stop use request-generation and explicit-intent guards, so stale
   station promises/errors cannot overwrite a newer selection or revive a pause.
 - Station metadata includes name, country, tags and artwork; a full radio player
@@ -289,21 +280,12 @@ engine.
 - **Queue**, **People** and **Chat** shortcuts reach the room sections on small
   screens. **Reconnect** handles a disconnected session; **Leave room** exits it.
 
-<<<<<<< HEAD
 See [rooms.md](rooms.md) for authority, protocol, lifecycle, synchronization and
 the development harness.
-=======
-- Create room → share link `/rooms?r=<id>`; the creator gets an admin key.
-- Invitees join with the code/name. Create/join service responses must be HTTP
-  successes; `exists: false` stays on the join screen with a clear error.
-- WebSocket bases must be credential-free `ws:`/`wss:` URLs before connection.
-  Failed joins show the visible join banner rather than an error hidden inside
-  the room view.
-- Admin can play/pause/seek/track, manage the queue, promote/demote listeners.
-- Chat, participants, queue and room expiry are server-authoritative.
-- Room survives an empty room for 3 minutes; listeners can reclaim control for
-  30 seconds after the last admin leaves.
->>>>>>> 62cde5b (Private recovery snapshot before local/production reconciliation (not for deployment))
+
+Create/join responses must be HTTP successes; `exists: false` stays on the join
+screen with a clear error. WebSocket bases must be credential-free `ws:`/`wss:`
+URLs before connection. Failed joins use the visible join banner.
 
 ## Settings
 
@@ -344,7 +326,10 @@ query parameter. The activity, its settings and setup live in
 - Toast live region (`role="status" aria-live="polite"`).
 - Global focus-visible ring, disabled/busy styles, reduced-motion support.
 - Escape closes the top overlay only; Tab is trapped in dialogs; focus is
-  restored on close; Enter/Space activates `role="button"` rows/cards.
+   restored on close; Enter/Space activates `role="button"` rows/cards.
+- At 900 px and above, the full player is nonmodal and its docked Up Next
+  companion is a region without `aria-modal`; Tab is untrapped. Phone overlays
+  retain modal focus behavior.
 - Active tabs expose `aria-current="page"`; icon-only controls have labels;
   cover images have alt text (empty for decorative art); form controls are
   labelled.

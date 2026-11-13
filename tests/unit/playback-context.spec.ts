@@ -81,3 +81,17 @@ test('Up Next projection includes future, queued items and remaining collection 
   expect(projected[0].visit.anchorId).toBe('a');
   expect(JSON.stringify(context)).toBe(before);
 });
+
+test('queuing, shuffle and reorder keep pending interruptions from forward history', () => {
+  for (const action of ['queue','shuffle','reorder']) {
+    let context = createPlaybackContext(['a','b','c'])!;
+    context.future = [{id:'x',cursor:0,anchorId:'a',override:true}, {id:'b',cursor:1,override:false}];
+    context.queue = ['y'];
+    if (action === 'queue') enqueueContext(context,'z',true);
+    if (action === 'shuffle') context = setContextShuffle(context,true,'a',() => 0);
+    if (action === 'reorder') reorderContextUpcoming(context,['c','b']);
+    expect(context.queue).toEqual(action === 'queue' ? ['z','x','y'] : ['x','y']);
+    expect(context.future).toEqual([]);
+    expect(advanceContext(context,1,'off').id).toBe(action === 'queue' ? 'z' : 'x');
+  }
+});

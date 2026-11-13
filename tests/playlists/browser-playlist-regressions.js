@@ -11,7 +11,11 @@ async function until(predicate, label, timeout = 10000) {
 }
 const $ = (id) => document.getElementById(id);
 const text = (selector) => document.querySelector(selector)?.textContent.trim() || '';
-const saved = () => JSON.parse(localStorage.getItem('auraPlaylists') || '[]');
+const saved = () => {
+  const store = JSON.parse(localStorage.getItem('auraPlaylists') || '[]');
+  return Array.isArray(store) ? store : store.playlists;
+};
+const savedKeys = (playlist) => playlist.tracks.map((track) => typeof track === 'string' ? track : track.legacyKey);
 function fixtureOnly() {
   const fixture = window.__auraFixture;
   if (location.hostname !== '127.0.0.1' || fixture?.page !== 'main') throw new Error('Use the dedicated local main-app fixture.');
@@ -83,6 +87,7 @@ export async function runPlaylistSharingRegressions() {
     await playlists.playlistPageShare();
     await until(() => {
       const button = document.querySelector('[data-copy-share]');
+      if (!button) return false;
       const bounds = button.getBoundingClientRect();
       return button.contains(document.elementFromPoint(bounds.left + bounds.width / 2, bounds.top + bounds.height / 2));
     }, 'share controls clear of fixed navigation');
@@ -154,23 +159,28 @@ export async function runPlaylistSharingRegressions() {
 
     $('miniExpandBtn').click();
     const fullPlayer = $('fullPlayerOverlay');
+    const desktop = matchMedia('(min-width:900px)').matches;
     const playerOwnsFocus = () => (matchMedia('(min-width:900px)').matches ? [fullPlayer, $('upNextSheet'), $('miniPlayer')] : [fullPlayer])
       .some(root => root.contains(document.activeElement));
+    if (desktop) $('playPauseBtn').focus();
     await until(playerOwnsFocus, 'full-player workspace focus');
     arrive(link, true);
-    check(fullPlayer.classList.contains('active') && playerOwnsFocus(), 'received inline preview respects focus in the open full-player workspace');
-    if (matchMedia('(min-width:900px)').matches) {
+    check(fullPlayer.classList.contains('active') && (desktop ? document.activeElement === $('sharedPlaylistHeading') : playerOwnsFocus()),
+      desktop ? 'received preview can focus its heading beside the nonmodal desktop player' : 'received inline preview respects the modal phone player focus');
+    if (desktop) {
       for (const id of ['playPauseBtn', 'ytmTabLyricsBtn']) {
         $(id).focus();
         arrive(link);
         await flush();
-        check(document.activeElement === $(id) && fullPlayer.classList.contains('active'), `received preview preserves the desktop workspace focus on ${id}`);
+        check(document.activeElement === $('sharedPlaylistHeading') && fullPlayer.classList.contains('active'), `received preview remains reachable from the nonmodal desktop ${id} control`);
       }
     }
     $('closeFullPlayerBtn').focus();
-    document.activeElement.dispatchEvent(new KeyboardEvent('keydown', { key: 'Tab', shiftKey: true, bubbles: true, cancelable: true }));
-    const playerRoots = matchMedia('(min-width:900px)').matches ? [fullPlayer, $('upNextSheet'), $('miniPlayer')] : [fullPlayer];
-    check(playerRoots.some(root => root.contains(document.activeElement)) && document.activeElement !== $('closeFullPlayerBtn'), 'Tab remains in the active player workspace while a received preview waits behind it');
+    const tab = new KeyboardEvent('keydown', { key: 'Tab', shiftKey: true, bubbles: true, cancelable: true });
+    document.activeElement.dispatchEvent(tab);
+    check(desktop ? !tab.defaultPrevented && fullPlayer.getAttribute('aria-modal') === 'false' && $('upNextSheet').getAttribute('role') === 'region' && !$('upNextSheet').hasAttribute('aria-modal')
+      : tab.defaultPrevented && fullPlayer.contains(document.activeElement) && document.activeElement !== $('closeFullPlayerBtn'),
+      desktop ? 'desktop player and companion do not trap Tab or claim modal focus' : 'phone Tab stays in the active player while a received preview waits behind it');
     document.activeElement.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true, cancelable: true }));
     await flush();
     check(!fullPlayer.classList.contains('active') && $('tabPlaylist').classList.contains('active') && document.querySelector('[data-save-shared]'), 'Escape closes the player alone and leaves the received preview ready');
@@ -183,24 +193,29 @@ export async function runPlaylistSharingRegressions() {
       return originalSetItem.call(this, key, value);
     };
     document.querySelector('[data-save-shared]').click();
+    await until(() => text('#playlistImportStatus').includes('Could not save'), 'failed asynchronous playlist save');
     check(text('#playlistImportStatus').includes('Could not save') && localStorage.getItem('auraPlaylists') === sourceStorage, 'storage failure preserves the preview and existing playlists for retry');
     Storage.prototype.setItem = originalSetItem;
     document.querySelector('[data-save-shared]').click();
+    await until(() => saved()[0]?.id !== source.id && !document.querySelector('[data-save-shared]'), 'explicit shared snapshot save');
     const imported = saved()[0];
-    check(imported.id !== source.id && imported.privacy === 'Private' && JSON.stringify(imported.tracks) === JSON.stringify(payload.tracks.map((track) => track.key)), 'Save playlist creates a new private local copy with stable ordered keys');
+    check(imported.id !== source.id && imported.privacy === 'Private' && imported.schemaVersion === 2 && JSON.stringify(savedKeys(imported)) === JSON.stringify(payload.tracks.map((track) => track.key)) &&
+      new Set(imported.tracks.map(track => track.ref)).size === payload.tracks.length, 'Save playlist creates a new private version-2 copy with stable ordered references and source keys');
+    check(localStorage.getItem('auraPlaylists_backup_v1') === sourceStorage, 'explicit legacy migration keeps a byte-exact recovery copy');
     check(localStorage.getItem('addedTracks') === addedBefore && !state.songs.some((song) => song.id === senderOnly.id), 'import neither adds missing music nor changes saved library tracks');
     check(document.querySelectorAll('#tabPlaylist [data-play-index]').length === 2 && document.querySelectorAll('[data-unavailable-track]').length === 1 && text('#tabPlaylist').includes('மழை 🎵'), 'saved playlist retains an honest, named placeholder for missing music');
-    check(text(`[data-playlist-id="${imported.id}"] .playlist-card-copy p`).includes('3 tracks · 2 available'), 'playlist overview counts saved missing tracks without pretending they are playable');
+    check(text(`[data-playlist-id="${imported.id}"] .playlist-card-copy p`).includes('3 tracks on this device. 1 unavailable'), 'playlist overview counts saved missing tracks without pretending they are playable');
     const importedStorage = localStorage.getItem('auraPlaylists');
     const count = saved().length;
     arrive(link);
     check(text('[data-save-shared]') === 'Open saved playlist', 'reopening the same snapshot identifies the saved copy');
     document.querySelector('[data-save-shared]').click();
+    await until(() => !document.querySelector('[data-save-shared]'), 'open an already saved snapshot');
     check(saved().length === count && localStorage.getItem('auraPlaylists') === importedStorage, 'repeated import does not create duplicates or rewrite storage');
     state.songs.push(senderOnly);
     playlists.refreshPlaylistViews();
     check(document.querySelectorAll('#tabPlaylist [data-play-index]').length === 3 && !document.querySelector('[data-unavailable-track]') && localStorage.getItem('auraPlaylists') === importedStorage, 'a later library update resolves missing keys without mutating the saved playlist');
-    playlists.addTrackToPlaylist(imported.id, state.songs.findIndex((song) => trackKey(song) === 'lk:hand upload|old artist'));
+    await playlists.addTrackToPlaylist(imported.id, String(state.songs.find((song) => trackKey(song) === 'lk:hand upload|old artist').id));
     check(saved()[0].tracks.length === 3 && localStorage.getItem('auraPlaylists') === importedStorage, 'adding a renamed existing track to the imported copy stays deduplicated');
 
     const untrusted = { v: 1, title: '<img src=x onerror=window.__playlistInjected=1>', description: '<b>தமிழ் 🎧</b>', tracks: [{ key: 'vid:xxxxxxxxxxx', title: '<svg onload=window.__playlistInjected=1>', artist: 'Untrusted <artist>' }], omitted: { local: 0, unavailable: 0 } };
@@ -266,7 +281,8 @@ export async function runPlaylistArrivalRegressions({ signIn = false } = {}) {
   check(text('#tabPlaylist').includes('Not in your library') && text('#tabPlaylist').includes('Local audio isn’t transferred'), 'fresh/returning recipient sees missing and local-only feedback');
   const count = saved().length;
   document.querySelector('[data-save-shared]').click();
-  check(saved().length === count + 1 && JSON.stringify(saved()[0].tracks) === JSON.stringify(payload.tracks.map((track) => track.key)), 'explicit save appends a new local playlist while preserving source keys');
+  await until(() => saved().length === count + 1 && !document.querySelector('[data-save-shared]'), 'explicit asynchronous arrival save');
+  check(saved().length === count + 1 && saved()[0].schemaVersion === 2 && JSON.stringify(savedKeys(saved()[0])) === JSON.stringify(payload.tracks.map((track) => track.key)), 'explicit save appends a version-2 local playlist while preserving source keys');
   check(!location.hash && text('#tabPlaylist').includes(payload.title) && document.querySelector('[data-unavailable-track]'), 'saved arrival keeps missing-track details and consumes the link');
   check(!fixture.requests.some((request) => ['search', 'dispatch', 'bucketUpload'].includes(request.action)), 'arrival and local import never trigger remote discovery or submissions');
   check(document.documentElement.scrollWidth <= document.documentElement.clientWidth && fixture.errors.length === 0, 'arrival completes without overflow or uncaught errors');

@@ -1,7 +1,7 @@
 /* Optional Playwright runner for the existing isolated Vite fixture. No server
    or dependency installation is automatic; output stays outside the checkout. */
 import assert from 'node:assert/strict';
-import { mkdir, writeFile } from 'node:fs/promises';
+import { mkdir, readFile, writeFile } from 'node:fs/promises';
 import { resolve } from 'node:path';
 
 const { chromium } = await import(process.env.PLAYWRIGHT_MODULE || 'playwright');
@@ -11,6 +11,8 @@ const output = resolve(process.env.AURA_BROWSER_OUTPUT || '../aura-artist-browse
 await mkdir(output, { recursive: true });
 const only = new Set((process.env.AURA_BROWSER_SUITES || '').split(',').filter(Boolean));
 const widths = (process.env.AURA_BROWSER_WIDTHS || '390,1440').split(',').map(Number);
+const playlistArrivals = JSON.parse(await readFile(new URL('../playlists/browser-suites.json', import.meta.url), 'utf8'))
+  .filter(suite => suite.name.startsWith('playlist-arrival-'));
 const suites = [
   ['main-and-identity', '', 'artists/browser-regressions.js', 'runBrowserRegressions', 'artists/browser-identity-regressions.js', 'runArtistIdentityRegressions'],
   ['artist-page', '?artist-page', 'artists/browser-page-regressions.js', 'runArtistPageRegressions'],
@@ -26,7 +28,10 @@ const suites = [
   ['playback', '', 'playback/browser-playback-regressions.js', 'runPlaybackRegressions'],
   ['queue-playback', '', 'artists/browser-identity-regressions.js', 'runQueuePlaybackRegressions'],
   ['library-races', '', 'artists/browser-library-races.js', 'runLibraryRaceRegressions'],
+  ['local-storage-races', '', 'artists/browser-local-storage-races.js', 'runLocalStorageRaceRegressions'],
   ['playlist-sharing', '', 'playlists/browser-playlist-regressions.js', 'runPlaylistSharingRegressions'],
+  ...playlistArrivals.map(suite => [suite.name, (suite.signedOut ? '?signed-out' : '') + suite.query,
+    'playlists/browser-playlist-regressions.js', suite.entry, undefined, undefined, suite.options]),
   ['rooms', '?page=rooms', 'artists/browser-room-regressions.js', 'runRoomRegressions'],
   ['signed-out-metadata', '?signed-out', 'artists/browser-metadata-regressions.js', 'runSignedOutMetadataRegressions'],
   ['signed-out-admin-metadata', '?page=admin&signed-out', 'artists/browser-metadata-regressions.js', 'runSignedOutMetadataRegressions'],
@@ -43,7 +48,7 @@ async function contextFor(width) {
   return context;
 }
 async function runSuite(suite, width) {
-  const [name, query, module, entry, secondModule, secondEntry] = suite;
+  const [name, query, module, entry, secondModule, secondEntry, options] = suite;
   const context = await contextFor(width), page = await context.newPage();
   const errors = [];
   page.on('pageerror', error => errors.push(error.message));
@@ -57,11 +62,11 @@ async function runSuite(suite, width) {
         window.state?.hfSongs.length && window.state.hfSongs.every(song => song.hfUrl) &&
         window.state.songs.some(song => song.isLocal && song.url?.startsWith('blob:')));
     }
-    const parts = await page.evaluate(async ({ module, entry, secondModule, secondEntry }) => {
-      const first = await (await import('/tests/' + module))[entry]();
+    const parts = await page.evaluate(async ({ module, entry, secondModule, secondEntry, options }) => {
+      const first = await (await import('/tests/' + module))[entry](options);
       const second = secondModule ? await (await import('/tests/' + secondModule))[secondEntry]() : undefined;
       return second ? [first, second] : [first];
-    }, { module, entry, secondModule, secondEntry });
+    }, { module, entry, secondModule, secondEntry, options });
     assert.deepEqual(errors, [], 'uncaught browser errors');
     const passed = parts.reduce((total, part) => total + part.passed, 0);
     results.push({ name, width, passed, parts });

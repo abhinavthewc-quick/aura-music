@@ -1,19 +1,8 @@
-<<<<<<< HEAD
 /* Aura's black listening room. Each component owns its active and responsive
    states; there is no late override layer or alternate theme. */
 @import './shell.css';
 @import './nav.css';
 @import './profile.css';
-=======
-/* Aura Music design system. Each component owns its normal, active and responsive states.
-   No late patch layer: change the owner instead of adding specificity. */
-@import './tokens.css';
-@import './base.css';
-@import './shell.css';
-@import './nav.css';
-@import './profile.css';
-@import './login.css';
->>>>>>> 62cde5b (Private recovery snapshot before local/production reconciliation (not for deployment))
 @import './home.css';
 @import './library.css';
 @import './artists.css';

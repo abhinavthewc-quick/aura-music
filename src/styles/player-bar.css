@@ -1,14 +1,7 @@
-<<<<<<< HEAD
 /* A floating phone strip and a full-width desktop transport. */
 .player-bar, .radio-player-bar { position: fixed; z-index: 600; bottom: var(--mobile-player-bottom); left: 50%; display: none; align-items: center; justify-content: space-between; gap: 12px; width: calc(100% - 24px); max-width: 520px; min-height: 72px; padding: 10px 14px; overflow: hidden; border: 1px solid var(--line-strong); border-radius: var(--radius-md); background: var(--surface-1); color: var(--text); box-shadow: 0 8px 28px rgba(0, 0, 0, .25); transform: translateX(-50%); }
 .player-bar.active, .radio-player-bar.active { display: flex; }
 .player-bar .song-info { flex: 1; min-width: 0; min-height: var(--tap); gap: 12px; padding: 0; border: 0; background: transparent; color: inherit; text-align: left; cursor: pointer; }
-=======
-/* Shared transport: a floating phone strip and a full-width desktop dock. */
-.player-bar, .radio-player-bar { position: fixed; z-index: 600; bottom: var(--mobile-player-bottom); left: 50%; display: none; align-items: center; justify-content: space-between; gap: 12px; width: calc(100% - 24px); max-width: 520px; min-height: 72px; padding: 10px 14px; overflow: hidden; border: 1px solid var(--line-strong); border-radius: var(--radius-md); background: var(--surface-1); color: var(--text); box-shadow: 0 8px 28px rgba(0, 0, 0, .25); transform: translateX(-50%); }
-.player-bar.active, .radio-player-bar.active { display: flex; }
-.player-bar .song-info { flex: 1; min-width: 0; gap: 12px; cursor: pointer; }
->>>>>>> 62cde5b (Private recovery snapshot before local/production reconciliation (not for deployment))
 .player-bar .song-info img { width: 48px; height: 48px; flex: 0 0 48px; border-radius: var(--radius-xs); }
 .player-bar .song-title { font-size: 14px; font-weight: 600; }
 .player-bar .song-artist { display: block; font-size: 12px; }
@@ -29,7 +22,6 @@
 @keyframes miniHeartPop { 50% { transform: scale(1.2); } }
 .mini-progress-track { display: none; }
 .mini-edge-progress { position: absolute; right: 0; bottom: 0; left: 0; height: 4px; background: var(--line-strong); cursor: pointer; touch-action: none; }
-<<<<<<< HEAD
 .mini-edge-fill { position: absolute; inset: 0; width: 100%; background: var(--accent); transform: scaleX(0); transform-origin: left; transition: transform 100ms linear; pointer-events: none; }
 .mini-seek { appearance: none; background: transparent; cursor: pointer; }
 .mini-seek::-webkit-slider-runnable-track { height: 4px; background: linear-gradient(to right, var(--accent) 0, var(--accent) var(--seek-pct, 0%), var(--line-strong) var(--seek-pct, 0%), var(--line-strong) 100%); }
@@ -38,16 +30,6 @@
 .mini-seek::-moz-range-track { height: 4px; background: var(--line-strong); }
 .mini-seek::-moz-range-progress { height: 4px; background: var(--accent); }
 .mini-seek::-moz-range-thumb { width: 0; height: 0; border: 0; background: var(--accent); }
-=======
-.mini-edge-fill { position: absolute; inset: 0; width: 100%; background: rgb(var(--dyn-rgb)); transform: scaleX(0); transform-origin: left; transition: transform 100ms linear; pointer-events: none; }
-.mini-seek { appearance: none; background: transparent; cursor: pointer; }
-.mini-seek::-webkit-slider-runnable-track { height: 4px; background: linear-gradient(to right, rgb(var(--dyn-rgb)) 0, rgb(var(--dyn-rgb)) var(--seek-pct, 0%), var(--line-strong) var(--seek-pct, 0%), var(--line-strong) 100%); }
-.mini-seek::-webkit-slider-thumb { appearance: none; width: 0; height: 0; border: 0; border-radius: 50%; background: rgb(var(--dyn-rgb)); }
-.mini-seek:hover::-webkit-slider-thumb, .mini-seek:focus-visible::-webkit-slider-thumb { width: 12px; height: 12px; margin-top: -4px; }
-.mini-seek::-moz-range-track { height: 4px; background: var(--line-strong); }
-.mini-seek::-moz-range-progress { height: 4px; background: rgb(var(--dyn-rgb)); }
-.mini-seek::-moz-range-thumb { width: 0; height: 0; border: 0; background: rgb(var(--dyn-rgb)); }
->>>>>>> 62cde5b (Private recovery snapshot before local/production reconciliation (not for deployment))
 .mini-seek:hover::-moz-range-thumb, .mini-seek:focus-visible::-moz-range-thumb { width: 12px; height: 12px; }
 .mini-vol { display: flex; align-items: center; }
 .mini-volume { appearance: none; width: 0; height: 4px; margin: 0; border-radius: var(--radius-pill); background: linear-gradient(to right, var(--text) 0, var(--text) var(--vol-pct, 80%), var(--line-strong) var(--vol-pct, 80%), var(--line-strong) 100%); opacity: 0; cursor: pointer; transition: width var(--dur-fast), opacity var(--dur-fast), margin var(--dur-fast); }
@@ -56,11 +38,7 @@
 .mini-volume::-moz-range-thumb { width: 12px; height: 12px; border: 0; border-radius: 50%; background: var(--text); }
 @media (max-width: 899px) {
   .desk-only { display: none; }
-<<<<<<< HEAD
   body.np-open .player-bar, body.np-open .radio-player-bar { display: none; }
-=======
-  body.np-track-open .player-bar, body.np-radio-open .radio-player-bar { display: none; }
->>>>>>> 62cde5b (Private recovery snapshot before local/production reconciliation (not for deployment))
 }
 @media (min-width: 900px) {
   .player-bar, .radio-player-bar { right: 0; bottom: 0; left: 0; width: 100%; max-width: none; height: var(--np-bar-h); min-height: 0; padding: 0 24px; overflow: visible; border: 0; border-top: 1px solid var(--line); border-radius: 0; background: var(--player-bg); box-shadow: none; transform: none; }
@@ -68,21 +46,12 @@
   .player-bar .song-info { order: 2; flex: 1 1 0; gap: 14px; margin: 0 20px; }
   .player-bar .mini-right { order: 3; }
   .player-bar .ctrl-glass-btn { font-size: 17px; }
-<<<<<<< HEAD
   .player-bar .ctrl-glass-btn.play-primary { margin: 0 4px; background: var(--accent); color: var(--accent-ink); }
   .player-bar .ctrl-glass-btn.play-primary:hover { background: #dedede; }
-=======
-  .player-bar .ctrl-glass-btn.play-primary { margin: 0 4px; background: rgb(var(--dyn-rgb)); color: var(--dyn-fg); }
-  .player-bar .ctrl-glass-btn.play-primary:hover { filter: brightness(1.08); }
->>>>>>> 62cde5b (Private recovery snapshot before local/production reconciliation (not for deployment))
   .player-bar .song-title { font-size: 15px; }
   .player-bar .song-artist { font-size: 13px; }
   .mini-time { margin-left: 8px; }
   .player-bar > .mini-seek { position: absolute; z-index: 10; top: -6px; right: 0; left: 0; display: block; width: 100%; height: 12px; margin: 0; padding: 0; }
   .mini-edge-progress { display: none; }
 }
-<<<<<<< HEAD
 @media (min-width: 900px) and (max-width: 1120px) { .player-bar .song-info { margin: 0 10px; } .mini-time, .mini-vol { display: none; } }
-=======
-@media (min-width: 900px) and (max-width: 1120px) { .player-bar .song-info { margin: 0 10px; } .mini-time { display: none; } .mini-vol { display: none; } }
->>>>>>> 62cde5b (Private recovery snapshot before local/production reconciliation (not for deployment))

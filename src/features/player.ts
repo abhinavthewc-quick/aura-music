@@ -1,7 +1,7 @@
 import { auraMasterCtx, effectCtx } from './ambience';
 import { fmt, toast } from '../core/dom';
 import { addToRecent, renderSongs, updateLibCount, updateLibNowPlaying } from './library';
-import { clearArtistPlayback, closeUpNext, playNext, playPrevious, renderUpNext } from './queue';
+import { clearArtistPlayback, closeUpNext, playNext, playPrevious, renderUpNext, retainPlaybackInterruptions } from './queue';
 import { currentRadioStation, escapeHtml, radioAudio, resumeRadioAfterForeground, setupRadioMediaSession, stopRadio } from './radio';
 import { auraYTQueue, extractYouTubeId } from './search';
 import { auraSettings } from './settings';
@@ -161,6 +161,7 @@ import { fetchLyricsForTrack, renderLyrics, updateLyricsProgress, prepareLyricsF
     export function stopPersonalPlaybackForRadio(): void {
       pausePlayback();
       beginPlaybackIntent();
+      retainPlaybackInterruptions();
       clearArtistPlayback();
       retireAuraYouTube();
       resetFullPlayerArtToImage(state.activeTrack?.img || '');
@@ -340,7 +341,7 @@ import { fetchLyricsForTrack, renderLyrics, updateLyricsProgress, prepareLyricsF
 
     export async function playYouTubeInsideAura(videoId,title,poster,liked=false,autoPlay=true, options: { catalogSong?: any; preserveArtist?: boolean; preserveContext?: boolean } = {}){
       if(!/^[A-Za-z0-9_-]{11}$/.test(String(videoId))){toast('The YouTube video ID is invalid.','triangle-exclamation');return;}
-      if(!options.preserveArtist && !options.preserveContext) clearArtistPlayback();
+      if(!options.preserveArtist && !options.preserveContext) { retainPlaybackInterruptions(); clearArtistPlayback(); }
       lastPlayRequestAt = Date.now();
       if(!options.catalogSong) playRequestSequence += 1;
       stopRadio();
@@ -592,7 +593,8 @@ import { fetchLyricsForTrack, renderLyrics, updateLyricsProgress, prepareLyricsF
         seekActivePlayback(event.seekTime);
       });
     }
-    setupMainMediaSession();
+    // Authenticated app.ready performs the first setup after feature imports
+    // and local hydration. Eager setup enters the cyclic radio binding too soon.
 
     export function updateMainMediaSession(){
       if(!('mediaSession' in navigator)) return;
@@ -736,6 +738,7 @@ import { fetchLyricsForTrack, renderLyrics, updateLyricsProgress, prepareLyricsF
       playRequestSequence += 1;
       playbackIntent = true;
       if (!preserveContext) {
+        retainPlaybackInterruptions();
         clearArtistPlayback();
         state.playbackContext = createPlaybackContext(state.songs.filter(trackAvailable).map(stableTrackRef), {
           source: 'library', label: 'Library', startId: stableTrackRef(song), shuffle: state.isShuffle,

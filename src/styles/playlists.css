@@ -1,8 +1,4 @@
-<<<<<<< HEAD
 /* Device-local collections. Artwork mosaics, ordinary rows, neutral controls. */
-=======
-/* Playlists: deliberate collections, consistent rows, and usable local tools. */
->>>>>>> 62cde5b (Private recovery snapshot before local/production reconciliation (not for deployment))
 .playlist-modal, .playlist-picker { position: fixed; z-index: 1500; inset: 0; display: flex; align-items: center; justify-content: center; padding: 24px; background: var(--overlay-scrim); opacity: 0; visibility: hidden; pointer-events: none; transition: opacity var(--dur), visibility var(--dur); }
 .playlist-modal.active, .playlist-picker.active { opacity: 1; visibility: visible; pointer-events: auto; }
 .playlist-modal-card, .playlist-picker-card { width: min(460px, 100%); max-height: calc(88dvh - var(--safe-top)); overflow-y: auto; padding: 24px; border: 1px solid var(--line-strong); border-radius: var(--radius-md); background: var(--surface-2); color: var(--text); box-shadow: var(--shadow-overlay); transform: translateY(8px); transition: transform var(--dur) var(--ease-out); }
@@ -11,31 +7,17 @@
 .playlist-field { display: block; margin-bottom: 16px; }
 .playlist-field > span { display: block; margin-bottom: 8px; color: var(--text); font-size: 13px; font-weight: 500; }
 .playlist-field small { color: var(--text-sub); font-weight: 400; }
-<<<<<<< HEAD
 .playlist-field input { width: 100%; min-height: 48px; padding: 10px 12px; border: 1px solid var(--line-strong); border-radius: var(--radius-xs); background: var(--surface-1); color: var(--text); font-size: 15px; }
 .playlist-field input:focus { border-color: var(--accent); }
 .playlist-field textarea { display: block; width: 100%; min-width: 0; min-height: 76px; max-height: 180px; padding: 10px 12px; resize: vertical; overflow-wrap: anywhere; border: 1px solid var(--line-strong); border-radius: var(--radius-xs); background: var(--surface-1); color: var(--text); font: inherit; font-size: 13px; line-height: 1.5; }
 .playlist-field textarea:focus { border-color: var(--accent); }
 .playlist-error { margin: 0 0 12px; color: var(--danger); font-size: 13px; }
 .playlist-modal-actions { display: flex; align-items: center; justify-content: flex-end; gap: 8px; margin-top: 24px; }
-.playlist-btn, .playlist-create-btn { display: inline-flex; align-items: center; justify-content: center; gap: 8px; min-height: var(--tap); padding: 8px 16px; border: 1px solid var(--line-strong); border-radius: var(--radius-xs); background: transparent; color: var(--text); font-size: 13px; font-weight: 600; }
-.playlist-btn:hover:not(:disabled) { background: var(--hover); }
+.playlist-btn, .playlist-create-btn, .playlist-secondary-btn { display: inline-flex; align-items: center; justify-content: center; gap: 8px; min-height: var(--tap); padding: 8px 16px; border: 1px solid var(--line-strong); border-radius: var(--radius-xs); background: transparent; color: var(--text); font-size: 13px; font-weight: 600; }
+.playlist-btn:hover:not(:disabled), .playlist-secondary-btn:hover:not(:disabled) { background: var(--hover); }
 .playlist-btn.primary, .playlist-create-btn { border-color: var(--accent); background: var(--accent); color: var(--accent-ink); }
 .playlist-btn.primary:hover:not(:disabled), .playlist-create-btn:hover { background: #dedede; }
 
-=======
-.playlist-field input, .playlist-field select { width: 100%; min-height: 48px; padding: 10px 12px; border: 1px solid var(--line-strong); border-radius: var(--radius-xs); background: var(--surface-1); color: var(--text); font-size: 15px; }
-.playlist-field input:focus, .playlist-field select:focus { border-color: var(--accent); }
-.playlist-error { margin: 0 0 12px; color: var(--danger); font-size: 13px; }
-.playlist-modal-actions { display: flex; align-items: center; justify-content: flex-end; gap: 8px; margin-top: 24px; }
-.playlist-btn, .playlist-create-btn, .playlist-secondary-btn { display: inline-flex; align-items: center; justify-content: center; gap: 8px; min-height: var(--tap); padding: 8px 16px; border: 1px solid var(--line-strong); border-radius: var(--radius-xs); background: transparent; color: var(--text); font-size: 13px; font-weight: 600; }
-.playlist-btn:hover, .playlist-secondary-btn:hover { background: var(--hover); }
-.playlist-btn.primary, .playlist-create-btn { border-color: var(--accent); background: var(--accent); color: var(--accent-ink); }
-.playlist-btn.primary:hover, .playlist-create-btn:hover { filter: brightness(1.06); }
-.playlists-page-actions { display: flex; align-items: center; gap: 8px; }
-
-/* Collection shortcuts in the desktop rail and mobile drawer. */
->>>>>>> 62cde5b (Private recovery snapshot before local/production reconciliation (not for deployment))
 .ytm-new-playlist-btn { display: flex; align-items: center; justify-content: center; gap: 8px; width: calc(100% - 8px); min-height: var(--tap); margin: 16px 4px; padding: 8px 12px; border: 1px solid var(--line-strong); border-radius: var(--radius-xs); background: var(--surface-1); color: var(--text); font-size: 13px; font-weight: 500; }
 .ytm-new-playlist-btn:hover { border-color: var(--accent); }
 .ytm-playlist-sep { height: 1px; margin: 4px 8px 12px; background: var(--line); }
@@ -54,26 +36,16 @@
 .drawer-playlists { max-height: 40dvh; overflow-y: auto; }
 @media (min-width: 900px) { .drawer-playlists { display: none; } }
 
-<<<<<<< HEAD
-=======
-/* Overview uses artwork mosaics as its content, with no extra decorative card. */
-#tabPlaylists, #tabPlaylist { max-width: 1180px; margin: 0 auto; }
->>>>>>> 62cde5b (Private recovery snapshot before local/production reconciliation (not for deployment))
 .playlists-page-head { display: flex; align-items: flex-start; justify-content: space-between; gap: 24px; margin-bottom: 28px; }
 .playlists-page-head h2 { margin-bottom: 6px; color: var(--text); font-size: 28px; font-weight: 600; letter-spacing: -.035em; }
 .playlists-page-head p { max-width: 58ch; color: var(--text-sub); font-size: 13px; line-height: 1.5; }
+.playlists-page-actions { display: flex; flex-wrap: wrap; flex: 0 0 auto; gap: 8px; }
 .playlists-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(180px, 1fr)); gap: 28px 20px; }
-<<<<<<< HEAD
 .playlist-card { position: relative; min-width: 0; cursor: pointer; }
-=======
-.playlist-card { position: relative; min-width: 0; }
-.playlist-card-open { display: block; width: 100%; padding: 0; border: 0; border-radius: var(--radius-sm); background: transparent; color: var(--text); text-align: left; }
->>>>>>> 62cde5b (Private recovery snapshot before local/production reconciliation (not for deployment))
 .playlist-card-cover { display: grid; grid-template-columns: repeat(2, 1fr); grid-template-rows: repeat(2, 1fr); width: 100%; aspect-ratio: 1; overflow: hidden; border: 1px solid var(--line); border-radius: var(--radius-sm); background: var(--surface-2); }
 .playlist-card-cover img, .playlist-card-cover > span, .pl-cover-mosaic img, .pl-cover-mosaic > span { width: 100%; height: 100%; min-width: 0; min-height: 0; object-fit: cover; }
 .playlist-card-cover > span, .pl-cover-mosaic > span { display: grid; place-items: center; background: var(--surface-2); color: var(--text-dim); font-size: 26px; }
 .playlist-card-copy { display: block; padding-top: 12px; }
-<<<<<<< HEAD
 .playlist-card-copy h3 { display: block; overflow: hidden; color: var(--text); font-size: 14px; font-weight: 600; line-height: 1.35; white-space: nowrap; text-overflow: ellipsis; }
 .playlist-card-open { display: block; max-width: 100%; overflow: hidden; padding: 0; border: 0; background: transparent; color: inherit; font: inherit; text-align: left; white-space: inherit; text-overflow: ellipsis; }
 .playlist-card-open::after { position: absolute; inset: 0; border-radius: var(--radius-sm); content: ''; }
@@ -81,11 +53,6 @@
 .playlist-card-open:focus-visible::after { outline: 2px solid var(--accent); outline-offset: 4px; }
 .playlist-card-copy p { display: block; margin-top: 4px; color: var(--text-sub); font-size: 12px; line-height: 1.4; }
 .playlist-card-menu { position: absolute; z-index: 1; top: 8px; right: 8px; display: grid; place-items: center; width: var(--tap); height: var(--tap); padding: 0; border: 1px solid rgba(255,255,255,.16); border-radius: 50%; background: rgba(0,0,0,.68); color: #fff; font-size: 16px; }
-=======
-.playlist-card-copy strong { display: block; overflow: hidden; color: var(--text); font-size: 14px; font-weight: 600; line-height: 1.35; white-space: nowrap; text-overflow: ellipsis; }
-.playlist-card-copy small { display: block; margin-top: 4px; color: var(--text-sub); font-size: 12px; line-height: 1.4; }
-.playlist-card-menu { position: absolute; top: 8px; right: 8px; display: grid; place-items: center; width: var(--tap); height: var(--tap); padding: 0; border: 1px solid rgba(255,255,255,.16); border-radius: 50%; background: rgba(0,0,0,.68); color: #fff; font-size: 16px; }
->>>>>>> 62cde5b (Private recovery snapshot before local/production reconciliation (not for deployment))
 .playlist-card-menu:hover { background: rgba(0,0,0,.86); }
 .playlists-empty { display: flex; flex-direction: column; align-items: flex-start; gap: 12px; max-width: 520px; padding: 24px 0; }
 .playlists-empty-mark { display: grid; place-items: center; width: 60px; height: 60px; margin-bottom: 4px; border-radius: var(--radius-md); background: var(--accent-soft); color: var(--accent); font-size: 26px; }
@@ -93,10 +60,6 @@
 .playlists-empty p { max-width: 46ch; color: var(--text-sub); font-size: 14px; line-height: 1.6; }
 .playlists-empty .playlist-create-btn { margin-top: 8px; }
 
-<<<<<<< HEAD
-=======
-/* Detail rows separate playback from editing; all explicit actions have 44px targets. */
->>>>>>> 62cde5b (Private recovery snapshot before local/production reconciliation (not for deployment))
 .pl-back { display: inline-flex; align-items: center; gap: 8px; min-height: var(--tap); margin-bottom: 20px; padding: 8px 0; border: 0; background: transparent; color: var(--text-sub); font-size: 13px; }
 .pl-back:hover { color: var(--text); }
 .pl-head { display: flex; align-items: center; gap: 28px; margin-bottom: 32px; }
@@ -110,11 +73,7 @@
 .pl-desc { max-width: 60ch; margin: 12px 0 16px; color: var(--text-sub); font-size: 13px; line-height: 1.6; overflow-wrap: anywhere; }
 .pl-actions { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 16px; }
 .pl-actions button { display: inline-flex; align-items: center; justify-content: center; gap: 8px; min-height: var(--tap); padding: 8px 14px; border: 1px solid var(--line); border-radius: var(--radius-xs); background: transparent; color: var(--text); font-size: 13px; font-weight: 600; }
-<<<<<<< HEAD
 .pl-actions button:hover:not(:disabled) { background: var(--hover); }
-=======
-.pl-actions button:hover { background: var(--hover); }
->>>>>>> 62cde5b (Private recovery snapshot before local/production reconciliation (not for deployment))
 .pl-actions button:first-child { border-color: var(--accent); background: var(--accent); color: var(--accent-ink); }
 .pl-actions .danger { color: var(--danger); }
 .pl-actions .danger:hover { background: var(--danger-soft); }
@@ -123,43 +82,27 @@
 .pl-section-head h3 { color: var(--text); font-size: 20px; font-weight: 600; letter-spacing: -.02em; }
 .pl-section-head > span { color: var(--text-sub); font-size: 12px; }
 .pl-track-list { display: flex; flex-direction: column; gap: 2px; }
-<<<<<<< HEAD
-.pl-track { display: grid; grid-template-columns: 24px 48px minmax(0, 1fr) 44px; align-items: center; gap: 12px; min-width: 0; min-height: 72px; padding: 8px; border-bottom: 1px solid var(--line); border-radius: var(--radius-xs); cursor: pointer; }
+.pl-track { display: grid; grid-template-columns: 24px 48px minmax(0, 1fr) auto 44px; align-items: center; gap: 12px; min-width: 0; min-height: 72px; padding: 8px; border-bottom: 1px solid var(--line); border-radius: var(--radius-xs); cursor: pointer; }
 .pl-track:hover { background: var(--hover); }
-.pl-track.pl-track-playable { grid-template-columns: minmax(0, 1fr) 44px; }
-.pl-track-play { display: grid; grid-template-columns: 24px 48px minmax(0, 1fr); align-items: center; gap: 12px; min-width: 0; min-height: 56px; padding: 0; border: 0; border-radius: var(--radius-xs); background: transparent; color: var(--text); text-align: left; }
+.pl-track-main { display: flex; flex-wrap: wrap; align-items: center; gap: 8px; min-width: 0; }
+.pl-track-play { align-self: stretch; min-width: 0; min-height: 56px; padding: 0; border: 0; border-radius: var(--radius-xs); background: transparent; color: var(--text); text-align: left; }
+.pl-track-order { display: flex; align-items: center; gap: 2px; }
+.pl-track-order button { display: grid; place-items: center; width: var(--tap); height: var(--tap); padding: 0; border: 0; border-radius: 50%; background: transparent; color: var(--text-sub); }
+.pl-track-order button:hover { background: var(--surface-3); color: var(--text); }
+.pl-track-order button[aria-disabled="true"] { color: var(--text-dim); }
+.pl-track-drag { touch-action: none; cursor: grab; }
+.pl-track.is-dragging { opacity: .5; background: var(--accent-soft); }
+.pl-relink-btn { min-height: var(--tap); padding: 8px 12px; border: 1px solid var(--line); border-radius: var(--radius-xs); background: transparent; color: var(--text); font-size: 12px; }
+.pl-relink-btn:hover { background: var(--hover); }
 .pl-track-number { color: var(--text-dim); font-size: 12px; text-align: center; font-variant-numeric: tabular-nums; }
 .pl-track img { width: 48px; height: 48px; border-radius: var(--radius-xs); background: var(--surface-2); object-fit: cover; }
-=======
-.pl-track { display: grid; grid-template-columns: 24px 48px minmax(0, 1fr) 132px 44px; align-items: center; gap: 12px; min-width: 0; min-height: 72px; padding: 8px; border-bottom: 1px solid var(--line); border-radius: var(--radius-xs); }
-.pl-track:hover { background: var(--hover); }
-.pl-track.is-dragging { opacity: .5; background: var(--accent-soft); }
-.pl-track.is-missing { background: var(--surface-1); }
-.pl-track-number { color: var(--text-dim); font-size: 12px; text-align: center; font-variant-numeric: tabular-nums; }
-.pl-track img, .pl-track-placeholder { width: 48px; height: 48px; border-radius: var(--radius-xs); background: var(--surface-2); object-fit: cover; }
-.pl-track-placeholder { display: grid; place-items: center; color: var(--text-dim); }
-.pl-track-main { display: flex; align-items: center; gap: 12px; min-width: 0; min-height: var(--tap); padding: 0; border: 0; border-radius: var(--radius-xs); background: transparent; color: var(--text); text-align: left; }
->>>>>>> 62cde5b (Private recovery snapshot before local/production reconciliation (not for deployment))
 .pl-track-meta { flex: 1; min-width: 0; }
 .pl-track-meta b, .pl-track-meta span { display: block; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
 .pl-track-meta b { color: var(--text); font-size: 14px; font-weight: 600; line-height: 1.35; }
 .pl-track-meta span { margin-top: 3px; color: var(--text-sub); font-size: 12px; line-height: 1.4; }
-<<<<<<< HEAD
 .pl-track-remove { display: grid; place-items: center; width: var(--tap); height: var(--tap); padding: 0; border: 0; border-radius: 50%; background: transparent; color: var(--text-sub); font-size: 14px; }
 .pl-track-remove:hover { background: var(--surface-3); color: var(--danger); }
 .pl-suggestion { grid-template-columns: 48px minmax(0, 1fr) auto; cursor: default; }
-=======
-.pl-relink-btn { flex: 0 0 auto; min-height: var(--tap); padding: 8px 12px; border: 1px solid var(--line); border-radius: var(--radius-xs); background: transparent; color: var(--accent); font-size: 12px; font-weight: 600; }
-.pl-track-order { display: grid; grid-template-columns: repeat(3, var(--tap)); }
-.pl-track-drag { touch-action: none; cursor: grab; }
-.pl-track-drag:active { cursor: grabbing; }
-.pl-track.is-missing .pl-track-main { align-items: flex-start; flex-wrap: wrap; }
-.pl-track.is-missing .pl-track-meta { flex: 1 0 100%; }
-.pl-track-order button, .pl-track-remove { display: grid; place-items: center; width: var(--tap); height: var(--tap); padding: 0; border: 0; border-radius: 50%; background: transparent; color: var(--text-sub); font-size: 14px; }
-.pl-track-order button:hover:not(:disabled), .pl-track-remove:hover { background: var(--surface-3); color: var(--text); }
-.pl-track-remove:hover { color: var(--danger); }
-.pl-suggestion { grid-template-columns: 48px minmax(0, 1fr) auto; }
->>>>>>> 62cde5b (Private recovery snapshot before local/production reconciliation (not for deployment))
 .pl-add-btn { display: inline-flex; align-items: center; justify-content: center; gap: 8px; min-width: var(--tap); min-height: var(--tap); padding: 8px 12px; border: 1px solid var(--line); border-radius: var(--radius-xs); background: transparent; color: var(--text); font-size: 12px; font-weight: 600; }
 .pl-add-btn:hover { border-color: var(--accent); color: var(--accent); }
 .pl-empty { display: flex; flex-direction: column; align-items: flex-start; gap: 12px; padding: 24px 8px; }
@@ -167,7 +110,6 @@
 .pl-empty h3 { font-size: 20px; font-weight: 600; }
 .pl-empty p { max-width: 46ch; color: var(--text-sub); font-size: 13px; line-height: 1.55; }
 
-<<<<<<< HEAD
 /* Sharing is an inline snapshot, keeping the player and navigation available. */
 .pl-share-panel { max-width: 720px; margin: 24px 0; padding: 20px; border: 1px solid var(--line-strong); border-radius: var(--radius-sm); background: var(--surface-1); }
 .pl-share-panel > p, .pl-availability { max-width: 68ch; margin: 0 0 16px; color: var(--text-sub); font-size: 13px; line-height: 1.6; overflow-wrap: anywhere; }
@@ -187,31 +129,20 @@
 .pl-link-error h2 { max-width: 26ch; font-size: 26px; line-height: 1.2; }
 #sharedPlaylistHeading:focus { outline: none; }
 
-=======
-/* Picker and relinking keep track identity visible. */
->>>>>>> 62cde5b (Private recovery snapshot before local/production reconciliation (not for deployment))
 .playlist-picker-head { display: flex; align-items: flex-start; justify-content: space-between; gap: 16px; margin-bottom: 16px; }
 .playlist-picker-head h3 { margin: 0 0 6px; font-size: 22px; font-weight: 600; }
 .playlist-picker-head p { color: var(--text-sub); font-size: 13px; line-height: 1.5; }
 .playlist-picker-head button { display: grid; place-items: center; width: var(--tap); height: var(--tap); flex: 0 0 var(--tap); padding: 0; border: 0; border-radius: 50%; background: transparent; color: var(--text-sub); }
 .playlist-picker-head button:hover { background: var(--hover); }
-<<<<<<< HEAD
-=======
-.playlist-picker-search { width: 100%; min-height: 48px; margin: 0 0 16px; padding: 10px 12px; border: 1px solid var(--line-strong); border-radius: var(--radius-xs); background: var(--surface-1); color: var(--text); font-size: 15px; }
-.playlist-picker-search:focus { border-color: var(--accent); }
->>>>>>> 62cde5b (Private recovery snapshot before local/production reconciliation (not for deployment))
 .playlist-picker-list { display: flex; flex-direction: column; gap: 8px; }
+.playlist-picker-search { width: 100%; min-height: var(--tap); margin: 0 0 16px; padding: 8px 12px; border: 1px solid var(--line-strong); border-radius: var(--radius-xs); background: var(--surface-1); color: var(--text); font: inherit; }
 .playlist-picker-option { display: flex; align-items: center; gap: 12px; min-width: 0; min-height: 72px; padding: 8px; border: 1px solid var(--line); border-radius: var(--radius-sm); background: var(--surface-1); color: var(--text); text-align: left; }
 .playlist-picker-option:hover:not(:disabled) { border-color: var(--accent); }
 .playlist-picker-cover { display: grid; grid-template-columns: repeat(2, 1fr); grid-template-rows: repeat(2, 1fr); flex: 0 0 48px; width: 48px; height: 48px; overflow: hidden; border-radius: var(--radius-xs); background: var(--surface-2); }
 .playlist-picker-cover img, .playlist-picker-cover > span { display: block; width: 100%; height: 100%; min-width: 0; min-height: 0; object-fit: cover; }
 .playlist-picker-cover > span { display: grid; place-items: center; color: var(--text-dim); font-size: 12px; }
-<<<<<<< HEAD
+.playlist-picker-cover > img:only-child { grid-column: 1 / -1; grid-row: 1 / -1; }
 .playlist-picker-option > span { flex: 1; min-width: 0; }
-=======
-.playlist-picker-cover > img:only-child { grid-area: 1 / 1 / -1 / -1; }
-.playlist-picker-option > span:not(.playlist-picker-cover) { flex: 1; min-width: 0; }
->>>>>>> 62cde5b (Private recovery snapshot before local/production reconciliation (not for deployment))
 .playlist-picker-option b, .playlist-picker-option small { display: block; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
 .playlist-picker-option b { font-size: 13px; font-weight: 600; }
 .playlist-picker-option small { margin-top: 4px; color: var(--text-sub); font-size: 12px; }
@@ -220,15 +151,8 @@
 @media (max-width: 700px) { .playlists-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 24px 12px; } .pl-head { gap: 20px; } .pl-cover { flex-basis: 132px; width: 132px; } }
 @media (max-width: 600px) {
   .playlists-page-head { gap: 12px; }
-<<<<<<< HEAD
-  .playlists-page-head .playlist-create-btn { width: var(--tap); padding: 0; }
-  .playlists-page-head .playlist-create-btn span { display: none; }
-=======
-  .playlist-create-btn, .playlist-secondary-btn { width: var(--tap); padding: 0; }
-  .playlist-create-btn span, .playlist-secondary-btn span { display: none; }
-  .playlists-empty .playlist-create-btn { width: auto; padding: 8px 16px; }
-  .playlists-empty .playlist-create-btn span { display: inline; }
->>>>>>> 62cde5b (Private recovery snapshot before local/production reconciliation (not for deployment))
+  .playlists-page-head .playlist-create-btn, .playlists-page-head .playlist-secondary-btn { width: var(--tap); padding: 0; }
+  .playlists-page-head .playlist-create-btn span, .playlists-page-head .playlist-secondary-btn span { display: none; }
   .pl-head { align-items: flex-start; gap: 16px; }
   .pl-cover { flex-basis: 96px; width: 96px; }
   .pl-name { font-size: 26px; }
@@ -237,24 +161,17 @@
   .pl-actions button span { display: none; }
   .pl-actions button:first-child { width: auto; padding: 8px 14px; }
   .pl-actions button:first-child span { display: inline; }
-<<<<<<< HEAD
-  .pl-track { grid-template-columns: 44px minmax(0, 1fr) 44px; gap: 10px; padding: 8px 4px; }
-  .pl-track-play { grid-template-columns: 44px minmax(0, 1fr); gap: 10px; }
+  .pl-track { grid-template-columns: 44px minmax(0, 1fr) 44px; gap: 8px; padding: 8px 4px; }
+  .pl-track-main { grid-column: 2; }
+  .pl-track-order { grid-column: 2; grid-row: 2; }
+  .pl-track-remove { grid-column: 3; grid-row: 1; }
+  .pl-suggestion { grid-template-columns: 44px minmax(0, 1fr) 44px; }
   .pl-track-number { display: none; }
   .pl-track img { width: 44px; height: 44px; }
   .pl-track-placeholder { width: 44px; height: 44px; }
   .pl-shared-track { grid-template-columns: minmax(0, 1fr); gap: 6px; }
   .pl-track-availability { text-align: left; }
   .pl-share-panel { padding: 16px; }
-=======
-  .pl-track { grid-template-columns: 44px minmax(0, 1fr) 44px; gap: 4px 10px; padding: 8px 4px; }
-  .pl-track-number { display: none; }
-  .pl-track img, .pl-track-placeholder { width: 44px; height: 44px; }
-  .pl-track-main { grid-column: 2 / 4; }
-  .pl-track-order { grid-column: 2; justify-self: end; }
-  .pl-track-remove { grid-column: 3; }
-  .pl-suggestion { grid-template-columns: 44px minmax(0, 1fr) 44px; }
->>>>>>> 62cde5b (Private recovery snapshot before local/production reconciliation (not for deployment))
   .pl-add-btn { width: var(--tap); padding: 0; }
   .pl-add-btn span { display: none; }
 }

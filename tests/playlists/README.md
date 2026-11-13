@@ -76,12 +76,11 @@ Tab, Shift+Tab, Enter, Space and Escape input at both viewports. Sharing APIs
 remain fixture-controlled. Verify these focus scopes:
 
 - **Desktop (`min-width:900px`)**: the open player's artwork
-  (`#fullPlayerOverlay`), Lyrics/Related companion (`#upNextSheet`) and transport
-  (`#miniPlayer`) form one composite keyboard scope. Tab and Shift+Tab traverse
-  and wrap across all three roots, keeping the obscured app outside the cycle.
+  (`#fullPlayerOverlay`), Lyrics/Related/Queue companion (`#upNextSheet`) and
+  transport (`#miniPlayer`) are nonmodal. Tab and Shift+Tab are not trapped.
   The full player owns the companion and transport through `aria-owns`; the
-  companion is a region within that workspace. Incoming playlist previews retain
-  focus in any of those roots, including the transport and companion tabs.
+  companion is a region with no `aria-modal`. Incoming playlist previews can
+  focus their heading without closing or interrupting the desktop player.
 - **Mobile (below 900px)**: the full player and its Related/lyrics sheet are
   stacked dialogs. Tab and Shift+Tab stay in the top sheet. Escape closes only
   that sheet and restores its opener; a subsequent Escape closes the player and

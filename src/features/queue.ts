@@ -3,11 +3,11 @@ import { $, state } from '../core/state';
 import { resolveTrackId, stableTrackRef, trackAvailable } from '../core/track-identity';
 import {
   advanceContext, applyPlaybackVisit, capturePlaybackVisit, createPlaybackContext, previewPlayback,
-  reorderContextUpcoming, setContextShuffle, type PlaybackContext, type PlaybackReason, type PlaybackSource,
+  reorderContextUpcoming, retainContextInterruptions, setContextShuffle, type PlaybackContext, type PlaybackReason, type PlaybackSource,
 } from '../core/playback-context';
 import {
   advanceArtistPlayback, captureArtistVisit, createArtistPlayback, previewArtistPlayback, reorderArtistUpcoming, setArtistShuffle,
-  type ArtistPlayback, type ArtistPlaybackOptions,
+  retainArtistInterruptions, type ArtistPlayback, type ArtistPlaybackOptions,
 } from '../core/artistPlayback';
 import { deleteTrack, openEditModal, restoreLocalFile, toggleFavorite } from './library';
 import {
@@ -40,6 +40,7 @@ export interface PlaybackSequenceOptions {
 }
 
 export function clearArtistPlayback(): void {
+  if (artistPlayback) { syncArtistQueue(artistPlayback); retainArtistInterruptions(artistPlayback); retainArtistQueue(artistPlayback); }
   artistPlayback = null;
   if (state.playbackContext?.source === 'artist') state.playbackContext = null;
 }
@@ -65,7 +66,7 @@ export function getArtistPlayback(): ArtistPlayback | null {
 
 function syncArtistQueue(context: ArtistPlayback): void {
   context.queue = manualQueue.map(String);
-  if (context.shuffle !== !!state.isShuffle) setArtistShuffle(context, !!state.isShuffle);
+  if (context.shuffle !== !!state.isShuffle) { setArtistShuffle(context, !!state.isShuffle); replaceManualQueue(context.queue.map(rawId)); }
   mirrorArtistContext(context);
 }
 function retainArtistQueue(context: ArtistPlayback): void {
@@ -74,12 +75,20 @@ function retainArtistQueue(context: ArtistPlayback): void {
 }
 function syncContextQueue(context: PlaybackContext): void { context.queue = manualQueue.map(reference); }
 function retainContextQueue(context: PlaybackContext): void { replaceManualQueue(context.queue.map(rawId)); }
-const scopedContext = () => state.playbackContext && state.playbackContext.source !== 'library' && state.playbackContext.source !== 'artist'
+const scopedContext = () => state.playbackContext && state.playbackContext.source !== 'artist'
+  && (state.playbackContext.source !== 'library' || !!state.playbackContext.collectionId)
   ? state.playbackContext : null;
+
+/** Retire a projected schedule without losing pending raw-ID queue entries. */
+export function retainPlaybackInterruptions(): void {
+  if (artistPlayback) { syncArtistQueue(artistPlayback); retainArtistInterruptions(artistPlayback); retainArtistQueue(artistPlayback); }
+  else if (state.playbackContext) { syncContextQueue(state.playbackContext); retainContextInterruptions(state.playbackContext); retainContextQueue(state.playbackContext); }
+}
 
 export function playTrackSequence(ids: Array<string | number>, options?: PlaybackSequenceOptions): boolean {
   const songs = ids.map(findSongById).filter(trackAvailable);
   if (!songs.length) { toast('There are no available tracks in this collection.', 'circle-info'); return false; }
+  retainPlaybackInterruptions();
   if (options?.clearManualQueue === true) replaceManualQueue([]);
   if (options?.source === 'artist') {
     const artistOptions: ArtistPlaybackOptions = { ...options, collectionId: options.collectionId || 'artist', label: options.label || 'Artist',
@@ -123,6 +132,7 @@ export function syncPlaybackShuffle(enabled: boolean): void {
   else if (state.playbackContext) {
     syncContextQueue(state.playbackContext);
     state.playbackContext = setContextShuffle(state.playbackContext, enabled);
+    retainContextQueue(state.playbackContext);
   }
   syncShuffleControls(); renderUpNext();
 }
@@ -131,11 +141,12 @@ export function queueSong(id: string | number, next = false): void {
   const song = findSongById(id);
   if (!trackAvailable(song)) { toast('This track is unavailable. Relink its file before queuing it.', 'triangle-exclamation'); return; }
   if (String(state.songs[state.currentIndex]?.id) === String(song.id)) { toast('That song is already playing', 'circle-info'); return; }
+  retainPlaybackInterruptions();
   const queue = manualQueue.filter(item => String(item) !== String(song.id));
   if (next) queue.unshift(song.id); else queue.push(song.id);
   replaceManualQueue(queue);
-  if (artistPlayback) { artistPlayback.future = []; syncArtistQueue(artistPlayback); }
-  else if (state.playbackContext) { state.playbackContext.future = []; syncContextQueue(state.playbackContext); }
+  if (artistPlayback) syncArtistQueue(artistPlayback);
+  else if (state.playbackContext) syncContextQueue(state.playbackContext);
   renderUpNext();
   toast(next ? `“${song.title}” will play next` : `Added “${song.title}” to queue`, 'circle-check');
 }
@@ -233,23 +244,28 @@ function selectUpcoming(song: any): void {
   if (artist) {
     syncArtistQueue(artist);
     const copy: ArtistPlayback = {...artist, order:[...artist.order], playOrder:[...artist.playOrder], queue:[...artist.queue], history:[], future:artist.future.map(entry => ({...entry}))};
+    const skipped: ArtistPlayback['future'] = [];
     for (let n = 0; n < upNextLimit(); n++) {
       const id = advanceArtistPlayback(copy, 1, state.repeatMode, playable);
       if (!id) return;
-      if (id !== String(song.id)) continue;
+      if (id !== String(song.id)) { if (copy.overrideActive) skipped.push(captureArtistVisit(copy)); continue; }
       artist.history.push(captureArtistVisit(artist));
       artist.currentId = copy.currentId; artist.cursor = copy.cursor; artist.overrideActive = copy.overrideActive;
-      artist.future = copy.future;
-      artist.queue = artist.queue.filter(entry => entry !== id);
+      const anchorId = copy.playOrder[copy.cursor], skippedIds = new Set(skipped.map(entry => entry.id));
+      artist.future = [...skipped.map(entry => ({...entry, anchorId})), ...copy.future.filter(entry => entry.id !== id && !skippedIds.has(entry.id))];
+      artist.queue = [...new Set([...skipped.map(entry => entry.id), ...artist.queue])].filter(entry => entry !== id);
       retainArtistQueue(artist); playSong(state.songs.indexOf(song), false, true); break;
     }
   } else if (scopedContext()) {
     const context = scopedContext(); syncContextQueue(context);
-    const item = previewPlayback(context, state.repeatMode, upNextLimit(), playable).find(entry => entry.visit.id === stableTrackRef(song));
+    const preview = previewPlayback(context, state.repeatMode, upNextLimit(), playable);
+    const selected = preview.findIndex(entry => entry.visit.id === stableTrackRef(song)), item = preview[selected];
     if (!item) return;
     context.history.push(capturePlaybackVisit(context));
-    context.queue = context.queue.filter(id => id !== item.visit.id);
-    context.future = item.after.future.map(entry => ({...entry}));
+    const skipped = preview.slice(0, selected).filter(entry => entry.visit.override).map(entry => entry.visit);
+    const skippedIds = new Set(skipped.map(entry => entry.id)), anchorId = item.after.playOrder[item.after.cursor];
+    context.queue = [...new Set([...skippedIds, ...context.queue])].filter(id => id !== item.visit.id);
+    context.future = [...skipped.map(entry => ({...entry, anchorId})), ...item.after.future.filter(entry => entry.id !== item.visit.id && !skippedIds.has(entry.id)).map(entry => ({...entry}))];
     applyPlaybackVisit(context, item.visit); retainContextQueue(context);
     playSong(state.songs.indexOf(song), false, true);
   } else {
@@ -309,9 +325,10 @@ export function promoteVisibleOrder(ids: string[]): void {
     syncContextQueue(context);
     const refs = [...new Set(ids.map(reference))];
     const explicit = new Set([...context.queue, ...context.future.filter(entry => entry.override).map(entry => entry.id)]);
+    const pending = context.future.filter(entry => !refs.includes(entry.id));
     reorderContextUpcoming(context, refs.filter(id => !explicit.has(id)), state.repeatMode);
     let anchor = context.playOrder[context.cursor];
-    context.future = refs.map(id => { const override = explicit.has(id); if (!override) anchor = id; return {id,override,anchorId:anchor,cursor:context.playOrder.indexOf(anchor)}; });
+    context.future = [...refs.map(id => { const override = explicit.has(id); if (!override) anchor = id; return {id,override,anchorId:anchor,cursor:context.playOrder.indexOf(anchor)}; }), ...pending];
     context.queue = [...refs.filter(id => context.queue.includes(id)), ...context.queue.filter(id => !refs.includes(id))];
     retainContextQueue(context); return;
   }

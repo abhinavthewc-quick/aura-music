@@ -39,6 +39,13 @@ export async function runRoomRegressions() {
     document.dispatchEvent(new Event('visibilitychange'));
     await flush();
     check(fixture.requests.length === 0 && contexts.length === 0, 'idle join and focus changes start no catalogue, room request, or audio context');
+    // document.write installs the real page's stylesheet after the fixture's
+    // initial paint. Its finite control-color transitions are not record motion.
+    const startupTransitions = document.getAnimations().filter(animation => animation.playState === 'running');
+    check(startupTransitions.every(animation => animation instanceof CSSTransition &&
+      Number.isFinite(animation.effect.getComputedTiming().endTime)), 'fixture stylesheet hydration starts no decorative or looping animation');
+    await Promise.all(startupTransitions.map(animation => animation.finished.catch(() => undefined)));
+    await flush();
     check(document.getAnimations().filter((animation) => animation.playState === 'running').length === 0, 'idle gate has no startup or looping animation');
     check(getComputedStyle(document.body).backgroundColor === 'rgb(0, 0, 0)', 'rooms retain a true-black canvas');
 

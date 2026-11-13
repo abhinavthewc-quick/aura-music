@@ -1,9 +1,5 @@
 import { state, $ } from '../core/state';
-<<<<<<< HEAD
 import { getActivePlaybackTime, seekActivePlayback } from './player';
-=======
-import { currentPlaybackTime } from './player';
->>>>>>> 62cde5b (Private recovery snapshot before local/production reconciliation (not for deployment))
 
 export type SyncType = 'Syllable' | 'Word' | 'Line' | 'Unsynced';
 
@@ -1078,15 +1074,7 @@ export function startLyricsSyncLoop() {
       return;
     }
     lastLyricsSync = now;
-<<<<<<< HEAD
     updateLyricsProgress(getActivePlaybackTime());
-=======
-    const curTime = currentPlaybackTime();
-
-    if (curTime > 0) {
-      updateLyricsProgress(curTime);
-    }
->>>>>>> 62cde5b (Private recovery snapshot before local/production reconciliation (not for deployment))
     lyricsRafId = requestAnimationFrame(tick);
   }
   lyricsRafId = requestAnimationFrame(tick);
@@ -1107,20 +1095,6 @@ export function stopLyricsSyncLoop() {
 /* The lyrics sheet is independent of the full-player overlay. Transport class
    changes on a minimized player must not stop a visible (even paused) sheet. */
 function observeLyricsVisibility() {
-<<<<<<< HEAD
-  const container = $('fullPlayerLyricsContainer') || $('ytmLyricsPanel');
-  if (!container) return;
-  const mo = new MutationObserver(() => {
-    if (!lyricsPanelVisible() || container.offsetParent === null) {
-      stopLyricsSyncLoop();
-    } else if (currentLyrics?.isSynced) {
-      startLyricsSyncLoop();
-    }
-  });
-  for (const target of new Set([container, $('upNextSheet'), $('ytmLyricsPanel')])) {
-    if (target) mo.observe(target, { attributes: true, attributeFilter: ['style', 'class'] });
-  }
-=======
   const sheet = $('upNextSheet'), panel = $('ytmLyricsPanel');
   if (!sheet || !panel) return;
   const sync = () => {
@@ -1128,11 +1102,12 @@ function observeLyricsVisibility() {
     else if (currentLyrics?.isSynced) startLyricsSyncLoop();
   };
   const observer = new MutationObserver(sync);
-  observer.observe(sheet,{attributes:true,attributeFilter:['class','data-tab']});
-  observer.observe(panel,{attributes:true,attributeFilter:['hidden']});
+  observer.observe(sheet,{attributes:true,attributeFilter:['class','style','data-tab']});
+  observer.observe(panel,{attributes:true,attributeFilter:['class','style','hidden']});
+  const container = $('fullPlayerLyricsContainer');
+  if (container) observer.observe(container,{attributes:true,attributeFilter:['class','style']});
   document.addEventListener('visibilitychange',sync);
   sync();
->>>>>>> 62cde5b (Private recovery snapshot before local/production reconciliation (not for deployment))
 }
 // Initialize observer when lyrics module loads
 if (typeof document !== 'undefined') {

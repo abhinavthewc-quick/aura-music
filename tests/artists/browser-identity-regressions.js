@@ -1,7 +1,7 @@
 /* Run after the shared regressions in the dedicated main-page local fixture:
    (await import('/tests/artists/browser-identity-regressions.js')).runArtistIdentityRegressions()
-   No remote writes. Common/artist playback boundaries are observed. Queue checks
-   restore the manual order and never activate its directly imported play action;
+   No remote writes. Imported row transport and the artist boundary are observed.
+   Queue checks restore the manual order without activating upcoming playback;
    artwork sharing is captured locally. Native key activation is audited centrally. */
 export async function runArtistIdentityRegressions() {
   const fixture = window.__auraFixture;
@@ -11,15 +11,14 @@ export async function runArtistIdentityRegressions() {
   const { state } = await import('/src/core/state.ts');
   const library = await import('/src/features/library.ts');
   const home = await import('/src/features/home.ts');
+  const player = await import('/src/features/player.ts');
+  const { getPlaybackIntent } = await import('/src/core/playbackIntent.ts');
   const { goTab } = await import('/src/ui/nav.ts');
   // The preceding suite now opts into artist transport. These legacy Up Next
   // checks deliberately exercise the ordinary library queue without playback.
   (await import('/src/features/queue.ts')).clearArtistPlayback();
-  const initialPlayback = { src: state.audio.getAttribute('src'), index: state.currentIndex, playing: state.isPlaying, rate: state.audio.playbackRate };
-  const originalPlay = window.playSong, originalLike = window.toggleFavorite, originalSequence = window.playTrackSequence;
-  const plays = [], likes = [], sequences = [];
-  window.playSong = (...args) => plays.push(args);
-  window.toggleFavorite = (...args) => likes.push(args);
+  const originalSequence = window.playTrackSequence;
+  const sequences = [];
   window.playTrackSequence = (...args) => { sequences.push(args); return true; };
   try {
     goTab('tabLibrary');
@@ -33,13 +32,21 @@ export async function runArtistIdentityRegressions() {
     check(!play.querySelector('button, a, input, [tabindex]') && !play.contains(like) && !play.contains(menu), 'play, like and menu are sibling actions, never nested controls');
     play.focus();
     check(document.activeElement === play, 'track play participates in native focus navigation');
+    const songId = row.dataset.songId, beforePlay = getPlaybackIntent();
     play.click();
-    check(plays.length === 1 && Number.isInteger(plays[0][0]) && !!state.songs[plays[0][0]], 'native play invokes one valid playback action');
+    check(getPlaybackIntent() === beforePlay + 1 && String(state.songs[state.currentIndex]?.id) === songId, 'native play invokes one valid playback action');
+    await state.audio.play();
+    const beforeLike = getPlaybackIntent(), favorite = !!state.songs[state.currentIndex].favorite;
     like.click();
-    check(likes.length === 1 && plays.length === 1, 'liking a row cannot bubble into playback');
-    menu.click();
-    check(document.getElementById('trackSheetOverlay').classList.contains('active') && plays.length === 1, 'the existing row menu opens without starting a track');
+    check(!!state.songs[state.currentIndex].favorite === !favorite && getPlaybackIntent() === beforeLike, 'liking a row cannot bubble into playback');
+    // Favorite rendering replaces ordinary library rows; use the new live menu.
+    [...document.querySelectorAll('#librarySongList .song-item')].find(item => item.dataset.songId === songId).querySelector('.song-item-menu-btn').click();
+    check(document.getElementById('trackSheetOverlay').classList.contains('active') && getPlaybackIntent() === beforeLike, 'the existing row menu opens without starting a track');
     document.getElementById('trackSheetOverlay').click();
+    library.toggleFavorite(null, songId);
+    player.pauseMainPlayback();
+    await new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve)));
+    const initialPlayback = { src: state.audio.getAttribute('src'), index: state.currentIndex, playing: state.isPlaying, rate: state.audio.playbackRate, intent: getPlaybackIntent() };
 
     const groups = library.getArtistGroups();
     home.renderArtistsFullGrid();
@@ -55,7 +62,7 @@ export async function runArtistIdentityRegressions() {
     const artistRow = document.querySelector('#artistSongsList .artist-song-row');
     check(artistRow instanceof HTMLButtonElement && !!artistRow.getAttribute('aria-label') && !artistRow.querySelector('button, a, [tabindex]'), 'Home artist tracks are single named native buttons');
     artistRow.click();
-    check(sequences.length === 1 && plays.length === 1 && sequences[0][1].source === 'artist' &&
+    check(sequences.length === 1 && getPlaybackIntent() === initialPlayback.intent && sequences[0][1].source === 'artist' &&
       sequences[0][1].collectionId === groups[0].key && sequences[0][1].startId === artistRow.dataset.artistTrackId &&
       JSON.stringify(sequences[0][0]) === JSON.stringify(groups[0].songs.map(song => song.id)),
       'Home artist row invokes its original recording once through the artist playback boundary');
@@ -64,8 +71,6 @@ export async function runArtistIdentityRegressions() {
     const audio = state.audio;
     check(audio.getAttribute('src') === initialPlayback.src && state.currentIndex === initialPlayback.index && state.isPlaying === initialPlayback.playing && audio.playbackRate === initialPlayback.rate, 'artist, queue and artwork controls leave playback state intact');
   } finally {
-    window.playSong = originalPlay;
-    window.toggleFavorite = originalLike;
     window.playTrackSequence = originalSequence;
     home.closeArtistDetail();
     goTab('tabHome');
@@ -75,22 +80,13 @@ export async function runArtistIdentityRegressions() {
 
 async function checkUpNextControls(check, state) {
   const queue = await import('/src/features/queue.ts');
+  const player = await import('/src/features/player.ts');
   const originalQueue = [...queue.manualQueue];
   const originalFocus = document.activeElement;
   const scroll = { left: window.scrollX, top: window.scrollY };
-  let host;
-  let list = document.getElementById('upNextList');
-  // The current Lyrics/Related page omits this legacy mount. Exercise the real
-  // renderer in a temporary, visible fixture without changing the shipped page.
-  if (!list) {
-    host = document.createElement('section');
-    host.setAttribute('aria-label', 'Up Next control fixture');
-    list = document.createElement('div');
-    list.id = 'upNextList';
-    list.className = 'up-next-list';
-    host.append(list);
-    document.getElementById('tabHome').append(host);
-  }
+  const list = document.getElementById('upNextList');
+  const sheet = document.getElementById('upNextSheet');
+  const originalSheet = { open: sheet.classList.contains('active'), tab: sheet.dataset.tab || 'lyrics' };
   const rows = () => [...list.querySelectorAll('.up-next-row')];
   const ids = () => rows().map((row) => row.dataset.upNextId);
   const same = (left, right) => JSON.stringify(left) === JSON.stringify(right);
@@ -102,6 +98,9 @@ async function checkUpNextControls(check, state) {
     return event.defaultPrevented;
   };
   try {
+    // Inspect the shipped queue in its visible panel, not a hidden DOM mount.
+    queue.openUpNext();
+    await new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve)));
     queue.manualQueue.splice(0);
     queue.renderUpNext();
     const initialIds = ids();
@@ -113,7 +112,8 @@ async function checkUpNextControls(check, state) {
       return play instanceof HTMLButtonElement && play.type === 'button' &&
         play.getAttribute('aria-label') === `Play ${play.querySelector('.up-next-song-title').textContent} by ${play.querySelector('.up-next-song-artist').textContent}` &&
         !play.querySelector('button, a, input, [tabindex]') && actions?.parentElement === play.parentElement &&
-        actions.querySelectorAll('button.up-next-action').length === 2;
+        ['favorite', 'move-up', 'move-down', 'reorder'].every(name => actions.querySelector(`button.up-next-action.${name}`)) &&
+        !!actions.querySelector('.remove') === (row.dataset.queueKind === 'explicit');
     }), 'each Up Next track has a named native play button and independent favorite/reorder actions');
     const help = document.getElementById('upNextReorderHelp');
     const status = document.getElementById('upNextReorderStatus');
@@ -154,7 +154,10 @@ async function checkUpNextControls(check, state) {
       status.textContent.includes(`position 2 of ${before.length}`), 'one persistent live region reports the latest position across row refreshes');
   } finally {
     queue.manualQueue.splice(0, queue.manualQueue.length, ...originalQueue);
-    if (host) host.remove(); else queue.renderUpNext();
+    queue.renderUpNext();
+    player.switchRightPanelTab(originalSheet.tab);
+    if (!originalSheet.open) player.closePlayerSheet();
+    await new Promise(resolve => requestAnimationFrame(() => requestAnimationFrame(resolve)));
     if (originalFocus instanceof HTMLElement && originalFocus.isConnected) originalFocus.focus({ preventScroll: true });
     window.scrollTo(scroll);
   }
@@ -178,9 +181,9 @@ async function checkArtworkActions(check, state) {
       check(menu.classList.contains('active') === menuWasOpen && queue.trackSheetSongId === originalMenuId, 'artwork Info keeps the missing-track guard');
     }
     document.getElementById('artShareBtn').click();
-    const url = song?.isYouTube && song.videoId ? `https://youtu.be/${song.videoId}` : song?.url || undefined;
-    check(song ? shares.length === 1 && shares[0].title === song.title && shares[0].text === `${song.title} — ${song.artist}` && shares[0].url === url : shares.length === 0,
-      'artwork Share uses the existing current-track attribution and URL, or ignores a missing track');
+    const url = song?.isYouTube && song.videoId ? `https://youtu.be/${song.videoId}` : song?.hfUrl || song?.url || undefined;
+    check(song && !song.isLocal ? shares.length === 1 && shares[0].title === song.title && shares[0].text === `${song.title} — ${song.artist}` && shares[0].url === url : shares.length === 0,
+      'artwork Share preserves current-track attribution without exposing local audio or a missing track');
     check(!menu.classList.contains('active') || menuWasOpen, 'artwork Share does not leave a track menu open');
   } finally {
     if (shareDescriptor) Object.defineProperty(navigator, 'share', shareDescriptor); else delete navigator.share;

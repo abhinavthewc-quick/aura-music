@@ -35,31 +35,22 @@ queue, settings) stays in your browser.
   See [automatic artist profiles](docs/artist-metadata.md).
 - **Library search** — filters the Aura catalogue by title, artist, album,
   film, favourites, and recent plays. It never mixes preview tracks from other
-<<<<<<< HEAD
-  services into the library.
-- **Playlists** — create, edit, delete, play, and manage device-local playlists;
-  share a snapshot link that recipients preview and explicitly save in their own
-  browser. Links include up to 100 tracks within a 16 KiB payload; local audio
-  stays on the sender’s device. See [playlist sharing](docs/features.md#sharing-a-playlist).
-- **Returning listeners** — restore a valid browser session through a loading
-  screen with **Reload Aura** recovery; expired sessions return to sign-in.
-- **Player** — full player, playlist sequencing, shuffle/repeat, media keys, art-derived
-  theming, YouTube's official embedded player for YouTube tracks.
-=======
-  services into the library. Local files is an actual filter; search does not
-  promise podcasts or a new acquisition service.
+  services into the library. The Local files filter shows personal audio.
 - **Local audio** — import device files into IndexedDB with filename-based
   title/artist metadata; Restore reconnects a missing blob without losing its
   playlist identity. This is personal audio, not shared-catalogue acquisition.
-- **Playlists** — ordered local collections with scoped transport, missing-track
-  recovery, pointer/keyboard reorder, and versioned JSON export/import. Sharing
-  transfers an importable file, not a misleading public/private cloud link.
-  Strict validation/recovery protects saved data; Web Locks or short IndexedDB
-  transaction locks coordinate cross-tab writes.
-- **Player** — one collection/queue/history domain for Next/Previous, shuffle,
-  off/all/one repeat, natural end and media keys; HTML audio and the official
-  YouTube iframe remain playback backends inside that domain.
->>>>>>> 62cde5b (Private recovery snapshot before local/production reconciliation (not for deployment))
+- **Playlists** — ordered device-local collections with scoped playback,
+  missing-track recovery, pointer/keyboard reorder, and versioned JSON import/export.
+  Share a snapshot link that recipients preview and explicitly save in their own
+  browser: up to 100 tracks within a 16 KiB payload, excluding local audio.
+  Strict validation and coordinated writes protect saved data. See
+  [playlist sharing](docs/features.md#sharing-a-playlist).
+- **Returning listeners** — restore a valid browser session through a loading
+  screen with **Reload Aura** recovery; expired sessions return to sign-in.
+- **Player** — full/mini players, scoped artist and playlist sequencing,
+  queue interruptions, shuffle/repeat, media keys and art-derived colour.
+  HTML audio and the official YouTube iframe share personal transport;
+  ordinary library/search selection retains the existing fallback behaviour.
 - **Live radio** — thousands of stations via radio-browser.info plus custom
   stream URLs.
 - **Listen Together** — synchronized rooms over WebSocket + a Cloudflare
@@ -68,23 +59,15 @@ queue, settings) stays in your browser.
 - **Discord presence** — a companion [PreMiD activity](premid/README.md) shows
   the current track, artist, cover art and progress, with a deep link back to
   the exact song.
-<<<<<<< HEAD
 - **Submission pipeline** — intentionally submit YouTube links in Discord via
   [AURA FARMER](https://github.com/angel2rider/AURA-FARMER), maintained in its own
   repository. The private admin panel moderates the queue and GitHub Actions
   downloads, tags, uploads, and updates `manifest.json`.
 - **True-black interface** — a `#000` canvas, neutral controls, artwork colour,
   and locally bundled fonts and icons.
-=======
 - **Archive streaming** — catalogue audio normally starts through `/api/audio`,
   with direct Hugging Face fallback. OCI hot caching is optional, uses server
   environment credentials only, and exposes private aggregate diagnostics.
-- **Canonical design** — true black, graphite surfaces and restrained brass;
-  artwork supplies the player color instead of competing glass/gradient themes.
-- **Submission pipeline** — AURA FARMER accepts YouTube links in Discord, while
-  the private admin panel moderates the queue and GitHub Actions downloads,
-  tags, uploads, and updates `manifest.json`.
->>>>>>> 62cde5b (Private recovery snapshot before local/production reconciliation (not for deployment))
 
 ## Stack
 
@@ -122,10 +105,11 @@ work with no provider keys. Rooms need the worker running locally — see
 | `npm run dev` | Vite dev server on `:5173` |
 | `npm run build` | Production build into `dist/` |
 | `npm run preview` | Preview the built site |
-| `npm run typecheck` | `tsc --noEmit` |
+| `npm run typecheck` | Typecheck shipped source and test fixtures |
 | `npm run lint` | Zero-dependency project lint ([`scripts/lint.mjs`](scripts/lint.mjs)) |
 | `npm test` | Playwright domain/security tests and isolated browser regressions |
 | `npm run test:unit` / `npm run test:e2e` | Focused frontend subsets |
+| `npm run test:artists` / `npm run test:playback` / `npm run test:playlists` | Node artist/storage, playback and sharing regressions |
 | `bash experiments/telepathy/run-tests.sh -q` | Optional isolated/offline Python research tests after `.venv` setup |
 
 ## Repository map
@@ -217,9 +201,9 @@ code and the project-local design skill retain their own notices. The unused
 React wrapper was removed; the licensed vanilla loader renderer remains.
 
 The [Telepathy experiment](experiments/telepathy/README.md) is kept only for
-research, with explicit packaging, pinned tested dependencies and **14 passing
-offline Python tests** in a CPython 3.12 virtual environment. It is not imported
-by the listener app or deployed by Pages.
+research, with explicit packaging, pinned dependencies and a historical
+**14/14 offline Python result** in a CPython 3.12 virtual environment (not rerun
+during reconciliation). It is not imported by the listener app or deployed by Pages.
 
 **Owner infrastructure action remains:** revoke/rotate the OCI customer key
 that appeared in historical source, set new environment-only values in

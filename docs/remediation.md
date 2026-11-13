@@ -2,7 +2,7 @@
 
 This is a source remediation for the existing personal, library-first music app,
 not a wholesale framework rewrite or a deployment. The canonical listener theme
-is **true black, graphite and restrained warm brass**. Existing radio, rooms,
+is **true black, neutral graphite and white interaction states**. Existing radio, rooms,
 lyrics, administration, presence, local profiles and legacy saved audio remain
 part of the product; experimental recommendations are not promoted to shipped
 scope simply because prototype code exists.
@@ -28,7 +28,7 @@ Library / playlist / artist / search selection
 
 - Reaching a playlist boundary does not fall into unrelated global tracks.
 - Selecting a row establishes that collection and cursor.
-- Shuffle is collection-scoped; repeat cycles off/all/one. Repeat-one applies to
+- Shuffle is collection-scoped; repeat cycles off/all/one, initially all. Repeat-one applies to
   natural end, not a user's manual Next action.
 - Queue interruptions resume the collection, while Previous follows listening
   history. Next after Previous replays future visits before pending queue items;
@@ -36,6 +36,17 @@ Library / playlist / artist / search selection
 - History visits carry stable track identity and optional `anchorId` for overrides;
   restoring a cursor rebases it by identity against the current permutation after
   shuffle/live reorder, rather than trusting the old array index.
+- The production raw-ID `manualQueue` and mutable artist `playOrder` remain
+  compatible; artist traversal is mirrored into stable-reference
+  `state.playbackContext`. Library/search retain ordinary fallback behavior.
+  Collection handoffs, retirement, row selection and shuffle retain unheard
+  interruptions, including those held only in forward history. Up Next previews
+  at most 4 tracks on phones and 30 on desktop.
+- Playback-intent/source guards reject stale native promises/events and iframe
+  callbacks. YouTube callbacks must match the exact current iframe target;
+  advancement is delayed and native ended events require actual source completion.
+  Pending YouTube exclusively owns transport/time: prior native audio remains
+  paused, reported time is zero and seeking is unavailable.
 - Missing tracks are handled in a bounded traversal; room mode and live radio
   deliberately have separate server/live transport ownership.
 
@@ -59,14 +70,23 @@ See [architecture](architecture.md#personal-playback-domain) and
 - Strict parsing rejects malformed/unsupported/oversized/duplicate imports
   before mutation. Limits are 16 MiB per import, 2,000 tracks per playlist and
   200 collections. Corrupted saved stores freeze writes and offer raw recovery;
-  legacy migrations are prepared before title/artist edits.
+  legacy migrations are prepared before title/artist edits. An explicit mutation
+  must save the original legacy payload in `auraPlaylists_backup_v1` before
+  replacing the primary store; backup failure aborts mutation. Startup, previews,
+  refreshes, metadata repaints and library deletion never migrate playlists.
 - Web Locks or short IndexedDB transaction coordination locks serialize writes;
   without either safe mechanism saving is refused. Storage/BroadcastChannel
   refresh all same-origin views and reconcile active name/order without
   restarting current audio. Deleting the playlist detaches a labeled playback
   snapshot; no stale collection identity remains.
-- Public/unlisted/private ACLs, permanent share links and automatic cross-device
-  sync are **not** claimed. The transfer file is the honest sharing boundary.
+- Existing `privacy`, `year` and valid received `shared` metadata are retained;
+  privacy labels are descriptive, not ACLs.
+- Version-1 `#playlist=` snapshot links remain supported alongside version-2
+  file import/export. Links contain ordered labels/keys and omission counts,
+  never media/artwork URLs, local-file IDs or account data. Preview is read-only;
+  explicit Save creates a browser-local copy without fetching audio or starting
+  playback. Sender edits do not update received copies. Permanent hosted links,
+  ACLs and automatic cross-device sync are **not** claimed.
 
 Details: [playlist/file contract](data-model.md#playlists-and-export-files).
 
@@ -76,6 +96,13 @@ Details: [playlist/file contract](data-model.md#playlists-and-export-files).
 - Local files is a real filter and device-audio import with filename metadata,
   not a label that opens all tracks. Missing blobs expose Restore under their
   existing identity; no jsmediatags/tagging provider is implied.
+- Local-file operations serialize by raw ID and recheck after awaits. Stale
+  hydration, restore, metadata edits and cover FileReaders cannot revive deleted
+  or replaced tracks. Blob writes roll back on failed metadata persistence;
+  object URLs are released only when no longer in use. Deletion saves metadata
+  before destroying blobs and finishes transport changes before awaiting
+  IndexedDB deletion. Numeric `toggleFavorite` arguments remain indices;
+  internal raw-ID callers use strings.
 - Search → playlist clears Search's body/layout state.
 - Playlist icon-only actions retain accessible names on mobile; track, reorder,
   import/export and recovery controls expose actual user actions.
@@ -86,8 +113,10 @@ Details: [playlist/file contract](data-model.md#playlists-and-export-files).
 
 - [Radio](../src/features/radio.ts) validates credential-free HTTP(S) streams
   before changing ownership, pauses personal audio and stops active/pending
-  YouTube without changing collection/queue/history, and guards promises/errors
-  by selection, request generation and explicit intent.
+  YouTube without rewriting saved playlists or consuming the personal queue.
+  Artist transport retires with unheard interruptions retained; scoped playlist
+  traversal stays intact. Promises/errors are guarded by selection, request
+  generation and explicit intent.
 - Live play/pause/stop own Media Session; next/previous/all seeks and position
   state are cleared. Stop restores personal handlers/metadata. Restored stations
   remain paused. Explicit Pause/Stop cancels foreground recovery, which otherwise
@@ -106,6 +135,12 @@ part; the surrounding shell is quiet and disciplined. Typography, spacing,
 radii, surfaces, active states, focus, errors and reduced motion use a shared
 foundation across desktop/mobile. Responsive layouts may differ intentionally
 without becoming different products.
+
+Fonts and Font Awesome SVG-mask icons are self-hosted, with licenses retained.
+At 900 px and above, the full player is nonmodal and docked Up Next is a region
+without `aria-modal` or trapped Tab. Phone overlays retain modal focus behavior.
+Initial playlist rendering and Media Session setup occur in authenticated
+`app.ready`, after initialization and local hydration.
 
 Numbered patches and separate YTM/polish/quality override layers are retired.
 A new feature or fix belongs in its component owner, not another last-file
@@ -165,21 +200,35 @@ claim is inferred from those files.
 npm run typecheck
 npm run lint
 npm test
+npm run test:artists
+npm run test:playback
+npm run test:playlists
 npm run build
 ```
 
-### Recorded final local gate
+### Recorded reconciliation gate — 13 November 2026
 
 | Check | Recorded result |
 | --- | --- |
-| `npm test` | **78/78 passed**: 39 browser tests (including 7 radio and 13 surfaces) and 39 unit tests (including 19 audio-security tests) |
+| `npm test` | **116/116 passed**: 62 browser tests and 54 unit tests; Playwright discovers only `**/*.spec.ts` |
+| Separate Node runners | **266/266 passed**: artist/metadata/storage **181/181**, playback **43/43**, sharing **42/42**; Node `*.test.ts` fixtures stay separate |
+| Retained/native-browser runner | **48 suites / 1,236 checks passed**, including source ownership, sharing, local storage races and native input/layout |
 | TypeScript | Both TypeScript configurations passed |
-| Source/HTML lint | 52 source/HTML files passed |
+| Source/HTML lint | 70 source files / 3 HTML files passed |
 | Vite production build | All three entry pages built: listener, administration and rooms |
 | `npm audit` | 0 reported vulnerabilities |
 | `git diff --check` | Passed |
-| Isolated Python safe runner | **14/14 passed**, reverified in **3.06 s** |
+| Dependency lock alignment | All 75 npm/Bun package versions and checksums agree; isolated frozen installs with scripts disabled preserve package/lock bytes |
+| Self-hosted UI assets | 7 font subsets / 186 SVG-mask rules regenerated (196 style/name selectors, including 8 grouped alias rules); all masks/font headers and literal icon classes validated; targeted surface tests passed **13/13** |
+| Isolated Python safe runner | Historical **14/14** result only; **not rerun** during this reconciliation |
 | Computed browser assertions | Layout, contrast, input, pointer and keyboard assertions passed at **320 / 390 / 768 / 1440 px** |
+| Artist/native-layout coverage | Home and Library at **320 / 390 / 430 / 768 / 1024 / 1440 px**; local storage races at **390 / 1440 px** |
+
+The read-only preservation audit also verified both initial/drift archives and
+history bundles, all five patches, recovery Git objects/indexes, and the retained
+299-path integration checkpoint (including its 39 unmerged paths). The protected
+original checkout's HEAD, index and all 252 recorded paths match the drift backup.
+Its six newer audio-version paths remain separate and are not part of this merge.
 
 [Audio security tests](../tests/unit/audio-security.spec.ts) use fake keys and
 fully mocked fetches. Pure playback tests and isolated browser fixtures cover
@@ -190,9 +239,10 @@ a deployed Worker, the external PreMiD extension or a production cache.
 ### Synthetic fixture screenshots
 
 These captures use synthetic fixture tracks and data, not the owner's live
-catalogue. They were captured but **not manually visually inspected**: image
-inspection was rejected by the model. The computed assertions above cover tested
-layout/contrast/interaction contracts; they are not human visual approval.
+catalogue. All four refreshed captures were visually inspected during
+reconciliation after the full suite recaptured them. Computed assertions cover
+the tested layout/contrast/interaction contracts; image inspection is not
+owner design approval or verification of live providers and real devices.
 
 | Surface | Desktop | Mobile |
 | --- | --- | --- |
@@ -209,14 +259,15 @@ Review at least:
   existing local files, dialogs, reduced motion and absence of console errors;
 - preserved presence/deep links, rooms and administration entry points.
 
-### Verified isolated Python experiment
+### Historical isolated Python experiment
 
 ```bash
 bash experiments/telepathy/run-tests.sh -q
 ```
 
-**14/14 existing Python tests passed**, reverified in **3.06 s** through the safe
-runner in the experiment's CPython 3.12 virtual environment. The suite forces in-memory
+The earlier **14/14** result in **3.06 s** came from the safe runner in the
+experiment's CPython 3.12 virtual environment; it was **not rerun during the
+13 November reconciliation**. The suite forces in-memory
 SQLite before singleton import, uses deterministic metadata/lyrics, clears
 provider keys, blocks external HTTP/Internet sockets, disposes connections, and
 exercises the API in-process. The pinned dependency file includes

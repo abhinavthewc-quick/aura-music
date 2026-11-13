@@ -99,10 +99,10 @@ Known limits:
   handlers (`onclick="…"`), inline scripts (theme bootstrap/loader) and external
   CDNs, so a strict CSP would require removing those patterns or adopting
   hashes/nonces for every page. A CSP is the highest-value hardening item.
-- External assets/SDKs (Font Awesome CSS, Google Fonts, Google Identity Services,
-  YouTube IFrame API) are loaded from CDNs without SRI. A compromised active
-  script provider could execute on the origin; fonts/styles also cross provider
-  trust boundaries. Pin versions and consider SRI/native hosting where practical.
+- Google Identity Services and the YouTube IFrame API are loaded on demand from
+  external providers without SRI. A compromised active script provider could
+  execute on the origin. Fonts and Font Awesome SVG-mask icons are pinned and
+  self-hosted; their licenses are retained under `docs/licenses/`.
 - `window.state`, `window.playSong` and friends are intentionally exposed for
   inline handlers; any script running on the origin can call them. That is
   already game over after XSS.
@@ -187,7 +187,8 @@ by probing a live owner's cache or entering a real token into test scripts.
   app source.
 - The browser calls Hugging Face for the library, radio-browser for stations,
   and Google for sign-in. Those providers see the user’s IP and relevant
-  request; Google Fonts and Font Awesome see page loads.
+  request. Font/icon providers receive no runtime page-load requests because
+  those UI assets are self-hosted.
 - Likes, recent plays, playlists, settings, and room names stay in the browser.
   There is no server-side user database or per-account playlist ACL. Signing out
   is not a wipe of all local collections; anyone with access to that browser
@@ -200,6 +201,12 @@ by probing a live owner's cache or entering a real token into test scripts.
   storage credentials or a privacy permission; unavailable tracks remain
   recoverable entries. Local Restore retains identity. Cross-tab updates are not
   cloud synchronization.
+- Version-1 snapshot links additionally allowlist only title/description,
+  ordered track labels/keys and omission counts. Local audio, account details
+  and media/artwork URLs are excluded. Anyone with the link can read it;
+  fragments are not sent to the server and privacy labels do not enforce ACLs.
+  Preview remains read-only; saving requires an explicit action. Legacy
+  migration requires a saved verbatim backup before the primary store changes.
 - Telepathy is quarantined under `experiments/telepathy/`, not imported into the
   app and not deployed as Pages Functions. Its tests force in-memory SQLite,
   fixture metadata/lyrics, and blocked external HTTP/sockets. The research API
@@ -223,8 +230,8 @@ by probing a live owner's cache or entering a real token into test scripts.
       credentials in fixtures, command history, `VITE_*`, or tracked `.dev.vars`.
 - [ ] Keep the admin allow-list in sync in both `src/core/config.ts` and
       `functions/api/admin.ts`.
-- [ ] Add a CSP once inline handlers are removed; consider self-hosting static
-      fonts/icons and adding SRI to suitable pinned external assets in the meantime.
+- [ ] Add a CSP once inline handlers are removed; retain self-hosted fonts/icons
+      and consider SRI for suitable pinned external assets.
 - [ ] Add rate limiting to `/api/admin` (Cloudflare WAF/rate-limit rule) because
       the Function itself has none.
 - [ ] Keep the HF bucket write token server-side; the read side is public by

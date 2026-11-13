@@ -240,14 +240,8 @@ Full steps: [premid/README.md](../premid/README.md) and
 - **No app-level CI.** `.github/workflows` only contains the music pipeline.
   Typecheck/lint/build are manual gates; consider adding a small CI workflow if
   more contributors join.
-<<<<<<< HEAD
 - **No strict CSP** is configured. Fonts and selected icons are self-hosted;
   optional integrations and inline event handlers still need consideration for
   a CSP migration. See [security](security.md).
-=======
-- **No custom HTTP headers/CSP** are configured. The app loads Font Awesome,
-  Google Fonts from CDNs and uses inline event handlers, so a
-  strict CSP would need a separate migration. See [security](security.md).
->>>>>>> 62cde5b (Private recovery snapshot before local/production reconciliation (not for deployment))
 - **Keep `main` deployable.** Pages builds `main` automatically; a broken
   `npm run build` blocks deployment but does not take down the previous build.

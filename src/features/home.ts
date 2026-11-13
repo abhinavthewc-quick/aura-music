@@ -1,5 +1,4 @@
 import { timeGreeting, toast } from '../core/dom';
-<<<<<<< HEAD
 import { resolveArtistSelection, selectArtist, type ArtistSelection } from '../core/artistGroups';
 import { playSong } from './player';
 import { escapeHtml } from './radio';
@@ -8,16 +7,7 @@ import { DEFAULT_ARTIST_PORTRAIT, observeArtistMetadataCards, prioritizeArtistMe
 import { $, state } from '../core/state';
 import { getArtistGroups } from './library';
 import { playArtistCollection, refreshArtistPageMetadata, renderArtistPage } from './artist-page';
-=======
-import { artistMatchKey } from '../core/artist-names';
-import { playSong } from './player';
-import { escapeHtml } from './radio';
-import { DEFAULT_COVER } from '../core/catalog';
-import { $, state } from '../core/state';
-import { getArtistGroups } from './library';
->>>>>>> 62cde5b (Private recovery snapshot before local/production reconciliation (not for deployment))
 import { goTab } from '../ui/nav';
-import { playArtistCollection, renderArtistPage, type ArtistPageEntry } from './artist-page';
 /* ===== 3075-3096 ===== */
     export function setGreeting(){
       $('greetingLabel').textContent = timeGreeting();
@@ -143,7 +133,6 @@ import { playArtistCollection, renderArtistPage, type ArtistPageEntry } from './
       });
     }
 
-<<<<<<< HEAD
     export interface ArtistDirectoryEntry {
       key: string;
       name: string;
@@ -157,25 +146,8 @@ import { playArtistCollection, renderArtistPage, type ArtistPageEntry } from './
       return getArtistGroups().map(g => ({
         key: g.key, name: g.name, img: g.cover || DEFAULT_ARTIST_PORTRAIT,
         count: g.songs.length, songs: g.songs,
-        metadataName: g.key.startsWith('unresolved:') ? '' : g.name,
-      }));
-=======
-    export interface ArtistDirectoryEntry extends ArtistPageEntry {
-      count: number;
-    }
-
-    export function getAllArtists(): ArtistDirectoryEntry[] {
-      return getArtistGroups().map(group => ({
-        key: group.key, name: group.name, img: group.cover || DEFAULT_COVER,
-        bio: group.bio, count: group.songs.length, songs: group.songs,
-      }));
-    }
-
-    function artistForName(artists: ArtistDirectoryEntry[], name: string): ArtistDirectoryEntry | undefined {
-      const match = artistMatchKey(name);
-      return artists.find(artist => artist.name.toLowerCase() === name.toLowerCase()) ||
-        artists.find(artist => match && (artistMatchKey(artist.key) === match || artistMatchKey(artist.name) === match));
->>>>>>> 62cde5b (Private recovery snapshot before local/production reconciliation (not for deployment))
+         metadataName: g.key.startsWith('unresolved:') ? '' : g.name,
+       }));
     }
 
     export function renderFeaturedArtistsShelf() {
@@ -189,18 +161,14 @@ import { playArtistCollection, renderArtistPage, type ArtistPageEntry } from './
 
       const topArtists = artists.slice(0, 16);
       shelf.innerHTML = topArtists.map(a => `
-<<<<<<< HEAD
         <div class="ytm-artist-card" role="button" tabindex="0" data-artist-open="${escapeHtml(a.key)}" data-artist-metadata-name="${escapeHtml(a.metadataName)}" title="${escapeHtml(a.name)}">
-=======
-        <button type="button" class="ytm-artist-card" data-open-artist="${escapeHtml(a.key)}" title="${escapeHtml(a.name)}">
->>>>>>> 62cde5b (Private recovery snapshot before local/production reconciliation (not for deployment))
           <div class="ytm-artist-art-wrap">
             <img class="ytm-artist-avatar" data-artist-portrait src="${escapeHtml(a.img)}" alt="${escapeHtml(a.name)}" loading="lazy" decoding="async">
             <div class="ytm-artist-play-overlay"><i class="fa-solid fa-play"></i></div>
           </div>
           <div class="ytm-artist-name">${escapeHtml(a.name)}</div>
           <div class="ytm-artist-sub">${a.count} song${a.count !== 1 ? 's' : ''}</div>
-        </button>
+        </div>
       `).join('');
       observeArtistMetadataCards(shelf);
     }
@@ -215,18 +183,14 @@ import { playArtistCollection, renderArtistPage, type ArtistPageEntry } from './
       }
 
       grid.innerHTML = artists.map(a => `
-<<<<<<< HEAD
         <div class="ytm-artist-card grid-card" role="button" tabindex="0" data-artist-open="${escapeHtml(a.key)}" data-artist-metadata-name="${escapeHtml(a.metadataName)}" title="${escapeHtml(a.name)}">
-=======
-        <button type="button" class="ytm-artist-card grid-card" data-open-artist="${escapeHtml(a.key)}" title="${escapeHtml(a.name)}">
->>>>>>> 62cde5b (Private recovery snapshot before local/production reconciliation (not for deployment))
           <div class="ytm-artist-art-wrap">
             <img class="ytm-artist-avatar" data-artist-portrait src="${escapeHtml(a.img)}" alt="${escapeHtml(a.name)}" loading="lazy" decoding="async">
             <div class="ytm-artist-play-overlay"><i class="fa-solid fa-play"></i></div>
           </div>
           <div class="ytm-artist-name">${escapeHtml(a.name)}</div>
           <div class="ytm-artist-sub">${a.count} song${a.count !== 1 ? 's' : ''}</div>
-        </button>
+        </div>
       `).join('');
       observeArtistMetadataCards(grid);
     }
@@ -244,7 +208,6 @@ import { playArtistCollection, renderArtistPage, type ArtistPageEntry } from './
       const mainView = $('homeMainView');
       const artistsView = $('homeArtistsView');
       const detailView = $('homeArtistDetailView');
-      $('tabHome')?.classList.remove('artist-detail-open');
       if (mainView) mainView.style.display = 'none';
       if (detailView) detailView.style.display = 'none';
       if (artistsView) {
@@ -258,13 +221,11 @@ import { playArtistCollection, renderArtistPage, type ArtistPageEntry } from './
       const mainView = $('homeMainView');
       const artistsView = $('homeArtistsView');
       const detailView = $('homeArtistDetailView');
-      $('tabHome')?.classList.remove('artist-detail-open');
       if (artistsView) artistsView.style.display = 'none';
       if (detailView) detailView.style.display = 'none';
       if (mainView) mainView.style.display = 'block';
     }
 
-<<<<<<< HEAD
     let openArtistSelection: ArtistSelection | null = null;
     export function openArtistDetail(artistName: string | ArtistSelection, scroll = true, interactive = true) {
       const group = resolveArtistSelection(getArtistGroups(), artistName);
@@ -275,17 +236,6 @@ import { playArtistCollection, renderArtistPage, type ArtistPageEntry } from './
       }
       openArtistSelection = selectArtist(group);
       if(interactive && !group.key.startsWith('unresolved:')) prioritizeArtistMetadata(group.name, 'open');
-=======
-    export function openArtistDetail(artistName: string) {
-      const artists = getAllArtists();
-      const artist = artistForName(artists, artistName) || {
-        key: artistName.toLowerCase().trim(),
-        name: artistName,
-        img: DEFAULT_COVER,
-        count: 0,
-        songs: state.songs.filter(s => (s.artist || '').toLowerCase().includes(artistName.toLowerCase()))
-      };
->>>>>>> 62cde5b (Private recovery snapshot before local/production reconciliation (not for deployment))
 
       const mainView = $('homeMainView');
       const artistsView = $('homeArtistsView');
@@ -294,8 +244,6 @@ import { playArtistCollection, renderArtistPage, type ArtistPageEntry } from './
       if (mainView) mainView.style.display = 'none';
       if (artistsView) artistsView.style.display = 'none';
       if (detailView) detailView.style.display = 'block';
-<<<<<<< HEAD
-      $('tabHome')?.classList.add('artist-detail-open');
       if(detailView) renderArtistPage(detailView, group, { prefix: 'artist', onBack: () => {
         closeArtistDetail();
         openHomeArtistsTab();
@@ -306,13 +254,6 @@ import { playArtistCollection, renderArtistPage, type ArtistPageEntry } from './
         window.scrollTo({ top: 0, behavior: reduced ? 'auto' : 'smooth' });
         detailView?.querySelector<HTMLElement>('.artist-hero-name')?.focus({ preventScroll: true });
       }
-=======
-
-      if (detailView) renderArtistPage(detailView, artist, { prefix: 'artist', onBack: closeArtistDetail });
-      goTab('tabHome');
-      window.scrollTo({ top: 0, behavior: 'instant' });
-      $('artistName')?.focus({ preventScroll: true });
->>>>>>> 62cde5b (Private recovery snapshot before local/production reconciliation (not for deployment))
     }
 
     export function refreshArtistViews() {
@@ -344,7 +285,6 @@ import { playArtistCollection, renderArtistPage, type ArtistPageEntry } from './
     });
 
     export function closeArtistDetail() {
-<<<<<<< HEAD
       openArtistSelection = null;
       const activeChip = document.querySelector('#ytmMoodChips .ytm-chip.active') as HTMLElement | null;
       const mood = activeChip?.dataset.mood || 'all';
@@ -356,37 +296,13 @@ import { playArtistCollection, renderArtistPage, type ArtistPageEntry } from './
       }
     }
 
-    export function playArtistSongs(artistName: string, shuffle = false) {
+    export function playArtistSongs(artistName: string, shuffle = false, startId?: string) {
       const artist = resolveArtistSelection(getArtistGroups(), artistName);
       if (!artist || !artist.songs.length) return;
-      if(playArtistCollection(artist, shuffle)) toast(`Playing ${artist.name}`, 'play');
-=======
-      openHomeArtistsTab();
-      $('homeArtistsChip')?.focus({ preventScroll: true });
+      if(playArtistCollection(artist, shuffle, startId)) toast(`Playing ${artist.name}`, 'play');
     }
 
-    export function playArtistSongs(artistName: string, shuffle = false, startId?: string) {
-      const artists = getAllArtists();
-      const artist = artistForName(artists, artistName);
-      if (!artist || !artist.songs.length) return;
-
-      playArtistCollection(artist, shuffle, startId);
->>>>>>> 62cde5b (Private recovery snapshot before local/production reconciliation (not for deployment))
-    }
-
-    document.addEventListener('click', (event) => {
-      const button = (event.target as Element).closest<HTMLElement>('[data-open-artist]');
-      if (!button) return;
-      const artist = getAllArtists().find(entry => entry.key === button.dataset.openArtist);
-      if (artist) openArtistDetail(artist.name);
-    });
-
-    window.addEventListener('aura:library-changed', () => {
-      if (!$('tabHome')?.classList.contains('artist-detail-open')) return;
-      const name = $('artistName')?.textContent;
-      const artist = getAllArtists().find(entry => entry.name === name);
-      if (artist) renderArtistPage($('homeArtistDetailView'), artist, { prefix: 'artist', onBack: closeArtistDetail });
-    });
+    window.addEventListener('aura:library-changed', refreshArtistViews);
 
     if (typeof window !== 'undefined') {
       (window as any).openHomeArtistsTab = openHomeArtistsTab;
@@ -462,16 +378,10 @@ import { playArtistCollection, renderArtistPage, type ArtistPageEntry } from './
       }
     }
 
-<<<<<<< HEAD
     /* Home and Library use the same identities, including collaborations and
        authoritative cloud profiles. A shared credit appears once per artist. */
     export function renderArtistSpotlight(){
       const artists = getArtistGroups().filter(g => g.songs.length >= 2);
-=======
-    /* Spotlights use the same artist names and collections as the directory. */
-    export function renderArtistSpotlight(){
-      const artists = getArtistGroups().filter(group => group.songs.length >= 2);
->>>>>>> 62cde5b (Private recovery snapshot before local/production reconciliation (not for deployment))
       const container = $('artistSpotlightContainer');
       if(!container) return;
 
@@ -487,13 +397,8 @@ import { playArtistCollection, renderArtistPage, type ArtistPageEntry } from './
         }).join('');
         return `<div class="artist-spotlight-block" style="margin-bottom:24px">
           <div class="spotlight-header">
-<<<<<<< HEAD
             <img class="spotlight-avatar" data-artist-portrait data-artist-key="${escapeHtml(g.key)}" data-artist-metadata-name="${g.key.startsWith('unresolved:') ? '' : escapeHtml(g.name)}" src="${escapeHtml(g.cover || DEFAULT_ARTIST_PORTRAIT)}" alt="" loading="lazy" decoding="async">
             <div><p>More from</p><p>${escapeHtml(g.name)}</p></div>
-=======
-            <img class="spotlight-avatar" src="${escapeHtml(g.cover||DEFAULT_COVER)}" alt="" loading="lazy" decoding="async">
-            <div><p style="font-size:11px;color:var(--text-sub)">More from</p><p style="font-size:16px;font-weight:800">${escapeHtml(g.name)}</p></div>
->>>>>>> 62cde5b (Private recovery snapshot before local/production reconciliation (not for deployment))
           </div>
           <div class="recent-scroll">${cards}</div>
         </div>`;

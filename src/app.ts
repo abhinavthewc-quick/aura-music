@@ -5,7 +5,7 @@ import { getProfileUsername, getSession, setProfileUsername } from './core/sessi
 import { refreshArtistViews, refreshAutomaticArtistViews, renderQuickPicks, setGreeting, setupHeaderSearch, setupMoodChips } from './features/home';
 import { applyPlayDeepLink } from './features/deeplink';
 import { getArtistGroups, hydrateLocalTracks, reconcileCatalog, refreshAutomaticLibraryArtists, renderLibrary, renderRecent, renderSongs, updateLibCount } from './features/library';
-import { auraYTPlayer, auraYTVideoId, lastPlayRequestAt, loadSong, updateMainMediaSession } from './features/player';
+import { auraYTPlayer, auraYTVideoId, lastPlayRequestAt, loadSong, setupMainMediaSession, updateMainMediaSession } from './features/player';
 import { updateProfilePopup } from './features/settings';
 import { filterSearchTab } from './features/search';
 import { renderUpNext } from './features/queue';
@@ -103,8 +103,10 @@ import { $, setHfTracks, state } from './core/state';
       state.catalogLoading = !state.hfSongs.length;
       state.catalogError = false;
       await hydrateLocalTracks();
+      setupMainMediaSession();
       renderSongs(state.songs); if(state.songs.length) loadSong(0); updateLibCount(); renderRecent(); renderQuickPicks();
       updateProfilePopup();
+      refreshPlaylistViews();
       /* Do not hold app.ready or the catalogue for provider work. Two frames
          let the real signed-in library paint before the lazy queue starts. */
       requestAnimationFrame(() => requestAnimationFrame(() => startArtistMetadata({

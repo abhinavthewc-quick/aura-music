@@ -14,7 +14,8 @@ Created in [`src/core/catalog.ts`](../src/core/catalog.ts):
 {
   id: 'hf:<bucket path>',      // e.g. "hf:A. R. Rahman - Song [dQw4w9WgXcQ].opus"
   title: string,               // manifest t > parsed filename > cleaned
-  artist: string,              // manifest a > parsed filename > "Unknown Artist"
+  artist: string,              // D1 track override > manifest a > parsed filename > "Unknown Artist"
+  catalogArtist?: string,      // original credit, retained before a D1 display correction
   album: string,               // manifest al, else ''
   year: string,                // manifest y, else ''
   duration: number,            // seconds from manifest d, else 0
@@ -53,7 +54,7 @@ The catalogue's cross-source dedupe still uses
 ```ts
 trackKey(song) =
   song.videoId ? 'vid:' + videoId
-               : 'lk:' + lowercase(title) + '|' + lowercase(artist)
+               : 'lk:' + lowercase(title) + '|' + lowercase(catalogArtist ?? artist)
 ```
 
 - One song is one entry regardless of source (bucket, manual, YouTube, local).
@@ -131,7 +132,11 @@ Written by the upload workflow (`scripts/build_manifest.py`) and by admin
 | `y` | year (string) |
 | `d` | duration in seconds (number) |
 
-Priority when both sources exist: **manifest** → filename parse → defaults.
+Base metadata priority: **manifest** → filename parse → defaults. D1 artist
+track corrections apply afterward while retaining the original `catalogArtist`
+for stable no-video-ID keys. Artist ownership and per-field automatic metadata
+precedence are separate contracts; see [artist storage](artist-storage.md) and
+[automatic metadata](artist-metadata.md).
 The manifest is cached for 30 s in the admin Function and in the browser’s
 `auraHfCatalog_v1` cache; the tree itself is cached for 60 s server-side.
 
@@ -157,13 +162,13 @@ The manifest is cached for 30 s in the admin Function and in the browser’s
 | `auraUserName` | login/settings | display name |
 | `auraFirstLogin`, `auraLastLogin` | login/app | ISO timestamps for the profile popover |
 | `auraSettings_v1` | settings | `{autoplayNext, rememberVolume, reduceMotion}` |
-| `auraTheme` | settings/bootstrap | `light` or `dark`; applied before first paint |
+| `auraTheme` | legacy clients | old `light`/`dark` values may remain; the neutral-black interface ignores them |
 | `auraVolume` | mini-player | `0..1` string |
 | `auraLikedSongs_v2` | state | `[{id,title,artist,img,videoId,url,isYouTube}]` |
 | `recentlyPlayed` | library | last 10 `{id,title,artist,img}` |
 | `addedTracks` | library | added/local track metadata (local `url` deliberately stripped) |
-| `auraPlaylists` | playlists | `{version:2,revision,playlists:[{schemaVersion:2,id,title,description,createdAt,updatedAt,tracks:[ref snapshot]}]}`; strict parsing/migration preserves unresolved entries |
-| `auraPlaylists_backup_v1` | playlist migration | best-effort original legacy payload backup for recovery |
+| `auraPlaylists` | playlists | `{version:2,revision,playlists:[{schemaVersion:2,id,title,description,privacy,year,shared?,createdAt,updatedAt,tracks:[ref snapshot]}]}`; strict parsing/migration preserves unresolved entries |
+| `auraPlaylists_backup_v1` | explicit playlist migration | mandatory verbatim legacy-payload backup before replacing the primary store; a failed backup aborts mutation |
 | `aura_play_counts_v1` | state/library | track-id/legacy-key play counts; ranking data, not playlist identity |
 | `auraHfCatalog_v1` | catalog | `{tracks: [...], at: timestamp}` cache |
 | `auraRadioPlaybackState_v1` | radio | `{url, station, playing, savedAt}`; remembers a validated selection, restored paused |
@@ -193,6 +198,9 @@ interface PlaylistStore {
     description: string;
     createdAt: number;
     updatedAt: number;
+    privacy: 'Public' | 'Private' | 'Unlisted'; // descriptive only, not an ACL
+    year: number | string;
+    shared?: SharedPlaylist;   // validated version-1 received-link metadata
     tracks: Array<{
       ref: string;              // video:<videoId>, id:<trackId>, or unresolved legacy reference
       legacyKey?: string;       // old vid:/lk: migration alias
@@ -221,11 +229,14 @@ The store holds at most 200 playlists. A corrupt/unsupported saved payload freez
 writes and offers a raw recovery copy instead of being normalized into empty storage.
 
 Legacy array stores with string keys migrate under the same safe write lock,
-with a best-effort original-payload backup in `auraPlaylists_backup_v1`. Migration
-is prepared before track metadata edits so old title/artist aliases resolve
-before those values change. Do not erase unresolved entries or infer that a
-`privacy` field enforced an ACL; no playlist ACL/backend exists. All data is
-browser-profile-local, not a per-user cloud table.
+only during an explicit playlist mutation or metadata edit. A verbatim original
+payload must first be saved in `auraPlaylists_backup_v1` if no backup exists;
+failure aborts the mutation without replacing the primary store. Startup,
+previews, refreshes, metadata repaints and library deletion remain read-only for
+playlists. Migration is prepared before track metadata edits so old title/artist
+aliases resolve before those values change. Preserve `privacy`, `year` and valid
+`shared` metadata, but do not infer an ACL; no playlist ACL/backend exists. All
+data is browser-profile-local, not a per-user cloud table.
 
 Web Locks serialize read-modify-write operations; browsers without Web Locks
 use a short IndexedDB readwrite transaction coordination lock. If neither safe
@@ -249,6 +260,8 @@ The transfer file is:
     "description": "",
     "createdAt": 1767225600000,
     "updatedAt": 1767225600000,
+    "privacy": "Private",
+    "year": 2026,
     "tracks": [
       {
         "ref": "id:hf:Artist - Song.opus",
@@ -266,7 +279,35 @@ It contains ordered track references/metadata, **not audio blobs, secret keys,
 account credentials, or sharing permissions**. The export can be downloaded or
 sent through browser-supported file sharing. Import previews available/missing
 tracks and creates a new local playlist ID; unmatched tracks stay recoverable.
-A file transfer is not a public/private link or automatic cross-device sync.
+A file transfer is separate from bounded snapshot links; neither supplies an
+ACL or automatic cross-device sync.
+
+### Playlist snapshot links
+
+`/#playlist=<base64url UTF-8 JSON>` carries the existing version-1 wire contract:
+
+```ts
+interface SharedPlaylist {
+  v: 1;
+  title: string;
+  description: string;
+  tracks: Array<{ key: string; title: string; artist: string }>;
+  omitted: { local: number; unavailable: number };
+}
+```
+
+Only `vid:<11-char-id>` and bounded lowercase `lk:<title>|<artist>` keys are
+allowed. Limits are 100 tracks including omissions and 16 KiB decoded JSON.
+Media/artwork URLs, local-file IDs, playlist IDs and account data are excluded;
+local audio and unresolved legacy entries are omitted with counts. Anyone with
+the link can read the snapshot; fragments are not sent in HTTP requests.
+
+Preview is read-only. Explicit Save creates a version-2 local collection,
+retains missing labels/keys in `shared` metadata, and never fetches missing audio
+or starts playback. An unchanged copy can be reopened without duplication.
+Sender edits do not update a received copy. See
+[sharing](features.md#sharing-a-playlist) and
+[the codec](../src/core/playlist-sharing.ts).
 
 ### Personal playback context (in memory)
 
@@ -288,8 +329,13 @@ The active context is separate from persisted playlist data:
 }
 ```
 
-`state.repeatMode` is `off | all | one`; shuffle operates only within this
-collection. A visit is:
+`state.repeatMode` is `off | all | one`, defaulting to `all`; shuffle operates
+only within an explicit collection. `state.playbackContext` uses stable
+`video:`/`id:` references. The production `manualQueue` and artist transport
+retain mutable raw song IDs; artist `playOrder` is mirrored into the stable
+context without replacing that public queue contract. Ordinary library/search
+selection keeps its fallback behavior. Up Next previews at most 4 tracks on a
+phone and 30 on desktop. A visit is:
 
 ```ts
 interface PlaybackVisit {
@@ -306,7 +352,14 @@ by track identity, or by `anchorId` for an override; an old array index is not
 trusted after shuffle or live playlist reorder. Natural end and manual navigation
 share the same domain, but repeat-one applies only to natural end. YouTube/HTML
 audio are playback backends, not different collection types; radio and rooms keep
-separate live/server-authoritative transport.
+separate live/server-authoritative transport. Selecting, retiring, shuffling or
+reordering a collection retains unheard interruptions, including those held only
+in forward history.
+
+A pending YouTube selection exclusively owns transport and time: the old HTML
+source remains paused, reported time is zero and seeking is unavailable. It
+cannot fall back to playing or seeking the prior native source. Ready/state/end
+callbacks must match the exact current iframe target and playback intent.
 
 ### Radio playback memory and ownership
 
@@ -338,6 +391,14 @@ file** replaces a missing blob under the existing identity and snapshots.
 `addedTracks`; on boot `hydrateLocalTracks()` looks up blobs, recreates
 `URL.createObjectURL(file)` URLs, and marks entries `missing` when the blob is
 gone.
+
+Local-file operations serialize per raw ID and recheck identity/version after
+awaits. Stale hydration, restoration, edits and cover FileReaders cannot revive
+a deleted or replaced track. Blob writes roll back if metadata cannot be saved;
+replaced object URLs are released only when no longer in use. Deletion persists
+metadata before destroying blobs, completes transport changes before awaiting
+IndexedDB deletion, and never migrates playlists. Numeric `toggleFavorite`
+arguments retain the production index API; internal raw-ID callers use strings.
 
 ### Session and auth
 

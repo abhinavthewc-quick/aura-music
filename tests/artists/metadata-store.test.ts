@@ -418,8 +418,8 @@ test('a late D1 claim cannot start provider work after the request stopped waiti
   const db = new SqliteD1(); t.after(() => db.close());
   const release = deferred(); t.after(() => release.resolve());
   let now = START, calls = 0;
-  const slow = { prepare: db.prepare.bind(db), batch: async (statements: any[]) => {
-    const result = await db.batch(statements); await release.promise; return result;
+  const slow = { prepare: db.prepare.bind(db), batch: async <T>(statements: any[]) => {
+    const result = await db.batch<T>(statements); await release.promise; return result;
   } };
   const options: ArtistMetadataStoreOptions = { now: () => now, storageTimeoutMs: 5, provider: async (name) => { calls++; return ready(name, now); } };
   const result = await readArtistMetadata({ ARTIST_DB: slow }, 'Delayed Claim', options);

@@ -64,6 +64,10 @@ export function setArtistShuffle(context: ArtistPlayback, enabled: boolean, rand
   context.playOrder = enabled ? shuffledAfterStart(context.order, anchor, random) : [...context.order];
   context.cursor = context.playOrder.indexOf(anchor);
   context.shuffle = enabled;
+  retainArtistInterruptions(context);
+}
+export function retainArtistInterruptions(context: ArtistPlayback): void {
+  context.queue = unique([...context.future.filter(visit => visit.override).map(visit => visit.id), ...context.queue]);
   context.future = [];
 }
 function step(context: ArtistPlayback, cursor: number, direction: 1 | -1, repeat: string): string | null {

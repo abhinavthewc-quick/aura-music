@@ -14,16 +14,13 @@ import { state } from '../core/state';
   /* ---- body state classes (drive the CSS) ---- */
   let wasTrackOpen = false, wasDesktop = mq.matches;
   function syncBody(){
-    [overlay,radioOverlay,$('upNextSheet')].forEach((panel) => panel?.setAttribute('aria-modal',mq.matches ? 'false' : 'true'));
+    [overlay,radioOverlay].forEach((panel) => panel?.setAttribute('aria-modal',mq.matches ? 'false' : 'true'));
     document.body.classList.toggle('np-track-open', isOn(overlay));
     document.body.classList.toggle('np-open', isOn(overlay) || isOn(radioOverlay));
     document.body.classList.toggle('has-mini', isOn(mini) || isOn(radioMini));
     const ex = $('miniExpandBtn'); if(ex) ex.classList.toggle('open', isOn(overlay));
-<<<<<<< HEAD
     for(const id of ['miniExpandBtn', 'miniTrackOpenBtn']) $(id)?.setAttribute('aria-expanded', String(Boolean(isOn(overlay))));
     $('radioMiniOpenBtn')?.setAttribute('aria-expanded', String(Boolean(isOn(radioOverlay))));
-    if(isOn(overlay) && mq.matches){ try{ renderUpNext(); }catch(e){} }
-=======
     const trackOpen = !!isOn(overlay);
     if (trackOpen && mq.matches && (!wasTrackOpen || !wasDesktop)) {
       const selected = $('upNextSheet')?.dataset.tab;
@@ -31,7 +28,6 @@ import { state } from '../core/state';
     }
     wasTrackOpen = trackOpen; wasDesktop = mq.matches;
     if(trackOpen && mq.matches){ try{ renderUpNext(); }catch(e){} }
->>>>>>> 62cde5b (Private recovery snapshot before local/production reconciliation (not for deployment))
   }
   const mo = new MutationObserver(syncBody);
   [overlay, radioOverlay, mini, radioMini, $('upNextSheet')].forEach(el => el && mo.observe(el, {attributes:true, attributeFilter:['class']}));
@@ -78,7 +74,7 @@ import { state } from '../core/state';
     if(e) e.stopPropagation();
     const s = state.songs[state.currentIndex];
     if(!s){ toast('Nothing playing right now', 'circle-info'); return; }
-    toggleFavorite(null, s.id);
+    toggleFavorite(null, String(s.id));
     syncLike(true);
   }
   $('shuffleBtn').onclick = toggleShuffle;

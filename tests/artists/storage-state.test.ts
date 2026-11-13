@@ -163,7 +163,7 @@ describe('stored music state startup', { concurrency: false }, () => {
     const blobs = new Map<string | number, Blob>([[local.id, new Blob(['local audio'])], [0, new Blob(['numeric-key audio'])]]);
     const urls = [URL.createObjectURL(blobs.get(keptLocal.id)!), URL.createObjectURL(blobs.get(keptNumeric.id)!)];
     t.after(() => urls.forEach(url => URL.revokeObjectURL(url)));
-    keptLocal.url = urls[0]; keptNumeric.url = urls[1];
+    Object.assign(keptLocal, { url: urls[0] }); Object.assign(keptNumeric, { url: urls[1] });
     loadSelection(context.store, keptNumeric);
     const beforeAudio = { ...audio };
     playCountMap[trackKey(cloud)] = 50;

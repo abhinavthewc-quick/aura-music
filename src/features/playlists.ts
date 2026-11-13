@@ -3,7 +3,7 @@ import { getSavedUserName, toast } from '../core/dom';
 import { goTab, showPlaylistTab } from '../ui/nav';
 import { activeDialogOwnsFocus } from '../ui/a11y';
 import { goToSearchCategory } from './search';
-import { findSongById, playTrackSequence, renderUpNext } from './queue';
+import { findSongById, playTrackSequence, renderUpNext, retainPlaybackInterruptions } from './queue';
 import { restoreLocalFile } from './library';
 import { resolveTrackSnapshot, snapshotTrack, stableTrackRef, trackAvailable } from '../core/track-identity';
 import {
@@ -51,7 +51,7 @@ function saveStore(store: PlaylistStore, original: string | null): void {
   // Migration is part of an explicit mutation only. Keep a recovery copy of
   // legacy keys before replacing the primary payload atomically.
   if (original?.trim().startsWith('[') && !localStorage.getItem('auraPlaylists_backup_v1')) {
-    try { localStorage.setItem('auraPlaylists_backup_v1', original); } catch { /* primary data still remains until setItem succeeds */ }
+    localStorage.setItem('auraPlaylists_backup_v1', original);
   }
   localStorage.setItem(PLAYLISTS_KEY, JSON.stringify(store));
   try { playlistChannel?.postMessage({ type: 'changed', revision: store.revision }); } catch { /* storage events remain the fallback */ }
@@ -105,7 +105,7 @@ async function mutatePlaylists<T>(mutator: (playlists: Playlist[]) => T): Promis
     return { ok: false };
   }
 }
-/** Called only by an explicit library edit/removal, before display keys change. */
+/** Called only by an explicit library edit, before display keys change. */
 export async function preparePlaylistTrackEdit(): Promise<boolean> {
   return (await mutatePlaylists(() => undefined)).ok;
 }
@@ -197,7 +197,7 @@ function reconcileActivePlaylist(): void {
   if (!ids.includes(anchor)) anchor = context.playOrder.slice(0, context.cursor).reverse().find(id => ids.includes(id));
   context.order = ids;
   context.playOrder = state.isShuffle ? [...context.playOrder.filter(id => ids.includes(id)), ...ids.filter(id => !context.playOrder.includes(id))] : [...ids];
-  context.cursor = context.playOrder.indexOf(anchor); context.future = [];
+  context.cursor = context.playOrder.indexOf(anchor); retainPlaybackInterruptions();
 }
 function renderAllPlaylistSurfaces(): void {
   const focused = document.activeElement as HTMLElement | null;
@@ -639,4 +639,6 @@ function schedulePlaylistRefresh(): void {
 window.addEventListener('storage', event => { if (event.key === PLAYLISTS_KEY || event.key === null) schedulePlaylistRefresh(); });
 window.addEventListener('aura:library-changed', schedulePlaylistRefresh);
 try { playlistChannel = typeof BroadcastChannel === 'function' ? new BroadcastChannel('aura-playlists-v2') : null; if (playlistChannel) playlistChannel.onmessage = schedulePlaylistRefresh; } catch { playlistChannel = null; }
-renderSidebarPlaylists();
+// Initial rendering belongs to authenticated app.ready, after every transport
+// module and local-file hydration has initialized. Import-time rendering can
+// enter queue/player/radio through the feature cycle before their bindings exist.

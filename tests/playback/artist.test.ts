@@ -46,7 +46,7 @@ test('artist playback retains the production manual queue and returns to its col
   assert.equal(h.queue.playTrackSequence([AUDIO.id, AUDIO_TWO.id], options), true);
   assert.equal(currentId(h), AUDIO.id);
   assert.deepEqual(Array.from(h.queue.manualQueue), [VIDEO_A.id]);
-  assert.deepEqual(Array.from(h.queue.getRollingUpNextItems(), song => song.id), [VIDEO_A.id, AUDIO_TWO.id]);
+  assert.deepEqual(Array.from(h.queue.getRollingUpNextItems(), (song: any) => song.id), [VIDEO_A.id, AUDIO_TWO.id]);
   await h.queue.playNext(); await flush();
   assert.equal(currentId(h), VIDEO_A.id);
   const yt = h.instances.at(-1)!; yt.ready(); yt.transition(h.PlayerState.PLAYING);
@@ -126,7 +126,7 @@ test('reordered manual interruptions survive artist retirement and shuffle chang
   h.queue.manualQueue.push(VIDEO_A.id, VIDEO_B.id);
   h.queue.playTrackSequence([AUDIO.id, AUDIO_TWO.id], options);
   h.queue.promoteVisibleOrder([AUDIO_TWO.id, VIDEO_B.id, VIDEO_A.id]);
-  assert.deepEqual(Array.from(h.queue.getRollingUpNextItems(), song => song.id), [AUDIO_TWO.id, VIDEO_B.id, VIDEO_A.id]);
+  assert.deepEqual(Array.from(h.queue.getRollingUpNextItems(), (song: any) => song.id), [AUDIO_TWO.id, VIDEO_B.id, VIDEO_A.id]);
   assert.deepEqual(Array.from(h.queue.manualQueue), [VIDEO_B.id, VIDEO_A.id]);
   h.state.isShuffle = true;
   h.queue.renderUpNext();

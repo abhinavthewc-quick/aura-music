@@ -96,7 +96,7 @@ test('starting radio stops an active YouTube player and ignores its late callbac
   await page.evaluate(() => {
     const instance = (window as any).__youtubePlayers[0];
     instance.options.events.onReady({target:instance});
-    instance.options.events.onStateChange({data:1});
+    instance.transition(1);
   });
   expect(await page.evaluate(async () => {
     const player = await import('/src/features/player.ts' as string);

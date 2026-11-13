@@ -5,8 +5,9 @@
 - Node.js **20.19+ or 22.12+** (or a compatible later release) for Vite 7.
 - npm (the repo has `package-lock.json`; `npm ci` is fine).
 - A modern Chromium/Firefox/Safari for device-specific smoke testing. Automated
-  Playwright tests use the browser configured in the Playwright config (local
-  Google Chrome by default); install that browser before running the suite.
+  Playwright tests use installed Playwright Chromium by default; run
+  `npx playwright install chromium`, or set `PLAYWRIGHT_CHANNEL=chrome` for an
+  installed Google Chrome.
 - Optional experiment tests: CPython **3.12** and an isolated virtual environment;
   no global pip installation is required.
 - For rooms: Docker is **not** required; `wrangler` runs the Worker locally.
@@ -36,6 +37,10 @@ serves those clean URLs too).
 | `npm test` | Playwright pure-domain/server security tests and browser regressions |
 | `npm run test:unit` | Unit/domain/security subset |
 | `npm run test:e2e` | Isolated browser-flow subset |
+| `npm run test:artists` | Node artist identity/metadata/storage regressions |
+| `npm run test:playback` | Node source-ownership and collection transport regressions |
+| `npm run test:playlists` | Node version-1 sharing codec regressions |
+| `npm run test:artists:browser` | Local-only retained regression fixture server (default port 5186) |
 | `bash experiments/telepathy/run-tests.sh -q` | Optional offline Python experiment suite, using its own `.venv` |
 
 The lint is intentionally small: no ESLint toolchain exists in this project, so
@@ -156,6 +161,9 @@ The automated gate is:
 npm run typecheck
 npm run lint
 npm test
+npm run test:artists
+npm run test:playback
+npm run test:playlists
 npm run build
 ```
 
@@ -164,7 +172,17 @@ not the owner's production catalogue or accounts. Audio security tests substitut
 all fetches and use explicit fake credentials; they cover disabled/partial OCI
 env, status authorization, URI-key signing, ranges/HEAD, bounded uploads, sanitized
 errors, pagination and failed-capacity behavior. Do not inject real keys or
-live endpoints into test fixtures.
+live endpoints into test fixtures. Playwright discovers only `**/*.spec.ts`;
+Node `*.test.ts` suites have separate runners and isolated fixture state. For
+targeted browser runs use `npx playwright test tests/e2e/<name>.spec.ts`, not the
+E2E npm script, which already prepends the entire E2E directory.
+
+The retained/native-input suite runs separately against its local-only fixture
+server; see [artist fixture setup](artist-storage.md#browser-fixtures) and
+[playback regressions](../tests/playback/README.md). Give it a dedicated port and
+output directory, never a production origin. [Remediation](remediation.md#verification)
+records the current 116 Playwright tests, 266 Node tests and 1,236 retained/native
+checks. These runners cover different contracts, not interchangeable totals.
 
 Run the full frontend suite once at a time: its managed development server uses
 port 5199. Concurrent independent unit/e2e invocations can race the same port or
@@ -191,10 +209,10 @@ inherited `DATABASE_URL` with in-memory SQLite before importing the singleton,
 clear provider credentials, supply deterministic metadata/lyrics, block external
 HTTP and Internet sockets, and use ASGITransport for in-process API tests. No
 live database, metadata provider or deployed Function is contacted. Exact
-verified dependencies and **14 passing research tests** are documented in
+historically verified dependencies and **14/14 research tests** are documented in
 [the experiment README](../experiments/telepathy/README.md). Scientific packages
 need compatible wheels; CPython 3.12 was verified, unlike the host's newest
-interpreter.
+interpreter. The Python result was not rerun during the 13 November reconciliation.
 
 ### Deployment/device smoke checklist
 
@@ -212,7 +230,7 @@ interpreter.
    provider is promised; shared catalogue acquisition still belongs to Discord.
 7. Library-only search categories, including Local files; no podcast wording or
    online acquisition fan-out. Search → playlist clears Search body/layout state.
-8. Settings/dialog keyboard focus, topmost Escape, reduced motion and theme;
+8. Settings/dialog keyboard focus, topmost Escape, reduced motion and black theme;
    390 px touch/overflow, desktop full player and all icon-only accessible names.
 9. PreMiD activity and deep links against the extension/device environment.
 10. Audio proxy behavior in an owner-approved staging environment. **Do not
@@ -241,6 +259,9 @@ code should prefer `addEventListener` inside a module.
 ### Accessibility
 
 - Dialogs use `role="dialog" aria-modal="true"` and a visible close control.
+- Desktop full-player/transport surfaces are nonmodal; docked Up Next is a
+  `role="region"` without `aria-modal` and must not trap Tab. Phone overlays
+  retain the modal focus scope.
 - Prefer native buttons/links for interactive rows and nested actions. Legacy
   custom buttons use `role="button" tabindex="0"` and the global a11y activation;
   do not layer another Enter/Space handler on top of it.
@@ -257,7 +278,8 @@ code should prefer `addEventListener` inside a module.
   Numbered patches and the separate YTM/polish/quality passes are retired; do not
   add another final override file.
 - Canonical listener palette: true black, graphite elevations, legible neutral
-  text, restrained brass interaction states, and artwork-led player color.
+  text, white interaction states, and artwork-led player color. Legacy light
+  preferences do not change that palette.
 - Use shared color/radius/type/motion/focus tokens rather than per-component
   gradients, arbitrary radii, or scattered `!important` fights.
 - Keep mobile rules in their responsive owner and test at 390 px. Structural
@@ -272,16 +294,26 @@ code should prefer `addEventListener` inside a module.
 - Never rename/remove a key without a migration; users keep local data forever.
 - `trackKey()` is catalogue dedupe/migration, not playlist identity. Persist
   durable video/id references with snapshots, and preserve unresolved entries.
-- Every collection selection must establish a playback context. Engine-specific
+- Every explicit collection selection must establish a playback context. Engine-specific
   code must not invent its own Next/Previous/shuffle path or a fallback into the
   global library at a playlist boundary.
 - Use strict `playlist-data.ts` parsing; unsupported/corrupt saved formats freeze
   writes with recovery rather than becoming empty storage. Prepare migration
-  before track metadata edits.
+  before track metadata edits, saving the required legacy backup first. Startup,
+  previews, refreshes and library deletion never migrate playlists.
 - Web Locks or a short IndexedDB transaction coordination lock protect playlist
   writes; if neither is available, refuse unsafe saving. BroadcastChannel/storage
   update all same-origin views and active collection metadata/order without
   restarting current audio. These mechanisms are not a cloud service.
+- Preserve the mutable raw-ID `manualQueue` and artist `playOrder` contract;
+  mirror artist traversal into stable-reference `state.playbackContext`. Retain
+  unheard interruptions during handoffs, shuffle and temporary reorder.
+- Serialize local-file operations by ID and recheck after every await. Persist
+  deletion metadata before removing a blob, and finish transport changes before
+  awaiting IndexedDB deletion. Keep numeric `toggleFavorite` arguments as indices;
+  use strings for internal raw-ID calls.
+- A pending YouTube selection owns transport/time exclusively; never play or seek
+  the paused prior HTML source. Stale source promises/events cannot win ownership.
 
 ### Performance
 

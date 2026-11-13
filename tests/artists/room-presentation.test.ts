@@ -115,7 +115,7 @@ async function fakeAudio(run: (environment: any) => Promise<void>): Promise<void
   }
 }
 
-const track = (key: string) => ({ key, title: key, artist: 'Room artist', url: '/fixture.wav', durationMs: 120000 });
+const track = (key: string) => ({ key, videoId: null, title: key, artist: 'Room artist', url: '/fixture.wav', durationMs: 120000 });
 
 test('a late decode cannot revive a room that was left or fire its track callback', async () => {
   await fakeAudio(async (environment) => {

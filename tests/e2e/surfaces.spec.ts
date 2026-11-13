@@ -72,6 +72,12 @@ async function namedVisibleButtons(page: Page) {
     checked++;
   }
   expect(checked, 'audit at least one rendered control').toBeGreaterThan(0);
+  const missingMasks = await page.evaluate(() => [...document.querySelectorAll<HTMLElement>('.fa-solid, .fa-regular, .fa-brands')].filter((icon) => {
+    const style = getComputedStyle(icon);
+    return icon.getClientRects().length > 0 && style.display !== 'none' && style.visibility !== 'hidden' &&
+      !style.maskImage.includes('data:image/svg+xml,');
+  }).map((icon) => icon.className));
+  expect(missingMasks, 'visible icons must use bundled SVG masks, not solid rectangle fallbacks').toEqual([]);
 }
 
 async function receivesPointer(locator: Locator) {
@@ -121,7 +127,7 @@ async function expandPlayer(page: Page, width: number) {
   // desktop player closed or try the intentionally hidden mobile mini player.
   if (!await player.evaluate((element) => element.classList.contains('active'))) {
     if (width >= 900) await page.locator('#miniExpandBtn').click();
-    else await page.locator('#miniPlayer .song-info').click();
+    else await page.locator('#miniTrackOpenBtn').click();
   }
   await expect(player).toHaveClass(/active/);
   await expect(player).toHaveCSS('opacity', '1');
@@ -217,24 +223,32 @@ for (const viewport of entryViewports) {
       await route.fulfill({ status: response.status, contentType: 'application/json', body: JSON.stringify(response.body) });
     });
     await page.goto('/rooms.html');
-    await expect(page.getByRole('heading', { name: 'Join a room', exact: true })).toBeVisible();
+    await expect(page.getByRole('heading', { name: 'Find your people.', exact: true })).toBeVisible();
     await expect(page.locator('#roomView')).toBeHidden();
     await expect(page.locator('body')).toHaveCSS('background-color', 'rgb(0, 0, 0)');
     await targets44(page.locator('#joinBtn, #createBtn'));
     await namedVisibleButtons(page);
     await noHorizontalOverflow(page);
     await page.locator('#joinBtn').click();
-    await expect(page.getByRole('textbox', { name: 'Room code', exact: true })).toBeFocused();
+    const code = page.getByRole('textbox', { name: 'Room code or invite link', exact: true });
+    const name = page.getByRole('textbox', { name: 'Your name in the room', exact: true });
+    await expect(code).toBeFocused();
     expect(requests).toEqual([]);
-    await page.getByRole('textbox', { name: 'Room code', exact: true }).fill('K7!m2-PQ');
-    await expect(page.locator('#codeInput')).toHaveValue('k7m2pq');
+    await code.fill('K7!m2-PQ');
     await page.locator('#joinBtn').click();
-    await expect(page.getByRole('textbox', { name: 'Your name', exact: true })).toBeFocused();
+    await expect(code).toBeFocused();
+    await expect(code).toHaveAttribute('aria-invalid', 'true');
+    await expect(code).toHaveValue('K7!m2-PQ');
     expect(requests).toEqual([]);
-    await page.getByRole('textbox', { name: 'Your name', exact: true }).fill('Fixture Listener');
+    await code.fill('K7m2PQ');
+    await page.locator('#joinBtn').click();
+    await expect(name).toBeFocused();
+    expect(requests).toEqual([]);
+    await name.fill('Fixture Listener');
     await page.locator('#codeInput').press('Enter');
     await expect(page.getByRole('alert')).toBeVisible();
-    await expect(page.getByRole('alert')).toContainText(/not found|invalid.*code|check.*code/i);
+    await expect(page.getByRole('alert')).toContainText(/not found|doesn’t exist|invalid.*code|check.*code/i);
+    await expect(code).toHaveValue('k7m2pq');
     await expect(page.locator('#joinView')).toBeVisible();
     await expect(page.locator('#roomView')).toBeHidden();
     expect(await page.evaluate(() => (window as any).__unexpectedRoomSockets)).toEqual([]);
@@ -293,18 +307,20 @@ for (const viewport of entryViewports) {
     });
     await page.goto('/rooms.html?r=k7m2pq');
     await expect(page.locator('#codeInput')).toHaveValue('k7m2pq');
-    await page.getByRole('textbox', { name: 'Your name', exact: true }).fill('Fixture Listener');
+    await page.getByRole('textbox', { name: 'Your name in the room', exact: true }).fill('Fixture Listener');
     await page.locator('#joinBtn').click();
     await expect(page.locator('#roomView')).toBeVisible();
     await expect(page.locator('#joinView')).toBeHidden();
     await expect(page.locator('#roomCode')).toHaveText('k7m2pq');
-    await expect(page.locator('#rolePill')).toHaveText('listener');
+    await expect(page.locator('#rolePill')).toHaveText('Listener');
     await expect(page.locator('#peopleList')).toContainText('Fixture Listener');
     await expect(page.locator('#peopleList')).toContainText('Fixture Friend');
     await expect(page.locator('#pCount')).toHaveText('2');
-    await expect(page.locator('#nowTitle')).toHaveText('Nothing playing');
+    await expect(page.locator('#nowTitle')).toHaveText('Waiting for a record.');
     for (const selector of ['#prevBtn', '#playBtn', '#nextBtn']) await expect(page.locator(selector)).toBeDisabled();
     await namedVisibleButtons(page);
+    await page.getByRole('button', { name: 'Invite friends', exact: true }).click();
+    await expect(page.getByRole('textbox', { name: 'Listener invite link', exact: true })).toHaveValue(new URL('/rooms?r=k7m2pq', page.url()).href);
     await targets44(page.locator('#copyBtn, #leaveBtn, #chatForm button'));
     await noHorizontalOverflow(page);
     await evidence(page, test.info(), `rooms-${viewport.label}-joined-layout`, ['#roomView', '.topbar', '#copyBtn', '#leaveBtn']);
@@ -327,12 +343,12 @@ for (const viewport of surfaceViewports) {
     await openPlaylist(page);
     await expect(page.getByRole('heading', { name: 'Night test', exact: true })).toBeVisible();
     await expect(page.locator('body')).toHaveCSS('background-color', 'rgb(0, 0, 0)');
-    await expect(page.locator('.pl-name')).toHaveCSS('color', 'rgb(247, 245, 241)');
+    await expect(page.locator('.pl-name')).toHaveCSS('color', 'rgb(245, 245, 245)');
     await targets44(page.locator('#tabPlaylist .pl-actions button, #tabPlaylist .pl-track-order button'));
     await namedVisibleButtons(page);
     await noHorizontalOverflow(page);
 
-    const edit = page.getByRole('button', { name: 'Edit Night test', exact: true });
+    const edit = page.getByRole('button', { name: 'Edit playlist', exact: true });
     await page.keyboard.press('Tab'); // establish keyboard, not pointer, modality
     await edit.focus();
     await expect(edit).toBeFocused();
@@ -354,13 +370,11 @@ for (const viewport of surfaceViewports) {
     await expect(edit).toBeFocused();
 
     await openPreferences(page, viewport.width);
-    const theme = viewport.width >= 900
-      ? page.locator('.desktop-settings-group').getByRole('button', { name: /^Light Mode$/i })
-      : page.locator('#themeToggleBtn');
-    await theme.click();
-    await expect(page.locator('body')).toHaveClass(/light-theme/);
-    await expect(page.locator('body')).toHaveCSS('background-color', 'rgb(247, 245, 241)');
-    await expect(page.locator('.pl-name')).toHaveCSS('color', 'rgb(36, 33, 29)');
+    // Production is intentionally neutral black; no retired theme control is
+    // required and opening preferences must not change the canvas.
+    await expect(page.locator('#themeToggleBtn')).toHaveCount(0);
+    await expect(page.locator('body')).not.toHaveClass(/light-theme/);
+    await expect(page.locator('body')).toHaveCSS('background-color', 'rgb(0, 0, 0)');
     const settings = viewport.width >= 900
       ? page.locator('.desktop-settings-group').getByRole('button', { name: 'Settings', exact: true })
       : page.locator('#openSettingsBtn');
@@ -369,7 +383,7 @@ for (const viewport of surfaceViewports) {
     await insideViewport(page, page.locator('#settingsModal .settings-modal-card'));
     await targets44(page.locator('#settingsCloseBtn'));
     await namedVisibleButtons(page);
-    await evidence(page, test.info(), `light-${viewport.width}-computed-layout`, ['body', '.pl-name', '#settingsModal .settings-modal-card', '#settingsCloseBtn']);
+    await evidence(page, test.info(), `neutral-${viewport.width}-computed-layout`, ['body', '.pl-name', '#settingsModal .settings-modal-card', '#settingsCloseBtn']);
     await page.locator('#settingsCloseBtn').click();
     await noHorizontalOverflow(page);
 
@@ -385,7 +399,13 @@ for (const viewport of surfaceViewports) {
     await expandPlayer(page, viewport.width);
     const modal = viewport.width >= 900 ? 'false' : 'true';
     await expect(page.locator('#fullPlayerOverlay')).toHaveAttribute('aria-modal', modal);
-    await expect(page.locator('#upNextSheet')).toHaveAttribute('aria-modal', modal);
+    if (viewport.width >= 900) {
+      await expect(page.locator('#upNextSheet')).toHaveAttribute('role', 'region');
+      await expect(page.locator('#upNextSheet')).not.toHaveAttribute('aria-modal');
+    } else {
+      await expect(page.locator('#upNextSheet')).toHaveAttribute('role', 'dialog');
+      await expect(page.locator('#upNextSheet')).toHaveAttribute('aria-modal', modal);
+    }
     const player = await insideViewport(page, page.locator('#fullPlayerOverlay'));
     const sheet = await insideViewport(page, page.locator('#upNextSheet'));
     if (viewport.width >= 900) {
@@ -412,7 +432,10 @@ for (const viewport of surfaceViewports) {
     await noHorizontalOverflow(page);
     await evidence(page, test.info(), `player-${viewport.width}-computed-layout`, ['#fullPlayerOverlay', '#upNextSheet', '#miniPlayer', '#ytmQueuePanel', '#fullPlayBtn']);
     await page.locator('#upNextCloseBtn').click();
-    await expect(page.locator('#upNextSheet')).toBeHidden();
+    // The desktop companion remains docked while artwork is open. On phones
+    // the independent sheet closes and reveals the full-player controls.
+    if (viewport.width < 900) await expect(page.locator('#upNextSheet')).toBeHidden();
+    else await expect(page.locator('#upNextSheet')).toBeVisible();
     await expect(page.locator('#fullPlayerOverlay')).toHaveClass(/active/);
     if (viewport.width < 900) {
       await targets44(page.locator('#fullPlayBtn, #fullPrevBtn, #fullNextBtn'));

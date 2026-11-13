@@ -1,9 +1,9 @@
 import { expect, test } from '@playwright/test';
 import { readFile } from 'node:fs/promises';
-import { currentTitle, mockYouTube, openPlaylist, resetPosition, seedAura, silentAudio, store } from './fixtures';
+import { currentTitle, endNativeAudio, mockYouTube, openPlayerSheet, openPlaylist, resetPosition, seedAura, silentAudio, store } from './fixtures';
 
 test('playlist transport remains scoped; Previous and selecting a different playlist use the right order', async ({page}) => {
-  const evidence = await seedAura(page);
+  const evidence = await seedAura(page,{repeat:'off'});
   await page.getByRole('button',{name:'Playlists',exact:true}).first().click();
   await page.getByRole('button',{name:'Open Night test'}).click();
   await page.locator('[data-play-playlist]').click();
@@ -19,10 +19,11 @@ test('playlist transport remains scoped; Previous and selecting a different play
 
 test('repeat off/all/one and shuffle stay scoped and are mirrored between controls', async ({page}) => {
   await seedAura(page); await openPlaylist(page); await page.locator('[data-play-playlist]').click();
-  await page.locator('#miniRepeatBtn').click(); await expect(page.locator('#miniRepeatBtn')).toHaveAttribute('aria-label','Repeat all');
+  await expect.poll(() => page.evaluate(() => (globalThis as any).state.repeatMode)).toBe('all');
+  await expect(page.locator('#miniRepeatBtn')).toHaveAttribute('aria-label','Repeat all');
   await page.locator('#nextBtn').click(); await page.locator('#nextBtn').click(); await expect.poll(() => currentTitle(page)).toBe('Gamma');
   await page.locator('#miniRepeatBtn').click(); await expect(page.locator('#repeatBtn')).toHaveAttribute('aria-label','Repeat one');
-  await page.evaluate(() => {(globalThis as any).state.audio.pause();(globalThis as any).state.audio.dispatchEvent(new Event('ended'));});
+  await endNativeAudio(page);
   await expect.poll(() => currentTitle(page)).toBe('Gamma');
   await page.locator('#nextBtn').click(); await expect.poll(() => currentTitle(page)).toBe('Alpha');
   await page.locator('#miniShuffleBtn').click();
@@ -35,7 +36,7 @@ test('manual queue interrupts a playlist, then resumes it; history includes queu
   await seedAura(page); await openPlaylist(page); await page.locator('[data-play-playlist]').click();
   await page.evaluate(() => (globalThis as any).openTrackMenu(null,'4'));
   await page.getByRole('button',{name:'Play next',exact:true}).click();
-  await page.evaluate(() => (globalThis as any).openPlayerSheet('queue'));
+  await openPlayerSheet(page,'queue');
   await expect(page.locator('#queueContextLabel')).toHaveText('Up next from Night test');
   await expect(page.locator('.up-next-row').first()).toHaveAttribute('data-up-next-id','id:4');
   await page.locator('#nextBtn').click(); await expect.poll(() => currentTitle(page)).toBe('Delta');
@@ -45,17 +46,18 @@ test('manual queue interrupts a playlist, then resumes it; history includes queu
   await page.locator('#nextBtn').click(); await expect.poll(() => currentTitle(page)).toBe('Delta');
 });
 
-test('row selection discards a stale queued sequence', async ({page}) => {
+test('row selection changes the collection without discarding unheard manual queue entries', async ({page}) => {
   await seedAura(page); await openPlaylist(page); await page.locator('[data-play-playlist]').click();
   await page.evaluate(() => (globalThis as any).openTrackMenu(null,'1')); await page.getByRole('button',{name:'Play next',exact:true}).click();
   await openPlaylist(page,'p2'); await page.getByRole('button',{name:'Play Beta by Aura Test'}).click();
+  await page.locator('#nextBtn').click(); await expect.poll(() => currentTitle(page)).toBe('Alpha');
   await page.locator('#nextBtn').click(); await expect.poll(() => currentTitle(page)).toBe('Delta');
 });
 
 test('metadata edits preserve stable references, playhead, and selected track identity', async ({page}) => {
   await seedAura(page); await openPlaylist(page); await page.getByRole('button',{name:'Play Alpha by Aura Test'}).click();
   await page.evaluate(() => {(globalThis as any).state.audio.currentTime=12;(globalThis as any).openTrackMenu(null,'1');});
-  await page.getByRole('button',{name:'Edit track',exact:true}).click();
+  await page.getByRole('button',{name:'Edit Track',exact:true}).click();
   await page.locator('#editTitleInput').fill('Alpha renamed'); await page.locator('#editArtistInput').fill('Edited artist');
   await page.getByRole('button',{name:'Save Changes',exact:true}).click();
   await expect.poll(() => currentTitle(page)).toBe('Alpha renamed');
@@ -64,12 +66,13 @@ test('metadata edits preserve stable references, playhead, and selected track id
   expect(await page.evaluate(() => (globalThis as any).state.audio.currentTime)).toBeGreaterThanOrEqual(12);
 });
 
-test('stale catalogue indices cannot change the track added or played; numeric likes identify the correct song', async ({page}) => {
+test('stale catalogue indices cannot change row targets; numeric favorites retain the production index API', async ({page}) => {
   await seedAura(page); await openPlaylist(page);
   await page.evaluate(() => (globalThis as any).state.songs.reverse());
-  await page.getByRole('button',{name:'Add Beta to Night test'}).click();
+  await page.getByRole('button',{name:'Add Beta',exact:true}).click();
   await page.getByRole('button',{name:'Play Gamma by Second Artist'}).click(); await expect.poll(() => currentTitle(page)).toBe('Gamma');
-  await page.evaluate(() => (globalThis as any).toggleFavorite(null,1));
+  const index = await page.evaluate(() => (globalThis as any).state.songs.findIndex((song:any) => song.id===1));
+  await page.evaluate(index => (globalThis as any).toggleFavorite(null,index),index);
   expect(await page.evaluate(() => (globalThis as any).state.songs.find((song:any) => song.id===1).favorite)).toBe(true);
   expect(await page.evaluate(() => !!(globalThis as any).state.songs.find((song:any) => song.id===2).favorite)).toBe(false);
   expect((await store(page)).playlists.find((item:any) => item.id==='p1').tracks.map((ref:any) => ref.ref)).toContain('id:2');
@@ -150,7 +153,7 @@ test('failed storage writes never report success or drop tracks; corrupt/newer d
     (window as any).__restoreStorage = () => Storage.prototype.setItem=write;
     Storage.prototype.setItem=function(key,value){if(key==='auraPlaylists')throw new DOMException('quota','QuotaExceededError');return write.call(this,key,value);};
   });
-  await page.getByRole('button',{name:'Remove Gamma from Night test'}).click();
+  await page.getByRole('button',{name:'Remove Gamma from playlist'}).click();
   await expect(page.locator('.toast').last()).toContainText('could not save'); expect(await store(page)).toEqual(before);
   await page.evaluate(() => {(window as any).__restoreStorage();localStorage.setItem('auraPlaylists','{"version":99,"playlists":[]}');window.dispatchEvent(new StorageEvent('storage',{key:'auraPlaylists'}));});
   await page.evaluate(() => (globalThis as any).goTab('tabPlaylists'));
@@ -176,9 +179,10 @@ test('YouTube playlist ends advance context, keep metadata, and reject stale ifr
   });
   await expect.poll(() => currentTitle(page)).toBe('Video title');
   expect(await page.evaluate(() => navigator.mediaSession.metadata.artist)).toBe('Video artist');
-  await page.evaluate(() => (window as any).__youtubePlayers[0].options.events.onStateChange({data:0}));
+  await page.waitForFunction(() => (window as any).__youtubePlayers[0]?.getPlayerState()===1);
+  await page.evaluate(() => (window as any).__youtubePlayers[0].transition(0));
   await expect.poll(() => currentTitle(page)).toBe('Alpha');
-  await page.evaluate(() => (window as any).__youtubePlayers[0].options.events.onStateChange({data:0}));
+  await page.evaluate(() => (window as any).__youtubePlayers[0].transition(0));
   await expect.poll(() => currentTitle(page)).toBe('Alpha');
 });
 
@@ -186,7 +190,7 @@ test('Media Session uses the same context, and lyrics are fetched lazily with a 
   const evidence = await seedAura(page); await openPlaylist(page); await page.locator('[data-play-playlist]').click();
   expect(evidence.lyricsRequests).toHaveLength(0);
   await page.evaluate(() => (window as any).__mediaActions.nexttrack()); await expect.poll(() => currentTitle(page)).toBe('Alpha');
-  await page.evaluate(() => (globalThis as any).openPlayerSheet('queue')); expect(evidence.lyricsRequests).toHaveLength(0);
+  await openPlayerSheet(page,'queue'); expect(evidence.lyricsRequests).toHaveLength(0);
   await page.locator('#ytmTabLyricsBtn').click(); await expect(page.locator('#fullPlayerLyricsContainer')).toContainText(/alpha first line/i);
   const parsed = await page.evaluate(async () => {
     const path = '/src/features/lyrics.ts'; const lyrics = await import(path);
@@ -204,7 +208,7 @@ test('desktop and mobile surfaces keep visible labels and no horizontal overflow
       expect(await page.evaluate(() => document.documentElement.scrollWidth - innerWidth),`${tab} at ${width}`).toBeLessThanOrEqual(1);
     }
     await openPlaylist(page);
-    await expect(page.getByRole('button',{name:'Edit Night test'})).toBeVisible(); await expect(page.getByRole('button',{name:'Export Night test'})).toBeVisible();
+    await expect(page.getByRole('button',{name:'Edit playlist',exact:true})).toBeVisible(); await expect(page.getByRole('button',{name:'Export Night test'})).toBeVisible();
     expect(await page.evaluate(() => document.documentElement.scrollWidth - innerWidth),`playlist at ${width}`).toBeLessThanOrEqual(1);
   }
   expect(evidence.pageErrors).toEqual([]);
@@ -219,7 +223,7 @@ test('deletion cannot destroy local audio when metadata persistence is denied', 
     (globalThis as any).openTrackMenu(null,'4');
   });
   page.once('dialog',(dialog) => dialog.accept());
-  await page.getByRole('button',{name:'Remove from library',exact:true}).click();
+  await page.getByRole('button',{name:'Remove from Library',exact:true}).click();
   await expect(page.locator('.toast').last()).toContainText('could not be saved');
   expect(await page.evaluate(() => localStorage.getItem('addedTracks'))).toBe(before);
   const retained = await page.evaluate(async () => {
@@ -230,6 +234,7 @@ test('deletion cannot destroy local audio when metadata persistence is denied', 
 });
 test('pending YouTube honors Media Session Pause and never resumes the previous HTML source', async ({page}) => {
   await seedAura(page);
+  const previousSource = await page.evaluate(() => (globalThis as any).state.audio.getAttribute('src'));
   await page.context().route('https://www.youtube.com/iframe_api',(route) => route.fulfill({contentType:'application/javascript',body:'/* SDK callback is deliberately deferred */'}));
   await page.evaluate(() => {
     const original = HTMLMediaElement.prototype.play;
@@ -241,7 +246,14 @@ test('pending YouTube honors Media Session Pause and never resumes the previous 
   await page.waitForFunction(() => typeof (window as any).onYouTubeIframeAPIReady==='function');
   await page.evaluate(() => {(window as any).__mediaActions.play();(window as any).__mediaActions.pause();});
   expect(await page.evaluate(() => (window as any).__audioPlayCount)).toBe(0);
-  expect(await page.evaluate(() => (globalThis as any).state.audio.getAttribute('src'))).toBeNull();
+  // Production retains the paused native source, but a pending iframe owns
+  // transport and time. Native audio must never be the fallback for Play/seek.
+  expect(await page.evaluate(() => (globalThis as any).state.audio.getAttribute('src'))).toBe(previousSource);
+  expect(await page.evaluate(() => (globalThis as any).state.audio.paused)).toBe(true);
+  expect(await page.evaluate(async () => {
+    const player = await import('/src/features/player.ts' as string);
+    return { time: player.getActivePlaybackTime(), sought: player.seekActivePlayback(20) };
+  })).toEqual({ time: 0, sought: false });
   await mockYouTube(page); await page.evaluate(() => (window as any).onYouTubeIframeAPIReady());
   await expect.poll(() => page.evaluate(() => (window as any).__youtubePlayers.length)).toBe(1);
   expect(await page.evaluate(() => (window as any).__youtubePlayers[0].getPlayerState())).toBe(2);
@@ -256,9 +268,9 @@ test('selecting a future queued item keeps its original collection anchor and ho
     await page.getByRole('button',{name:'Add to queue',exact:true}).click();
   }
   await page.locator('#nextBtn').click(); await resetPosition(page); await page.locator('#miniPrevBtn').click();
-  await page.evaluate(() => (globalThis as any).openPlayerSheet('queue'));
+  await openPlayerSheet(page,'queue');
   await expect(page.locator('.up-next-row').first()).toHaveAttribute('data-up-next-id','id:4');
-  await page.getByRole('button',{name:'Play Delta next'}).click();
+  await page.locator('#upNextList').getByRole('button',{name:'Play Delta by Second Artist'}).click();
   await page.locator('#nextBtn').click(); await expect.poll(() => currentTitle(page)).toBe('Beta');
   await page.locator('#nextBtn').click(); await expect.poll(() => currentTitle(page)).toBe('Alpha');
 });

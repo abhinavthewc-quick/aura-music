@@ -22,7 +22,7 @@ class Events {
   }
   emit(type: string, values: Record<string, any> = {}) {
     const event = {
-      target: this, type, bubbles: true, stopped: false, defaultPrevented: false,
+      target: this, currentTarget: this as Events, type, bubbles: true, stopped: false, defaultPrevented: false,
       stopPropagation() { this.stopped = true; },
       preventDefault() { this.defaultPrevented = true; },
       ...values,
@@ -224,6 +224,19 @@ export const LYRICS = {
   ],
 };
 
+interface FixtureTrack {
+  id: string | number;
+  title: string;
+  artist: string;
+  url: string;
+  img: string;
+  isLocal?: boolean;
+  isYouTube?: boolean;
+  videoId?: string;
+  hfUrl?: string;
+  missing?: boolean;
+}
+
 export function createPlaybackHarness({ delayedAPI = false } = {}) {
   const clock = new Clock();
   const mutationObservers: FixtureMutationObserver[] = [];
@@ -250,8 +263,8 @@ export function createPlaybackHarness({ delayedAPI = false } = {}) {
   document.head = document.appendChild(new Element('head'));
   document.body = document.appendChild(new Element('body'));
   document.createElement = (tag: string) => new Element(tag);
-  document.getElementById = (id: string) => document.querySelector('#' + id);
-  const $ = document.getElementById;
+  const $ = (id: string): Element | null => document.querySelector('#' + id);
+  document.getElementById = $;
   const mount = (id: string, parent = document.body, tag = 'div') => {
     const node = new Element(tag); node.id = id; parent.appendChild(node); return node;
   };
@@ -274,8 +287,9 @@ export function createPlaybackHarness({ delayedAPI = false } = {}) {
   mount('fullPlayerLyricsContainer', lyricsPanel);
   const audio = new AudioElement();
   const state = {
-    audio, songs: [AUDIO, VIDEO_A, VIDEO_B, VIDEO_C, AUDIO_TWO].map((song) => ({ ...song })),
+    audio, songs: [AUDIO, VIDEO_A, VIDEO_B, VIDEO_C, AUDIO_TWO].map((song): FixtureTrack => ({ ...song })),
     currentIndex: 0, isPlaying: false, repeatMode: 'off', isShuffle: false,
+    activeTrack: null as FixtureTrack | null, playbackContext: null as import('../../src/core/playback-context').PlaybackContext | null,
     auraYTQueueIndex: -1, addedSongs: [], recentlyPlayed: [], radioIsPlaying: false,
   };
   const storage = new Map<string, string>();

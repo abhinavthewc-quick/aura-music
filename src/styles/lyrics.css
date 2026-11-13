@@ -1,8 +1,4 @@
-<<<<<<< HEAD
 /* Multi-tier synced lyrics retain word timing and their legible hierarchy. */
-=======
-/* Synced lyrics remain multi-tier and word-timed, with inexpensive legible states. */
->>>>>>> 62cde5b (Private recovery snapshot before local/production reconciliation (not for deployment))
 .bl-lyrics-wrapper { display: flex; flex-direction: column; flex: 1; min-height: 0; overflow: hidden; }
 #ytmLyricsPanel { position: relative; }
 .bl-lyrics-backdrop { position: absolute; z-index: 0; inset: -12px; background-position: center; background-size: cover; opacity: .12; filter: blur(24px); pointer-events: none; }
@@ -14,18 +10,10 @@
 .bl-tools-group::-webkit-scrollbar { display: none; }
 .bl-tool-pill { display: inline-flex; align-items: center; justify-content: center; flex: 0 0 auto; min-width: var(--tap); min-height: var(--tap); padding: 8px 10px; border: 1px solid var(--line); border-radius: var(--radius-xs); background: transparent; color: var(--text-sub); font-size: 12px; font-weight: 500; }
 .bl-tool-pill:hover { background: var(--hover); color: var(--text); }
-<<<<<<< HEAD
 .bl-tool-pill.active { border-color: var(--line-strong); background: var(--accent-soft); color: var(--accent); }
 #blSyncOffsetLabel { min-width: 36px; color: var(--text-sub); font-size: 11px; text-align: center; font-variant-numeric: tabular-nums; }
 #fullPlayerLyricsContainer { position: relative; z-index: 1; display: flex; flex-direction: column; flex: 1 1 0; min-height: 0; overflow: hidden; }
 .bl-lyrics-scroll { --lyric-rgb: 245, 245, 245; display: block; flex: 1 1 0; min-height: 0; overflow-y: auto; padding: 16px 24px 48vh; scrollbar-width: thin; overscroll-behavior: contain; -webkit-mask-image: linear-gradient(to bottom, transparent, #000 12px, #000 calc(100% - 24px), transparent); mask-image: linear-gradient(to bottom, transparent, #000 12px, #000 calc(100% - 24px), transparent); }
-=======
-.bl-tool-pill.active { border-color: rgba(var(--accent-rgb), .3); background: var(--accent-soft); color: var(--accent); }
-#blSyncOffsetLabel { min-width: 36px; color: var(--text-sub); font-size: 11px; text-align: center; font-variant-numeric: tabular-nums; }
-#fullPlayerLyricsContainer { position: relative; z-index: 1; display: flex; flex-direction: column; flex: 1 1 0; min-height: 0; overflow: hidden; }
-.bl-lyrics-scroll { --lyric-rgb: 247, 245, 241; display: block; flex: 1 1 0; min-height: 0; overflow-y: auto; padding: 16px 24px 48vh; scrollbar-width: thin; overscroll-behavior: contain; -webkit-mask-image: linear-gradient(to bottom, transparent, #000 12px, #000 calc(100% - 24px), transparent); mask-image: linear-gradient(to bottom, transparent, #000 12px, #000 calc(100% - 24px), transparent); }
-body.light-theme .bl-lyrics-scroll { --lyric-rgb: 36, 33, 29; }
->>>>>>> 62cde5b (Private recovery snapshot before local/production reconciliation (not for deployment))
 .bl-lyrics-scroll::-webkit-scrollbar { width: 4px; }
 .bl-lyrics-scroll::-webkit-scrollbar-thumb { border-radius: var(--radius-pill); background: var(--line-strong); }
 .bl-lyric-line { margin-bottom: 24px; color: var(--text); opacity: .6; transform: scale(.98); transform-origin: left center; cursor: pointer; user-select: none; transition: opacity 180ms, transform 220ms var(--ease-out); }
@@ -34,20 +22,12 @@ body.light-theme .bl-lyrics-scroll { --lyric-rgb: 36, 33, 29; }
 .bl-lyric-line.passed { opacity: .42; }
 .bl-lyric-line.active { opacity: 1; transform: scale(1.035); }
 .bl-lyric-main { color: var(--text); font-size: 23px; font-weight: 600; line-height: 1.4; overflow-wrap: anywhere; }
-<<<<<<< HEAD
-=======
-.bl-lyric-line.active .bl-lyric-main { font-weight: 650; }
->>>>>>> 62cde5b (Private recovery snapshot before local/production reconciliation (not for deployment))
 .bl-lyric-translit { display: inline-block; margin-top: 8px; padding: 3px 8px; border-radius: var(--radius-xs); background: var(--hover); color: var(--text-sub); font-size: 13px; font-weight: 500; line-height: 1.4; }
 .bl-lyric-trans { margin-top: 6px; color: var(--text-sub); font-size: 14px; line-height: 1.5; }
 .bl-word { display: inline-block; margin-right: .16em; transform-origin: left bottom; transition: transform 160ms var(--ease-out); }
 .bl-word.done { color: var(--text); }
 .bl-word.upcoming { color: rgba(var(--lyric-rgb), .5); }
-<<<<<<< HEAD
 /* --word-prog comes from the rich-sync loop, not a decorative solid fill. */
-=======
-/* --word-prog is written by the rich-sync loop; do not replace this with a solid fill. */
->>>>>>> 62cde5b (Private recovery snapshot before local/production reconciliation (not for deployment))
 .bl-word.active { background: linear-gradient(to right, var(--text) 0%, var(--text) var(--word-prog, 100%), rgba(var(--lyric-rgb), .5) var(--word-prog, 100%), rgba(var(--lyric-rgb), .5) 100%); background-clip: text; -webkit-background-clip: text; -webkit-text-fill-color: transparent; transform: scale(1.045); }
 .bl-lyric-line.bl-instrumental { display: flex; align-items: center; margin: 8px 0 24px; opacity: .5; transform: none; }
 .bl-lyric-line.bl-instrumental.active { opacity: 1; }
@@ -87,10 +67,6 @@ body.light-theme .bl-lyrics-scroll { --lyric-rgb: 36, 33, 29; }
 .bl-empty-title { color: var(--text); font-size: 18px; font-weight: 600; }
 .bl-empty-sub { max-width: 36ch; font-size: 13px; line-height: 1.55; }
 
-<<<<<<< HEAD
-=======
-/* Related tracks are a continuation of the record shelf, not another UI theme. */
->>>>>>> 62cde5b (Private recovery snapshot before local/production reconciliation (not for deployment))
 .ytm-rel-section { margin-bottom: 24px; }
 .ytm-rel-section-title { margin-bottom: 14px; color: var(--text); font-size: 17px; font-weight: 600; letter-spacing: -.015em; }
 .ytm-rel-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 16px; }
@@ -100,7 +76,6 @@ body.light-theme .bl-lyrics-scroll { --lyric-rgb: 36, 33, 29; }
 .ytm-rel-play-overlay { position: absolute; inset: 0; display: grid; place-items: center; background: rgba(0,0,0,.3); color: #fff; opacity: 0; transition: opacity var(--dur-fast); }
 .ytm-rel-card:hover .ytm-rel-play-overlay, .ytm-rel-card:focus-visible .ytm-rel-play-overlay { opacity: 1; }
 .ytm-rel-info { min-width: 0; padding-top: 8px; }
-<<<<<<< HEAD
 .ytm-rel-title, .ytm-rel-row-title { display: block; overflow: hidden; color: var(--text); font-size: 13px; font-weight: 600; line-height: 1.35; white-space: nowrap; text-overflow: ellipsis; }
 .ytm-rel-artist, .ytm-rel-row-sub { display: block; overflow: hidden; margin-top: 3px; color: var(--text-sub); font-size: 12px; white-space: nowrap; text-overflow: ellipsis; }
 .ytm-rel-list { display: flex; flex-direction: column; gap: 4px; }
@@ -111,17 +86,6 @@ body.light-theme .bl-lyrics-scroll { --lyric-rgb: 36, 33, 29; }
 .ytm-rel-row-meta { flex: 1; min-width: 0; }
 .ytm-rel-row-play { display: grid; place-items: center; flex: 0 0 var(--tap); width: var(--tap); height: var(--tap); padding: 0; border: 0; border-radius: 50%; background: transparent; color: var(--text-sub); }
 .ytm-rel-row:not(:disabled) .ytm-rel-row-play:hover { background: var(--hover); color: var(--text); }
-=======
-.ytm-rel-title, .ytm-rel-row-title { overflow: hidden; color: var(--text); font-size: 13px; font-weight: 600; line-height: 1.35; white-space: nowrap; text-overflow: ellipsis; }
-.ytm-rel-artist, .ytm-rel-row-sub { overflow: hidden; margin-top: 3px; color: var(--text-sub); font-size: 12px; white-space: nowrap; text-overflow: ellipsis; }
-.ytm-rel-list { display: flex; flex-direction: column; gap: 4px; }
-.ytm-rel-row { display: flex; align-items: center; gap: 12px; min-height: 64px; padding: 8px; border-radius: var(--radius-xs); cursor: pointer; }
-.ytm-rel-row:hover { background: var(--hover); }
-.ytm-rel-row-img { width: 44px; height: 44px; flex: 0 0 44px; border-radius: var(--radius-xs); background: var(--surface-2); object-fit: cover; }
-.ytm-rel-row-meta { flex: 1; min-width: 0; }
-.ytm-rel-row-play { display: grid; place-items: center; flex: 0 0 var(--tap); width: var(--tap); height: var(--tap); padding: 0; border: 0; border-radius: 50%; background: transparent; color: var(--text-sub); }
-.ytm-rel-row-play:hover { background: var(--hover); color: var(--text); }
->>>>>>> 62cde5b (Private recovery snapshot before local/production reconciliation (not for deployment))
 .ytm-rel-artist-tags { display: flex; align-items: center; flex-wrap: wrap; gap: 8px; }
 .ytm-rel-tag { display: inline-flex; align-items: center; gap: 6px; padding: 5px 8px; border: 1px solid var(--line); border-radius: var(--radius-xs); color: var(--text-sub); font-size: 11px; }
 .ytm-rel-artist-card { padding: 16px 0; border-top: 1px solid var(--line); }
