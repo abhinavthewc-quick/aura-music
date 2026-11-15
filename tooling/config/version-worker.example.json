@@ -1,0 +1,9 @@
+{
+  "site": "https://aura-music-01g.pages.dev",
+  "bucket": "Angelrider/sonora",
+  "token_file": "~/.config/aura-music/version-worker.token",
+  "work_dir": "~/.local/share/aura-music/version-worker",
+  "aubatch": "/opt/homebrew/bin/aubatch",
+  "jobs": 4,
+  "organize": true
+}
