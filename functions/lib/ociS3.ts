@@ -191,9 +191,12 @@ export async function deleteOciObject(key: string, config: OciS3Config): Promise
 export async function pruneOciBucketToLimit(
   config: OciS3Config,
   maxAllowedTracks = 30,
+  prefix = '',
 ): Promise<{ prunedCount: number; remainingCount: number; totalBytes: number; hasCapacity: boolean }> {
   if (!Number.isInteger(maxAllowedTracks) || maxAllowedTracks < 1) throw new Error('Invalid hot-cache limit');
-  const objects = (await listOciObjects(config)).filter((object) => /\.(mp3|opus|webm|m4a|aac|ogg|flac|wav)$/i.test(object.key));
+  if (prefix) encodeS3ObjectKey(prefix);
+  const objects = (await listOciObjects(config)).filter((object) => object.key.startsWith(prefix)
+    && /\.(mp3|opus|webm|m4a|aac|ogg|flac|wav)$/i.test(object.key));
   let totalBytes = objects.reduce((sum, object) => sum + object.size, 0);
   objects.sort((a, b) => (Date.parse(a.lastModified) || 0) - (Date.parse(b.lastModified) || 0));
   const excess = Math.max(0, objects.length - maxAllowedTracks + 1);

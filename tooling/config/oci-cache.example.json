@@ -1,0 +1,11 @@
+{
+  "site": "https://aura-music-01g.pages.dev",
+  "project": "aura-music",
+  "hf_bucket": "Angelrider/sonora",
+  "OCI_NAMESPACE": "YOUR_NAMESPACE",
+  "OCI_BUCKET_NAME": "YOUR_CACHE_BUCKET",
+  "OCI_REGION": "ap-hyderabad-1",
+  "OCI_ACCESS_KEY": "",
+  "OCI_SECRET_KEY": "",
+  "admin_token_file": "~/.config/aura-music/audio-cache-admin.token"
+}

@@ -3,6 +3,7 @@ import { DatabaseSync } from 'node:sqlite';
 import { readFileSync } from 'node:fs';
 import { onRequestGet, onRequestPost } from '../../functions/api/versions';
 import type { RegistryEnv, VersionDatabase } from '../../functions/lib/version-registry';
+import { audioCachePath, registryAudioIdentity } from '../../functions/lib/audio-cache';
 
 const token = 'test-worker-token-with-at-least-thirty-two-characters';
 const sourcePath = 'originals/Artist - Song [abcdefghijk].opus';
@@ -73,6 +74,29 @@ test('private mutations require the worker token and public reads reveal only re
   } finally {h.close();}
 });
 
+test('D1 cache identities resolve migrated originals and change after rendition publication', async () => {
+  const h=harness('cache-revisions');
+  try {
+    await h.call('sync',{tracks:[{...track,versions:{bass:{path:'versions/abcdefghijk/bass.mp3'}}}]});
+    const original=await registryAudioIdentity(h.env.VERSION_DB,'Artist - Song [abcdefghijk].opus');
+    expect(original).toEqual({path:sourcePath,revision:'a'.repeat(64)});
+    const before=await registryAudioIdentity(h.env.VERSION_DB,'versions/bass/abcdefghijk.mp3');
+    expect(before.path).toBe('versions/abcdefghijk/bass.mp3');
+    expect(before.revision).toMatch(/^[a-f0-9]{64}-\d+$/);
+    // Regenerate just this mode, as the Admin queue operation does.
+    h.db.exec("UPDATE audio_renditions SET status='pending' WHERE mode='bass'");
+    await h.call('claimOne',{ref,owner});
+    expect(await registryAudioIdentity(h.env.VERSION_DB,'versions/abcdefghijk/bass.mp3')).toBeNull();
+    const rendition={path:'versions/abcdefghijk/bass.mp3',bytes:200,duration:60,sha256:'f'.repeat(64),recipe:'new-render'};
+    expect((await h.call('complete',{ref,owner,versions:{bass:rendition}})).status).toBe(200);
+    const after=await registryAudioIdentity(h.env.VERSION_DB,rendition.path);
+    expect(after.sha256).toBe(rendition.sha256);
+    expect(after.revision).not.toBe(before.revision);
+    expect(await audioCachePath('test/cache-revisions',after)).not.toBe(await audioCachePath('test/cache-revisions',before));
+    expect((await h.public()).tracks[ref].bass.revision).toBe(after.revision);
+  } finally {h.close();}
+});
+
 test('a lease prevents duplicate jobs, resumes after expiry, and rejects the old owner', async () => {
   const h = harness('leases');
   try {
@@ -100,7 +124,7 @@ test('publication verifies uploaded bytes and preserves an already-ready partner
     expect(claim.tracks[0].missing).toEqual(['bass-reverb']);
     const file = {path:'versions/abcdefghijk/bass-reverb.mp3',bytes:301,duration:62,sha256:'d'.repeat(64),recipe:'test-aubatch'};
     expect((await h.call('complete',{ref,owner,versions:{'bass-reverb':file}})).status).toBe(409);
-    expect((await h.public()).tracks[ref]).toEqual({bass:{path:'versions/bass/abcdefghijk.mp3',duration:60}});
+    expect((await h.public()).tracks[ref]).toMatchObject({bass:{path:'versions/bass/abcdefghijk.mp3',duration:60}});
     expect((await h.call('complete',{ref,owner,versions:{'bass-reverb':{...file,bytes:300}}})).status).toBe(200);
     expect((await h.public()).tracks[ref]['bass-reverb'].path).toBe(file.path);
     expect((await (await h.call('claim',{owner:other,limit:1})).json()).tracks).toEqual([]);

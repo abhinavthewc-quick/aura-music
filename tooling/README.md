@@ -5,6 +5,11 @@ Chrome DevTools MCP checks live here. These sources are committed with the
 registry API and D1 schema they use. Older metadata/cache tools already tracked
 in `scripts/` remain available there.
 
+OCI cache tools live in `cache/`: initialize private settings with
+`python3 tooling/cache/configure_pages.py --init`, validate/activate the fresh
+credentials, then use `oci_cache.py status`, `warm` or `benchmark`. See
+[OCI cache operations](../docs/oci-cache.md) for deployment and freshness rules.
+
 ## Install on a Mac
 
 Requirements: Python 3.10+, Node 22.13+, `hf` with bucket support, `ffprobe`,

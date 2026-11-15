@@ -13,6 +13,9 @@ import {
   signOciS3Request,
   type OciS3Config,
 } from '../lib/ociS3';
+import { archiveAudioIdentity, audioCachePath, audioCachePrefix, registryAudioIdentity,
+  type AudioCacheIdentity } from '../lib/audio-cache';
+import type { VersionDatabase } from '../lib/version-registry';
 
 export interface AudioEnv {
   OCI_NAMESPACE?: string;
@@ -22,6 +25,7 @@ export interface AudioEnv {
   OCI_SECRET_KEY?: string;
   AUDIO_ADMIN_TOKEN?: string;
   HF_BUCKET_ID?: string;
+  VERSION_DB?: VersionDatabase;
 }
 
 interface AudioContext {
@@ -34,6 +38,7 @@ const HF_BUCKET_DEFAULT = 'Angelrider/sonora';
 const MAX_HOT_CACHE_TRACKS = 30;
 const MAX_AUDIO_FILE_SIZE_BYTES = 25 * 1024 * 1024;
 const MAX_EXISTENCE_ENTRIES = 256;
+const MAX_PENDING_CACHE_UPLOADS = 4;
 const AUDIO_EXTENSION = /\.(mp3|opus|webm|m4a|aac|ogg|flac|wav)$/i;
 const inFlightUploads = new Set<string>();
 const existenceCache = new Map<string, { exists: boolean; expiresAt: number }>();
@@ -78,7 +83,7 @@ function corsHeaders(extra: Record<string, string> = {}): Headers {
     'Access-Control-Allow-Origin': '*',
     'Access-Control-Allow-Methods': 'GET, HEAD, OPTIONS',
     'Access-Control-Allow-Headers': 'Range, Content-Type, Accept, Authorization',
-    'Access-Control-Expose-Headers': 'Content-Range, Content-Length, Accept-Ranges, x-aura-cache',
+    'Access-Control-Expose-Headers': 'Content-Range, Content-Length, Accept-Ranges, x-aura-cache, x-aura-revision',
     'X-Content-Type-Options': 'nosniff',
   });
   for (const [key, value] of Object.entries(extra)) if (value) headers.set(key, value);
@@ -125,7 +130,7 @@ function validateRange(raw: string | null): string | null | false {
   return `bytes=${match[1]}-${match[2]}`;
 }
 
-function streamResponse(response: Response, type: string, cache: string, head: boolean): Response {
+function streamResponse(response: Response, type: string, cache: string, head: boolean, revision = '', requestedRevision = ''): Response {
   const compressed = response.headers.get('content-encoding');
   const length = compressed && compressed !== 'identity' ? '' : response.headers.get('content-length') || '';
   return new Response(head ? null : response.body, {
@@ -138,8 +143,9 @@ function streamResponse(response: Response, type: string, cache: string, head: b
       'Content-Range': response.headers.get('content-range') || '',
       'Accept-Ranges': 'bytes',
       // Catalogue metadata can replace a file at its path. Do not mark it immutable.
-      'Cache-Control': 'public, max-age=3600',
+      'Cache-Control': revision && requestedRevision === revision ? 'public, max-age=3600' : 'public, max-age=0, must-revalidate',
       'x-aura-cache': cache,
+      'x-aura-revision': revision,
     }),
   });
 }
@@ -178,8 +184,9 @@ export async function readBoundedAudio(response: Response): Promise<Uint8Array |
   return result;
 }
 
-function scheduleCacheUpload(context: AudioContext, config: OciS3Config, key: string, path: string, archiveUrl: string): void {
-  if (typeof context.waitUntil !== 'function' || inFlightUploads.has(key)) return;
+function scheduleCacheUpload(context: AudioContext, config: OciS3Config, key: string, objectPath: string,
+  archiveUrl: string, identity: AudioCacheIdentity, bucket: string): void {
+  if (typeof context.waitUntil !== 'function' || inFlightUploads.has(key) || inFlightUploads.size >= MAX_PENDING_CACHE_UPLOADS) return;
   inFlightUploads.add(key);
   const task = uploadTail.then(async () => {
     try {
@@ -192,12 +199,17 @@ function scheduleCacheUpload(context: AudioContext, config: OciS3Config, key: st
       }
       const bytes = await readBoundedAudio(response);
       if (!bytes) return;
-      const capacity = await pruneOciBucketToLimit(config, MAX_HOT_CACHE_TRACKS);
-      if (!capacity.hasCapacity) return;
+      // A render may finish while the archive download is in flight. Never
+      // publish downloaded bytes under a superseded source identity.
+      const current = await resolveAudioIdentity(context,bucket,identity.path);
+      if (!current || current.path !== identity.path || current.revision !== identity.revision) return;
       const hash = new Uint8Array(await crypto.subtle.digest('SHA-256', bytes as BufferSource));
       const payloadHash = Array.from(hash, (byte) => byte.toString(16).padStart(2, '0')).join('');
-      const signed = await signOciS3Request('PUT', path, config, {
-        'content-type': mimeType(path), 'content-length': String(bytes.byteLength),
+      if (identity.sha256 && identity.sha256 !== payloadHash) return;
+      const capacity = await pruneOciBucketToLimit(config, MAX_HOT_CACHE_TRACKS,await audioCachePrefix(bucket));
+      if (!capacity.hasCapacity) return;
+      const signed = await signOciS3Request('PUT', objectPath, config, {
+        'content-type': mimeType(identity.path), 'content-length': String(bytes.byteLength),
       }, payloadHash);
       const written = await fetch(signed.url, {
         method: 'PUT', headers: signed.headers, body: bytes as BodyInit, signal: AbortSignal.timeout(10_000),
@@ -216,6 +228,20 @@ function scheduleCacheUpload(context: AudioContext, config: OciS3Config, key: st
   context.waitUntil(task);
 }
 
+async function resolveAudioIdentity(context: AudioContext, bucket: string, path: string): Promise<AudioCacheIdentity | null> {
+  try {
+    if (context.env.VERSION_DB) {
+      const identity = await registryAudioIdentity(context.env.VERSION_DB,path);
+      if (identity) return identity;
+    }
+    return await archiveAudioIdentity(`https://huggingface.co/buckets/${bucket}/resolve/${encodeS3ObjectKey(path)}`,path);
+  } catch {
+    // A cache identity outage cannot break the source stream.
+    console.warn('[audio] Cache identity unavailable; using archive.');
+    return null;
+  }
+}
+
 async function statusResponse(context: AudioContext, config: OciS3Config | null, head: boolean): Promise<Response> {
   const expected = context.env.AUDIO_ADMIN_TOKEN?.trim() || '';
   const given = /^Bearer\s+(.+)$/i.exec(context.request.headers.get('authorization') || '')?.[1]?.trim() || '';
@@ -224,7 +250,8 @@ async function statusResponse(context: AudioContext, config: OciS3Config | null,
   }
   if (!config) return errorResponse('Hot cache is not configured', 503, head, { Vary: 'Authorization' });
   try {
-    const objects = await listOciObjects(config);
+    const prefix = await audioCachePrefix(context.env.HF_BUCKET_ID?.trim() || HF_BUCKET_DEFAULT);
+    const objects = (await listOciObjects(config)).filter(object => object.key.startsWith(prefix));
     const body = JSON.stringify({
       status: 'healthy',
       cachedTracksCount: objects.filter((object) => AUDIO_EXTENSION.test(object.key)).length,
@@ -244,7 +271,7 @@ async function handleAudio(context: AudioContext, head: boolean): Promise<Respon
   const url = new URL(request.url);
   const config = getOciConfig(env);
   if (url.searchParams.get('action') === 'status') return statusResponse(context, config, head);
-  const path = validateTrackPath(url);
+  let path = validateTrackPath(url);
   if (!path) return errorResponse('A valid relative track path is required', 400, head);
   if (!AUDIO_EXTENSION.test(path)) return errorResponse('Unsupported audio format', 400, head);
   const range = validateRange(request.headers.get('range'));
@@ -253,16 +280,24 @@ async function handleAudio(context: AudioContext, head: boolean): Promise<Respon
   if (!/^[a-z0-9][a-z0-9_.-]*\/[a-z0-9][a-z0-9_.-]*$/i.test(bucket)) {
     return errorResponse('Archive storage is not configured correctly', 503, head);
   }
-  const archiveUrl = `https://huggingface.co/buckets/${bucket}/resolve/${encodeS3ObjectKey(path)}`;
+  let archiveUrl = `https://huggingface.co/buckets/${bucket}/resolve/${encodeS3ObjectKey(path)}`;
   const type = mimeType(path);
-  const key = config ? `${config.namespace}/${config.region}/${config.bucket}/${bucket}/${path}` : '';
+  const identity = config ? await resolveAudioIdentity(context,bucket,path) : null;
+  if (identity) {
+    path = identity.path;
+    archiveUrl = `https://huggingface.co/buckets/${bucket}/resolve/${encodeS3ObjectKey(path)}`;
+  }
+  const objectPath = identity ? await audioCachePath(bucket,identity) : '';
+  const key = identity ? `${config.namespace}/${config.region}/${config.bucket}/${objectPath}` : '';
+  const revision = identity?.revision || '';
+  const requestedRevision = url.searchParams.get('v') || '';
 
-  if (config) {
+  if (config && identity) {
     let exists = existenceCache.get(key)?.exists || false;
     const cached = existenceCache.get(key);
-    if (!cached || cached.expiresAt <= Date.now()) {
+    if (head || !cached || cached.expiresAt <= Date.now()) {
       try {
-        const signed = await signOciS3Request('HEAD', path, config);
+        const signed = await signOciS3Request('HEAD', objectPath, config);
         const response = await fetch(signed.url, { method: 'HEAD', headers: signed.headers, signal: AbortSignal.timeout(2500) });
         exists = response.ok;
         // An outage is not proof of a missing object; cache only confirmed states.
@@ -274,9 +309,9 @@ async function handleAudio(context: AudioContext, head: boolean): Promise<Respon
     }
     if (exists) {
       try {
-        const signed = await signOciS3Request(head ? 'HEAD' : 'GET', path, config, range ? { range } : {});
+        const signed = await signOciS3Request(head ? 'HEAD' : 'GET', objectPath, config, range ? { range } : {});
         const response = await fetch(signed.url, { method: head ? 'HEAD' : 'GET', headers: signed.headers, signal: AbortSignal.timeout(5000) });
-        if (response.status === 200 || response.status === 206) return streamResponse(response, type, 'HIT-OCI', head);
+        if (response.status === 200 || response.status === 206) return streamResponse(response, type, 'HIT-OCI', head,revision,requestedRevision);
         if (response.status === 416) {
           await response.body?.cancel().catch(() => {});
           return errorResponse('Byte range is not satisfiable', 416, head, { 'Content-Range': response.headers.get('content-range') || '' });
@@ -296,6 +331,20 @@ async function handleAudio(context: AudioContext, head: boolean): Promise<Respon
       method: head ? 'HEAD' : 'GET', headers: { 'Accept-Encoding': 'identity', ...(range ? { range } : {}) },
       signal: AbortSignal.timeout(10_000),
     });
+    // Old playlists/cached clients keep their original source keys after the
+    // bucket move. Resolve only these known legacy layouts on a confirmed 404.
+    if (response.status === 404) {
+      const legacy = /^versions\/(bass|bass-reverb)\/([A-Za-z0-9_-]{11}|track-[a-f0-9]{20})\.mp3$/.exec(path);
+      const migrated = legacy ? `versions/${legacy[2]}/${legacy[1]}.mp3` : !path.includes('/') ? `originals/${path}` : '';
+      if (migrated) {
+        await response.body?.cancel().catch(() => {});
+        archiveUrl = `https://huggingface.co/buckets/${bucket}/resolve/${encodeS3ObjectKey(migrated)}`;
+        response = await fetch(archiveUrl, {
+          method: head ? 'HEAD' : 'GET', headers: {'Accept-Encoding': 'identity', ...(range ? {range} : {})},
+          signal: AbortSignal.timeout(10_000),
+        });
+      }
+    }
   } catch {
     return errorResponse('Remote catalog storage unreachable', 502, head);
   }
@@ -306,8 +355,8 @@ async function handleAudio(context: AudioContext, head: boolean): Promise<Respon
     return errorResponse('Remote catalog storage failed', 502, head);
   }
   if (!head && !response.body) return errorResponse('Remote catalog storage returned no audio', 502);
-  if (config && !head) scheduleCacheUpload(context, config, key, path, archiveUrl);
-  return streamResponse(response, type, 'MISS-HF-STREAMING', head);
+  if (config && identity && !head) scheduleCacheUpload(context, config, key, objectPath, archiveUrl,identity,bucket);
+  return streamResponse(response, type, 'MISS-HF-STREAMING', head,revision,requestedRevision);
 }
 
 export const onRequestOptions = async (): Promise<Response> => new Response(null, { status: 204, headers: corsHeaders() });
