@@ -1,0 +1,9 @@
+{
+  "name": "aura-version-tooling",
+  "compatibility_date": "2026-11-15",
+  "d1_databases": [{
+    "binding": "VERSION_DB",
+    "database_name": "aura-audio-versions",
+    "database_id": "e187b796-f6b9-4bbc-9c33-3c0393955f74"
+  }]
+}

@@ -1,0 +1,14 @@
+{
+  "name": "aura-music-tooling",
+  "private": true,
+  "version": "1.0.0",
+  "type": "module",
+  "scripts": {
+    "test": "python3 -m unittest discover -s audio/tests && python3 -m unittest discover -s tests && playwright test --config playwright.config.ts",
+    "test:registry": "playwright test --config playwright.config.ts",
+    "devtools": "node browser/devtools-bridge.mjs"
+  },
+  "dependencies": {"@modelcontextprotocol/sdk": "1.32.1", "chrome-devtools-mcp": "1.13.0"},
+  "devDependencies": {"@playwright/test": "1.65.0"},
+  "engines": {"node": ">=22.13.0"}
+}
