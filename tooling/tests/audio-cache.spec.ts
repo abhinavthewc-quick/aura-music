@@ -460,6 +460,25 @@ test.describe('bounded audio buffers and OCI signing', () => {
     expect(parseS3ListObjectsXml(encoded)[0].key).toBe('A+B 10% ?#&.opus');
   });
 
+  test('OCI eviction targets the actual filename when spaces, literal plus signs and escapes coexist', async () => {
+    const key = 'cache/A+B - Song 10% #&.opus';
+    mockedFetch((call) => {
+      const url = new URL(call.url);
+      if (call.method === 'DELETE') {
+        expect(decodeURIComponent(url.pathname)).toBe(`/unit-cache/${key}`);
+        return new Response(null, {status: 204});
+      }
+      // Reproduce OCI's form-style encoding, which differs from S3's usual
+      // percent encoding. The raw listing is unambiguous for these names.
+      const encoded = url.searchParams.get('encoding-type') === 'url';
+      const name = encoded ? encodeURIComponent(key).replaceAll('%20', '+') : key.replaceAll('&', '&amp;');
+      return new Response(`<ListBucketResult>${encoded ? '<EncodingType>url</EncodingType>' : ''}<Contents><Key>${name}</Key><Size>4</Size></Contents></ListBucketResult>`);
+    });
+    const result = await pruneOciBucketToLimit(fakeConfig, 1, 'cache/');
+    expect(result.prunedCount).toBe(1);
+    expect(result.hasCapacity).toBe(true);
+  });
+
   test('listing follows signed pagination markers without leaking keys into a query', async () => {
     mockedFetch((call) => {
       const url = new URL(call.url);
