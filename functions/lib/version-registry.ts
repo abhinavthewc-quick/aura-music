@@ -15,6 +15,7 @@ export interface RegistryEnv {
 }
 export const MODES = ['bass', 'bass-reverb'] as const;
 export const LEASE_SECONDS = 3600;
+export const RENDITION_REVISION_SQL = "COALESCE(NULLIF(r.sha256, ''), t.original_hash) || '-' || r.updated_at";
 export function safePath(path: unknown): path is string {
   return typeof path === 'string' && path.length <= 1024 && !/[\\\x00-\x1f\x7f]/.test(path) &&
     !path.includes('://') && path.split('/').every(part => !!part && part !== '.' && part !== '..');
@@ -55,12 +56,13 @@ export async function archiveTree(bucket: string, force = false): Promise<Map<st
   throw new Error('Archive listing incomplete');
 }
 export async function publicVersions(db: VersionDatabase): Promise<any> {
-  const {results} = await db.prepare(`SELECT r.track_ref, r.mode, r.path, r.duration FROM audio_renditions r
+  const {results} = await db.prepare(`SELECT r.track_ref, r.mode, r.path, r.duration,
+    ${RENDITION_REVISION_SQL} AS revision FROM audio_renditions r
     JOIN audio_tracks t ON t.ref = r.track_ref WHERE t.active = 1 AND r.status = 'ready'`).all();
   const tracks = Object.create(null);
   for (const row of results) {
     tracks[row.track_ref] ||= {};
-    tracks[row.track_ref][row.mode] = {path: row.path, ...(row.duration > 0 ? {duration: row.duration} : {})};
+    tracks[row.track_ref][row.mode] = {path: row.path, revision:row.revision, ...(row.duration > 0 ? {duration: row.duration} : {})};
   }
   return {v: 1, source: 'database', tracks};
 }

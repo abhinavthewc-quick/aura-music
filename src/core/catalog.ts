@@ -57,7 +57,9 @@ export function hfFileUrl(path: string): string {
  * Edge proxy URL with OCI Hyderabad hot-caching and byte-range streaming.
  */
 export function getAudioStreamUrl(path: string): string {
-  return '/api/audio?path=' + encodeURIComponent(path);
+  // Bust responses cached by the pre-revision proxy. The server revalidates
+  // unversioned requests against D1 before choosing an OCI content key.
+  return '/api/audio?path=' + encodeURIComponent(path) + '&cache=2';
 }
 
 /* YouTube's auto-generated channels publish as "<Artist> - Topic" — strip the
