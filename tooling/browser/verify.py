@@ -36,7 +36,7 @@ def main():
       const response=await fetch('/api/versions'); const registry=await response.json();
       const deadline=Date.now()+25000;
       while(document.getElementById('auraLoader')&&Date.now()<deadline)await new Promise(r=>setTimeout(r,100));
-      const images=[...document.querySelectorAll('img')].filter(e=>e.getAttribute('src')&&getComputedStyle(e).visibility!=='hidden'&&e.getBoundingClientRect().width>0&&e.getBoundingClientRect().top<innerHeight);
+      const images=[...document.querySelectorAll('img')].filter(e=>{const r=e.getBoundingClientRect();return e.getAttribute('src')&&getComputedStyle(e).visibility!=='hidden'&&r.width>0&&r.top<innerHeight&&r.bottom>0&&r.left<innerWidth&&r.right>0;});
       return {database:response.ok&&registry.source==='database',tracks:Object.keys(registry.tracks||{}).length,
         ready:Object.values(registry.tracks||{}).reduce((n,v)=>n+Object.keys(v).length,0),
         background:getComputedStyle(document.body).backgroundColor,images:images.length,loaded:images.filter(e=>e.complete&&e.naturalWidth>0).length,
@@ -72,7 +72,7 @@ def main():
         data = dev.evaluate('''async()=>{
           const deadline=Date.now()+25000;
           while((!window.state?.songs?.length||document.getElementById('auraLoader'))&&Date.now()<deadline)await new Promise(r=>setTimeout(r,100));
-          const images=()=>[...document.querySelectorAll('img')].filter(e=>{const r=e.getBoundingClientRect();return e.getAttribute('src')&&getComputedStyle(e).visibility!=='hidden'&&r.width>0&&r.top<innerHeight&&r.bottom>0;});
+          const images=()=>[...document.querySelectorAll('img')].filter(e=>{const r=e.getBoundingClientRect();return e.getAttribute('src')&&getComputedStyle(e).visibility!=='hidden'&&r.width>0&&r.top<innerHeight&&r.bottom>0&&r.left<innerWidth&&r.right>0;});
           while(images().some(e=>!e.complete)&&Date.now()<deadline)await new Promise(r=>setTimeout(r,100));
           return {songs:window.state?.songs?.length||0,variants:window.state?.songs?.filter(s=>Object.keys(s.audioVersions||{}).length).length||0,
             images:images().length,loaded:images().filter(e=>e.naturalWidth>0).length,
