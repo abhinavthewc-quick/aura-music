@@ -157,7 +157,9 @@ export async function listOciObjects(config: OciS3Config): Promise<OciStoredObje
   const markers = new Set<string>();
   let marker = '';
   for (let page = 0; page < 20; page++) {
-    const query: Record<string, string> = { 'encoding-type': 'url', 'max-keys': '1000' };
+    // OCI encodes spaces as '+' in URL-encoded listings. Request raw XML keys
+    // so spaces and literal plus signs remain distinct during eviction.
+    const query: Record<string, string> = { 'max-keys': '1000' };
     if (marker) query.marker = marker;
     const signed = await signOciS3Request('GET', '', config, {}, undefined, { query });
     const response = await fetch(signed.url, { headers: signed.headers, signal: AbortSignal.timeout(5000) });
