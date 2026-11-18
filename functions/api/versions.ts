@@ -3,8 +3,21 @@ import { archiveTree, authenticated, LEASE_SECONDS, MODES, originalId, publicVer
 import { audioEvent } from '../lib/audio-processing-admin';
 
 interface Context { request: Request; env: RegistryEnv }
+/**
+ * The public versions index is read-only and changes only when the admin
+ * pipeline publishes a rendition — minutes apart at the very fastest, usually
+ * hours. It is fetched on every boot, so a 15s TTL meant a D1 read per visitor
+ * per quarter-minute for data that had not changed.
+ *
+ * 5 minutes with `stale-while-revalidate` is the compromise: a freshly
+ * published rendition is visible within one revalidation window, and the
+ * browser keeps serving the old copy while that happens so nobody waits on it.
+ * `must-revalidate` is deliberately dropped — it is what forced the blocking
+ * round trip. Mutating actions on this endpoint are POST and are never cached.
+ */
+const PUBLIC_INDEX_CACHE = 'public, max-age=300, stale-while-revalidate=60';
 const json = (body: unknown, status = 200, cache = false) => Response.json(body, {status, headers: {
-  'Cache-Control': cache ? 'public, max-age=15, must-revalidate' : 'no-store',
+  'Cache-Control': cache ? PUBLIC_INDEX_CACHE : 'no-store',
   'X-Content-Type-Options': 'nosniff',
 }});
 const now = () => Math.floor(Date.now() / 1000);

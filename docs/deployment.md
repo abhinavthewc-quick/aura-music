@@ -50,11 +50,11 @@ If you deploy from a laptop instead of Git integration:
 ```bash
 npm ci
 npm run build
-npx wrangler pages deploy dist --project-name aura-music-01g
+npx wrangler pages deploy dist --project-name aura-music --branch main
 ```
 
-`wrangler` needs a Cloudflare login/token. The Pages project name is the
-subdomain part of the URL (`aura-music-01g`). Git integration is preferred: every
+`wrangler` needs a Cloudflare login/token. The Pages project is named `aura-music`; its public domain is
+`aura-music-01g.pages.dev`. Git integration is preferred: every
 push to `main` rebuilds the site.
 
 ### Cache and routes
@@ -234,7 +234,7 @@ Full steps: [premid/README.md](../premid/README.md) and
   Typecheck/lint/build are manual gates; consider adding a small CI workflow if
   more contributors join.
 - **No custom HTTP headers/CSP** are configured. The app loads Font Awesome,
-  Google Fonts and jsmediatags from CDNs and uses inline event handlers, so a
+  Google Fonts from CDNs and uses inline event handlers, so a
   strict CSP would need a separate migration. See [security](security.md).
 - **Keep `main` deployable.** Pages builds `main` automatically; a broken
   `npm run build` blocks deployment but does not take down the previous build.

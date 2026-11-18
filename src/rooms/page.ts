@@ -77,7 +77,7 @@ function setPlayIcon(playing: boolean) {
 }
 
 function banner(text: string) {
-  const el = $('banner');
+  const el = $($('roomView').hidden ? 'joinBanner' : 'banner');
   el.textContent = text;
   el.hidden = !text;
 }
@@ -271,8 +271,13 @@ async function join(roomId: string, adminKey: string | null, isHost: boolean) {
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ action: 'exists', roomId }),
     });
-    wsBase = (await res.json()).wsBase || '';
-  } catch { /* reported below */ }
+    if (!res.ok) throw new Error('Room service unavailable');
+    const info = await res.json();
+    if (info.exists === false) { banner('Room not found. Check the code and try again.'); return; }
+    const address = new URL(info.wsBase || '');
+    if (!['ws:','wss:'].includes(address.protocol) || address.username || address.password) throw new Error('Invalid room service');
+    wsBase = address.href;
+  } catch { /* reported below without exposing an upstream exception */ }
 
   if (!wsBase) { banner('Rooms are unavailable right now. Try again in a moment.'); return; }
 

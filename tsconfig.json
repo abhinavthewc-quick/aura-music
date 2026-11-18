@@ -15,8 +15,7 @@
     "isolatedModules": true,
     "esModuleInterop": true,
     "forceConsistentCasingInFileNames": true,
-    "types": ["vite/client"],
-    "jsx": "react-jsx"
+    "types": ["vite/client"]
   },
-  "include": ["src/**/*.ts", "src/**/*.tsx", "src/**/*.d.ts", "functions/**/*.ts", "lib/**/*.ts"]
+  "include": ["src/**/*.ts", "src/**/*.d.ts", "functions/**/*.ts", "lib/**/*.ts"]
 }

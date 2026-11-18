@@ -66,6 +66,10 @@ export function createAppTarget(onError?: (m: string) => void): SyncTarget {
       currentKey = key;
       const index = state.songs.indexOf(song);
       if (index >= 0) state.currentIndex = index;
+      /* index.html ships preload="none" so visiting the app never fetches
+         audio. A room explicitly asked for this track, so opt back in before
+         loading — otherwise loadedmetadata never fires and we time out. */
+      audio.preload = 'auto';
       audio.src = track.url;
       audio.load();
 

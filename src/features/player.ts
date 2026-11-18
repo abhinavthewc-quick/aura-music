@@ -1,12 +1,16 @@
-import { auraMasterCtx, effectCtx } from './ambience';
+import { auraMasterCtx, effectCtx, ensureMusicOutput } from './ambience';
 import { fmt, toast } from '../core/dom';
 import { addToRecent, renderSongs, updateLibCount, updateLibNowPlaying } from './library';
 import { closeUpNext, playNext, playPrevious, renderUpNext } from './queue';
-import { currentRadioStation, escapeHtml, radioAudio, stopRadio, updateRadioPlayerUI } from './radio';
-import { auraYTQueue, extractYouTubeId } from './search';
+import { currentRadioStation, escapeHtml, radioAudio, resumeRadioAfterForeground, setupRadioMediaSession, stopRadio, updateRadioPlayerUI } from './radio';
 import { auraSettings } from './settings';
 import { roomModeActive } from '../rooms/roomFlag';
 import { $, persistLikedHistory, savedLikeMap, state } from '../core/state';
+import { createPlaybackContext } from '../core/playback-context';
+import { stableTrackRef, trackAvailable } from '../core/track-identity';
+import { getAudioStreamUrl, hfFileUrl } from '../core/catalog';
+import { AUDIO_VERSION_LABELS, AUDIO_VERSION_PREFERENCE_KEY, isAudioVersion, normalizeAudioVersions, resolveAudioVersion, type AudioVersion } from '../core/audio-versions';
+import { ParallelAudioDeck, type VersionSources } from '../core/parallel-audio-deck';
 import { fetchLyricsForTrack, renderLyrics, updateLyricsProgress, prepareLyricsForNewSong, getTrackKey, lyricsCache, startLyricsSyncLoop } from './lyrics';
 /* ===== 2955-2994 ===== */
     export const dynamicColorCache = {};
@@ -181,6 +185,70 @@ import { fetchLyricsForTrack, renderLyrics, updateLyricsProgress, prepareLyricsF
     }
 
 /* ===== 3057-3057 ===== */
+    let playRequestSequence = 0;
+    let youtubeGeneration = 0;
+    let playbackIntent = false;
+    export function currentPlaybackTime(): number {
+      if (auraYTPlayer && auraYTPlayerReady) {
+        try { return Number(auraYTPlayer.getCurrentTime()) || 0; } catch { return 0; }
+      }
+      return Number(state.audio.currentTime) || 0;
+    }
+    export function pausePlayback(): void {
+      playbackIntent = false;
+      auraYTDesiredPlaying = false;
+      auraYTPendingPlay = false;
+      try { if (auraYTPlayer) auraYTPlayer.pauseVideo(); else state.audio.pause(); } catch { /* already stopped */ }
+      state.isPlaying = false;
+      updatePlayState();
+      updateMainMediaSession();
+    }
+    export function stopPersonalPlaybackForRadio(): void {
+      pausePlayback();
+      parallelDeck.dispose();
+      state.activeAudioVersion = 'original';
+      audioLoadGeneration += 1;
+      clearPendingAudioMetadata();
+      state.audio.onerror = null;
+      stopAuraYouTube();
+      resetFullPlayerArtToImage(state.activeTrack?.img || '');
+    }
+    export function cancelRadioForegroundResume(): void { radioWasPlayingBeforeHidden = false; }
+
+    export function resumePlayback(): void {
+      playbackIntent = true;
+      /* index.html ships preload="none" so boot does not fetch audio for the
+         track it displays. The first real play upgrade to "auto" so buffering
+         starts immediately on the tap that asked for it. */
+      state.audio.preload = 'auto';
+      if (auraYTVideoId) {
+        auraYTDesiredPlaying = true;
+        auraYTPendingPlay = true;
+        if (!auraYTPlayer || !auraYTPlayerReady) { state.isPlaying = false; updatePlayState(); return; }
+        try { auraYTPlayer.playVideo(); } catch { state.isPlaying = false; updatePlayState(); }
+        return;
+      }
+      if (!state.audio.getAttribute('src')) {
+        const preserve = !!state.activeTrack && state.playbackContext?.currentId === stableTrackRef(state.activeTrack);
+        playSong(state.currentIndex >= 0 ? state.currentIndex : 0,false,preserve);
+        return;
+      }
+      if (!parallelDeck.loaded && !currentRadioStation) prepareAudioVersions(state.activeTrack);
+      const request = playRequestSequence;
+      const generation = audioLoadGeneration;
+      void state.audio.play().catch((error) => {
+        if (request !== playRequestSequence || generation !== audioLoadGeneration || error?.name === 'AbortError') return;
+        playbackIntent = false;
+        state.isPlaying = false;
+        updatePlayState();
+        if (error?.name === 'NotAllowedError') toast('Press Play to allow audio in this browser.', 'circle-info');
+      });
+      updatePlayState();
+    }
+    export function restartCurrentTrack(): void {
+      try { if (auraYTPlayer) auraYTPlayer.seekTo(0, true); else state.audio.currentTime = 0; } catch { /* metadata may still be loading */ }
+      resumePlayback();
+    }
     export function mediaSessionAction(action,handler){ try{ navigator.mediaSession.setActionHandler(action,handler); }catch(e){} }
 /* ===== 5363-5555 ===== */
     /* Integrated YouTube player: the existing AURA full-player becomes the
@@ -198,16 +266,24 @@ import { fetchLyricsForTrack, renderLyrics, updateLyricsProgress, prepareLyricsF
     // moment (especially on mobile), so we keep the requested state separately.
     export let auraYTDesiredPlaying = false;
 
-    export function ensureYouTubeAPI(){
-      if(window.YT && window.YT.Player) return Promise.resolve();
-      if(auraYTReadyPromise) return auraYTReadyPromise;
-      auraYTReadyPromise = new Promise<void>((resolve,reject)=>{
-        const previous=window.onYouTubeIframeAPIReady;
-        window.onYouTubeIframeAPIReady=()=>{ try{ if(typeof previous==='function') previous(); }catch(e){} auraYTReady=true; resolve(); };
-        const script=document.createElement('script');
-        script.src='https://www.youtube.com/iframe_api';
-        script.async=true;
-        script.onerror=()=>{ auraYTReadyPromise=null; reject(new Error('YouTube API failed')); };
+    export function ensureYouTubeAPI(): Promise<void> {
+      if (window.YT?.Player) return Promise.resolve();
+      if (auraYTReadyPromise) return auraYTReadyPromise;
+      auraYTReadyPromise = new Promise<void>((resolve, reject) => {
+        const previous = window.onYouTubeIframeAPIReady;
+        const script = document.createElement('script');
+        const timeout = window.setTimeout(() => fail(), 15000);
+        const cleanup = () => window.clearTimeout(timeout);
+        const fail = () => { cleanup(); auraYTReadyPromise = null; script.remove(); reject(new Error('YouTube API unavailable')); };
+        window.onYouTubeIframeAPIReady = () => {
+          cleanup();
+          try { if (typeof previous === 'function') previous(); } catch { /* another consumer */ }
+          auraYTReady = true;
+          resolve();
+        };
+        script.src = 'https://www.youtube.com/iframe_api';
+        script.async = true;
+        script.onerror = fail;
         document.head.appendChild(script);
       });
       return auraYTReadyPromise;
@@ -226,6 +302,7 @@ import { fetchLyricsForTrack, renderLyrics, updateLyricsProgress, prepareLyricsF
     }
 
     export function stopAuraYouTube(){
+      youtubeGeneration += 1;
       try{ if(auraYTPlayer && typeof auraYTPlayer.stopVideo==='function') auraYTPlayer.stopVideo(); }catch(e){}
       try{ if(auraYTPlayer && typeof auraYTPlayer.destroy==='function') auraYTPlayer.destroy(); }catch(e){}
       auraYTPlayer=null;
@@ -237,10 +314,20 @@ import { fetchLyricsForTrack, renderLyrics, updateLyricsProgress, prepareLyricsF
       auraYTPoster='';
     }
 
-    export async function playYouTubeInsideAura(videoId,title,poster,liked=false,autoPlay=true){
-      if(!videoId){toast('YouTube video ID was missing','triangle-exclamation');return;}
+    export async function playYouTubeInsideAura(videoId,title,poster,liked=false,autoPlay=true,selectedSong?:any){
+      if(!/^[A-Za-z0-9_-]{11}$/.test(String(videoId))){toast('The YouTube video ID is invalid.','triangle-exclamation');return;}
+      stopAuraYouTube();
+      const generation = youtubeGeneration;
+      const isCurrent = () => generation === youtubeGeneration && auraYTVideoId === String(videoId);
+      lastPlayRequestAt = Date.now();
+      if (!selectedSong) playRequestSequence += 1;
       stopRadio();
-      if(state.audio){ try{state.audio.pause();}catch(e){} }
+      parallelDeck.dispose();
+      clearPendingAudioMetadata();
+      audioVersionMessage = '';
+      audioLoadGeneration += 1;
+      if(state.audio){ try{state.audio.pause(); state.audio.removeAttribute('src'); state.audio.load();}catch(e){} }
+      playbackIntent = autoPlay;
       state.isPlaying=false;
       auraYTPendingPlay=false;
       auraYTDesiredPlaying=false;
@@ -248,28 +335,26 @@ import { fetchLyricsForTrack, renderLyrics, updateLyricsProgress, prepareLyricsF
       auraYTVideoId=String(videoId);
       auraYTPoster=poster||'';
 
-      let ytArtist = 'YouTube Music';
-      let ytTitle = title || 'YouTube Music';
-      if (ytTitle.includes(' - ')) {
+      let ytArtist = selectedSong?.artist || 'YouTube';
+      let ytTitle = selectedSong?.title || title || 'YouTube video';
+      if (!selectedSong?.artist && ytTitle.includes(' - ')) {
         const parts = ytTitle.split(' - ');
         ytArtist = parts[0].trim();
         ytTitle = parts.slice(1).join(' - ').trim();
       }
       auraYTTitle = ytTitle;
-
-      let idx=state.songs.findIndex(x=>String(x.id)===`youtube-${auraYTVideoId}`);
-      if(idx===-1){
-        state.songs.push({id:`youtube-${auraYTVideoId}`,title:ytTitle,artist:ytArtist,img:auraYTPoster,url:'',favorite:!!liked,isLocal:false,missing:false,isYouTube:true,videoId:auraYTVideoId});
-        idx=state.songs.length-1;
-      }else{
-        state.songs[idx].title=ytTitle;
-        state.songs[idx].artist=ytArtist;
-        state.songs[idx].img=auraYTPoster||state.songs[idx].img;
-        state.songs[idx].isYouTube=true;
-        state.songs[idx].videoId=auraYTVideoId;
+      let idx = selectedSong ? state.songs.indexOf(selectedSong) : state.songs.findIndex((song) => song.isYouTube && String(song.videoId) === String(videoId));
+      if (idx < 0) {
+        const temporary = {id:`youtube-${videoId}`,title:ytTitle,artist:ytArtist,img:auraYTPoster,url:'',favorite:!!liked,isLocal:false,missing:false,isYouTube:true,videoId:String(videoId)};
+        state.songs.push(temporary);
+        idx = state.songs.length - 1;
       }
+      if (!selectedSong) state.playbackContext = createPlaybackContext([stableTrackRef(state.songs[idx])], {
+        source: 'manual', label: 'YouTube video', startId: stableTrackRef(state.songs[idx]),
+      });
       state.currentIndex=idx;
-      state.songs[idx].favorite = !!savedLikeMap[String(state.songs[idx].id)];
+      state.activeAudioVersion = 'original';
+      state.songs[idx].favorite = !!liked || !!savedLikeMap[String(state.songs[idx].id)];
       $('currentImg').src=auraYTPoster;
       $('currentTitle').textContent=ytTitle;
       $('currentArtist').textContent=ytArtist;
@@ -283,58 +368,72 @@ import { fetchLyricsForTrack, renderLyrics, updateLyricsProgress, prepareLyricsF
       $('fullPlayerOverlay').classList.add('active');
       $('youtubeModeBadge').classList.add('active');
       updateLibCount();
-      addToRecent(state.songs[idx]);
+      renderUpNext();
       if(state.songs[idx].favorite) persistLikedHistory();
 
       const art=$('fullPlayerArt');
       art.classList.add('youtube-mode');
       art.innerHTML=`<div id="auraYTFrameHost" style="width:100%;height:100%;background:#000"></div>`;
+      refreshTrackMetadata(state.songs[idx]);
       updatePlayState();
-      prepareLyricsForNewSong(ytTitle, ytArtist, videoId);
-      fetchLyricsForTrack(ytTitle, ytArtist, undefined, videoId).then(l => renderLyrics(l));
+      setupMainMediaSession();
+      updateMainMediaSession();
+      if (lyricsPanelOpen()) {
+        prepareLyricsForNewSong(ytTitle, ytArtist, videoId);
+        void fetchLyricsForTrack(ytTitle, ytArtist, state.songs[idx].duration, videoId).then((lyrics) => {
+          if (isCurrent() && lyricsPanelOpen()) renderLyrics(lyrics);
+        });
+      }
 
       try{
         // IMPORTANT: finish loading the API and create the player before the
         // user is expected to press AURA Play. This avoids the mobile race where
         // playVideo() is called before the iframe is ready and gets blocked.
         await ensureYouTubeAPI();
+        if (!isCurrent()) return;
         auraYTPlayer=new YT.Player('auraYTFrameHost',{
           videoId:auraYTVideoId,
           width:'100%',height:'100%',
-          playerVars:{autoplay:autoPlay?1:0,playsinline:1,rel:0,controls:1,enablejsapi:1,origin:(location.protocol==='http:'||location.protocol==='https:')?location.origin:undefined},
+          playerVars:{autoplay:0,playsinline:1,rel:0,controls:1,enablejsapi:1,origin:(location.protocol==='http:'||location.protocol==='https:')?location.origin:undefined},
           events:{
             onReady:()=>{
+              if (!isCurrent()) return;
               auraYTPlayerReady=true;
               auraYTPendingPlay=false;
-              if(autoPlay){
-                try{ auraYTDesiredPlaying=true; auraYTPendingPlay=true; auraYTPlayer.playVideo(); }catch(e){}
-              }
               state.isPlaying=false;
               updatePlayState();
+              if(playbackIntent){
+                try{ auraYTDesiredPlaying=true; auraYTPendingPlay=true; auraYTPlayer.playVideo(); }catch(e){}
+              } else { try { auraYTPlayer.pauseVideo(); } catch { /* already paused */ } }
             },
             onStateChange:(e)=>{
-              if(!window.YT) return;
+              if(!window.YT || !isCurrent()) return;
               if(e.data===YT.PlayerState.PLAYING){
                 auraYTPendingPlay=false;
                 auraYTDesiredPlaying=true;
                 state.isPlaying=true;
+                recordPlaybackStart();
                 updatePlayState();
+                updateMainMediaSession();
               }else if(e.data===YT.PlayerState.PAUSED){
                 auraYTPendingPlay=false;
                 auraYTDesiredPlaying=false;
                 state.isPlaying=false;
                 updatePlayState();
               }else if(e.data===YT.PlayerState.ENDED){
-                if(state.repeatMode==='one'){ try{ auraYTPlayer.seekTo(0,true); auraYTPlayer.playVideo(); }catch(_){} return; }
                 auraYTPendingPlay=false;
                 auraYTDesiredPlaying=false;
                 state.isPlaying=false;
                 updatePlayState();
-                if(auraSettings.autoplayNext && auraYTQueue.length){ setTimeout(()=>{ playNext(); },250); }
+                if (!roomModeActive() && (auraSettings.autoplayNext || state.repeatMode === 'one')) {
+                  playNext(false, 'ended');
+                }
               }
               // BUFFERING / CUED / UNSTARTED do not change the AURA play state.
             },
             onAutoplayBlocked:()=>{
+              if (!isCurrent()) return;
+              playbackIntent = false;
               // Do not flip AURA into a fake playing state when the browser blocks
               // scripted playback. The user can press AURA Play again directly.
               auraYTPendingPlay=false;
@@ -343,6 +442,8 @@ import { fetchLyricsForTrack, renderLyrics, updateLyricsProgress, prepareLyricsF
               updatePlayState();
             },
             onError:(e)=>{
+              if (!isCurrent()) return;
+              playbackIntent = false;
               auraYTPlayerReady=false;
               state.isPlaying=false;
               updatePlayState();
@@ -351,9 +452,12 @@ import { fetchLyricsForTrack, renderLyrics, updateLyricsProgress, prepareLyricsF
           }
         });
       }catch(err){
-        console.warn('YouTube player load error:',err);
+        if (!isCurrent()) return;
         auraYTPlayerReady=false;
-        toast('YouTube player could not load. Try again.','triangle-exclamation');
+        playbackIntent = false;
+        state.isPlaying = false;
+        updatePlayState();
+        toast('YouTube player could not load. Select the track again to retry.','triangle-exclamation');
       }
     }
 
@@ -365,27 +469,6 @@ import { fetchLyricsForTrack, renderLyrics, updateLyricsProgress, prepareLyricsF
       if(badge) badge.classList.remove('active');
     }
 
-    export async function playYouTubeProResult(meta){
-      const id=meta?.id || meta?.videoId;
-      if(id && auraYTQueue.length){
-        const qi=auraYTQueue.findIndex(x=>String(x?.id)===String(id));
-        if(qi>=0) state.auraYTQueueIndex=qi;
-      }
-      const youtubeId=meta?._auraYoutubeId || meta?.videoId || extractYouTubeId(meta);
-      if(!youtubeId){toast('This result has no playable YouTube ID','triangle-exclamation');return;}
-      try{
-        await playYouTubeInsideAura(
-          youtubeId,
-          meta?.title || meta?.name || 'YouTube Music',
-          meta?.img || meta?.poster || '',
-          !!meta?.favorite,
-          true
-        );
-      }catch(err){
-        console.warn('YouTube playback error:',err);
-        toast('This YouTube video could not be played','triangle-exclamation');
-      }
-    }
 
 /* ===== 5820-5852 ===== */
     /* ---------- Background/foreground playback resilience ----------
@@ -404,12 +487,10 @@ import { fetchLyricsForTrack, renderLyrics, updateLyricsProgress, prepareLyricsF
     }
 
     export function auraResumeAfterForeground(){
-      if(radioWasPlayingBeforeHidden && currentRadioStation && radioAudio.paused){
-        radioAudio.play().then(()=>{state.radioIsPlaying=true;updateRadioPlayerUI();}).catch(()=>{});
-      }
-      if(audioWasPlayingBeforeHidden && state.audio.src && state.audio.paused){
-        state.audio.play().then(()=>{state.isPlaying=true;updatePlayState();}).catch(()=>{});
-      }
+      const resumeRadio = radioWasPlayingBeforeHidden, resumeAudio = audioWasPlayingBeforeHidden;
+      radioWasPlayingBeforeHidden = audioWasPlayingBeforeHidden = false;
+      if(resumeRadio && currentRadioStation && radioAudio.paused) resumeRadioAfterForeground();
+      if(resumeAudio && playbackIntent && !auraYTVideoId && state.audio.src && state.audio.paused) resumePlayback();
       if(typeof effectCtx!=='undefined' && effectCtx && effectCtx.state==='suspended'){ effectCtx.resume().catch(()=>{}); }
       if(typeof auraMasterCtx!=='undefined' && auraMasterCtx && auraMasterCtx.state==='suspended'){ auraMasterCtx.resume().catch(()=>{}); }
     }
@@ -424,75 +505,238 @@ import { fetchLyricsForTrack, renderLyrics, updateLyricsProgress, prepareLyricsF
 /* ===== 5888-5985 ===== */
     export function setupMainMediaSession(){
       if(!('mediaSession' in navigator)) return;
-      mediaSessionAction('play',()=>{ if(state.audio.src) state.audio.play().catch(()=>{}); });
-      mediaSessionAction('pause',()=>{ state.audio.pause(); });
+      if(currentRadioStation) { setupRadioMediaSession(); return; }
+      mediaSessionAction('play',resumePlayback);
+      mediaSessionAction('pause',pausePlayback);
+      mediaSessionAction('stop',pausePlayback);
       mediaSessionAction('previoustrack',()=>{ playPrevious(); });
       mediaSessionAction('nexttrack',()=>{ playNext(); });
+      mediaSessionAction('seekto',(event)=>{
+        if (!Number.isFinite(event.seekTime)) return;
+        try { if (auraYTPlayer) auraYTPlayer.seekTo(event.seekTime,true); else state.audio.currentTime=event.seekTime; } catch { /* no seekable media */ }
+      });
     }
     setupMainMediaSession();
 
     export function updateMainMediaSession(){
       if(!('mediaSession' in navigator)) return;
       const s = state.songs[state.currentIndex];
-      if(!s || (auraYTPlayer || auraYTVideoId)) return; // YouTube playback manages its own session state
+      if(!s || currentRadioStation) return;
       try{
         navigator.mediaSession.metadata = new MediaMetadata({
-          title: s.title || 'AURA Music',
+          title: s.title || 'Aura Music',
           artist: s.artist || '',
-          album: 'AURA Music',
-          artwork: s.img ? [{src:s.img, sizes:'512x512', type:'image/png'}] : []
+          album: s.album || 'Aura Music',
+          artwork: s.img ? [{src:new URL(s.img,location.href).href}] : []
         });
-        navigator.mediaSession.playbackState = state.audio.paused ? 'paused' : 'playing';
+        navigator.mediaSession.playbackState = state.isPlaying ? 'playing' : 'paused';
       }catch(e){}
     }
 
-    export function loadSong(i){
-      const s=state.songs[i]; if(!s) return;
-      state.audio.src=s.url;
-      // Resilient fallback: if edge proxy has a transient failure, seamlessly fall back to direct Hugging Face URL
-      state.audio.onerror = () => {
-        if (!s.hfUrl) return;
-        let fallback = s.hfUrl;
-        try { fallback = new URL(s.hfUrl, location.href).href; } catch (_) {}
-        /* src is always the resolved absolute URL; comparing it to a possibly
-           relative hfUrl meant a broken file reloaded itself forever. Once the
-           fallback is in place, let the failure stand. */
-        if (state.audio.src === fallback) return;
-        console.warn('[Aura Audio] Edge proxy unreachable, falling back to direct Hugging Face URL');
-        state.audio.src = fallback;
+    let audioLoadGeneration = 0;
+    let pendingAudioPosition: number | null = null;
+    let pendingAudioMetadata: (() => void) | null = null;
+    let audioVersionMessage = '';
+    const parallelDeck = new ParallelAudioDeck(state.audio, ensureMusicOutput, (version, message) => {
+      state.activeAudioVersion = version;
+      audioVersionMessage = message;
+      refreshAudioVersionControls();
+    });
+    function prepareAudioVersions(song: any): void {
+      if (!song?.isHf || song.isLocal || song.isYouTube || roomModeActive()) return;
+      const files = normalizeAudioVersions(song.audioVersions);
+      if (!Object.keys(files).length) return;
+      const sources: VersionSources = {original: [song.url, song.hfUrl].filter(Boolean)};
+      for (const [version, file] of Object.entries(files)) {
+        sources[version] = [getAudioStreamUrl(file.path), hfFileUrl(file.path)];
+      }
+      parallelDeck.load(sources, resolveAudioVersion(song, state.preferredAudioVersion));
+    }
+    window.addEventListener('aura:room-mode-changed', () => {
+      if (roomModeActive()) { parallelDeck.dispose(); state.activeAudioVersion = 'original'; }
+      refreshAudioVersionControls();
+    });
+
+    function clearPendingAudioMetadata(): void {
+      if (pendingAudioMetadata) state.audio.removeEventListener('loadedmetadata', pendingAudioMetadata);
+      pendingAudioMetadata = null;
+      pendingAudioPosition = null;
+    }
+
+    export function refreshAudioVersionControls(): void {
+      const song = state.activeTrack;
+      const files = normalizeAudioVersions(song?.audioVersions);
+      const visible = !!song?.isHf && !song.isLocal && !song.isYouTube;
+      const blocked = !!currentRadioStation || roomModeActive() || !visible;
+      for (const id of ['miniVersionControl', 'fullVersionControl']) {
+        const control = $(id);
+        if (control) control.hidden = !visible;
+      }
+      for (const id of ['miniAudioVersion', 'fullAudioVersion']) {
+        const group = $(id);
+        if (!group) continue;
+        const selected = audioVersionMessage && parallelDeck.requested !== 'original'
+          ? parallelDeck.requested : state.activeAudioVersion;
+        group.style.setProperty('--version-index', String(['original', 'bass', 'bass-reverb'].indexOf(selected)));
+        for (const button of group.querySelectorAll<HTMLButtonElement>('[data-audio-version]')) {
+          const version = button.dataset.audioVersion as AudioVersion;
+          const available = version === 'original' || !!files[version];
+          button.disabled = blocked || !available;
+          button.setAttribute('aria-checked', String(version === selected));
+          button.tabIndex = version === selected && !button.disabled ? 0 : -1;
+          button.dataset.loadState = parallelDeck.states[version] || (available ? 'ready' : 'unavailable');
+        }
+      }
+      const status = $('audioVersionStatus');
+      if (status) {
+        const unavailable = state.preferredAudioVersion !== 'original' && !files[state.preferredAudioVersion];
+        const text = blocked ? '' : audioVersionMessage || (unavailable
+          ? `${AUDIO_VERSION_LABELS[state.preferredAudioVersion]} isn't available for this song. Using Original.` : '');
+        status.textContent = text;
+        status.hidden = !text;
+      }
+    }
+
+    /** Changing a source does not select a song, mutate its identity or record
+     * another listen. All retries share the same personal transport intent. */
+    function loadAudioVersionSource(song: any, version: AudioVersion, position?: number, resumeWhenReady = false): void {
+      const file = version === 'original' ? null : normalizeAudioVersions(song.audioVersions)[version];
+      const sources: Array<{url: string; version: AudioVersion}> = [];
+      if (file) sources.push(
+        {url: getAudioStreamUrl(file.path), version}, {url: hfFileUrl(file.path), version},
+      );
+      if (song.url && !song.missing) sources.push({url: song.url, version: 'original'});
+      if (song.hfUrl && !song.missing && song.hfUrl !== song.url) sources.push({url: song.hfUrl, version: 'original'});
+      let sourceIndex = 0;
+      let restorePosition = Math.max(0, Number(position) || 0);
+      audioVersionMessage = '';
+      const attempt = (resume: boolean) => {
+        const source = sources[sourceIndex];
+        const generation = ++audioLoadGeneration;
+        clearPendingAudioMetadata();
+        state.activeAudioVersion = source?.version || 'original';
+        if (source?.version === 'original' && file) {
+          audioVersionMessage = `Couldn't load ${AUDIO_VERSION_LABELS[version]}. Using Original.`;
+        }
+        refreshAudioVersionControls();
+        const isCurrent = () => generation === audioLoadGeneration && !auraYTVideoId && !currentRadioStation;
+        state.audio.onerror = () => {
+          if (!isCurrent()) return;
+          if (state.audio.readyState >= 1) restorePosition = currentPlaybackTime();
+          const shouldResume = playbackIntent;
+          sourceIndex += 1;
+          if (sources[sourceIndex]) { attempt(shouldResume); return; }
+          clearPendingAudioMetadata();
+          parallelDeck.dispose();
+          playbackIntent = false;
+          state.isPlaying = false;
+          audioVersionMessage = 'This audio could not load. Try another version or check your connection.';
+          updatePlayState();
+          if (lastPlayRequestAt) toast(audioVersionMessage, 'triangle-exclamation');
+        };
+        if (!source) { state.audio.removeAttribute('src'); state.audio.load(); return; }
+        const restore = position !== undefined || sourceIndex > 0;
+        pendingAudioPosition = restore ? restorePosition : null;
+        pendingAudioMetadata = () => {
+          if (!isCurrent()) return;
+          clearPendingAudioMetadata();
+          const duration = state.audio.duration;
+          if (restore) {
+            try { state.audio.currentTime = Number.isFinite(duration) && duration > 0
+              ? Math.min(restorePosition, Math.max(0, duration - .05)) : restorePosition; } catch { /* non-seekable source */ }
+          }
+          if (resume && playbackIntent) resumePlayback();
+          updateMainMediaSession();
+        };
+        state.audio.addEventListener('loadedmetadata', pendingAudioMetadata, {once: true});
+        state.audio.src = source.url;
         state.audio.load();
-        state.audio.play().catch(() => {});
       };
-      $('currentImg').src=$('fullImg').src=s.img;
-      $('currentTitle').textContent=$('fullTitle').textContent=$('fullHeaderTitle').textContent=s.title;
-      $('currentArtist').textContent=$('fullArtist').textContent=s.artist;
-      $('fullLikeBtn').className=`like-btn ${s.favorite?'active':''}`;
-      $('fullLikeBtn').setAttribute('aria-pressed', s.favorite ? 'true' : 'false');
-      $('fullLikeBtn').innerHTML=`<i class="fa-${s.favorite?'solid':'regular'} fa-heart"></i>`;
+      attempt(resumeWhenReady);
+    }
+
+    export function selectAudioVersion(value: unknown): boolean {
+      const song = state.activeTrack;
+      if (!isAudioVersion(value) || !song?.isHf || song.isLocal || song.isYouTube || currentRadioStation || roomModeActive()) return false;
+      if (value !== 'original' && resolveAudioVersion(song, value) !== value) { refreshAudioVersionControls(); return false; }
+      state.preferredAudioVersion = value;
+      try { localStorage.setItem(AUDIO_VERSION_PREFERENCE_KEY, value); } catch { /* selection still works for this tab */ }
+      parallelDeck.select(value);
+      return true;
+    }
+
+    for (const id of ['miniAudioVersion', 'fullAudioVersion']) {
+      const group = $(id);
+      group?.addEventListener('click', (event) => {
+        const button = (event.target as HTMLElement).closest<HTMLButtonElement>('[data-audio-version]');
+        if (button && !button.disabled) selectAudioVersion(button.dataset.audioVersion);
+      });
+      group?.addEventListener('keydown', (event: KeyboardEvent) => {
+        if (!['ArrowLeft', 'ArrowRight', 'ArrowUp', 'ArrowDown', 'Home', 'End'].includes(event.key)) return;
+        const buttons = [...group.querySelectorAll<HTMLButtonElement>('[data-audio-version]')].filter(button => !button.disabled);
+        if (!buttons.length) return;
+        event.preventDefault();
+        const current = buttons.indexOf(document.activeElement as HTMLButtonElement);
+        const next = event.key === 'Home' ? 0 : event.key === 'End' ? buttons.length - 1
+          : (current + (event.key === 'ArrowLeft' || event.key === 'ArrowUp' ? -1 : 1) + buttons.length) % buttons.length;
+        buttons[next].focus();
+        selectAudioVersion(buttons[next].dataset.audioVersion);
+      });
+    }
+    export function refreshTrackMetadata(song: any): void {
+      if (!song) return;
+      state.activeTrack = song;
+      for (const id of ['currentTitle','fullTitle','fullHeaderTitle']) {
+        const title = $(id);
+        if (title) { title.textContent = song.title || 'Untitled'; title.dataset.rawTitle = song.title || 'Untitled'; }
+      }
+      $('currentArtist').textContent = $('fullArtist').textContent = song.artist || 'Unknown artist';
+      ($('currentImg') as HTMLImageElement).src = song.img || '';
+      const image = $('fullImg') as HTMLImageElement | null;
+      if (image) image.src = song.img || '';
+      $('fullLikeBtn').classList.toggle('active', !!song.favorite);
+      $('fullLikeBtn').setAttribute('aria-pressed', song.favorite ? 'true' : 'false');
+      $('fullLikeBtn').innerHTML = `<i class="fa-${song.favorite ? 'solid' : 'regular'} fa-heart"></i>`;
+      refreshAudioVersionControls();
+      updateMainMediaSession();
+    }
+
+    export function loadSong(i, prepareVersions = true, loadSource = true){
+      const song = state.songs[i];
+      if (!song) return;
+      parallelDeck.dispose();
+      refreshTrackMetadata(song);
+      /* Boot also skips the <audio> source: Chrome's load() starts a range
+         request even with preload="none", so assigning it for artwork alone
+         pulled audio the listener never asked for. First play assigns it. */
+      if (loadSource) loadAudioVersionSource(song, 'original');
+      else { state.activeAudioVersion = 'original'; audioVersionMessage = ''; refreshAudioVersionControls(); }
+      /* Boot primes the player bar with art and metadata only. Preparing the
+         bass / bass-reverb renditions downloads and decodes every version of
+         the track, which must never happen before the listener presses play
+         (tools/bench, docs/performance.md: this was megabytes on mobile). */
+      if (prepareVersions) prepareAudioVersions(song);
+      const generation = audioLoadGeneration;
       $('progressFill').style.width = '0%';
       $('fullSeekSlider').value = 0;
       $('fullCurrentTime').textContent = '0:00';
       $('fullDurationTime').textContent = '0:00';
       const resetApi = (window as any).__auraMiniProgress;
-      if(resetApi && resetApi.reset) resetApi.reset(false);
-      applyDynamicPlayerColor(s.img);
-      updateMainMediaSession();
-      state.audio.load();
-      /* Lyrics used to be fetched and rendered on every play, which meant a
-         handful of provider requests plus a full lyrics DOM build on the main
-         thread in the same moment the audio started — very noticeable on
-         phones. The lyrics panel already fetches on demand when it opens, so
-         only do the eager work when it is actually on screen. */
-      if(lyricsPanelOpen()){
-        prepareLyricsForNewSong(s.title, s.artist, s.videoId);
-        fetchLyricsForTrack(s.title, s.artist, s.duration, s.videoId).then(l => renderLyrics(l));
+      resetApi?.reset?.(false);
+      applyDynamicPlayerColor(song.img);
+      setupMainMediaSession();
+      if (lyricsPanelOpen()) {
+        prepareLyricsForNewSong(song.title,song.artist,song.videoId);
+        void fetchLyricsForTrack(song.title,song.artist,song.duration,song.videoId).then((lyrics) => {
+          if (generation === audioLoadGeneration && lyricsPanelOpen()) renderLyrics(lyrics);
+        });
       }
     }
 
     /* True while the lyrics sheet is showing the lyrics tab (not Related). */
     function lyricsPanelOpen(): boolean{
       const sheet = $('upNextSheet');
-      return !!sheet && sheet.classList.contains('active') && sheet.getAttribute('data-tab') !== 'related';
+      return !!sheet && sheet.classList.contains('active') && (sheet.getAttribute('data-tab') || 'lyrics') === 'lyrics';
     }
 
     /* The lyrics sheet can also be opened from outside the player (the Up Next
@@ -521,57 +765,61 @@ import { fetchLyricsForTrack, renderLyrics, updateLyricsProgress, prepareLyricsF
     state.audio.addEventListener('durationchange', refreshDurationDisplay);
 
     export let lastPlayRequestAt=0;
-    export function playSong(i, keepFull=false){
-      lastPlayRequestAt=Date.now();
-      const s=state.songs[i];
-      if(!s) return;
-      if(s.isYouTube && s.videoId){
-        state.currentIndex=i;
-        playYouTubeInsideAura(s.videoId,s.title,s.img,!!s.favorite,true);
-        if(keepFull && !window.matchMedia('(min-width:900px)').matches){
-          $('fullPlayerOverlay').classList.add('active');
-        }
-        return;
+    let lastRecordedRequest = -1;
+    function recordPlaybackStart(): void {
+      if (!playRequestSequence || lastRecordedRequest === playRequestSequence || roomModeActive()) return;
+      lastRecordedRequest = playRequestSequence;
+      const song = state.songs[state.currentIndex];
+      if (song) addToRecent(song);
+    }
+    export function playSong(i, keepFull=false, preserveContext=false): boolean {
+      const song = state.songs[i];
+      if (!trackAvailable(song)) {
+        toast('This track is unavailable. Relink the file in its playlist or select another track.', 'triangle-exclamation');
+        return false;
+      }
+      lastPlayRequestAt = Date.now();
+      playRequestSequence += 1;
+      playbackIntent = true;
+      state.audio.preload = 'auto';
+      if (!preserveContext) {
+        state.playbackContext = createPlaybackContext(state.songs.filter(trackAvailable).map(stableTrackRef), {
+          source: 'library', label: 'Library', startId: stableTrackRef(song), shuffle: state.isShuffle,
+        });
+      }
+      state.currentIndex = i;
+      if (song.isYouTube) {
+        void playYouTubeInsideAura(song.videoId,song.title,song.img,!!song.favorite,true,song);
+        return true;
       }
       stopAuraYouTube();
-      state.auraYTQueueIndex=-1;
-      resetFullPlayerArtToImage(s.img||'');
-      const keepBigPlayer = window.matchMedia('(min-width:900px)').matches && $('fullPlayerOverlay').classList.contains('active');
+      state.audio.pause();
+      state.isPlaying = false;
       stopRadio();
-      if(keepBigPlayer || keepFull) $('fullPlayerOverlay').classList.add('active');
-      if(s.missing){ toast('This file is unavailable — please re-add it', 'triangle-exclamation'); return; }
-      state.currentIndex=i; loadSong(i);
-      /* A play() that is superseded by a newer track rejects with AbortError a
-         moment later. That used to flip the controls to "paused" while audio was
-         actually playing, which looked like the player had got stuck. */
-      const requestAt = lastPlayRequestAt;
-      state.audio.play().catch(err => {
-        if(requestAt !== lastPlayRequestAt) return;
-        if(err && (err as any).name === 'AbortError') return;
-        state.isPlaying=false; updatePlayState();
-      });
-      state.isPlaying=true;
+      resetFullPlayerArtToImage(song.img || '');
+      loadSong(i);
       $('miniPlayer').classList.add('active');
+      if (keepFull) $('fullPlayerOverlay').classList.add('active');
       updatePlayState();
-      /* Re-rendering the whole song list on every play froze the UI on phones.
-         The list is already rebuilt when the Library tab opens, so only refresh
-         it here when the user is actually looking at it. */
-      if($('tabLibrary')?.classList.contains('active')) filterSongs();
-      addToRecent(s);
+      resumePlayback();
+      if ($('tabLibrary')?.classList.contains('active')) filterSongs();
       updateLibNowPlaying();
-      if(keepFull && !window.matchMedia('(min-width:900px)').matches){
-        $('fullPlayerOverlay').classList.add('active');
-      }
+      renderUpNext();
+      return true;
     }
 
     export function updatePlayState(){
-      const icon = state.isPlaying ? "fa-solid fa-pause" : "fa-solid fa-play";
+      refreshAudioVersionControls();
+      const pending = playbackIntent && ((!!auraYTVideoId && !auraYTPlayerReady) ||
+        (!auraYTVideoId && !currentRadioStation && !state.isPlaying && !state.audio.paused));
+      const icon = state.isPlaying ? 'fa-solid fa-pause' : pending ? 'fa-solid fa-spinner fa-spin' : 'fa-solid fa-play';
       $('playIcon').className = $('fullPlayIcon').className = icon;
-      const label = state.isPlaying ? 'Pause' : 'Play';
+      const label = state.isPlaying ? 'Pause' : pending ? 'Cancel pending playback' : 'Play';
       $('fullPlayBtn')?.setAttribute('aria-label', label);
       $('playPauseBtn')?.setAttribute('aria-label', label);
       // Apple-Music artwork pulse: springs between scale(1) and scale(.8)
       $('fullPlayerOverlay').classList.toggle('art-paused', !state.isPlaying);
+      window.dispatchEvent(new Event('aura:playback-changed'));
     }
 
     // AURA play/pause controls — explicitly wired here so both the mini
@@ -583,38 +831,12 @@ import { fetchLyricsForTrack, renderLyrics, updateLyricsProgress, prepareLyricsF
 
 /* ===== 6185-6273 ===== */
     export function togglePlay(){
-      if(auraYTPlayer){
-        if(!auraYTPlayerReady){
-          toast('AURA player is still loading…','spinner');
-          return;
-        }
-        try{
-          const ytState=auraYTPlayer.getPlayerState();
-          if(window.YT && ytState===YT.PlayerState.PLAYING){
-            auraYTDesiredPlaying=false;
-            auraYTPendingPlay=false;
-            auraYTPlayer.pauseVideo();
-            state.isPlaying=false;
-          }else{
-            auraYTDesiredPlaying=true;
-            auraYTPendingPlay=true;
-            auraYTPlayer.playVideo();
-            state.isPlaying=true;
-          }
-        }catch(e){
-          state.isPlaying=false;
-        }
-        updatePlayState();
+      if (auraYTVideoId && !auraYTPlayerReady) {
+        if (playbackIntent) pausePlayback(); else resumePlayback();
         return;
       }
-      if(auraYTVideoId){
-        toast('AURA player is still loading…','spinner');
-        return;
-      }
-      if(!state.audio.src) playSong(0);
-      else if(state.isPlaying){ state.audio.pause(); state.isPlaying=false; }
-      else{ state.audio.play().catch(()=>{ state.isPlaying=false; updatePlayState(); }); state.isPlaying=true; }
-      updatePlayState();
+      if (state.isPlaying || auraYTPendingPlay || (!auraYTVideoId && playbackIntent && !state.audio.paused)) pausePlayback();
+      else resumePlayback();
     }
     
     state.audio.addEventListener('loadedmetadata', ()=>{
@@ -657,15 +879,27 @@ import { fetchLyricsForTrack, renderLyrics, updateLyricsProgress, prepareLyricsF
         // updateLyricsProgress moved to lyrics sync loop to avoid duplicate work
       });
     });
-    state.audio.addEventListener('play',()=>{state.isPlaying=true;updatePlayState();updateMainMediaSession();});
-    state.audio.addEventListener('pause',()=>{state.isPlaying=false;updatePlayState();updateMainMediaSession();});
+    state.audio.addEventListener('playing',()=>{
+      if (auraYTVideoId || currentRadioStation) return;
+      state.isPlaying=true;
+      recordPlaybackStart();
+      updatePlayState();
+      updateMainMediaSession();
+    });
+    state.audio.addEventListener('pause',()=>{
+      if (auraYTVideoId) return;
+      state.isPlaying=false;
+      updatePlayState();
+      updateMainMediaSession();
+    });
     /* A listening room owns what plays next, so the personal autoplay rules
        stand down while one is active — otherwise a track finishing would race
        the room and start something nobody else was expecting. */
     state.audio.addEventListener('ended',()=>{
-      if(roomModeActive()) return;
-      if(state.repeatMode==='one'){state.audio.currentTime=0;state.audio.play().catch(()=>{ state.isPlaying=false; updatePlayState(); });state.isPlaying=true;updatePlayState();return;}
-      if(auraSettings.autoplayNext){playNext();}else if(!state.isPlaying) updatePlayState();
+      if(roomModeActive() || auraYTVideoId || currentRadioStation) return;
+      state.isPlaying = false;
+      updatePlayState();
+      if (auraSettings.autoplayNext || state.repeatMode === 'one') playNext(false, 'ended');
     });
     setInterval(()=>{
       if(!auraYTPlayer || document.hidden) return;
@@ -711,6 +945,9 @@ import { fetchLyricsForTrack, renderLyrics, updateLyricsProgress, prepareLyricsF
     });
 
 
+    $('miniTrackOpenBtn').onclick=()=>{
+      $('fullPlayerOverlay').classList.add('active'); renderUpNext();
+    };
     $('miniPlayer').onclick=e=>{
       if(e.target.closest('button,input')) return;
       if(window.matchMedia('(min-width:900px)').matches && !e.target.closest('.song-info')) return;
@@ -742,14 +979,8 @@ import { fetchLyricsForTrack, renderLyrics, updateLyricsProgress, prepareLyricsF
 
     export function getCurrentActiveTrack(): { title: string; artist: string; videoId?: string; duration?: number } | null {
       if (auraYTVideoId) {
-        let ytArtist = 'YouTube Music';
-        let ytTitle = auraYTTitle;
-        if (auraYTTitle.includes(' - ')) {
-          const parts = auraYTTitle.split(' - ');
-          ytArtist = parts[0].trim();
-          ytTitle = parts.slice(1).join(' - ').trim();
-        }
-        return { title: ytTitle, artist: ytArtist, videoId: auraYTVideoId };
+        const song = state.songs[state.currentIndex];
+        return { title: song?.title || auraYTTitle, artist: song?.artist || 'YouTube', videoId: auraYTVideoId, duration: song?.duration };
       }
       const s = state.songs[state.currentIndex];
       if (!s) return null;
@@ -763,48 +994,37 @@ import { fetchLyricsForTrack, renderLyrics, updateLyricsProgress, prepareLyricsF
       return { title, artist, videoId: s.videoId, duration: s.duration };
     }
 
-    export function switchRightPanelTab(tab: 'lyrics' | 'related') {
+    export type PlayerSheetTab = 'lyrics' | 'related' | 'queue';
+    export function switchRightPanelTab(tab: PlayerSheetTab) {
       const sheet = $('upNextSheet');
-      if (sheet) sheet.setAttribute('data-tab', tab);
-
-      const lBtn = $('ytmTabLyricsBtn');
-      const rBtn = $('ytmTabRelatedBtn');
-      const lPan = $('ytmLyricsPanel');
-      const rPan = $('ytmRelatedPanel');
-
-      const fullLyricsBtn = $('playerTabLyricsBtn');
-      const fullRelatedBtn = $('playerTabRelatedBtn');
-      fullLyricsBtn?.classList.toggle('active', tab === 'lyrics');
-      fullRelatedBtn?.classList.toggle('active', tab === 'related');
-
-      lBtn?.classList.toggle('active', tab === 'lyrics');
-      rBtn?.classList.toggle('active', tab === 'related');
-
-      if (lPan) lPan.style.setProperty('display', tab === 'lyrics' ? 'flex' : 'none', 'important');
-      if (rPan) rPan.style.setProperty('display', tab === 'related' ? 'flex' : 'none', 'important');
-
-      if (tab === 'lyrics') {
-        const cur = getCurrentActiveTrack();
-        if (cur) {
-          const key = getTrackKey(cur.title, cur.artist);
-          if (lyricsCache.has(key)) {
-            renderLyrics(lyricsCache.get(key) || null);
-          } else {
-            prepareLyricsForNewSong(cur.title, cur.artist, cur.videoId);
-            fetchLyricsForTrack(cur.title, cur.artist, cur.duration, cur.videoId).then(l => {
-              renderLyrics(l);
-            });
-          }
+      if (sheet) sheet.dataset.tab = tab;
+      for (const name of ['lyrics','related','queue'] as const) {
+        const capitalized = name.charAt(0).toUpperCase() + name.slice(1);
+        const panel = $(`ytm${capitalized}Panel`);
+        if (panel) panel.hidden = name !== tab;
+        for (const id of [`ytmTab${capitalized}Btn`,`playerTab${capitalized}Btn`]) {
+          const button = $(id);
+          button?.classList.toggle('active',name === tab);
+          button?.setAttribute('aria-selected',String(name === tab));
         }
-        setTimeout(() => {
-          (window as any).centerActiveLyricLine?.(undefined, false);
-        }, 50);
-      } else if (tab === 'related') {
-        renderRelated();
       }
+      if (tab === 'queue') { renderUpNext(); return; }
+      if (tab === 'related') { renderRelated(); return; }
+      const cur = getCurrentActiveTrack();
+      if (!cur) return;
+      const request = playRequestSequence;
+      const key = getTrackKey(cur.title,cur.artist);
+      if (lyricsCache.has(key)) renderLyrics(lyricsCache.get(key) || null);
+      else {
+        prepareLyricsForNewSong(cur.title,cur.artist,cur.videoId);
+        void fetchLyricsForTrack(cur.title,cur.artist,cur.duration,cur.videoId).then((lyrics) => {
+          if (request === playRequestSequence && lyricsPanelOpen()) renderLyrics(lyrics);
+        });
+      }
+      setTimeout(() => { if (lyricsPanelOpen()) (window as any).centerActiveLyricLine?.(undefined,false); },50);
     }
 
-    export function openPlayerSheet(tab: 'lyrics' | 'related' = 'lyrics') {
+    export function openPlayerSheet(tab: PlayerSheetTab = 'lyrics') {
       switchRightPanelTab(tab);
       const sheet = $('upNextSheet');
       if (sheet) {
@@ -857,12 +1077,12 @@ import { fetchLyricsForTrack, renderLyrics, updateLyricsProgress, prepareLyricsF
       if (youMightLike.length > 0) {
         html += `
           <div class="ytm-rel-section">
-            <div class="ytm-rel-section-title">You might also like</div>
+            <div class="ytm-rel-section-title">More from your library</div>
             <div class="ytm-rel-grid">
               ${youMightLike.map(s => {
                 const originalIdx = state.songs.findIndex(x => x.id === s.id);
                 return `
-                  <div class="ytm-rel-card" onclick="playSong(${originalIdx >= 0 ? originalIdx : 0})" role="button" tabindex="0">
+                  <div class="ytm-rel-card" data-play-song-id="${escapeHtml(s.id)}" role="button" tabindex="0">
                     <div class="ytm-rel-art-wrap">
                       <img src="${escapeHtml(s.img || '')}" alt="" loading="lazy">
                       <div class="ytm-rel-play-overlay"><i class="fa-solid fa-play"></i></div>
@@ -879,29 +1099,6 @@ import { fetchLyricsForTrack, renderLyrics, updateLyricsProgress, prepareLyricsF
         `;
       }
 
-      // Section 2: About the artist spotlight card
-      html += `
-        <div class="ytm-rel-section">
-          <div class="ytm-rel-section-title">About the artist</div>
-          <div class="ytm-rel-artist-card">
-            <div class="ytm-rel-artist-header">
-              <div class="ytm-rel-artist-avatar">
-                <i class="fa-solid fa-user-astronaut"></i>
-              </div>
-              <div>
-                <div class="ytm-rel-artist-name">${escapeHtml(currentSong.artist || 'Artist')}</div>
-                <div class="ytm-rel-artist-desc">Featured on AURA Music</div>
-              </div>
-            </div>
-            <div class="ytm-rel-artist-tags">
-              <span class="ytm-rel-tag"><i class="fa-solid fa-compact-disc"></i> Studio Track</span>
-              <span class="ytm-rel-tag"><i class="fa-solid fa-sparkles"></i> High Fidelity</span>
-              <span class="ytm-rel-tag"><i class="fa-solid fa-headphones"></i> Immersive</span>
-            </div>
-          </div>
-        </div>
-      `;
-
       // Section 3: More from this artist
       if (sameArtistSongs.length > 0) {
         html += `
@@ -911,13 +1108,13 @@ import { fetchLyricsForTrack, renderLyrics, updateLyricsProgress, prepareLyricsF
               ${sameArtistSongs.map(s => {
                 const originalIdx = state.songs.findIndex(x => x.id === s.id);
                 return `
-                  <div class="ytm-rel-row" onclick="playSong(${originalIdx >= 0 ? originalIdx : 0})" role="button" tabindex="0">
+                  <div class="ytm-rel-row" data-play-song-id="${escapeHtml(s.id)}" role="button" tabindex="0">
                     <img class="ytm-rel-row-img" src="${escapeHtml(s.img || '')}" alt="" loading="lazy">
                     <div class="ytm-rel-row-meta">
                       <div class="ytm-rel-row-title">${escapeHtml(s.title || '')}</div>
                       <div class="ytm-rel-row-sub">${escapeHtml(s.artist || '')}</div>
                     </div>
-                    <button type="button" class="ytm-rel-row-play"><i class="fa-solid fa-play"></i></button>
+                    <span class="ytm-rel-row-play" aria-hidden="true"><i class="fa-solid fa-play"></i></span>
                   </div>
                 `;
               }).join('')}
@@ -934,4 +1131,3 @@ import { fetchLyricsForTrack, renderLyrics, updateLyricsProgress, prepareLyricsF
       (window as any).openPlayerSheet = openPlayerSheet;
       (window as any).closePlayerSheet = closePlayerSheet;
     }
-

@@ -5,9 +5,6 @@
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <title>Listen Together — AURA Music</title>
 <meta name="description" content="Listen to music with friends, in sync.">
-<link rel="preconnect" href="https://fonts.googleapis.com">
-<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;700&family=Cormorant+Garamond:wght@600&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="/src/rooms/rooms.css">
 </head>
 <body>
@@ -51,6 +48,7 @@
     <button class="primary big" id="joinBtn" type="button">Join room</button>
     <button class="ghost big" id="createBtn" type="button">Start a new room instead</button>
 
+    <div class="banner" id="joinBanner" role="alert" hidden></div>
     <p class="join-note">
       <svg class="ic"><use href="#i-headphone"/></svg>
       Use your device's built-in speakers. Bluetooth headphones add enough
@@ -85,7 +83,7 @@
     </div>
   </div>
 
-  <div class="banner" id="banner" hidden></div>
+  <div class="banner" id="banner" role="alert" hidden></div>
 
   <section class="stage">
     <div class="art" id="art"><img id="artImg" alt="" decoding="async"></div>

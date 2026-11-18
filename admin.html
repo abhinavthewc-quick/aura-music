@@ -4,15 +4,12 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Aura Admin — Music Uploader</title>
-  <link rel="preconnect" href="https://fonts.googleapis.com">
-  <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@400;500;700&family=Cormorant+Garamond:wght@600&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
 </head>
 <body>
   <header class="adm-header">
     <a class="adm-back" href="./index.html">&larr; Aura Music</a>
     <h1>AURA <span>Admin</span></h1>
-    <p class="adm-sub">Sign in &rarr; search or paste YouTube links &rarr; they land in your library automatically.</p>
+    <p class="adm-sub">Manage the music library, song versions, downloads and Discord.</p>
   </header>
 
   <main class="adm-grid">
@@ -41,6 +38,7 @@
     <nav class="adm-tabs adm-gated" id="admTabs" hidden aria-label="Admin sections">
       <button type="button" class="adm-tab active" data-panel="panelAdd"><i class="fa-solid fa-cloud-arrow-down"></i> Find &amp; queue</button>
       <button type="button" class="adm-tab" data-panel="panelLibrary"><i class="fa-solid fa-music"></i> Library <span class="adm-tabcount" id="libTabCount" hidden></span></button>
+      <button type="button" class="adm-tab" data-panel="panelProcessing"><i class="fa-solid fa-sliders"></i> Audio processing</button>
       <button type="button" class="adm-tab" data-panel="panelArtists"><i class="fa-solid fa-users"></i> Artists <span class="adm-tabcount" id="artistsTabCount" hidden></span></button>
       <button type="button" class="adm-tab" data-panel="panelDiscord"><i class="fa-brands fa-discord"></i> Discord <span class="adm-tabcount" id="discordTabCount" hidden></span></button>
       <button type="button" class="adm-tab" data-panel="panelSettings"><i class="fa-solid fa-gear"></i> Settings</button>
@@ -86,6 +84,33 @@
       <p class="adm-flow"><i class="fa-solid fa-rotate"></i> Live progress: <b>3s</b> polling while a run is active (10s idle). Click a run to expand its steps in place, or <b>logs</b> for GitHub.</p>
     </section>
     </div><!-- /panelAdd -->
+
+    <div class="adm-panel" id="panelProcessing" hidden>
+      <section class="adm-card adm-span2 audio-admin" aria-labelledby="audioHeading">
+        <div class="audio-heading"><div><h2 id="audioHeading">Audio processing</h2><p class="adm-hint">Originals stay in the library. Bass and Bass + Reverb are prepared on your Mac, then published to Hugging Face.</p></div><button class="adm-btn ghost" id="audioRefresh" type="button">Refresh</button></div>
+        <div id="audioStatus" class="adm-status" role="status" aria-live="polite"></div>
+        <div id="audioSummary" class="audio-summary" aria-label="Song processing totals"></div>
+        <div class="audio-coverage"><label for="audioCoverage">Versions ready <strong id="audioCoverageText">Loading…</strong></label><progress id="audioCoverage" max="1" value="0"></progress></div>
+        <div class="audio-worker"><div><strong>Manual Mac worker</strong><p id="audioWorkerInfo">Loading the latest worker report…</p></div><button class="adm-btn" id="audioCopyCommand" type="button">Copy run command</button></div>
+        <div class="audio-toolbar">
+          <button class="adm-btn" id="audioRetryFailed" type="button" disabled>Retry failed songs</button>
+          <button class="adm-btn" id="audioRecover" type="button" disabled>Recover expired jobs</button>
+          <button class="adm-btn ghost" id="audioReconcile" type="button" disabled>Check archive files</button>
+          <button class="adm-btn ghost" id="audioExport" type="button" disabled>Export report</button>
+        </div>
+        <p class="adm-hint">Queue changes take effect the next time you run the Mac worker. Active jobs keep their leases; retries preserve versions already ready.</p>
+        <div class="audio-searchbar">
+          <input id="audioSearch" class="adm-input" type="search" placeholder="Find a song, artist, ID or error…" aria-label="Search processing jobs">
+          <select id="audioFilter" class="adm-input" aria-label="Filter processing status"><option value="all">All songs</option><option value="attention">Needs attention</option><option value="pending">Pending</option><option value="processing">Processing</option><option value="failed">Failed</option><option value="expired">Expired lease</option><option value="ready">Ready</option><option value="inactive">Unavailable original</option></select>
+          <select id="audioSort" class="adm-input" aria-label="Sort processing jobs"><option value="attention">Needs attention first</option><option value="title">Song title</option><option value="recent">Recently updated</option></select>
+        </div>
+        <div class="audio-listhead"><label><input id="audioSelectPage" type="checkbox" disabled> Select eligible songs on this page</label><button class="adm-btn small" id="audioRetrySelected" type="button" disabled>Queue selected</button></div>
+        <div id="audioJobs" aria-busy="true"><p class="adm-hint">Loading processing records…</p></div>
+        <div class="audio-pagination"><span id="audioPageInfo"></span><button class="adm-btn ghost small" id="audioPrev" type="button" disabled>Previous</button><button class="adm-btn ghost small" id="audioNext" type="button" disabled>Next</button></div>
+        <details class="audio-activity"><summary>Recent activity</summary><div id="audioActivity"><p class="adm-hint">Activity appears after the worker reports a run or an admin changes the queue.</p></div></details>
+      </section>
+    </div>
+    <dialog id="audioInspector" class="audio-inspector" aria-labelledby="audioInspectorTitle"></dialog>
 
     <!-- Library tab: bucket browser -->
     <div class="adm-panel" id="panelLibrary" hidden>

@@ -20,8 +20,15 @@
 
 /** Peak ceiling for a boosted rendition. Leaves headroom for the output chain. */
 export const LEVEL_CEILING = 0.891; // -1.00 dBFS
-/** Above this amplitude the peak is shaped instead of scaled, so loudness survives. */
-export const LEVEL_KNEE = 0.7;
+/**
+ * Peak handling window. Peaks are ridden down by scaling the waveform, never by
+ * bending samples: a memoryless shaper colours everything above its knee, which
+ * is audible distortion on a boosted rendition. Lookahead lets the gain be
+ * already low when a transient arrives, so the reduction costs no punch.
+ */
+export const LIMITER_LOOKAHEAD_MS = 5;
+/** How quickly peak reduction lets go once a transient has passed. */
+export const LIMITER_RELEASE_MS = 80;
 /** A rendition is never lifted or cut further than this. */
 export const MAX_LEVEL_ADJUSTMENT_DB = 15;
 /** Below this the correction is inaudible and not worth rewriting the buffer. */
@@ -175,28 +182,106 @@ export function matchingGainDb(reference: LoudnessStats | null | undefined, targ
   return Math.max(-MAX_LEVEL_ADJUSTMENT_DB, Math.min(MAX_LEVEL_ADJUSTMENT_DB, gain));
 }
 
-/** Soft knee shaper: linear below the knee, tanh above it, ceiling never exceeded. */
-function shape(sample: number, knee: number, ceiling: number): number {
-  const magnitude = Math.abs(sample);
-  if (magnitude <= knee) return sample;
-  const span = ceiling - knee;
-  if (!(span > 0)) return Math.sign(sample) * ceiling;
-  const limited = knee + span * Math.tanh((magnitude - knee) / span);
-  return Math.sign(sample) * limited;
+/** Peak magnitude of every frame, stereo-linked so the image never shifts. */
+function stereoPeaks(channels: Float32Array[], gain: number, frames: number): Float32Array {
+  const envelope = new Float32Array(frames);
+  for (const channel of channels) {
+    const length = Math.min(frames, channel.length);
+    for (let i = 0; i < length; i++) {
+      const value = Math.abs(channel[i]) * gain;
+      if (value > envelope[i]) envelope[i] = value;
+    }
+  }
+  return envelope;
 }
 
 /**
- * Apply a level correction to decoded channels, shaping any peak that would
- * pass the ceiling. The gain is written into the samples rather than a playback
- * node so the result is deterministic and measurable, and so a boosted
- * rendition can never clip the shared output graph.
+ * Gain curve that keeps `envelope` under `ceiling`.
+ *
+ * Reduction is applied by scaling the waveform, so a steady tone leaves the
+ * limiter as a pure sinusoid at a lower level — no harmonics, unlike the
+ * memoryless soft-knee shaper this replaces, which bent every sample above its
+ * knee and measured ~25% THD on a boosted sine. The lookahead window pulls the
+ * gain down *before* a transient arrives so the attack clamps nothing, and the
+ * release lets go smoothly afterwards, which is what keeps heavy reduction from
+ * sounding like pumping.
  */
-export function applyLevel(channels: Float32Array[], gainDb: number, knee = LEVEL_KNEE, ceiling = LEVEL_CEILING): Float32Array[] {
+function limitingGains(envelope: Float32Array, ceiling: number, sampleRate: number): Float32Array {
+  const frames = envelope.length;
+  const lookahead = Math.max(1, Math.round(LIMITER_LOOKAHEAD_MS / 1000 * sampleRate));
+  const release = Math.max(1, Math.round(LIMITER_RELEASE_MS / 1000 * sampleRate));
+  const releaseCoefficient = 1 - Math.exp(-1 / release);
+
+  const required = new Float32Array(frames);
+  for (let i = 0; i < frames; i++) {
+    const value = envelope[i];
+    required[i] = value > ceiling ? ceiling / value : 1;
+  }
+
+  // Sliding-window minimum over [i, i + lookahead], via a monotonic deque, so
+  // each frame already knows the reduction the coming transient will need.
+  const windowed = new Float32Array(frames);
+  const queue = new Int32Array(frames);
+  let head = 0, tail = 0, next = 0;
+  for (let i = 0; i < frames; i++) {
+    const end = Math.min(frames - 1, i + lookahead);
+    while (next <= end) {
+      while (tail > head && required[queue[tail - 1]] >= required[next]) tail--;
+      queue[tail++] = next++;
+    }
+    while (queue[head] < i) head++;
+    windowed[i] = required[queue[head]];
+  }
+
+  const gains = new Float32Array(frames);
+  let current = 1;
+  for (let i = 0; i < frames; i++) {
+    const want = windowed[i];
+    // Attack is instant — the lookahead already put the gain in place — while
+    // release eases back up without ever overshooting what the ceiling allows.
+    current = want < current ? want : current + (want - current) * releaseCoefficient;
+    gains[i] = current;
+  }
+  return gains;
+}
+
+/**
+ * Apply a level correction to decoded channels, riding down any peak that would
+ * pass the ceiling. The gain is written into the samples rather than a playback
+ * node so the result is deterministic and measurable, and so a boosted rendition
+ * can never clip the shared output graph.
+ *
+ * When the corrected audio already fits under the ceiling the correction is a
+ * single multiply and the samples pass through untouched — the common case, and
+ * the one that must stay bit-transparent.
+ */
+export function applyLevel(
+  channels: Float32Array[],
+  gainDb: number,
+  sampleRate = 48000,
+  ceiling = LEVEL_CEILING,
+): Float32Array[] {
   const gain = Math.pow(10, gainDb / 20);
-  if (!Number.isFinite(gain) || gain === 1) return channels;
+  if (!Number.isFinite(gain) || gain === 1 || !channels.length) return channels;
+
+  const frames = channels[0].length;
+  const envelope = stereoPeaks(channels, gain, frames);
+  let peak = 0;
+  for (let i = 0; i < frames; i++) if (envelope[i] > peak) peak = envelope[i];
+
+  if (peak <= ceiling) {
+    return channels.map((channel) => {
+      const output = new Float32Array(channel.length);
+      for (let i = 0; i < channel.length; i++) output[i] = channel[i] * gain;
+      return output;
+    });
+  }
+
+  const gains = limitingGains(envelope, ceiling, sampleRate > 0 ? sampleRate : 48000);
   return channels.map((channel) => {
     const output = new Float32Array(channel.length);
-    for (let i = 0; i < channel.length; i++) output[i] = shape(channel[i] * gain, knee, ceiling);
+    const length = Math.min(frames, channel.length);
+    for (let i = 0; i < length; i++) output[i] = channel[i] * gain * gains[i];
     return output;
   });
 }
@@ -216,11 +301,11 @@ export function bufferChannels(buffer: AudioBuffer): Float32Array[] {
 }
 
 /**
- * Closed-loop match: lift `channels` to `referenceLufs`, shaping peaks under the
- * ceiling, then re-measure and top up once — soft-knee shaping absorbs part of
- * the first gain step, so one extra pass closes most of the residual gap.
- * Returns null when no meaningful correction is needed or possible; inputs are
- * never mutated.
+ * Closed-loop match: lift `channels` to `referenceLufs`, riding peaks under the
+ * ceiling, then re-measure and top up once — peak reduction absorbs part of the
+ * first gain step, so one extra pass closes most of the residual gap. Returns
+ * null when no meaningful correction is needed or possible; inputs are never
+ * mutated.
  */
 export function matchLevelToReference(
   channels: Float32Array[],
@@ -242,7 +327,7 @@ export function matchLevelToReference(
       : matchingGainDb({lufs: referenceLufs, peak}, {lufs, peak});
     if (!isLevelCorrectionWorthwhile(step) && pass > 0) break;
     if (applied + step > MAX_LEVEL_ADJUSTMENT_DB || applied + step < -MAX_LEVEL_ADJUSTMENT_DB) break;
-    current = applyLevel(current, step);
+    current = applyLevel(current, step, sampleRate);
     applied += step;
     const measured = measureLoudness(current, sampleRate);
     lufs = measured.lufs; peak = measured.peak;

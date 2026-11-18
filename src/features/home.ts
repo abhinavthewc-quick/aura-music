@@ -1,10 +1,12 @@
-import { timeGreeting, toast, artistMergeKey } from '../core/dom';
+import { timeGreeting, toast } from '../core/dom';
+import { artistMatchKey } from '../core/artist-names';
 import { playSong } from './player';
 import { escapeHtml } from './radio';
-import { DEFAULT_COVER, getArtistMeta } from '../core/catalog';
+import { DEFAULT_COVER } from '../core/catalog';
 import { $, state } from '../core/state';
-import { getArtistGroups, artistTileHTML } from './library';
+import { getArtistGroups } from './library';
 import { goTab } from '../ui/nav';
+import { playArtistCollection, renderArtistPage, type ArtistPageEntry } from './artist-page';
 /* ===== 3075-3096 ===== */
     export function setGreeting(){
       $('greetingLabel').textContent = timeGreeting();
@@ -57,39 +59,49 @@ import { goTab } from '../ui/nav';
       $('quickGrid').innerHTML = tiles.join('');
     }
 
-    /* Better YouTube Music: 3-Column Quick Picks Grid */
+    /* Actual library collections, not speculative mood recommendations. */
     let currentMood = 'all';
     let currentQuickPage = 0;
 
-    const MOOD_KEYWORDS: Record<string, string[]> = {
-      'romance': ['love', 'romance', 'dil', 'ishq', 'heart', 'kadhal', 'prema', 'romantic', 'priye'],
-      'feel good': ['feel', 'good', 'happy', 'smile', 'joy', 'vibe', 'celebrate', 'fun'],
-      'relax': ['relax', 'chill', 'calm', 'peace', 'sleep', 'acoustic', 'lo-fi', 'lofi'],
-      'energise': ['dance', 'beat', 'remix', 'fast', 'rock', 'energy', 'edm', 'fire'],
-      'party': ['party', 'punjab', 'dj', 'bass', 'club', 'celebration', 'dheem'],
-      'commute': ['journey', 'drive', 'travel', 'way', 'road'],
-      'workout': ['power', 'gym', 'run', 'fire', 'strong', 'beast'],
-      'focus': ['instrumental', 'piano', 'ambient', 'focus', 'study', 'violin']
-    };
+    /* Every play calls updateLibCount(), which rebuilds the home rails on the
+       next frame. Re-creating ~30 <img> nodes for identical content made the
+       page flash and re-decode artwork, so each rail compares a cheap
+       signature first and only writes the DOM when something actually changed. */
+    let quickPicksKey = '';
+    let artistsShelfKey = '';
+    let spotlightKey = '';
+
+    /* A heart tap changes one boolean. Rebuilding the picks, the artist shelf
+       and 493 library rows for it is what made favouriting feel sticky, so the
+       visible hearts are patched in place (library.ts) and only the tiles whose
+       text/count depends on favourites are refreshed here. */
+    export function refreshFavoriteChrome(){
+      updateDesktopHeroStats();
+      const sub = document.querySelector<HTMLElement>('#quickGrid .quick-tile:first-child .qt-sub');
+      if (sub) {
+        const count = state.songs.filter(s => s.favorite).length;
+        sub.textContent = `${count} track${count !== 1 ? 's' : ''}`;
+      }
+      if (currentMood === 'favorites') renderQuickPicks();
+    }
 
     export function renderQuickPicks(page?: number){
       const container = $('ytmQuickGrid');
       if(!container) return;
       if(!state.songs || !state.songs.length){
-        container.innerHTML = '<div style="color:var(--text-sub);padding:14px;font-size:13px">Loading library tracks…</div>';
+        if(quickPicksKey === 'empty') return;
+        quickPicksKey = 'empty';
+        container.innerHTML = '<p class="home-empty">No library tracks are available yet. Add local audio or check the catalogue connection.</p>';
         return;
       }
 
-      let pool = state.songs;
-      if(currentMood !== 'all' && MOOD_KEYWORDS[currentMood]){
-        const kw = MOOD_KEYWORDS[currentMood];
-        const filtered = state.songs.filter(s => {
-          const t = ((s.title || '') + ' ' + (s.artist || '')).toLowerCase();
-          return kw.some(k => t.includes(k));
-        });
-        if(filtered.length >= 4) {
-          pool = filtered;
-        }
+      let pool = state.songs.filter((song) => !song.missing);
+      if (currentMood === 'favorites') pool = pool.filter((song) => song.favorite);
+      if (currentMood === 'recent') pool = state.recentlyPlayed.map((recent) => pool.find((song) => String(song.id) === String(recent.id))).filter(Boolean);
+      if (!pool.length) {
+        if(quickPicksKey === 'none') return;
+        quickPicksKey = 'none';
+        container.innerHTML = '<p class="home-empty">No tracks in this collection yet. Choose All or add a favorite from your library.</p>'; return;
       }
 
       const pageSize = 12; // 3 columns x 4 rows
@@ -99,12 +111,15 @@ import { goTab } from '../ui/nav';
 
       const start = currentQuickPage * pageSize;
       const slice = pool.slice(start, start + pageSize);
+      const nextKey = currentMood + '|' + currentQuickPage + '|' + state.currentIndex + '|' + (state.isPlaying ? 1 : 0) + '|' + slice.map(s => s.id).join(',');
+      if (nextKey === quickPicksKey) return;
+      quickPicksKey = nextKey;
 
       const html = slice.map(s => {
         const globalIdx = state.songs.findIndex(x => x.id === s.id);
         const isPlaying = state.currentIndex === globalIdx && state.isPlaying;
         return `
-          <div class="ytm-track-card ${isPlaying ? 'is-playing' : ''}" role="button" tabindex="0" onclick="playSong(${globalIdx >= 0 ? globalIdx : 0})" title="${escapeHtml(s.title || '')}">
+          <div class="ytm-track-card ${isPlaying ? 'is-playing' : ''}" role="button" tabindex="0" data-play-song-id="${escapeHtml(s.id)}" title="${escapeHtml(s.title || '')}">
             <div class="ytm-track-art">
               <img src="${escapeHtml(s.img || DEFAULT_COVER)}" alt="" loading="lazy" decoding="async">
               <div class="ytm-play-hover">
@@ -148,42 +163,21 @@ import { goTab } from '../ui/nav';
       });
     }
 
-    export interface ArtistDirectoryEntry {
-      name: string;
-      img: string;
+    export interface ArtistDirectoryEntry extends ArtistPageEntry {
       count: number;
-      songs: any[];
     }
 
     export function getAllArtists(): ArtistDirectoryEntry[] {
-      const groups: Record<string, { name: string; names: Record<string, number>; songs: any[] }> = {};
-      const keys: string[] = [];
+      return getArtistGroups().map(group => ({
+        key: group.key, name: group.name, img: group.cover || DEFAULT_COVER,
+        bio: group.bio, count: group.songs.length, songs: group.songs,
+      }));
+    }
 
-      state.songs.forEach(s => {
-        const artist = (s.artist || '').trim();
-        if (!artist || artist.toLowerCase() === 'unknown artist') return;
-        const k = artistMergeKey(keys, artist);
-        if (!groups[k]) {
-          groups[k] = { name: artist, names: {}, songs: [] };
-          keys.push(k);
-        }
-        groups[k].names[artist] = (groups[k].names[artist] || 0) + 1;
-        groups[k].songs.push(s);
-      });
-
-      const result: ArtistDirectoryEntry[] = Object.values(groups).map(g => {
-        const bestName = Object.entries(g.names).sort((a, b) => b[1] - a[1] || b[0].length - a[0].length)[0][0];
-        const custom = getArtistMeta(bestName);
-        const sample = g.songs.find(s => s.img && !s.img.includes('default') && !s.img.includes('data:image')) || g.songs[0];
-        return {
-          name: custom?.name || bestName,
-          img: custom?.img || sample?.img || DEFAULT_COVER,
-          count: g.songs.length,
-          songs: g.songs
-        };
-      });
-
-      return result.sort((a, b) => b.count - a.count);
+    function artistForName(artists: ArtistDirectoryEntry[], name: string): ArtistDirectoryEntry | undefined {
+      const match = artistMatchKey(name);
+      return artists.find(artist => artist.name.toLowerCase() === name.toLowerCase()) ||
+        artists.find(artist => match && (artistMatchKey(artist.key) === match || artistMatchKey(artist.name) === match));
     }
 
     export function renderFeaturedArtistsShelf() {
@@ -191,20 +185,25 @@ import { goTab } from '../ui/nav';
       if (!shelf) return;
       const artists = getAllArtists();
       if (!artists.length) {
+        if (artistsShelfKey === 'empty') return;
+        artistsShelfKey = 'empty';
         shelf.innerHTML = '<div style="color:var(--text-sub);padding:10px 0;font-size:13px">Loading artists…</div>';
         return;
       }
 
       const topArtists = artists.slice(0, 16);
+      const key = topArtists.map(a => a.key + '|' + a.name + '|' + a.img + '|' + a.count).join('~');
+      if (key === artistsShelfKey) return;
+      artistsShelfKey = key;
       shelf.innerHTML = topArtists.map(a => `
-        <div class="ytm-artist-card" role="button" tabindex="0" onclick="openArtistDetail('${escapeHtml(a.name)}')" title="${escapeHtml(a.name)}">
+        <button type="button" class="ytm-artist-card" data-open-artist="${escapeHtml(a.key)}" title="${escapeHtml(a.name)}">
           <div class="ytm-artist-art-wrap">
             <img class="ytm-artist-avatar" src="${escapeHtml(a.img)}" alt="${escapeHtml(a.name)}" loading="lazy" decoding="async">
             <div class="ytm-artist-play-overlay"><i class="fa-solid fa-play"></i></div>
           </div>
           <div class="ytm-artist-name">${escapeHtml(a.name)}</div>
           <div class="ytm-artist-sub">${a.count} song${a.count !== 1 ? 's' : ''}</div>
-        </div>
+        </button>
       `).join('');
     }
 
@@ -218,14 +217,14 @@ import { goTab } from '../ui/nav';
       }
 
       grid.innerHTML = artists.map(a => `
-        <div class="ytm-artist-card grid-card" role="button" tabindex="0" onclick="openArtistDetail('${escapeHtml(a.name)}')" title="${escapeHtml(a.name)}">
+        <button type="button" class="ytm-artist-card grid-card" data-open-artist="${escapeHtml(a.key)}" title="${escapeHtml(a.name)}">
           <div class="ytm-artist-art-wrap">
             <img class="ytm-artist-avatar" src="${escapeHtml(a.img)}" alt="${escapeHtml(a.name)}" loading="lazy" decoding="async">
             <div class="ytm-artist-play-overlay"><i class="fa-solid fa-play"></i></div>
           </div>
           <div class="ytm-artist-name">${escapeHtml(a.name)}</div>
           <div class="ytm-artist-sub">${a.count} song${a.count !== 1 ? 's' : ''}</div>
-        </div>
+        </button>
       `).join('');
     }
 
@@ -241,6 +240,7 @@ import { goTab } from '../ui/nav';
       const mainView = $('homeMainView');
       const artistsView = $('homeArtistsView');
       const detailView = $('homeArtistDetailView');
+      $('tabHome')?.classList.remove('artist-detail-open');
       if (mainView) mainView.style.display = 'none';
       if (detailView) detailView.style.display = 'none';
       if (artistsView) {
@@ -253,6 +253,7 @@ import { goTab } from '../ui/nav';
       const mainView = $('homeMainView');
       const artistsView = $('homeArtistsView');
       const detailView = $('homeArtistDetailView');
+      $('tabHome')?.classList.remove('artist-detail-open');
       if (artistsView) artistsView.style.display = 'none';
       if (detailView) detailView.style.display = 'none';
       if (mainView) mainView.style.display = 'block';
@@ -260,7 +261,8 @@ import { goTab } from '../ui/nav';
 
     export function openArtistDetail(artistName: string) {
       const artists = getAllArtists();
-      const artist = artists.find(a => a.name.toLowerCase() === artistName.toLowerCase()) || {
+      const artist = artistForName(artists, artistName) || {
+        key: artistName.toLowerCase().trim(),
         name: artistName,
         img: DEFAULT_COVER,
         count: 0,
@@ -270,92 +272,43 @@ import { goTab } from '../ui/nav';
       const mainView = $('homeMainView');
       const artistsView = $('homeArtistsView');
       const detailView = $('homeArtistDetailView');
+      $('tabHome')?.classList.add('artist-detail-open');
       if (mainView) mainView.style.display = 'none';
       if (artistsView) artistsView.style.display = 'none';
       if (detailView) detailView.style.display = 'block';
 
-      // Render hero card
-      const heroCard = $('artistHeroCard');
-      if (heroCard) {
-        heroCard.innerHTML = `
-          <div class="artist-hero-backdrop" style="background-image:url('${escapeHtml(artist.img)}')"></div>
-          <div class="artist-hero-content">
-            <img class="artist-hero-img" src="${escapeHtml(artist.img)}" alt="${escapeHtml(artist.name)}" loading="lazy">
-            <div class="artist-hero-meta">
-              <span class="artist-hero-badge"><i class="fa-solid fa-circle-check"></i> Featured Artist</span>
-              <h1 class="artist-hero-name">${escapeHtml(artist.name)}</h1>
-              <p class="artist-hero-count">${artist.songs.length} song${artist.songs.length !== 1 ? 's' : ''} in your music</p>
-            </div>
-          </div>
-        `;
-      }
-
-      // Setup play all / shuffle buttons
-      const playAllBtn = $('artistPlayAllBtn');
-      if (playAllBtn) {
-        playAllBtn.onclick = () => playArtistSongs(artist.name, false);
-      }
-      const shuffleBtn = $('artistShuffleBtn');
-      if (shuffleBtn) {
-        shuffleBtn.onclick = () => playArtistSongs(artist.name, true);
-      }
-
-      // Render song rows
-      const songsList = $('artistSongsList');
-      if (songsList) {
-        if (!artist.songs.length) {
-          songsList.innerHTML = '<div style="color:var(--text-sub);padding:24px;font-size:14px">No tracks found for this artist.</div>';
-          return;
-        }
-
-        songsList.innerHTML = artist.songs.map((s, idx) => {
-          const globalIdx = state.songs.findIndex(x => x.id === s.id);
-          const isPlaying = state.currentIndex === globalIdx && state.isPlaying;
-          return `
-            <div class="artist-song-row ${isPlaying ? 'is-playing' : ''}" role="button" tabindex="0" onclick="playSong(${globalIdx >= 0 ? globalIdx : 0})">
-              <span class="artist-song-num">${isPlaying ? '<i class="fa-solid fa-volume-high"></i>' : (idx + 1)}</span>
-              <img class="artist-song-cover" src="${escapeHtml(s.img || DEFAULT_COVER)}" alt="" loading="lazy">
-              <div class="artist-song-info">
-                <div class="artist-song-title">${escapeHtml(s.title || 'Untitled')}</div>
-                <div class="artist-song-sub">${escapeHtml(s.artist || '')}</div>
-              </div>
-              <button type="button" class="artist-song-play-btn" title="Play"><i class="fa-solid fa-play"></i></button>
-            </div>
-          `;
-        }).join('');
-      }
-
-      window.scrollTo({ top: 0, behavior: 'smooth' });
+      if (detailView) renderArtistPage(detailView, artist, { prefix: 'artist', onBack: closeArtistDetail });
+      goTab('tabHome');
+      window.scrollTo({ top: 0, behavior: 'instant' });
+      $('artistName')?.focus({ preventScroll: true });
     }
 
     export function closeArtistDetail() {
-      const activeChip = document.querySelector('#ytmMoodChips .ytm-chip.active') as HTMLElement | null;
-      const mood = activeChip?.dataset.mood || 'all';
-
-      if (mood === 'artists') {
-        showArtistsView();
-      } else {
-        showDefaultHomeView();
-      }
+      openHomeArtistsTab();
+      $('homeArtistsChip')?.focus({ preventScroll: true });
     }
 
-    export function playArtistSongs(artistName: string, shuffle = false) {
+    export function playArtistSongs(artistName: string, shuffle = false, startId?: string) {
       const artists = getAllArtists();
-      const artist = artists.find(a => a.name.toLowerCase() === artistName.toLowerCase());
+      const artist = artistForName(artists, artistName);
       if (!artist || !artist.songs.length) return;
 
-      const songsToPlay = [...artist.songs];
-      if (shuffle) {
-        songsToPlay.sort(() => Math.random() - 0.5);
-      }
-
-      const firstSong = songsToPlay[0];
-      const idx = state.songs.findIndex(s => s.id === firstSong.id);
-      if (idx >= 0) {
-        playSong(idx);
-        toast(`Playing ${artist.name}`, 'play');
-      }
+      playArtistCollection(artist, shuffle, startId);
     }
+
+    document.addEventListener('click', (event) => {
+      const button = (event.target as Element).closest<HTMLElement>('[data-open-artist]');
+      if (!button) return;
+      const artist = getAllArtists().find(entry => entry.key === button.dataset.openArtist);
+      if (artist) openArtistDetail(artist.name);
+    });
+
+    window.addEventListener('aura:library-changed', () => {
+      if (!$('tabHome')?.classList.contains('artist-detail-open')) return;
+      const name = $('artistName')?.textContent;
+      const artist = getAllArtists().find(entry => entry.name === name);
+      if (artist) renderArtistPage($('homeArtistDetailView'), artist, { prefix: 'artist', onBack: closeArtistDetail });
+    });
 
     if (typeof window !== 'undefined') {
       (window as any).openHomeArtistsTab = openHomeArtistsTab;
@@ -364,107 +317,40 @@ import { goTab } from '../ui/nav';
       (window as any).playArtistSongs = playArtistSongs;
     }
 
-    export function setupHeaderSearch(){
-      const input = $('headerSearchInput') as HTMLInputElement | null;
-      if(!input) return;
-
-      const triggerSearch = () => {
-        const q = input.value;
-        const tabInput = $('searchTabInput') as HTMLInputElement | null;
-        if(tabInput && tabInput.value !== q){
-          tabInput.value = q;
-          tabInput.dispatchEvent(new Event('input', { bubbles: true }));
-        }
-      };
-
-      const ensureSearchTab = () => {
-        const searchTab = $('tabSearch');
-        if(searchTab && !searchTab.classList.contains('active')){
-          goTab('tabSearch');
-        }
-      };
-
-      // Only sync the query while typing without jumping tabs
-      input.addEventListener('input', () => {
-        triggerSearch();
-      });
-
-      // Pressing Enter confirms search and smoothly opens Search tab
-      input.addEventListener('keydown', (e) => {
-        if(e.key === 'Enter'){
-          const q = input.value.trim();
-          if(q){
-            ensureSearchTab();
-            triggerSearch();
-            const tabInput = $('searchTabInput') as HTMLInputElement | null;
-            if(tabInput) tabInput.focus();
-          }
-        } else if(e.key === 'Escape'){
-          input.value = '';
-          triggerSearch();
-          input.blur();
-        }
-      });
-
-      // Clicking the search icon inside the top search bar confirms search
-      const searchIcon = input.parentElement?.querySelector('i.fa-magnifying-glass');
-      if(searchIcon){
-        searchIcon.addEventListener('click', () => {
-          if(input.value.trim()){
-            ensureSearchTab();
-            triggerSearch();
-          } else {
-            input.focus();
-          }
-        });
-        (searchIcon as HTMLElement).style.cursor = 'pointer';
-      }
-
-      // Keep header search input in sync when user types directly in searchTabInput
-      const tabInput = $('searchTabInput') as HTMLInputElement | null;
-      if(tabInput){
-        tabInput.addEventListener('input', () => {
-          if(input.value !== tabInput.value){
-            input.value = tabInput.value;
-          }
-        });
-      }
-    }
-
-    /* Home: spotlight EVERY artist who has 2+ tracks in the library,
-       most-tracks-first — variants ("A. R. Rahman" / "A.R. Rahman" /
-       "… - Topic") merge into one bucket via artistKey. */
+    /* Spotlights use the same artist names and collections as the directory. */
     export function renderArtistSpotlight(){
-      const groups:any = {};
-      const keys:string[] = [];
-      state.songs.forEach(s=>{
-        if(!s.artist || s.artist==='Unknown Artist') return;
-        const k = artistMergeKey(keys, s.artist);
-        if(!groups[k]){ groups[k] = {count:0, names:{}, songs:[]}; keys.push(k); }
-        groups[k].count++;
-        groups[k].names[s.artist]=(groups[k].names[s.artist]||0)+1;
-        groups[k].songs.push(s);
-      });
-      /* show the spelling most of the library actually uses */
-      Object.values(groups).forEach((g:any)=>{
-        g.name = Object.entries(g.names).sort((a:any,b:any)=>b[1]-a[1] || b[0].length-a[0].length)[0][0];
-      });
-      const artists = Object.values(groups).filter((g:any)=>g.count>=2).sort((a:any,b:any)=>b.count-a.count);
+      const artists = getArtistGroups().filter(group => group.songs.length >= 2);
       const container = $('artistSpotlightContainer');
 
-      if(!artists.length){ container.innerHTML=''; return; }
+      if(!artists.length){
+        if(spotlightKey === 'empty') return;
+        spotlightKey = 'empty';
+        container.innerHTML=''; return;
+      }
+
+      // Each block is a horizontal rail that only ever shows the first few
+      // cards before the user scrolls it. Rendering every song of every artist
+      // built 334 <img> tags on a real library, and `loading="lazy"` does not
+      // defer inside a horizontal scroller, so a phone fetched hundreds of
+      // covers to show a rail it could only display ~3 cards of at a time.
+      const RAIL_LIMIT = 10;
+      const BLOCK_LIMIT = 6;
 
       const indexById = new Map<string, number>();
       state.songs.forEach((song, i) => indexById.set(String(song.id), i));
-      container.innerHTML = artists.map((g:any)=>{
-        const cards = g.songs.map(s=>{
+      const visible = artists.slice(0, BLOCK_LIMIT);
+      const key = visible.map(g => g.key + '|' + g.cover + '|' + g.name + '|' + g.songs.slice(0, RAIL_LIMIT).map(s => s.id).join(',')).join('~');
+      if (key === spotlightKey) return;
+      spotlightKey = key;
+      container.innerHTML = visible.map((g:any)=>{
+        const cards = g.songs.slice(0, RAIL_LIMIT).map(s=>{
           const idx = indexById.get(String(s.id)) ?? -1;
           if(idx < 0) return '';
-          return `<div class="spotlight-card" role="button" tabindex="0" aria-label="Play ${escapeHtml(s.title||'')}" onclick="playSong(${idx})"><img src="${escapeHtml(s.img||DEFAULT_COVER)}" alt="" loading="lazy" decoding="async"><p class="sc-title">${escapeHtml(s.title)}</p><p class="sc-sub">${escapeHtml(s.artist)}</p></div>`;
+          return `<div class="spotlight-card" role="button" tabindex="0" aria-label="Play ${escapeHtml(s.title||'')}" data-play-song-id="${escapeHtml(s.id)}"><img src="${escapeHtml(s.img||DEFAULT_COVER)}" alt="" loading="lazy" decoding="async"><p class="sc-title">${escapeHtml(s.title)}</p><p class="sc-sub">${escapeHtml(s.artist)}</p></div>`;
         }).join('');
         return `<div class="artist-spotlight-block" style="margin-bottom:24px">
           <div class="spotlight-header">
-            <img class="spotlight-avatar" src="${escapeHtml(g.songs[0].img||DEFAULT_COVER)}" alt="" loading="lazy" decoding="async">
+            <img class="spotlight-avatar" src="${escapeHtml(g.cover||DEFAULT_COVER)}" alt="" loading="lazy" decoding="async">
             <div><p style="font-size:11px;color:var(--text-sub)">More from</p><p style="font-size:16px;font-weight:800">${escapeHtml(g.name)}</p></div>
           </div>
           <div class="recent-scroll">${cards}</div>
@@ -480,7 +366,7 @@ import { goTab } from '../ui/nav';
         c.innerHTML = `<div class="aura-empty">
           <i class="fa-solid fa-compact-disc" aria-hidden="true"></i>
           <div><b>No picks yet</b><span>Your Aura library will appear here when the catalogue finishes loading.</span></div>
-          <button type="button" class="aura-empty-btn" onclick="goTab('tabSearch')">Find music</button>
+          <button type="button" class="aura-empty-btn" onclick="openSearch()">Find music</button>
         </div>`;
         return;
       }
@@ -494,7 +380,7 @@ import { goTab } from '../ui/nav';
       }
       c.innerHTML=auraPickIds.map(id=>{
         const i=state.songs.findIndex(s=>s.id===id), s=state.songs[i]; if(!s) return '';
-        return `<div class="aura-pick" role="button" tabindex="0" aria-label="Play ${escapeHtml(s.title||'')}" onclick="playSong(${i})"><img src="${escapeHtml(s.img||DEFAULT_COVER)}" alt="" loading="lazy" decoding="async"><span class="aura-pick-play"><i class="fa-solid fa-play"></i></span><div class="aura-pick-info"><b>${escapeHtml(s.title||'')}</b><span>${escapeHtml(s.artist||'')}</span></div></div>`;
+        return `<div class="aura-pick" role="button" tabindex="0" aria-label="Play ${escapeHtml(s.title||'')}" data-play-song-id="${escapeHtml(s.id)}"><img src="${escapeHtml(s.img||DEFAULT_COVER)}" alt="" loading="lazy" decoding="async"><span class="aura-pick-play"><i class="fa-solid fa-play"></i></span><div class="aura-pick-info"><b>${escapeHtml(s.title||'')}</b><span>${escapeHtml(s.artist||'')}</span></div></div>`;
       }).join('');
     }
     setTimeout(()=>renderAuraPicks(),0);

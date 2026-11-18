@@ -1,7 +1,7 @@
 import { expect, test } from '@playwright/test';
 import {
   LEVEL_CEILING,
-  LEVEL_KNEE,
+  LIMITER_LOOKAHEAD_MS,
   MAX_LEVEL_ADJUSTMENT_DB,
   applyLevel,
   bufferChannels,
@@ -115,24 +115,78 @@ test('matching gain is the reference/target gap and clamps to the safety bounds'
   expect(matchingGainDb({lufs: -10, peak: 1}, {lufs: -Infinity, peak: 0})).toBe(0);
 });
 
-test('applyLevel shapes peaks to the ceiling without touching quiet passages', () => {
+test('applyLevel rides peaks to the ceiling and stays bit-transparent below it', () => {
   const audio = makeAudio(2);
   const gain = 10 ** (12 / 20);
   const boosted = applyLevel(audio, 12);
   // Peak safety: assert a single worst-case deviation instead of per-sample expects.
   expect(maxAbsDeviation(boosted, LEVEL_CEILING + 1e-6)).toBeLessThanOrEqual(0);
-  // Samples that stay below the knee must be pure gain.
-  const source = audio[0], result = boosted[0];
+  // A program that already fits under the ceiling is a single multiply: no
+  // limiter, no gain curve, no per-sample deviation from pure gain.
+  const quiet = applyLevel(makeAudio(2), -20);
+  const lifted = applyLevel(quiet, 3);
+  expect(maxAbsDeviation(lifted, LEVEL_CEILING + 1e-6)).toBeLessThanOrEqual(0);
   let worstLinear = 0;
-  for (let i = 0; i < source.length; i++) {
-    const scaled = source[i] * gain;
-    if (Math.abs(scaled) <= LEVEL_KNEE) worstLinear = Math.max(worstLinear, Math.abs(result[i] - scaled));
+  for (let i = 0; i < quiet[0].length; i++) {
+    worstLinear = Math.max(worstLinear, Math.abs(lifted[0][i] - quiet[0][i] * 10 ** (3 / 20)));
   }
   expect(worstLinear).toBeLessThan(1e-6);
-  // A quiet program lifted 14 dB keeps its loudness gain through the shaper.
-  const quiet = applyLevel(makeAudio(1), -20);
-  const lifted = applyLevel(quiet, 14);
-  expect(measureLoudness(lifted, RATE).lufs - measureLoudness(quiet, RATE).lufs).toBeCloseTo(14, 1);
+  // A quiet program lifted 14 dB keeps its loudness gain through the limiter.
+  const veryQuiet = applyLevel(makeAudio(1), -20);
+  const hardLifted = applyLevel(veryQuiet, 14);
+  expect(measureLoudness(hardLifted, RATE).lufs - measureLoudness(veryQuiet, RATE).lufs).toBeCloseTo(14, 1);
+});
+
+test('limiting scales the waveform instead of bending samples, so a boosted tone stays clean', () => {
+  // The soft-knee shaper this replaced bent every sample above its knee and
+  // measured heavy harmonic distortion on a boosted sine. Scaling must not:
+  // a steady tone leaves the limiter as a sinusoid at a lower level.
+  const seconds = 1;
+  const length = Math.round(seconds * RATE);
+  const frequency = 220;
+  const source = new Float32Array(length);
+  for (let i = 0; i < length; i++) source[i] = .5 * Math.sin(2 * Math.PI * frequency * i / RATE);
+
+  const boosted = applyLevel([source], 12, RATE)[0];
+  expect(maxAbsDeviation([boosted], LEVEL_CEILING + 1e-6)).toBeLessThanOrEqual(0);
+
+  // Compare against the best-fit sinusoid at the same frequency: a scaling
+  // limiter leaves only amplitude error, a waveshaper leaves harmonic residue.
+  let dot = 0, norm = 0;
+  for (let i = 0; i < length; i++) {
+    const basis = Math.sin(2 * Math.PI * frequency * i / RATE);
+    dot += boosted[i] * basis;
+    norm += basis * basis;
+  }
+  const fitted = dot / norm;
+  let residual = 0, energy = 0;
+  for (let i = 0; i < length; i++) {
+    const basis = Math.sin(2 * Math.PI * frequency * i / RATE);
+    residual += (boosted[i] - fitted * basis) ** 2;
+    energy += (fitted * basis) ** 2;
+  }
+  // Harmonic residue stays under 1% of the fundamental's energy.
+  expect(residual / energy).toBeLessThan(.01);
+});
+
+test('the lookahead window pulls gain down before a transient arrives', () => {
+  // Quiet bed, then a loud burst. With lookahead the gain must already be
+  // reduced ahead of the burst, so the attack is not clamped after the fact.
+  const length = RATE;
+  const source = new Float32Array(length);
+  const burstStart = Math.round(.5 * RATE);
+  for (let i = 0; i < length; i++) {
+    source[i] = i < burstStart ? .05 * Math.sin(2 * Math.PI * 220 * i / RATE) : .9 * Math.sin(2 * Math.PI * 220 * i / RATE);
+  }
+  const boosted = applyLevel([source], 12, RATE)[0];
+  expect(maxAbsDeviation([boosted], LEVEL_CEILING + 1e-6)).toBeLessThanOrEqual(0);
+
+  // Immediately before the burst the output must already be attenuated well
+  // below what a lookahead-free limiter would have produced.
+  const lookaheadFrames = Math.round(LIMITER_LOOKAHEAD_MS / 1000 * RATE);
+  const probe = burstStart - Math.round(lookaheadFrames / 2);
+  const unscaled = Math.abs(source[probe]) * 10 ** (12 / 20);
+  expect(Math.abs(boosted[probe])).toBeLessThan(unscaled * .95);
 });
 
 test('closed-loop match brings a quiet rendition to the reference within tolerance', () => {

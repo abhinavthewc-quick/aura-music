@@ -1,15 +1,15 @@
 import { $, state } from './core/state';
 import { currentRadioQuery } from './features/radio';
 import { toast } from './core/dom';
-import { navClick, goTab, openMobileSearch, closeMobileSearch, mobileSearchOnInput, mobileSearchClear } from './ui/nav';
+import { navClick, goTab } from './ui/nav';
 import { playSong } from './features/player';
 import { openTrackMenu, playTrackSequence, queueTrackAction } from './features/queue';
 import {
-  closeEditModal, retryCatalog, saveEditedTrack,
+  closeEditModal, importLocalAudio, retryCatalog, saveEditedTrack,
   setLibView, toggleFavorite, toggleStatsPanel,
 } from './features/library';
 import {
-  goToSearchCategory, runSearchChip,
+  closeSearch, goToSearchCategory, openSearch, runSearchChip,
 } from './features/search';
 import { renderAuraPicks, resumeLastPlayed, shuffleAll } from './features/home';
 import {
@@ -35,15 +35,14 @@ import {
 Object.assign(globalThis, {
   $, state, toast,
   navClick, goTab, openPlaylistPage, renderPlaylistsPage,
-  openMobileSearch, closeMobileSearch, mobileSearchOnInput, mobileSearchClear,
   openPlaylistModal, closePlaylistModal, submitPlaylistModal, updatePlaylistCta,
   addTrackToPlaylist, removeTrackFromPlaylist, playPlaylist, deletePlaylist,
   openPlaylistPicker, closePlaylistPicker, playlistPageShare, playlistPageMore, drawerPlaylistTap,
   playSong,
   queueTrackAction, openTrackMenu, playTrackSequence,
-  closeEditModal, retryCatalog, saveEditedTrack,
+  closeEditModal, importLocalAudio, retryCatalog, saveEditedTrack,
   setLibView, toggleFavorite, toggleStatsPanel,
-  goToSearchCategory, runSearchChip,
+  goToSearchCategory, runSearchChip, openSearch, closeSearch,
   renderAuraPicks, resumeLastPlayed, shuffleAll,
   changeProfileName, closeHelp, logoutUser, openHelp, openSettings,
   openAbout, openEffects, openRadioEffectsTab, setRadioSegment, toggleAmbientLayer,

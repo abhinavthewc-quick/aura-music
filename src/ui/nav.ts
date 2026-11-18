@@ -1,20 +1,32 @@
-import { renderLibrary, flushPlaybackHomeRefresh } from '../features/library';
+import { renderLibraryIfStale, flushPlaybackHomeRefresh } from '../features/library';
 import { loadRadioStations } from '../features/radio';
-import { filterSearchTab } from '../features/search';
 import { $ } from '../core/state';
 /* ===== 3073-3074 ===== */
-    export function goTab(tabId: string){
+    /* Set while a tab switch is a side effect of opening search, so activating
+       Home does not immediately close the panel it is about to open. */
+    let keepSearchOnHome = false;
+    export function goTab(tabId: string, keepSearch = false){
+      /* "Search" is no longer a tab. Deep links and older call sites still ask
+         for it, so route them to the Home search panel instead of a dead id. */
+      if(tabId === 'tabSearch'){
+        (globalThis as any).openSearch?.(true);
+        return;
+      }
       const desktop = document.querySelector(`.desktop-nav-btn[data-tab="${tabId}"]`);
-      const mobile = document.querySelector(`.nav-bar .nav-btn[onclick*="'${tabId}'"]`) ||
-                     (tabId === 'tabSearch' ? document.getElementById('navSearchFab') : null);
+      const mobile = document.querySelector(`.nav-bar .nav-btn[onclick*="'${tabId}'"]`);
       const b = window.matchMedia('(max-width:899px)').matches ? (mobile || desktop) : (desktop || mobile);
+      keepSearchOnHome = keepSearch;
       navClick(b, tabId);
+      keepSearchOnHome = false;
     }
 
 /* Playlist pseudo-tab — activates a generated tab without touching nav highlight */
     export function showPlaylistTab(tabId: string){
+      const tab=$(tabId);
+      if(!tab) return;
+      (globalThis as any).closeSearch?.(true);
       document.querySelectorAll('.tab-content').forEach(t=>t.classList.remove('active'));
-      $(tabId).classList.add('active');
+      tab.classList.add('active');
       document.querySelectorAll('.desktop-nav-btn[data-tab], .nav-bar .nav-btn, .nav-fab').forEach(b=>{
         const on = (b as HTMLElement).dataset.tab === 'tabPlaylists' || (b as HTMLElement).id === 'navPlaylistsBtn';
         b.classList.toggle('active', on);
@@ -24,32 +36,6 @@ import { $ } from '../core/state';
       const indicator = document.getElementById('navIndicator');
       if(indicator) indicator.style.opacity = '1';
       if(mobilePlaylists && window.matchMedia('(max-width:899px)').matches) moveNavIndicator(mobilePlaylists, true);
-    }
-
-/* Mobile expandable search bar in the top header (desktop keeps the normal box) */
-    export function openMobileSearch(){
-      const bar=$('mobileSearchBar'); if(!bar) return;
-      bar.classList.add('open');
-      goTab('tabSearch');
-      setTimeout(()=>{ (document.getElementById('mobileSearchInput') as HTMLInputElement)?.focus(); },90);
-    }
-    export function closeMobileSearch(){ $('mobileSearchBar')?.classList.remove('open'); }
-    export function mobileSearchOnInput(el: HTMLInputElement){
-      const input=$('searchTabInput') as HTMLInputElement | null;
-      if(input){ input.value=el.value; }
-      const headerInput=$('headerSearchInput') as HTMLInputElement | null;
-      if(headerInput){ headerInput.value=el.value; }
-      filterSearchTab();
-    }
-    export function mobileSearchClear(){
-      const el=$('mobileSearchInput') as HTMLInputElement | null;
-      if(el) el.value='';
-      const input=$('searchTabInput') as HTMLInputElement | null;
-      if(input){ input.value=''; }
-      const headerInput=$('headerSearchInput') as HTMLInputElement | null;
-      if(headerInput){ headerInput.value=''; }
-      filterSearchTab();
-      el?.focus();
     }
 
 /* ===== 4872-4924 ===== */
@@ -96,8 +82,8 @@ import { $ } from '../core/state';
     export function navClick(el,tabId){
       document.querySelectorAll('.nav-bar .nav-btn, .nav-fab').forEach(b=>{ b.classList.remove('active'); b.removeAttribute('aria-current'); });
       if(el && el.classList){ el.classList.add('active'); el.setAttribute('aria-current','page'); }
-      const ind=document.getElementById('navIndicator'); if(ind) ind.style.opacity = tabId==='tabSearch' ? '0' : '1';
-      if(el && el.classList && el.classList.contains('nav-btn') && tabId!=='tabSearch') moveNavIndicator(el);
+      const ind=document.getElementById('navIndicator'); if(ind) ind.style.opacity = '1';
+      if(el && el.classList && el.classList.contains('nav-btn')) moveNavIndicator(el);
       document.querySelectorAll('.desktop-nav-btn[data-tab]').forEach(b=>{
         const on = b.dataset.tab===tabId;
         b.classList.toggle('active', on);
@@ -105,17 +91,12 @@ import { $ } from '../core/state';
       });
       document.querySelectorAll('.tab-content').forEach(t=>t.classList.remove('active'));
       $(tabId).classList.add('active');
-      document.body.classList.toggle('tab-search-active', tabId==='tabSearch');
-      if(tabId==='tabLibrary')renderLibrary();
+      /* Tapping Home from the nav returns to the feed; leaving Home closes the
+         panel too, so coming back never lands on a stale query. */
+      if(tabId !== 'tabHome' || !keepSearchOnHome) (globalThis as any).closeSearch?.(true);
+      if(tabId==='tabLibrary')renderLibraryIfStale();
       if(tabId==='tabPlaylists') (globalThis as any).renderPlaylistsPage?.();
       if(tabId==='tabHome')flushPlaybackHomeRefresh();
-      if(tabId==='tabSearch'){
-        filterSearchTab();
-        const tabInput = $('searchTabInput') as HTMLInputElement | null;
-        if(tabInput){
-          setTimeout(() => { tabInput.focus(); }, 60);
-        }
-      }
       if(tabId==='tabRadio' && !$('radioStationList').dataset.loaded){ $('radioStationList').dataset.loaded='1'; loadRadioStations('top'); }
     }
 
@@ -129,7 +110,3 @@ import { $ } from '../core/state';
       });
     });
 
-document.addEventListener('keydown',e=>{
-  const bar=document.getElementById('mobileSearchBar');
-  if(e.key==='Escape' && bar && bar.classList.contains('open')) bar.classList.remove('open');
-});

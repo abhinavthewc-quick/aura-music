@@ -15,7 +15,6 @@ import { currentRadioStation, radioAudio } from './radio';
 
 const TAB_NAMES: Record<string, string> = {
   tabHome: 'Home',
-  tabSearch: 'Search',
   tabLibrary: 'Library',
   tabRadio: 'Radio',
   tabPlaylists: 'Playlists',

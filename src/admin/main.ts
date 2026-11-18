@@ -3,6 +3,7 @@ import { ADMIN_EMAILS, GOOGLE_CLIENT_ID } from '../core/config';
 import { cleanArtist, cleanTitle, ArtistMeta } from '../core/catalog';
 import { verifyGoogleCredential } from '../core/google-auth';
 import { clearSession, exchangeGoogleToken, getSession, setSession } from '../core/session';
+import { createAudioProcessing } from './audio-processing';
 
 const SECRET_NAMES = ['HF_TOKEN', 'HF_BUCKET_ID', 'YOUTUBE_COOKIES'] as const;
 
@@ -32,6 +33,7 @@ const searchStatus = $('searchStatus');
 const searchModes = $('searchModes');
 const toastHost = $('toastHost');
 const gatedSections = Array.from(document.querySelectorAll<HTMLElement>('.adm-gated'));
+const adminPanels = ['panelAdd','panelLibrary','panelProcessing','panelArtists','panelDiscord','panelSettings'];
 
 /* ---------- toast ---------- */
 function toast(msg: string, kind: 'ok' | 'err' | '' = '') {
@@ -78,6 +80,8 @@ async function adminApi<T = any>(action: string, payload: Record<string, unknown
   }
   return data as T;
 }
+
+const audioProcessing = createAudioProcessing({api:adminApi,toast});
 
 /* ---------- Google gate ---------- */
 let gisInitialized = false;
@@ -161,9 +165,11 @@ function unlock() {
 }
 
 function lock(msg?: string) {
+  audioProcessing.hide();
+  audioProcessing.reset();
   $('sessionBar').hidden = true;
   gatedSections.forEach((s) => { s.hidden = true; });
-  ['panelAdd', 'panelLibrary', 'panelArtists', 'panelDiscord', 'panelSettings'].forEach((id) => {
+  adminPanels.forEach((id) => {
     const el = document.getElementById(id);
     if (el) el.hidden = true;
   });
@@ -178,11 +184,13 @@ function switchTab(panelId: string): void {
   document.querySelectorAll<HTMLElement>('.adm-tab').forEach((b) => {
     b.classList.toggle('active', b.dataset.panel === panelId);
   });
-  for (const id of ['panelAdd', 'panelLibrary', 'panelArtists', 'panelDiscord', 'panelSettings']) {
+  for (const id of adminPanels) {
     const el = document.getElementById(id);
     if (el) el.hidden = id !== panelId;
   }
   if (panelId === 'panelLibrary') void loadLibraryManager();
+  if (panelId === 'panelProcessing') audioProcessing.show();
+  else audioProcessing.hide();
   if (panelId === 'panelArtists') void loadArtistsManager();
   if (panelId === 'panelDiscord') void initDiscord();
   if (panelId === 'panelSettings') {
@@ -806,7 +814,7 @@ function ingestLibraryData(data: LibraryResponse): void {
   libFiles = files.filter((f) => f && AUDIO_FILE_RE.test(f.path));
   libCovers = new Map();
   for (const f of files) {
-    if (f && IMG_FILE_RE.test(f.path)) libCovers.set(f.path.replace(/\.[^.]+$/, ''), f.path);
+    if (f && IMG_FILE_RE.test(f.path)) libCovers.set(f.path.split('/').pop().replace(/\.[^.]+$/, ''), f.path);
   }
   /* bucket data changed — drop the derived lists so the next read rebuilds them */
   libEntriesCache = null;
@@ -826,7 +834,7 @@ function buildLibEntries(): LibEntry[] {
     const ext = f.path.slice(stem.length);
     const vidM = VID_SUFFIX_RE.exec(stem);
     const vid = vidM ? vidM[1] : '';
-    const base = stem.replace(VID_SUFFIX_RE, '');
+    const base = stem.split('/').pop().replace(VID_SUFFIX_RE, '');
     const fm = /^(.+?)\s+-\s+(.+)$/.exec(base);
     let artist = fm ? fm[1].trim() : '';
     let title = fm ? fm[2].trim() : base;
@@ -840,7 +848,7 @@ function buildLibEntries(): LibEntry[] {
       if (typeof m.d === 'number') duration = m.d;
       if (m.g) genre = m.g;
     }
-    const coverPath = libCovers.get(stem);
+    const coverPath = libCovers.get(stem.split('/').pop());
     return {
       path: f.path, stem, ext, vid,
       size: Number(f.size) || 0, mtime: f.mtime || '',
@@ -1229,7 +1237,7 @@ async function openEditTrackModal(path: string): Promise<void> {
       if (!isNaN(n)) durSec = n;
     }
 
-    const toPath = newStem() + entry.ext;
+    const toPath = (entry.path.startsWith('originals/') ? 'originals/' : '') + newStem() + entry.ext;
     const saveBtn = $<HTMLButtonElement>('etmSaveBtn');
     const saveNextBtn = $<HTMLButtonElement>('etmSaveNextBtn');
     saveBtn.disabled = true;

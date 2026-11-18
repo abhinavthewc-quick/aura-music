@@ -22,3 +22,5 @@ blob-report/
 *.webm
 *.sqlite
 *.sqlite-*
+
+image-backup/

@@ -109,8 +109,17 @@ there. This guide is ordered by symptom.
 ### Cover art is missing
 
 - Covers pair by **basename** (ignoring extension). `Song [id].opus` expects
-  `Song [id].webp` (or jpg/png).
+  `Song [id].webp` (or jpg/png), including when audio is in `originals/` and
+  artwork is in `covers/`.
+- Recently played cards use the current catalogue artwork. Older history
+  snapshots can still contain root URLs from before the archive move; playing
+  a song used to refresh only that song's snapshot and hide this problem.
+- A failed root artwork URL in the Sonora bucket retries the same filename in
+  `covers/`. Working root URLs from fresh uploads remain supported. The retry
+  also covers saved artist portraits and playlist artwork.
 - A failed cover is replaced by the vinyl `DEFAULT_COVER`.
+- After updating the site, refresh once to load the artwork fix. Clearing
+  history, playlists or all site storage is unnecessary.
 - If the image is still loading, the card shows a warm placeholder; that is not
   an error.
 

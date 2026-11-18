@@ -1,0 +1,20 @@
+/* Profile identity shares the shell palette. */
+.header-profile-wrap { position: relative; width: var(--tap); height: var(--tap); flex: 0 0 var(--tap); }
+.profile-btn { display: grid; place-items: center; width: var(--tap); height: var(--tap); padding: 0; overflow: hidden; border: 1px solid var(--line); border-radius: 50%; background: var(--surface-2); color: var(--text); }
+.profile-btn img { display: block; width: 100%; height: 100%; object-fit: cover; }
+.profile-btn:hover { border-color: var(--accent); }
+.profile-photo { border-radius: 50%; }
+.profile-initial { display: grid; place-items: center; width: 100%; height: 100%; border-radius: 50%; background: var(--accent-soft); color: var(--accent); font: 500 20px/1 var(--font-ui); user-select: none; }
+.profile-popover { position: absolute; z-index: 1400; top: 56px; right: 0; width: 300px; padding: 20px; overflow: hidden; border: 1px solid var(--line-strong); border-radius: var(--radius-md); background: var(--surface-2); color: var(--text); box-shadow: var(--shadow-overlay); opacity: 0; visibility: hidden; transform: translateY(-6px); pointer-events: none; transition: opacity var(--dur-fast), visibility var(--dur-fast), transform var(--dur-fast); }
+.profile-popover.active { opacity: 1; visibility: visible; transform: none; pointer-events: auto; }
+.profile-popover-head { display: flex; align-items: center; gap: 12px; padding-bottom: 16px; margin-bottom: 8px; border-bottom: 1px solid var(--line); }
+.profile-popover-head > div { flex: 1; min-width: 0; }
+.profile-popover-avatar { width: 48px; height: 48px; flex: 0 0 48px; border-radius: 50%; object-fit: cover; }
+.profile-popover-name { overflow: hidden; color: var(--text); font-size: 16px; font-weight: 600; white-space: nowrap; text-overflow: ellipsis; }
+.profile-popover-email { margin-top: 3px; color: var(--text-sub); font-size: 12px; }
+.profile-info-row { display: flex; align-items: center; justify-content: space-between; gap: 16px; min-height: 40px; font-size: 12px; }
+.profile-info-label { color: var(--text-sub); }
+.profile-info-value { max-width: 160px; overflow: hidden; font-weight: 500; white-space: nowrap; text-overflow: ellipsis; text-align: right; }
+.profile-popover-action { width: 100%; min-height: var(--tap); margin-top: 12px; padding: 8px 12px; border: 1px solid var(--line); border-radius: var(--radius-xs); background: var(--surface-1); color: var(--text); font-size: 13px; font-weight: 600; }
+.profile-popover-action:hover { border-color: var(--accent); }
+@media (max-width: 600px) { .profile-popover { position: fixed; top: calc(76px + var(--safe-top)); right: 12px; width: min(300px, calc(100vw - 24px)); } }

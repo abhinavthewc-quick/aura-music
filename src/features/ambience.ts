@@ -282,13 +282,23 @@ import { $, state } from '../core/state';
        elements through Web Audio only once this is first switched on, so
        normal playback stays simple and robust until someone opts in. */
     export let auraMasterCtx=null, auraMuffleRadioFilter=null, auraMuffleAudioFilter=null;
+    export function ensureMusicOutput(): {context: AudioContext; destination: AudioNode} {
+      if(!auraMasterCtx){
+        auraMasterCtx=new (window.AudioContext||window.webkitAudioContext)();
+        auraMuffleRadioFilter=auraMasterCtx.createBiquadFilter(); auraMuffleRadioFilter.type='lowpass'; auraMuffleRadioFilter.frequency.value=20000;
+        auraMuffleAudioFilter=auraMasterCtx.createBiquadFilter(); auraMuffleAudioFilter.type='lowpass'; auraMuffleAudioFilter.frequency.value=20000;
+        auraMuffleRadioFilter.connect(auraMasterCtx.destination);
+        auraMuffleAudioFilter.connect(auraMasterCtx.destination);
+      }
+      return {context:auraMasterCtx, destination:auraMuffleAudioFilter};
+    }
+    let muffleElementsConnected=false;
     export function ensureMuffleChain(){
-      if(auraMasterCtx) return;
-      auraMasterCtx=new (window.AudioContext||window.webkitAudioContext)();
-      auraMuffleRadioFilter=auraMasterCtx.createBiquadFilter(); auraMuffleRadioFilter.type='lowpass'; auraMuffleRadioFilter.frequency.value=20000;
-      auraMuffleAudioFilter=auraMasterCtx.createBiquadFilter(); auraMuffleAudioFilter.type='lowpass'; auraMuffleAudioFilter.frequency.value=20000;
-      try{ auraMasterCtx.createMediaElementSource(radioAudio).connect(auraMuffleRadioFilter).connect(auraMasterCtx.destination); }catch(e){}
-      try{ auraMasterCtx.createMediaElementSource(state.audio).connect(auraMuffleAudioFilter).connect(auraMasterCtx.destination); }catch(e){}
+      ensureMusicOutput();
+      if(muffleElementsConnected) return;
+      muffleElementsConnected=true;
+      try{ auraMasterCtx.createMediaElementSource(radioAudio).connect(auraMuffleRadioFilter); }catch(e){}
+      try{ auraMasterCtx.createMediaElementSource(state.audio).connect(auraMuffleAudioFilter); }catch(e){}
     }
     export function setMuffleMode(on){
       ensureMuffleChain();

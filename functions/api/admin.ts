@@ -6,6 +6,8 @@
    The email must match the allow-list before any GitHub API call is made. */
 
 import { sealBox, fromBase64, toBase64 } from '../../lib/sealedBox.js';
+import { trackRef, type VersionDatabase } from '../lib/version-registry';
+import { audioAdmin } from '../lib/audio-processing-admin';
 
 const REPO = 'abhinavthewc-quick/aura-music';
 const WORKFLOW_FILE = 'upload-music.yml';
@@ -36,6 +38,7 @@ interface Env {
   HF_TOKEN?: string; // bucket mutations (rename/delete) — set in Pages env
   HF_BUCKET_ID?: string;
   BOT_SERVICE_TOKEN?: string; // shared secret for the Aura Farmer Worker
+  VERSION_DB?: VersionDatabase;
 }
 
 /* The Discord bot's Worker may only use these read/dispatch actions. It never
@@ -48,6 +51,8 @@ interface BucketFile {
   mtime: string;
   xetHash?: string; // required to copyFile (rename) server-side
 }
+
+function mediaStem(path: string): string { return path.split('/').pop().replace(/\.[^.]+$/, ''); }
 
 function ytIdOf(u: string): string {
   const m = YT_RE.exec(u);
@@ -1113,6 +1118,13 @@ export const onRequestPost = async ({ request, env, ctx }: {
       case 'verify':
         return json({ ok: true, email });
 
+      case 'audioOverview': case 'audioJobs': case 'audioJob': case 'audioRetry':
+      case 'audioRecover': case 'audioRegenerate': case 'audioReconcile': {
+        if (!env.VERSION_DB) return json({error:'Audio processing database is unavailable'},503);
+        try { return json(await audioAdmin(env.VERSION_DB,body,email,env.HF_BUCKET_ID || HF_BUCKET)); }
+        catch (cause: any) { return json({error:cause.status ? cause.message : 'Audio processing operation failed'},cause.status || 502); }
+      }
+
       case 'search': {
         const q = String(body.q || '').trim().slice(0, SEARCH_MAX_Q);
         if (!q) return json({ error: 'empty query' }, 400);
@@ -1158,7 +1170,8 @@ export const onRequestPost = async ({ request, env, ctx }: {
       }
 
       case 'library': {
-        const files = await bucketTree();
+        // Renditions are source attachments, not songs in the library manager.
+        const files = (await bucketTree()).filter((file) => !/^versions\//i.test(file.path));
         const m = await hfManifest(env);
         return json({
           files,
@@ -1184,27 +1197,32 @@ export const onRequestPost = async ({ request, env, ctx }: {
         assertSafePath(path);
         if (!AUDIO_EXT_RE.test(path)) return json({ error: 'only audio files can be deleted' }, 400);
         const files = await bucketTree(true);
-        const stem = path.replace(/\.[^.]+$/, '');
-        const group = files.filter((f) => f.path.replace(/\.[^.]+$/, '') === stem);
+        const stem = mediaStem(path);
+        const group = files.filter((f) => !/^versions\//i.test(f.path) && mediaStem(f.path) === stem);
         if (!group.some((f) => f.path === path)) return json({ error: 'not found in the bucket' }, 404);
         await hfBatch(env, group.map((f) => ({ type: 'deleteFile', path: f.path })));
+        if (env.VERSION_DB) await env.VERSION_DB.prepare('UPDATE audio_tracks SET active = 0, lease_owner = NULL, lease_until = 0 WHERE ref = ?')
+          .bind(trackRef(path)).run();
         await invalidateTree();
         return json({ ok: true, deleted: group.map((f) => f.path) });
       }
 
       case 'bucketRename': {
         const from = String(body.from || '');
-        const to = String(body.to || '');
+        const requestedTo = String(body.to || '');
+        const to = from.startsWith('originals/') && !requestedTo.includes('/') ? `originals/${requestedTo}` : requestedTo;
         assertSafePath(from);
         assertSafePath(to);
         if (!AUDIO_EXT_RE.test(from)) return json({ error: 'source must be an audio file' }, 400);
         if (!AUDIO_EXT_RE.test(to)) return json({ error: 'new name must keep an audio extension (.opus/.mp3/…)' }, 400);
         if (from === to) return json({ ok: true, renamed: [] });
         const files = await bucketTree(true);
-        const srcGroup = files.filter((f) => f.path.replace(/\.[^.]+$/, '') === from.replace(/\.[^.]+$/, ''));
+        const srcGroup = files.filter((f) => !/^versions\//i.test(f.path) && mediaStem(f.path) === mediaStem(from));
         if (!srcGroup.some((f) => f.path === from)) return json({ error: 'not found in the bucket' }, 404);
         const toStem = to.replace(/\.[^.]+$/, '');
-        const planned = srcGroup.map((f) => toStem + f.path.slice(from.replace(/\.[^.]+$/, '').length));
+        const planned = srcGroup.map((f) => IMAGE_EXT_RE.test(f.path) && f.path.startsWith('covers/')
+          ? `covers/${mediaStem(to)}${f.path.slice(f.path.lastIndexOf('.'))}`
+          : toStem + f.path.slice(f.path.lastIndexOf('.')));
         if (files.some((f) => planned.includes(f.path))) {
           return json({ error: 'a file with the new name already exists' }, 409);
         }
@@ -1225,6 +1243,16 @@ export const onRequestPost = async ({ request, env, ctx }: {
         }
         for (const f of srcGroup) ops.push({ type: 'deleteFile', path: f.path });
         await hfBatch(env, ops);
+        if (env.VERSION_DB) {
+          if (trackRef(from) === trackRef(to)) await env.VERSION_DB.prepare('UPDATE audio_tracks SET original_path = ? WHERE ref = ?')
+            .bind(to, trackRef(from)).run();
+          else {
+            // Filename-only identities change on an explicit rename; leave the
+            // old attachments inactive and let the Mac discover the new source.
+            await env.VERSION_DB.prepare('UPDATE audio_tracks SET active = 0, lease_owner = NULL, lease_until = 0 WHERE ref = ?')
+              .bind(trackRef(from)).run();
+          }
+        }
         await invalidateTree();
         return json({ ok: true, renamed: planned });
       }
@@ -1240,8 +1268,8 @@ export const onRequestPost = async ({ request, env, ctx }: {
         const files = await bucketTree();
         if (!files.some((f) => f.path === path)) return json({ error: 'not found in the bucket' }, 404);
         /* keep the existing cover extension so the site keeps resolving it */
-        const existing = files.find((f) => f.path.replace(/\.[^.]+$/, '') === stem && IMAGE_EXT_RE.test(f.path));
-        const target = existing ? existing.path : stem + '.webp';
+        const existing = files.find((f) => mediaStem(f.path) === mediaStem(path) && IMAGE_EXT_RE.test(f.path));
+        const target = existing ? existing.path : path.startsWith('originals/') ? `covers/${mediaStem(path)}.webp` : stem + '.webp';
         const ext = target.slice(target.lastIndexOf('.') + 1).toLowerCase();
         const stagedName = `cover-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}.${ext}`;
         const stagedPath = `${STAGING_DIR}/${stagedName}`;

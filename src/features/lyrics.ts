@@ -1,4 +1,5 @@
 import { state, $ } from '../core/state';
+import { currentPlaybackTime } from './player';
 
 export type SyncType = 'Syllable' | 'Word' | 'Line' | 'Unsynced';
 
@@ -1049,7 +1050,7 @@ function lyricsPanelVisible(): boolean {
   const sheet = document.getElementById('upNextSheet');
   if (!sheet || !sheet.classList.contains('active')) return false;
   const panel = document.getElementById('ytmLyricsPanel');
-  return !panel || panel.style.display !== 'none';
+  return !!panel && !panel.hidden && (sheet.dataset.tab || 'lyrics') === 'lyrics';
 }
 
 export function startLyricsSyncLoop() {
@@ -1075,9 +1076,7 @@ export function startLyricsSyncLoop() {
       return;
     }
     lastLyricsSync = now;
-    const curTime = state.isPlaying
-      ? (state.audio?.currentTime || (window as any).auraYTPlayer?.getCurrentTime?.() || 0)
-      : ((window as any).auraYTPlayer?.getCurrentTime?.() || 0);
+    const curTime = currentPlaybackTime();
 
     if (curTime > 0) {
       updateLyricsProgress(curTime);
@@ -1101,23 +1100,17 @@ export function stopLyricsSyncLoop() {
 
 /* Auto-stop when lyrics panel is hidden */
 function observeLyricsVisibility() {
-  const container = $('fullPlayerLyricsContainer') || $('ytmLyricsPanel');
-  if (!container) return;
-  const mo = new MutationObserver(() => {
-    if (container.offsetParent === null) {
-      stopLyricsSyncLoop();
-    } else if (currentLyrics?.isSynced && state.isPlaying) {
-      startLyricsSyncLoop();
-    }
-  });
-  mo.observe(container, { attributes: true, attributeFilter: ['style', 'class'] });
-  // Also observe the full player overlay
-  const overlay = $('fullPlayerOverlay');
-  if (overlay) {
-    new MutationObserver(() => {
-      if (!overlay.classList.contains('active')) stopLyricsSyncLoop();
-    }).observe(overlay, { attributes: true, attributeFilter: ['class'] });
-  }
+  const sheet = $('upNextSheet'), panel = $('ytmLyricsPanel');
+  if (!sheet || !panel) return;
+  const sync = () => {
+    if (document.hidden || !lyricsPanelVisible()) stopLyricsSyncLoop();
+    else if (currentLyrics?.isSynced) startLyricsSyncLoop();
+  };
+  const observer = new MutationObserver(sync);
+  observer.observe(sheet,{attributes:true,attributeFilter:['class','data-tab']});
+  observer.observe(panel,{attributes:true,attributeFilter:['hidden']});
+  document.addEventListener('visibilitychange',sync);
+  sync();
 }
 // Initialize observer when lyrics module loads
 if (typeof document !== 'undefined') {

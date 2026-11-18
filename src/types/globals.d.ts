@@ -1,4 +1,3 @@
-declare const jsmediatags: any;
 declare const YT: any;
 declare var webkitSpeechRecognition: any;
 declare var SpeechRecognition: any;

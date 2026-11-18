@@ -1,352 +1,327 @@
 import { copyToClipboard, showTrackSheet, toast } from '../core/dom';
-import { deleteTrack, openEditModal, renderLibrary } from './library';
-import { auraYTVideoId, filterSongs, playSong, playYouTubeProResult, refreshLyricsForOpenSheet } from './player';
-import { escapeHtml } from './radio';
-import { auraYTQueue, extractYouTubeId, filterSearchTab } from './search';
 import { $, persistLikedHistory, savedLikeMap, state } from '../core/state';
-/* ===== 3474-3570 ===== */
-    /* ---------- Track action bottom sheet (the "..." menu) ---------- */
-    export let manualQueue = [];      // ids queued via "Play Next" / "Add to Queue"
-    export let trackSheetSongId = null;
+import { resolveTrackId, stableTrackRef, trackAvailable } from '../core/track-identity';
+import {
+  advanceContext, applyPlaybackVisit, capturePlaybackVisit, createPlaybackContext, enqueueContext, previewPlayback, reorderContextUpcoming,
+  setContextShuffle, type PlaybackPreview, type PlaybackReason, type PlaybackSource,
+} from '../core/playback-context';
+import { deleteTrack, openEditModal, playArtistByKey, renderLibrary, restoreLocalFile, toggleFavorite } from './library';
+import {
+  filterSongs, openPlayerSheet, pausePlayback, playSong, restartCurrentTrack,
+  refreshLyricsForOpenSheet, currentPlaybackTime,
+} from './player';
+import { currentRadioStation, escapeHtml } from './radio';
+import { filterSearchTab } from './search';
+import { roomModeActive } from '../rooms/roomFlag';
 
-    export function findSongById(id){
-      return state.songs.find(s => String(s.id) === String(id));
+export let trackSheetSongId: string | number | null = null;
+export const findSongById = (id: string | number | null | undefined): any | null =>
+  id === null || id === undefined ? null : resolveTrackId(id, state.songs);
+
+export interface PlaybackSequenceOptions {
+  source?: PlaybackSource;
+  collectionId?: string;
+  label?: string;
+  startId?: string | number;
+  shuffle?: boolean;
+  clearManualQueue?: boolean;
+}
+
+function playable(id: string): boolean { return trackAvailable(findSongById(id)); }
+
+function ensurePlaybackContext(): boolean {
+  if (state.playbackContext) return true;
+  const current = state.songs[state.currentIndex];
+  if (!current) return false;
+  state.playbackContext = createPlaybackContext(state.songs.map(stableTrackRef), {
+    source: 'library', label: 'Library', startId: stableTrackRef(current), shuffle: state.isShuffle,
+  });
+  return !!state.playbackContext;
+}
+
+function playContextId(id: string, keepFull = false): boolean {
+  const song = findSongById(id);
+  if (!trackAvailable(song)) return false;
+  return playSong(state.songs.indexOf(song), keepFull, true);
+}
+
+export function playTrackSequence(ids: Array<string | number>, options: PlaybackSequenceOptions = {}): boolean {
+  const sequence = ids.map(findSongById).filter(trackAvailable).map(stableTrackRef);
+  if (!sequence.length) { toast('There are no available tracks in this collection.', 'circle-info'); return false; }
+  const start = options.startId === undefined ? sequence[0] : stableTrackRef(findSongById(options.startId));
+  const previousQueue = options.clearManualQueue === false ? [...(state.playbackContext?.queue || [])] : [];
+  if (options.shuffle !== undefined) state.isShuffle = options.shuffle;
+  state.playbackContext = createPlaybackContext(sequence, {
+    source: options.source || 'library', collectionId: options.collectionId, label: options.label,
+    startId: start, shuffle: state.isShuffle,
+  });
+  state.playbackContext.queue = previousQueue;
+  const started = playContextId(state.playbackContext.currentId);
+  renderUpNext();
+  return started;
+}
+
+export function syncPlaybackShuffle(enabled: boolean): void {
+  if (state.playbackContext) state.playbackContext = setContextShuffle(state.playbackContext, enabled);
+  renderUpNext();
+}
+
+export function queueSong(id: string | number, next = false): void {
+  const song = findSongById(id);
+  if (!trackAvailable(song)) { toast('This track is unavailable. Relink its file before queuing it.', 'triangle-exclamation'); return; }
+  if (!ensurePlaybackContext()) return;
+  const ref = stableTrackRef(song);
+  if (state.playbackContext.currentId === ref) { toast('That track is already selected.', 'circle-info'); return; }
+  enqueueContext(state.playbackContext, ref, next);
+  renderUpNext();
+  toast(next ? `“${song.title}” will play next` : `Added “${song.title}” to queue`, 'circle-check');
+}
+
+export function openTrackMenu(event: Event | null, id: string | number): void {
+  event?.stopPropagation();
+  const song = findSongById(id);
+  if (!song) return;
+  trackSheetSongId = song.id;
+  const added = state.addedSongs.some((item: any) => String(item.id) === String(song.id));
+  const actions: Array<[string, string, string]> = [
+    ['favorite', song.favorite ? 'fa-solid fa-heart' : 'fa-regular fa-heart', song.favorite ? 'Remove from favorites' : 'Add to favorites'],
+    ['playNext', 'fa-solid fa-forward-step', 'Play next'],
+    ['addQueue', 'fa-solid fa-list-ol', 'Add to queue'],
+    ['playlist', 'fa-solid fa-list', 'Add to playlist'],
+  ];
+  if (song.isLocal && song.missing) actions.push(['restoreLocal', 'fa-solid fa-file-audio', 'Restore local file']);
+  if (added) actions.push(['edit', 'fa-solid fa-pen', 'Edit track']);
+  if (!song.isLocal) actions.push(['share', 'fa-solid fa-share-nodes', 'Share track link']);
+  if (!song.isYouTube && song.url) actions.push(['download', 'fa-solid fa-download', 'Download audio']);
+  if (added) actions.push(['delete', 'fa-solid fa-trash', 'Remove from library']);
+  const rows = actions.map(([action, icon, label]) => `<button type="button" class="track-sheet-row${action === 'delete' ? ' danger' : ''}" data-track-action="${action}"><i class="${icon}" aria-hidden="true"></i>${label}</button>`).join('');
+  showTrackSheet({ img: song.img, title: song.title, artist: song.artist, rowsHtml: rows });
+  $('trackSheetRows')?.querySelectorAll<HTMLElement>('[data-track-action]').forEach((button) => {
+    button.onclick = () => queueTrackAction(button.dataset.trackAction);
+  });
+}
+
+export function closeTrackMenu(): void {
+  $('trackSheetOverlay')?.classList.remove('active');
+  trackSheetSongId = null;
+}
+$('trackSheetOverlay')?.addEventListener('click', (event) => {
+  if (event.target === event.currentTarget) closeTrackMenu();
+});
+
+export function shareCurrentTrack(): void {
+  const song = state.songs[state.currentIndex];
+  if (!song) return;
+  trackSheetSongId = song.id;
+  queueTrackAction('share');
+}
+
+export function queueTrackAction(action: string): void {
+  const song = findSongById(trackSheetSongId);
+  closeTrackMenu();
+  if (!song) return;
+  if (action === 'playNext' || action === 'addQueue') return queueSong(song.id, action === 'playNext');
+  if (action === 'favorite') { toggleFavorite(null, String(song.id)); renderUpNext(); }
+  else if (action === 'restoreLocal') restoreLocalFile(String(song.id));
+  else if (action === 'edit') openEditModal(null, song.id);
+  else if (action === 'playlist') (globalThis as any).openPlaylistPicker?.(song.id);
+  else if (action === 'delete') void deleteTrack(null, song.id);
+  else if (action === 'share') {
+    if (song.isLocal) { toast('Local files stay on this device. Use Download audio to share the file.', 'circle-info'); return; }
+    const url = new URL('/', location.href);
+    url.searchParams.set('play', song.isYouTube && song.videoId ? `yt:${song.videoId}` : String(song.id));
+    if (navigator.share) void navigator.share({ title: song.title, text: `${song.title} — ${song.artist}`, url: url.href }).catch((error) => {
+      if (error?.name !== 'AbortError') toast('The track link could not be shared.', 'triangle-exclamation');
+    });
+    else copyToClipboard(url.href, 'Track link copied');
+  } else if (action === 'download') {
+    const link = document.createElement('a');
+    link.href = song.hfUrl || song.url;
+    link.download = song.title || 'track';
+    link.rel = 'noopener';
+    link.click();
+    toast('Audio download requested. This does not make the web app available offline.', 'circle-info');
+  }
+}
+
+export const UP_NEXT_PHONE_LIMIT = 12, UP_NEXT_DESKTOP_LIMIT = 50;
+export const upNextLimit = (): number => window.matchMedia('(min-width:900px)').matches ? UP_NEXT_DESKTOP_LIMIT : UP_NEXT_PHONE_LIMIT;
+interface QueueItem extends PlaybackPreview { id: string; song: any }
+
+function upcomingItems(): QueueItem[] {
+  const context = state.playbackContext;
+  return context ? previewPlayback(context,state.repeatMode,upNextLimit(),playable)
+    .map((preview) => ({...preview,id:preview.visit.id,song:findSongById(preview.visit.id)})) : [];
+}
+
+export function getRollingUpNextItems(): any[] { return upcomingItems().map((item) => item.song); }
+
+export function renderUpNext(): void {
+  const list = $('upNextList');
+  if (!list) return;
+  const context = state.playbackContext;
+  const label = $('queueContextLabel');
+  if (label) label.textContent = context?.label ? `Up next from ${context.label}` : 'Up next';
+  const clear = $('clearQueueBtn') as HTMLButtonElement | null;
+  if (clear) clear.disabled = !context?.queue.length;
+  const items = upcomingItems();
+  if (!items.length) {
+    list.innerHTML = '<p class="up-next-empty">This collection has reached its end. Choose another track, or turn on Repeat all.</p>';
+    return;
+  }
+  list.innerHTML = items.map((item) => {
+    const { song, id, kind, position } = item;
+    return `<div class="up-next-row" data-up-next-id="${escapeHtml(id)}" data-queue-kind="${kind}" data-queue-position="${position}">
+      <button class="up-next-main" type="button" aria-label="Play ${escapeHtml(song.title)} next">
+        <img class="up-next-cover" src="${escapeHtml(song.img || '')}" alt="" loading="lazy" decoding="async">
+        <span class="up-next-info"><span class="up-next-song-title">${escapeHtml(song.title)}</span><span class="up-next-song-artist">${escapeHtml(song.artist)}${kind === 'explicit' ? ' (queued)' : ''}</span></span>
+      </button>
+      <div class="up-next-actions">
+        <button class="up-next-action favorite" type="button" aria-label="${song.favorite ? 'Unlike' : 'Like'} ${escapeHtml(song.title)}"><i class="fa-${song.favorite ? 'solid' : 'regular'} fa-heart" aria-hidden="true"></i></button>
+        <button class="up-next-action move-up" type="button" aria-label="Move ${escapeHtml(song.title)} up in queue"><i class="fa-solid fa-chevron-up" aria-hidden="true"></i></button>
+        <button class="up-next-action move-down" type="button" aria-label="Move ${escapeHtml(song.title)} down in queue"><i class="fa-solid fa-chevron-down" aria-hidden="true"></i></button>
+        <button class="up-next-action reorder" type="button" aria-label="Drag ${escapeHtml(song.title)} within ${kind === 'explicit' ? 'queued tracks' : 'this collection'}"><i class="fa-solid fa-grip-lines" aria-hidden="true"></i></button>
+        ${kind === 'explicit' ? `<button class="up-next-action remove" type="button" aria-label="Remove ${escapeHtml(song.title)} from queue"><i class="fa-solid fa-xmark" aria-hidden="true"></i></button>` : ''}
+      </div>
+    </div>`;
+  }).join('');
+  list.querySelectorAll<HTMLElement>('.up-next-row').forEach((row, index) => {
+    const item = items[index];
+    row.querySelector<HTMLElement>('.up-next-main').onclick = () => selectUpcoming(item);
+    row.querySelector<HTMLElement>('.favorite').onclick = () => { toggleFavorite(null, String(item.song.id)); renderUpNext(); };
+    row.querySelector<HTMLElement>('.move-up').onclick = () => moveUpcoming(item, -1);
+    row.querySelector<HTMLElement>('.move-down').onclick = () => moveUpcoming(item, 1);
+    row.querySelector<HTMLElement>('.remove')?.addEventListener('click', () => {
+      context.queue.splice(item.position, 1); renderUpNext();
+    });
+    if (item.kind === 'history') row.querySelectorAll<HTMLButtonElement>('.move-up,.move-down,.reorder').forEach((button) => { button.disabled = true; });
+    initUpNextReorder(row.querySelector<HTMLElement>('.reorder'));
+  });
+}
+
+function selectUpcoming(item: QueueItem): void {
+  const context = state.playbackContext;
+  if (!context || !playable(item.id)) return;
+  context.history.push(capturePlaybackVisit(context));
+  context.queue = [...item.after.queue];
+  context.future = item.after.future.map((visit) => ({...visit}));
+  applyPlaybackVisit(context,item.visit);
+  playContextId(item.id);
+  renderUpNext();
+}
+
+function moveUpcoming(item: QueueItem, delta: number): void {
+  const context = state.playbackContext;
+  if (item.kind === 'history') return;
+  const group = upcomingItems().filter((other) => other.kind === item.kind);
+  const from = group.findIndex((other) => other.id === item.id);
+  const to = from + delta;
+  if (!context || to < 0 || to >= group.length) return;
+  [group[from], group[to]] = [group[to], group[from]];
+  if (item.kind === 'explicit') {
+    const visible = group.map((other) => other.id);
+    context.queue = [...visible, ...context.queue.filter((id) => !visible.includes(id))];
+  } else reorderContextUpcoming(context, group.map((other) => other.id), state.repeatMode);
+  renderUpNext();
+}
+
+export function promoteVisibleOrder(ids: string[]): void {
+  if (state.playbackContext) reorderContextUpcoming(state.playbackContext, ids, state.repeatMode);
+}
+
+let upNextDrag: { pointerId: number; row: HTMLElement; moved: boolean; startY: number } | null = null;
+export function initUpNextReorder(handle: HTMLElement): void {
+  handle.onpointerdown = (event) => {
+    event.preventDefault();
+    const row = handle.closest<HTMLElement>('.up-next-row');
+    if (!row) return;
+    handle.setPointerCapture?.(event.pointerId);
+    upNextDrag = { row, pointerId: event.pointerId, moved: false, startY: event.clientY };
+    row.classList.add('dragging-row');
+  };
+  handle.onpointermove = (event) => {
+    if (!upNextDrag || upNextDrag.pointerId !== event.pointerId) return;
+    if (Math.abs(event.clientY - upNextDrag.startY) > 4) upNextDrag.moved = true;
+    const list = $('upNextList');
+    const rows = [...list.querySelectorAll<HTMLElement>(`.up-next-row[data-queue-kind="${upNextDrag.row.dataset.queueKind}"]:not(.dragging-row)`)];
+    const target = rows.find((row) => event.clientY < row.getBoundingClientRect().top + row.getBoundingClientRect().height / 2);
+    if (target) list.insertBefore(upNextDrag.row, target);
+    else {
+      const last = rows[rows.length - 1];
+      if (last) last.after(upNextDrag.row);
     }
+  };
+  handle.onpointerup = finishUpNextReorder;
+  handle.onpointercancel = () => { upNextDrag = null; renderUpNext(); };
+}
 
-    export function playTrackSequence(ids: Array<string | number>){
-      const sequence = ids
-        .map(id => findSongById(id))
-        .filter(Boolean)
-        .map(song => song.id);
-      if(!sequence.length) return;
-      const firstId = sequence.shift();
-      manualQueue = sequence;
-      renderUpNext();
-      const index = state.songs.findIndex(song => String(song.id) === String(firstId));
-      if(index !== -1) playSong(index);
+export function finishUpNextReorder(event: PointerEvent): void {
+  if (!upNextDrag || upNextDrag.pointerId !== event.pointerId) return;
+  const context = state.playbackContext;
+  if (context && upNextDrag.moved) {
+    const rows = [...$('upNextList').querySelectorAll<HTMLElement>('.up-next-row')];
+    const explicit = rows.filter((row) => row.dataset.queueKind === 'explicit').map((row) => row.dataset.upNextId);
+    const traversal = rows.filter((row) => row.dataset.queueKind === 'context').map((row) => row.dataset.upNextId);
+    context.queue = [...explicit, ...context.queue.filter((id) => !explicit.includes(id))];
+    reorderContextUpcoming(context, traversal, state.repeatMode);
+    toast('Queue order updated.', 'list-check');
+  }
+  upNextDrag = null;
+  renderUpNext();
+}
+
+export function openUpNext(): void { renderUpNext(); openPlayerSheet('queue'); }
+export function closeUpNext(): void {
+  const sheet = $('upNextSheet');
+  sheet?.classList.remove('active', 'dragging');
+  sheet?.setAttribute('aria-hidden', 'true');
+}
+$('clearQueueBtn')?.addEventListener('click', () => {
+  if (state.playbackContext) state.playbackContext.queue = [];
+  renderUpNext();
+});
+
+export function playPrevious(keepFull = false): boolean {
+  if (roomModeActive() || currentRadioStation || !ensurePlaybackContext()) return false;
+  if (currentPlaybackTime() > 3) { restartCurrentTrack(); return true; }
+  const next = advanceContext(state.playbackContext, -1, state.repeatMode, playable);
+  if (!next.id) { restartCurrentTrack(); return false; }
+  const result = playContextId(next.id, keepFull); renderUpNext(); return result;
+}
+
+export function playNext(keepFull = false, reason: PlaybackReason = 'user'): boolean {
+  if (roomModeActive() || currentRadioStation || !ensurePlaybackContext()) return false;
+  const next = advanceContext(state.playbackContext, 1, state.repeatMode, playable, reason);
+  if (!next.id) { pausePlayback(); renderUpNext(); return false; }
+  if (reason === 'ended' && state.repeatMode === 'one') { restartCurrentTrack(); return true; }
+  const result = playContextId(next.id, keepFull); renderUpNext(); return result;
+}
+
+$('fullHeaderMenuBtn')?.addEventListener('click', (event) => {
+  const song = state.songs[state.currentIndex];
+  if (song) openTrackMenu(event, song.id);
+});
+$('fullPrevBtn')?.addEventListener('click', () => playPrevious(true));
+$('fullNextBtn')?.addEventListener('click', () => playNext(true));
+$('nextBtn')?.addEventListener('click', () => playNext());
+
+document.addEventListener('click', (event) => {
+  const target = event.target as HTMLElement;
+  const menu = target.closest<HTMLElement>('[data-song-menu]');
+  if (menu) { event.preventDefault(); event.stopPropagation(); openTrackMenu(event, menu.dataset.songMenu); return; }
+  const favorite = target.closest<HTMLElement>('[data-like-song-id]');
+  if (favorite) { event.preventDefault(); event.stopPropagation(); toggleFavorite(null,favorite.dataset.likeSongId); return; }
+  const artistSong = target.closest<HTMLElement>('[data-play-artist-song-id]');
+  if (artistSong && !target.closest('button')) {
+    (globalThis as any).playArtistSongs?.(artistSong.dataset.artistName,false,artistSong.dataset.playArtistSongId);
+    return;
+  }
+  const play = target.closest<HTMLElement>('[data-play-song-id]');
+  if (play && !target.closest('button:not([data-play-song-id]), a, input, [data-song-menu], [data-like-song-id]')) {
+    const song = findSongById(play.dataset.playSongId);
+    if (song) {
+      if (play.dataset.artistKey) playArtistByKey(play.dataset.artistKey,String(song.id));
+      else playSong(state.songs.indexOf(song));
     }
-
-    export function openTrackMenu(e, id){
-      if(e) e.stopPropagation();
-      const song = findSongById(id);
-      if(!song) return;
-      trackSheetSongId = song.id;
-      const isAdded = state.addedSongs.some(a => String(a.id) === String(song.id));
-      const canSaveOffline = !song.isYouTube && !!song.url;
-
-      const rows = [];
-      rows.push(`<div role="button" tabindex="0" class="track-sheet-row${song.favorite?' active-row':''}" onclick="queueTrackAction('favorite')"><i class="fa-${song.favorite?'solid':'regular'} fa-heart"></i>${song.favorite?'Remove from Favorites':'Add to Favorites'}</div>`);
-      rows.push(`<div role="button" tabindex="0" class="track-sheet-row" onclick="queueTrackAction('playlist')"><i class="fa-solid fa-list"></i>Add to Playlist</div>`);
-      if(isAdded){
-        rows.push(`<div role="button" tabindex="0" class="track-sheet-row" onclick="queueTrackAction('edit')"><i class="fa-solid fa-pen"></i>Edit Track</div>`);
-      }
-      rows.push(`<div role="button" tabindex="0" class="track-sheet-row" onclick="queueTrackAction('share')"><i class="fa-solid fa-share-nodes"></i>Share</div>`);
-      if(canSaveOffline){
-        rows.push(`<div role="button" tabindex="0" class="track-sheet-row" onclick="queueTrackAction('download')"><i class="fa-solid fa-download"></i>Save Offline</div>`);
-      }
-      if(isAdded){
-        rows.push(`<div role="button" tabindex="0" class="track-sheet-row danger" onclick="queueTrackAction('delete')"><i class="fa-solid fa-trash"></i>Remove from Library</div>`);
-      }
-      showTrackSheet({img:song.img, title:song.title, artist:song.artist, rowsHtml:rows.join('')});
-    }
-
-    export function closeTrackMenu(){
-      $('trackSheetOverlay').classList.remove('active');
-      trackSheetSongId = null;
-    }
-    $('trackSheetOverlay').onclick = (e) => { if(e.target === $('trackSheetOverlay')) closeTrackMenu(); };
-
-    export function queueTrackAction(action){
-      const id = trackSheetSongId;
-      const song = findSongById(id);
-      closeTrackMenu();
-      if(!song) return;
-
-      if(action === 'playNext'){
-        if(state.currentIndex>=0 && state.songs[state.currentIndex] && String(state.songs[state.currentIndex].id)===String(id)) return toast('That song is already playing','circle-info');
-        manualQueue = manualQueue.filter(qid => String(qid) !== String(id));
-        manualQueue.unshift(id);
-        renderUpNext();
-        toast(`"${song.title}" will play next`, 'circle-check');
-      } else if(action === 'addQueue'){
-        if(state.currentIndex>=0 && state.songs[state.currentIndex] && String(state.songs[state.currentIndex].id)===String(id)) return toast('That song is already playing','circle-info');
-        manualQueue=manualQueue.filter(qid=>String(qid)!==String(id));
-        manualQueue.push(id);
-        renderUpNext();
-        toast(`Added "${song.title}" to queue`, 'circle-check');
-      } else if(action === 'favorite'){
-        song.favorite = !song.favorite;
-        if(song.favorite) savedLikeMap[String(song.id)]=true; else delete savedLikeMap[String(song.id)];
-        persistLikedHistory();
-        if(state.currentIndex >= 0 && state.songs[state.currentIndex] && String(state.songs[state.currentIndex].id)===String(song.id)){
-          $('fullLikeBtn').className=`like-btn ${song.favorite?'active':''}`;
-          $('fullLikeBtn').innerHTML=`<i class="fa-${song.favorite?'solid':'regular'} fa-heart"></i>`;
-        }
-        filterSongs();
-        if($('tabLibrary').classList.contains('active')) renderLibrary();
-        if($('tabSearch').classList.contains('active')) filterSearchTab();
-        toast(song.favorite ? 'Added to Favorites' : 'Removed from Favorites', 'circle-check');
-      } else if(action === 'edit'){
-        openEditModal(null, song.id);
-      } else if(action === 'playlist'){
-        (globalThis as any).openPlaylistPicker?.(song.id);
-      } else if(action === 'delete'){
-        deleteTrack(null, song.id);
-      } else if(action === 'share'){
-        const shareUrl = song.isYouTube && song.videoId ? `https://youtu.be/${song.videoId}` : (song.url || '');
-        if(navigator.share){
-          navigator.share({ title: song.title, text: `${song.title} — ${song.artist}`, url: shareUrl || undefined }).catch(()=>{});
-        } else if(shareUrl){
-          copyToClipboard(shareUrl,'Link copied to clipboard');
-        } else {
-          toast('Sharing is not supported on this device', 'triangle-exclamation');
-        }
-      } else if(action === 'download'){
-        try{
-          const a = document.createElement('a');
-          a.href = song.url;
-          a.download = song.title || 'track';
-          document.body.appendChild(a);
-          a.click();
-          a.remove();
-          toast('Download started', 'circle-check');
-        }catch(err){
-          toast('Could not save this track offline', 'triangle-exclamation');
-        }
-      }
-    }
-
-/* ===== 5986-6184 ===== */
-    /* ---------- Up Next: rolling 4-song queue + touch drag reorder ---------- */
-    export const UP_NEXT_PHONE_LIMIT = 4, UP_NEXT_DESKTOP_LIMIT = 30;
-    export const upNextLimit = () => (window.matchMedia && window.matchMedia('(min-width:900px)').matches) ? UP_NEXT_DESKTOP_LIMIT : UP_NEXT_PHONE_LIMIT;
-    export let upNextDrag = null;
-
-    export function getRollingUpNextItems(){
-      const UP_NEXT_LIMIT = upNextLimit();
-      const result=[];
-      const seen=new Set();
-      const currentId = state.currentIndex>=0 && state.songs[state.currentIndex] ? String(state.songs[state.currentIndex].id) : null;
-      const add=(song)=>{
-        if(!song) return;
-        const id=String(song.id);
-        if(id===currentId || seen.has(id)) return;
-        seen.add(id);
-        if(result.length<UP_NEXT_LIMIT) result.push(song);
-      };
-      // Explicit Play Next / Add to Queue items always take priority.
-      for(const id of manualQueue) add(findSongById(id));
-      // Fill the visible window from the library only until four upcoming state.songs exist.
-      if(result.length<UP_NEXT_LIMIT && state.songs.length){
-        const start=state.currentIndex>=0 ? state.currentIndex+1 : 0;
-        for(let n=0;n<state.songs.length && result.length<UP_NEXT_LIMIT;n++) add(state.songs[(start+n)%state.songs.length]);
-      }
-      return result;
-    }
-
-    export function renderUpNext(){
-      const list=$('upNextList');
-      if(!list) return;
-      const items=getRollingUpNextItems();
-      if(!items.length){
-        list.innerHTML="<div class='up-next-empty'>Nothing queued yet. Add a song with Play Next or Add to Queue.</div>";
-        return;
-      }
-      list.innerHTML=items.map(song=>{
-        const liked=!!song.favorite;
-        return `<div class="up-next-row" role="button" tabindex="0" data-up-next-id="${escapeHtml(song.id)}">
-          <img class="up-next-cover" src="${escapeHtml(song.img||'')}" alt="" loading="lazy" decoding="async">
-          <div class="up-next-info"><div class="up-next-song-title">${escapeHtml(song.title||'Untitled')}</div><div class="up-next-song-artist">${escapeHtml(song.artist||'Unknown Artist')}</div></div>
-          <div class="up-next-actions">
-            <button class="up-next-action favorite" type="button" aria-label="${liked?'Remove from favorites':'Add to favorites'}"><i class="fa-${liked?'solid':'regular'} fa-heart"></i></button>
-            <button class="up-next-action reorder" type="button" aria-label="Hold and drag to reorder"></button>
-          </div>
-        </div>`;
-      }).join('');
-
-      list.querySelectorAll('.up-next-row').forEach(row=>{
-        row.addEventListener('click',e=>{
-          if(e.target.closest('.up-next-action')) return;
-          const id=row.dataset.upNextId;
-          const idx=state.songs.findIndex(x=>String(x.id)===String(id));
-          if(idx!==-1){
-            manualQueue=manualQueue.filter(q=>String(q)!==String(id));
-            closeUpNext();
-            playSong(idx);
-          }
-        });
-      });
-      list.querySelectorAll('.up-next-action.favorite').forEach(btn=>{
-        btn.addEventListener('click',e=>{
-          e.stopPropagation();
-          const row=btn.closest('.up-next-row');
-          const idx=state.songs.findIndex(x=>String(x.id)===String(row.dataset.upNextId));
-          if(idx===-1) return;
-          state.songs[idx].favorite=!state.songs[idx].favorite;
-          if(state.songs[idx].favorite) savedLikeMap[String(state.songs[idx].id)]=true; else delete savedLikeMap[String(state.songs[idx].id)];
-          persistLikedHistory();
-          renderUpNext();
-          filterSongs();
-          if($('tabLibrary').classList.contains('active')) renderLibrary();
-        });
-      });
-      list.querySelectorAll('.up-next-action.reorder').forEach(handle=>initUpNextReorder(handle));
-    }
-
-    export function promoteVisibleOrder(ids){
-      const unique=[]; const seen=new Set();
-      ids.forEach(id=>{ const s=findSongById(id); if(s && !seen.has(String(id))){seen.add(String(id));unique.push(s.id);} });
-      const visibleIds=new Set(unique.map(id=>String(id)));
-      const remaining=manualQueue.filter(id=>!visibleIds.has(String(id)) && findSongById(id));
-      manualQueue=[...unique,...remaining];
-    }
-
-    export function initUpNextReorder(handle){
-      handle.onpointerdown=(e)=>{
-        e.preventDefault();
-        e.stopPropagation();
-        const row=handle.closest('.up-next-row');
-        if(!row) return;
-        handle.setPointerCapture?.(e.pointerId);
-        upNextDrag={row,pointerId:e.pointerId,moved:false};
-        row.classList.add('dragging-row');
-        handle.style.touchAction='none';
-      };
-      handle.onpointermove=(e)=>{
-        if(!upNextDrag || upNextDrag.pointerId!==e.pointerId) return;
-        if(Math.abs(e.movementY)>2) upNextDrag.moved=true;
-        const rows=[...$('upNextList').querySelectorAll('.up-next-row:not(.dragging-row)')];
-        const target=rows.find(r=>{const b=r.getBoundingClientRect();return e.clientY < b.top+b.height/2;});
-        if(target) $('upNextList').insertBefore(upNextDrag.row,target); else $('upNextList').appendChild(upNextDrag.row);
-      };
-      handle.onpointerup=(e)=>finishUpNextReorder(e);
-      handle.onpointercancel=(e)=>finishUpNextReorder(e);
-    }
-
-    export function finishUpNextReorder(e){
-      if(!upNextDrag || upNextDrag.pointerId!==e.pointerId) return;
-      const list=$('upNextList');
-      const ids=[...list.querySelectorAll('.up-next-row')].map(r=>r.dataset.upNextId);
-      if(upNextDrag.moved) promoteVisibleOrder(ids);
-      upNextDrag.row.classList.remove('dragging-row');
-      upNextDrag=null;
-      renderUpNext();
-      toast('Up Next order updated','list-check');
-    }
-
-    export function openUpNext(){
-      renderUpNext();
-      const sheet=$('upNextSheet');
-      sheet.style.removeProperty('--up-next-drag-y');
-      sheet.classList.remove('dragging');
-      sheet.classList.add('active');
-      sheet.setAttribute('aria-hidden','false');
-      refreshLyricsForOpenSheet();
-    }
-    export function closeUpNext(){
-      const sheet=$('upNextSheet');
-      sheet.classList.remove('dragging');
-      sheet.style.removeProperty('--up-next-drag-y');
-      sheet.classList.remove('active');
-      sheet.setAttribute('aria-hidden','true');
-    }
-
-    const openBtn = $('upNextOpenBtn');
-    if (openBtn) openBtn.onclick=e=>{e.stopPropagation();openUpNext();};
-    const closeBtn = $('upNextCloseBtn');
-    if (closeBtn) closeBtn.onclick=closeUpNext;
-    const sheetEl = $('upNextSheet');
-    if (sheetEl) sheetEl.onclick=e=>{if(e.target===sheetEl) closeUpNext();};
-    document.addEventListener('keydown',e=>{if(e.key==='Escape') closeUpNext();});
-
-
-    export async function playPrevious(keepFull=false){
-      if(keepFull && !window.matchMedia('(min-width:900px)').matches){
-        $('fullPlayerOverlay').classList.add('active');
-      }
-      // Always resolve the current position from the actual YouTube result ID.
-      // This prevents a stale queue index from making AURA think we're at an end.
-      if(auraYTVideoId && auraYTQueue.length){
-        let idx=auraYTQueue.findIndex(m=>{
-          const mid=String(m?.id||'');
-          const vid=extractYouTubeId(m)||String(m?.videoId||'');
-          return mid===String(auraYTVideoId) || vid===String(auraYTVideoId);
-        });
-        if(idx<0) idx=state.auraYTQueueIndex;
-        if(idx<0) idx=0;
-        state.auraYTQueueIndex=idx;
-        const prevIndex=(idx-1+auraYTQueue.length)%auraYTQueue.length;
-        state.auraYTQueueIndex=prevIndex;
-        await playYouTubeProResult(auraYTQueue[prevIndex]);
-        if(keepFull && !window.matchMedia('(min-width:900px)').matches){
-          $('fullPlayerOverlay').classList.add('active');
-        }
-        return;
-      }
-      if(!state.songs.length) return;
-      let i=state.currentIndex-1;
-      if(i<0) i=state.songs.length-1;
-      playSong(i, keepFull);
-      if(keepFull && !window.matchMedia('(min-width:900px)').matches){
-        $('fullPlayerOverlay').classList.add('active');
-      }
-    }
-
-    export async function playNext(keepFull=false){
-      if(manualQueue.length){
-        const nextId = manualQueue.shift();
-        const idx = state.songs.findIndex(s => String(s.id) === String(nextId));
-        if(idx !== -1){ playSong(idx); renderUpNext(); return; }
-      }
-      if(keepFull && !window.matchMedia('(min-width:900px)').matches){
-        $('fullPlayerOverlay').classList.add('active');
-      }
-      if(auraYTVideoId && auraYTQueue.length){
-        let idx=auraYTQueue.findIndex(m=>{
-          const mid=String(m?.id||'');
-          const vid=extractYouTubeId(m)||String(m?.videoId||'');
-          return mid===String(auraYTVideoId) || vid===String(auraYTVideoId);
-        });
-        if(idx<0) idx=state.auraYTQueueIndex;
-        if(idx<0) idx=0;
-        state.auraYTQueueIndex=idx;
-        let nextIndex=(idx+1)%auraYTQueue.length;
-        if(state.isShuffle && auraYTQueue.length>1){ do{ nextIndex=Math.floor(Math.random()*auraYTQueue.length); }while(nextIndex===idx); }
-        state.auraYTQueueIndex=nextIndex;
-        await playYouTubeProResult(auraYTQueue[nextIndex]);
-        if(keepFull && !window.matchMedia('(min-width:900px)').matches){
-          $('fullPlayerOverlay').classList.add('active');
-        }
-        return;
-      }
-      if(!state.songs.length) return;
-      let i=state.currentIndex+1;
-      if(state.isShuffle && state.songs.length>1){ do{ i=Math.floor(Math.random()*state.songs.length); }while(i===state.currentIndex); }
-      if(i>=state.songs.length) i=0;
-      playSong(i, keepFull);
-      if(keepFull && !window.matchMedia('(min-width:900px)').matches){
-        $('fullPlayerOverlay').classList.add('active');
-      }
-      renderUpNext();
-    }
-
-    $('fullHeaderMenuBtn').onclick=e=>{
-      e.stopPropagation();
-      if(state.songs[state.currentIndex]) openTrackMenu(e, state.songs[state.currentIndex].id);
-    };
-    $('fullPrevBtn').onclick=e=>{e.stopPropagation();playPrevious(true);};
-    $('fullNextBtn').onclick=e=>{e.stopPropagation();playNext(true);};
-    $('nextBtn').onclick=e=>{e.stopPropagation();playNext(false);};
-
-
-/* Song-row menus live in library markup and carry their id in a data
-   attribute. Delegating here means ids like "hf:<bucket path>" never have to be
-   embedded inside an inline onclick as JavaScript source. */
-document.addEventListener('click', (e) => {
-  const target = e.target as HTMLElement;
-  const btn = target?.closest?.('[data-song-menu]') as HTMLElement | null;
-  if (!btn) return;
-  e.preventDefault();
-  e.stopPropagation();
-  openTrackMenu(e, btn.dataset.songMenu || '');
+  }
 }, true);

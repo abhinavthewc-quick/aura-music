@@ -10,6 +10,7 @@ let active = false;
 
 export function setRoomActive(value: boolean): void {
   active = value;
+  if (typeof window !== 'undefined') window.dispatchEvent(new Event('aura:room-mode-changed'));
 }
 
 export function roomModeActive(): boolean {

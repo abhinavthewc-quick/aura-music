@@ -105,7 +105,37 @@ function closeOverlay(el: HTMLElement): void {
 
 /* ---------- focus restoration + initial focus ---------- */
 let activeDialog: HTMLElement | null = null;
-let lastFocused: HTMLElement | null = null;
+const dialogOrigins = new WeakMap<HTMLElement,HTMLElement | null>();
+let latestLauncher: HTMLElement | null = null;
+document.addEventListener('pointerdown',(event) => {
+  latestLauncher = (event.target as Element | null)?.closest<HTMLElement>(FOCUSABLE) || null;
+},true);
+document.addEventListener('keydown',(event) => {
+  if (event.key === 'Enter' || event.key === ' ') latestLauncher = (event.target as HTMLElement)?.closest<HTMLElement>(FOCUSABLE) || null;
+},true);
+
+function reachable(target: HTMLElement | null): boolean {
+  if (!target?.isConnected || !isVisible(target) || target.closest('[hidden]')) return false;
+  return OVERLAY_PRIORITY.every((selector) => {
+    const overlay = document.querySelector<HTMLElement>(selector);
+    return !overlay?.contains(target) || isOverlayOpen(overlay);
+  });
+}
+function restoredTarget(origin: HTMLElement | null): HTMLElement | null {
+  if (reachable(origin)) return origin;
+  if (origin?.id) {
+    const target = document.getElementById(origin.id);
+    if (reachable(target)) return target;
+  }
+  if (origin && Object.keys(origin.dataset).length) {
+    const target = Array.from(document.querySelectorAll<HTMLElement>(FOCUSABLE)).find((element) =>
+      Object.entries(origin.dataset).every(([key,value]) => element.dataset[key] === value) && reachable(element));
+    if (target) return target;
+  }
+  const heading = document.querySelector<HTMLElement>('.tab-content.active h2,.tab-content.active h3');
+  if (heading) { heading.tabIndex = -1; return heading; }
+  return null;
+}
 
 function focusFirst(modal: HTMLElement): void {
   const items = Array.from(modal.querySelectorAll<HTMLElement>(FOCUSABLE)).filter(isVisible);
@@ -117,18 +147,31 @@ function focusFirst(modal: HTMLElement): void {
 function syncDialog(): void {
   const modal = topDialog();
   if (modal !== activeDialog) {
+    const previous = activeDialog, previousOrigin = previous ? dialogOrigins.get(previous) || null : null;
+    activeDialog = modal;
     if (modal) {
-      const current = document.activeElement;
-      lastFocused = current instanceof HTMLElement && current !== document.body ? current : null;
-      activeDialog = modal;
-      requestAnimationFrame(() => { if (activeDialog === modal) focusFirst(modal); });
-    } else {
-      activeDialog = null;
-      if (lastFocused && lastFocused.isConnected) {
-        try { lastFocused.focus({ preventScroll: true }); } catch { /* ignore */ }
+      const returning = reachable(previousOrigin) && modal.contains(previousOrigin);
+      if (!returning) {
+        const focused = document.activeElement instanceof HTMLElement ? document.activeElement : null;
+        let origin = focused && focused !== document.body && !modal.contains(focused) ? focused : latestLauncher;
+        // Replacing a closed menu with a picker inherits the menu's real launcher,
+        // not the now-hidden option button in that menu.
+        if (previous && origin && previous.contains(origin) && !reachable(origin)) origin = previousOrigin;
+        dialogOrigins.set(modal,origin);
       }
-      lastFocused = null;
+      requestAnimationFrame(() => {
+        if (activeDialog !== modal) return;
+        if (returning) previousOrigin.focus({preventScroll:true});
+        else if (!modal.contains(document.activeElement)) focusFirst(modal);
+      });
+    } else {
+      restoredTarget(previousOrigin)?.focus({preventScroll:true});
     }
+  }
+
+  for (const selector of OVERLAY_PRIORITY) {
+    const overlay = document.querySelector<HTMLElement>(selector);
+    if (overlay) overlay.inert = !isOverlayOpen(overlay);
   }
 
   /* Always run — this is independent of whether the active dialog changed.
@@ -148,12 +191,42 @@ function scheduleDialogSync(): void {
   dialogRaf = requestAnimationFrame(() => { dialogRaf = 0; syncDialog(); });
 }
 
-new MutationObserver(scheduleDialogSync).observe(document.body, {
+/* Watching every attribute change under <body> made this the app's busiest
+   observer: playing a track flips classes and aria-hidden on dozens of nodes,
+   and each batch queued a full pass over all 13 overlays (getComputedStyle per
+   node, plus inert writes). Only a handful of elements decide what the top
+   dialog is, so observe those directly — capped at one pass per frame, with a
+   cheap early-out when the outlined set of open overlays has not changed. */
+const OBSERVED_OVERLAYS = [...OVERLAY_PRIORITY, '#fullPlayerOverlay', '#radioFullPlayerOverlay']
+  .filter((selector, index, all) => all.indexOf(selector) === index);
+const observedNodes: HTMLElement[] = OBSERVED_OVERLAYS
+  .map((selector) => document.querySelector<HTMLElement>(selector))
+  .filter((el): el is HTMLElement => !!el);
+let openSignature = '';
+function overlaySignature(): string {
+  let signature = '';
+  const sideVisible = observedNodes.some((el) => el.id === 'sideMenu' && getComputedStyle(el).display !== 'none');
+  for (const el of observedNodes) {
+    const open = el.id === 'sideMenu'
+      ? sideVisible
+      : el.id === 'helpOverlay' ? el.classList.contains('open') : el.classList.contains('active');
+    if (open) signature += el.id + ',';
+  }
+  return signature;
+}
+new MutationObserver(() => {
+  const signature = overlaySignature();
+  if (signature === openSignature) return;
+  openSignature = signature;
+  scheduleDialogSync();
+}).observe(document.body, {
   subtree: true,
+  childList: true,
   attributes: true,
   attributeFilter: ['class', 'aria-hidden', 'hidden'],
 });
-scheduleDialogSync();
+syncDialog();
+openSignature = overlaySignature();
 
 /* ---------- keyboard ---------- */
 document.addEventListener('keydown', (e) => {

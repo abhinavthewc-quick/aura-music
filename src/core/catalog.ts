@@ -1,3 +1,6 @@
+import { artistMatchKey } from './artist-names';
+import { isAudioVersionPath, normalizeAudioVersions, parseAudioVersionsIndex } from './audio-versions';
+
 /* Dynamic catalog: lists tracks (audio + cover art) from the public
    Hugging Face storage bucket at runtime instead of hardcoding them.
    Result is cached in localStorage so the library paints instantly and
@@ -51,6 +54,22 @@ export function hfFileUrl(path: string): string {
     '/resolve/' +
     path.split('/').map(encodeURIComponent).join('/')
   );
+}
+
+/** Artwork snapshots saved before the archive move still point at root files.
+ * Only migrate this bucket's root images; custom URLs and nested paths keep
+ * their meaning. Decode once and re-encode so literal %, Unicode, ? and # in
+ * filenames survive the move. */
+export function normalizeHfArtworkUrl(value: unknown): string {
+  const raw = typeof value === 'string' ? value : '';
+  try {
+    const url = new URL(raw);
+    const prefix = `/buckets/${HF_BUCKET_ID}/resolve/`;
+    if (url.origin !== 'https://huggingface.co' || url.username || url.password || !url.pathname.startsWith(prefix)) return raw;
+    const path = decodeURIComponent(url.pathname.slice(prefix.length));
+    if (!COVER_RE.test(path) || /[\/\\\x00-\x1f\x7f]/.test(path)) return raw;
+    return hfFileUrl(`covers/${path}`) + url.search + url.hash;
+  } catch { return raw; }
 }
 
 /**
@@ -108,7 +127,7 @@ export function extractVideoId(path: string): string {
 export function parseTrackName(path: string): { title: string; artist: string } {
   /* "<Artist> - Topic - <Title>" is the auto-generated-channel filename form:
      collapse the middle segment so the first " - " split lands on the artist. */
-  const base = path
+  const base = path.split('/').pop()
     .replace(/\.[^.]+$/, '')
     .replace(VIDEO_ID_SUFFIX_RE, '')
     .replace(/\s*-\s*Topic\s*-\s*/i, ' - ');
@@ -127,8 +146,8 @@ export function readCatalogCache(): any[] {
     // Drop hidden/pruned tracks even from the cache so removal is instant.
     return parsed.tracks.filter((t: any) => {
       const path = typeof t?.id === 'string' && t.id.startsWith('hf:') ? t.id.slice(3) : '';
-      return !isHiddenTrack(path, t?.artist || '', t?.title || '');
-    });
+      return !isAudioVersionPath(path) && !isHiddenTrack(path, t?.artist || '', t?.title || '');
+    }).map((song: any) => ({...song, audioVersions: normalizeAudioVersions(song.audioVersions)}));
   } catch {
     return [];
   }
@@ -171,15 +190,34 @@ export function readArtistsCache(): Record<string, ArtistMeta> {
   }
 }
 
-export function getArtistMeta(artistName: string): ArtistMeta | undefined {
+export function getArtistMeta(artistName: string, artists = readArtistsCache()): ArtistMeta | undefined {
   if (!artistName) return undefined;
-  const artists = readArtistsCache();
   const k = artistName.toLowerCase().trim();
-  return artists[k] || Object.values(artists).find((a) => (a.name || '').toLowerCase().trim() === k);
+  const exact = artists[k] || Object.values(artists).find((a) => (a?.name || '').toLowerCase().trim() === k);
+  if (exact) return exact;
+  const match = artistMatchKey(artistName);
+  if (!match) return undefined;
+  return Object.entries(artists).find(([name, profile]) => profile && (
+    artistMatchKey(name) === match || artistMatchKey(profile.name || '') === match
+  ))?.[1];
 }
 
 export async function fetchHfCatalog(): Promise<any[]> {
-  const [treeRes, manifestRes] = await Promise.allSettled([fetch(HF_TREE_URL), fetch(hfFileUrl('manifest.json'))]);
+  // D1 is the only version registry. An unavailable registry leaves originals
+  // playable rather than advertising obsolete versions from a second index.
+  const versionIndex = async () => {
+    try {
+      const response = await fetch('/api/versions', {signal: AbortSignal.timeout(8000)});
+      if (response.ok) {
+        const data = await response.json();
+        if (data?.v === 1 && data.source === 'database' && data.tracks && typeof data.tracks === 'object' && !Array.isArray(data.tracks)) return data;
+      }
+    } catch { /* temporary database outage */ }
+    return null;
+  };
+  const [treeRes, manifestRes, versionsRes] = await Promise.allSettled([
+    fetch(HF_TREE_URL), fetch(hfFileUrl('manifest.json')), versionIndex(),
+  ]);
 
   if (treeRes.status !== 'fulfilled') throw treeRes.reason;
 
@@ -225,6 +263,10 @@ export async function fetchHfCatalog(): Promise<any[]> {
   }
   const meta: Record<string, ManifestEntry> =
     manifest.tracks && typeof manifest.tracks === 'object' ? manifest.tracks : {};
+  let versions = parseAudioVersionsIndex(null);
+  if (versionsRes.status === 'fulfilled') {
+    versions = parseAudioVersionsIndex(versionsRes.value);
+  }
 
   const covers = new Map<string, string>(); // basename (lowercase, no ext) -> path
   const audios: { path: string; size: number }[] = [];
@@ -232,22 +274,31 @@ export async function fetchHfCatalog(): Promise<any[]> {
   for (const it of items) {
     if (!it || it.type !== 'file' || typeof it.path !== 'string') continue;
     const p: string = it.path;
+    if (isAudioVersionPath(p)) continue;
     if (p === 'manifest.json') continue;
     const ct: string = it.contentType || '';
     if (AUDIO_RE.test(p)) {
       if (!isHiddenTrack(p)) audios.push({ path: p, size: Number(it.size) || 0 });
     } else if (COVER_RE.test(p) || ct.startsWith('image/')) {
-      covers.set(p.replace(/\.[^.]+$/, '').toLowerCase(), p);
+      covers.set(p.split('/').pop().replace(/\.[^.]+$/, '').toLowerCase(), p);
     }
   }
 
   const tracks = audios.map((a) => {
     const { title, artist } = parseTrackName(a.path);
-    const cover = covers.get(a.path.replace(/\.[^.]+$/, '').toLowerCase());
+    const cover = covers.get(a.path.split('/').pop().replace(/\.[^.]+$/, '').toLowerCase());
     const videoId = extractVideoId(a.path);
     const m = videoId ? meta[videoId] : undefined;
+    const originalPath = a.path.replace(/^originals\//, '');
+    const ref = videoId ? `video:${videoId}` : `id:hf:${originalPath}`;
+    const audioVersions = normalizeAudioVersions(versions.tracks[ref]);
+    // Publish only files actually present in this listing. Upload audio before
+    // its index so partial uploads cannot advertise unavailable choices.
+    for (const mode of ['bass', 'bass-reverb'] as const) {
+      if (audioVersions[mode] && !seenPaths.has(audioVersions[mode].path)) delete audioVersions[mode];
+    }
     return {
-      id: 'hf:' + a.path,
+      id: 'hf:' + originalPath,
       title: (m?.t || title) || title,
       artist: (m?.a && m.a.trim() ? m.a : artist) || artist,
       album: m?.al || '',
@@ -261,6 +312,7 @@ export async function fetchHfCatalog(): Promise<any[]> {
       favorite: false,
       isHf: true,
       size: a.size,
+      audioVersions,
     };
   });
 
@@ -277,6 +329,7 @@ export async function fetchHfCatalog(): Promise<any[]> {
       continue;
     }
     if (!prev.videoId && t.videoId) bySong.set(k, t);
+    else if (prev.id === t.id && t.hfPath.startsWith('originals/')) bySong.set(k, t);
   }
   const finalTracks = [...bySong.values()].filter(
     (t) => !isHiddenTrack(t.hfPath || '', t.artist || '', t.title || '')

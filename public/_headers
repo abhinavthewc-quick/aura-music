@@ -1,7 +1,64 @@
-/*
-  Cache-Control: no-cache, no-store, must-revalidate
-  Pragma: no-cache
-  Expires: 0
+# Aura Music — Cloudflare Pages headers.
+#
+# Two Cloudflare behaviours drive the shape of this file. Both are documented at
+# https://developers.cloudflare.com/pages/configuration/headers/
+#
+# 1. A header set by more than one matching rule is JOINED with a comma, it does
+#    not override. So a blanket `Cache-Control` on `/*` poisons every narrower
+#    rule: `no-cache, must-revalidate` + `public, max-age=31536000, immutable`
+#    is a single contradictory value, and `no-cache` wins. A narrower rule has
+#    to DETACH the header first with `! Cache-Control`, then set its own.
+#
+# 2. A splat `*` is greedy and matches `/` as well as any other character. So
+#    `/*.png` also matches `/assets/logo-B6rNPeia.png`. That means the
+#    extension rules must come BEFORE `/assets/*`, not after, or they would
+#    detach the immutable rule and downgrade hashed assets to a week.
+#
+# Order below is therefore: broadest first, `/assets/*` last so it has the final
+# say on anything Vite emitted.
 
+# Default: HTML and anything unhashed revalidates, so a deploy is picked up on
+# the next request. Security headers apply everywhere.
+/*
+  Cache-Control: no-cache, must-revalidate
+  X-Content-Type-Options: nosniff
+  Referrer-Policy: strict-origin-when-cross-origin
+  X-Frame-Options: SAMEORIGIN
+
+# Stable-name files copied from public/ (logos, icons, the vinyl mark). These do
+# NOT carry a content hash, so a year would pin a stale logo after a redesign.
+# A week is long enough to matter and short enough to recover from.
+/*.png
+  ! Cache-Control
+  Cache-Control: public, max-age=604800
+
+/*.svg
+  ! Cache-Control
+  Cache-Control: public, max-age=604800
+
+/*.webp
+  ! Cache-Control
+  Cache-Control: public, max-age=604800
+
+/*.jpg
+  ! Cache-Control
+  Cache-Control: public, max-age=604800
+
+/*.ico
+  ! Cache-Control
+  Cache-Control: public, max-age=604800
+
+# The catalogue manifest is fetched by the admin pipeline and can change on any
+# upload. Five minutes keeps it fresh without hammering the bucket.
+/manifest.json
+  ! Cache-Control
+  Cache-Control: public, max-age=300
+
+# Vite emits content-hashed filenames here (main-B6rNPeia.js, dm-sans-latin-
+# CwMReqGs.woff2, about-logo-C-N56Vop.jpg, ...). The hash changes whenever the
+# bytes change, so these are safe to cache for a year and never revalidate.
+# Deliberately LAST: it must win over the extension rules above, which also
+# match hashed images.
 /assets/*
+  ! Cache-Control
   Cache-Control: public, max-age=31536000, immutable

@@ -46,6 +46,7 @@ import { $ } from '../core/state';
 
     /* ---------- Google Sign-In (any Google account; username picked on first entry) ---------- */
     let gisLoaded = false;
+    let gisRequested = false;
     let pending: { profile: { email: string; name: string; picture: string; exp: number }; credential: string } | null = null;
 
     function showUsernamePicker(email: string){
@@ -261,36 +262,55 @@ import { $ } from '../core/state';
       window.addEventListener('resize', onResize);
       window.addEventListener('orientationchange', onResize);
 
-      const s = document.createElement('script');
-      s.src = 'https://accounts.google.com/gsi/client';
-      s.async = true;
-      s.defer = true;
-      s.onload = () => {
-        gisLoaded = true;
+      /* Google Identity Services pulls a large cross-origin client, its own
+         stylesheet and several requests. Eagerly injecting it during boot put
+         all of that on the same network and main thread as the first render,
+         for a button most visitors never press. Load it once the app is idle
+         (or immediately if the CTA is pressed) and keep the click handler
+         responsive in the meantime. */
+      const promptGoogle = () => {
         try{
-          w.google.accounts.id.initialize({
-            client_id: GOOGLE_CLIENT_ID,
-            callback: (resp: any) => handleCredential(resp?.credential || ''),
+          w.google.accounts.id.prompt((n: any) => {
+            if(n?.isNotDisplayed?.() || n?.isSkippedMoment?.()) showNativeFallback();
           });
-          const ours = $('googleSignInBtn') as HTMLElement | null;
-          if(ours){
-            ours.addEventListener('click', () => {
-              try{
-                w.google.accounts.id.prompt((n: any) => {
-                  if(n?.isNotDisplayed?.() || n?.isSkippedMoment?.()) showNativeFallback();
-                });
-              }catch{ showNativeFallback(); }
-            });
-          }
-          w.google.accounts.id.prompt();
         }catch{ showNativeFallback(); }
       };
-      s.onerror = () => {
-        const ours = $('googleSignInBtn') as HTMLElement | null;
-        if(ours) ours.hidden = true;
-        if(note) note.innerHTML = '<i class="fa-solid fa-triangle-exclamation"></i> Could not load Google sign-in — check your connection, or continue with email &amp; password below.';
+      const loadGis = () => {
+        if(gisRequested) return;
+        gisRequested = true;
+        const s = document.createElement('script');
+        s.src = 'https://accounts.google.com/gsi/client';
+        s.async = true;
+        s.defer = true;
+        s.onload = () => {
+          gisLoaded = true;
+          try{
+            w.google.accounts.id.initialize({
+              client_id: GOOGLE_CLIENT_ID,
+              callback: (resp: any) => handleCredential(resp?.credential || ''),
+            });
+            promptGoogle();
+          }catch{ showNativeFallback(); }
+        };
+        s.onerror = () => {
+          const ours = $('googleSignInBtn') as HTMLElement | null;
+          if(ours){ ours.hidden = true; ours.removeAttribute('aria-busy'); }
+          if(note) note.innerHTML = '<i class="fa-solid fa-triangle-exclamation"></i> Could not load Google sign-in — check your connection, or continue with email &amp; password below.';
+        };
+        document.head.appendChild(s);
       };
-      document.head.appendChild(s);
+
+      const ours = $('googleSignInBtn') as HTMLElement | null;
+      if(ours){
+        ours.addEventListener('click', () => {
+          if(gisLoaded){ promptGoogle(); return; }
+          ours.setAttribute('aria-busy','true');
+          loadGis();
+        });
+      }
+
+      const idle = (w.requestIdleCallback || ((fn: () => void) => setTimeout(fn, 1200)));
+      idle(loadGis, {timeout: 2600});
     }
     initGoogleAuth();
 

@@ -1,7 +1,7 @@
 import { toast } from './core/dom';
 import { fetchHfCatalog } from './core/catalog';
 import { getProfileUsername, getSession, setProfileUsername } from './core/session';
-import { renderQuickPicks, setGreeting, setupHeaderSearch, setupMoodChips } from './features/home';
+import { renderQuickPicks, setGreeting, setupMoodChips } from './features/home';
 import { applyPlayDeepLink } from './features/deeplink';
 import { hydrateLocalTracks, renderLibrary, renderRecent, renderSongs, updateLibCount } from './features/library';
 import { auraYTPlayer, auraYTVideoId, lastPlayRequestAt, loadSong } from './features/player';
@@ -21,7 +21,9 @@ import { $, setHfTracks, state } from './core/state';
       if(c&&c.addEventListener) c.addEventListener('change',slow);
       if(!navigator.onLine) offline(); else slow();
       state.audio.addEventListener('error',()=>{
-        if(!state.audio.getAttribute('src') || auraYTPlayer || auraYTVideoId || Date.now()-lastPlayRequestAt>20000) return;
+        // The source loader reports terminal errors after its proxy/direct and
+        // rendition/original retries. Avoid a premature toast during recovery.
+        if(typeof state.audio.onerror === 'function' || !state.audio.getAttribute('src') || auraYTPlayer || auraYTVideoId || Date.now()-lastPlayRequestAt>20000) return;
         toast(navigator.onLine ? "Couldn't play this track — the source may be blocked or removed. Try another." : 'No internet connection — this track needs a connection to play','triangle-exclamation');
       });
     })();
@@ -40,22 +42,29 @@ import { $, setHfTracks, state } from './core/state';
       }
       setGreeting();
       setupMoodChips();
-      setupHeaderSearch();
       /* Paint skeletons (instead of "no tracks") while the first remote
          catalogue request is in flight and there is no cache to show. */
       state.catalogLoading = !state.hfSongs.length;
       state.catalogError = false;
-      await hydrateLocalTracks();
-      renderSongs(state.songs); if(state.songs.length) loadSong(0); updateLibCount(); renderRecent(); renderQuickPicks();
+
+      /* Paint from the localStorage catalogue immediately (state.ts seeds
+         hfSongs there) instead of waiting for IndexedDB to hand back local
+         files: hydrateLocalTracks() only rewrites blob URLs for tracks this
+         device owns, so it can settle after the first paint. */
+      renderSongs(state.songs);
+      if(state.songs.length) loadSong(0, false, false);
+      updateLibCount();
+      renderRecent();
+      renderQuickPicks();
       updateProfilePopup();
-
-      /* A PreMiD "Listen in Aura Music" button lands here. Cached/local tracks
-         can start immediately; bucket tracks are retried after the fetch. */
       applyPlayDeepLink();
+      void hydrateLocalTracks().then(() => { renderRecent(); renderQuickPicks(); });
 
-      /* Catalog lives in the Hugging Face bucket — refresh it in the background
-         (the list is painted instantly from localStorage cache, if any). */
-      fetchHfCatalog().then((tracks)=>{
+      /* Catalog lives in the Hugging Face bucket. With a cached library the
+         page is already useful, so the refresh waits for an idle slot instead
+         of competing with the first paint, fonts and visible artwork. On a
+         cold visit it runs immediately because there is nothing else to show. */
+      const refreshCatalog = () => fetchHfCatalog().then((tracks)=>{
         state.catalogLoading = false;
         state.catalogError = false;
         const hadSongs = state.songs.length > 0;
@@ -64,7 +73,7 @@ import { $, setHfTracks, state } from './core/state';
         renderRecent();
         renderQuickPicks();
         updateLibCount();
-        if(!hadSongs && state.songs.length) loadSong(state.currentIndex);
+        if(!hadSongs && state.songs.length) loadSong(state.currentIndex, false, false);
         if($('tabLibrary').classList.contains('active')) renderLibrary();
         applyPlayDeepLink();
       }).catch(()=>{
@@ -74,4 +83,10 @@ import { $, setHfTracks, state } from './core/state';
         if($('tabLibrary').classList.contains('active')) renderLibrary();
          if(!state.hfSongs.length) toast('Could not load the Aura catalogue. Try again when your connection is stable.','triangle-exclamation');
       });
+      if(!state.hfSongs.length) refreshCatalog();
+      else {
+        const idle = (window as any).requestIdleCallback;
+        if(typeof idle === 'function') idle(refreshCatalog, { timeout: 3200 });
+        else setTimeout(refreshCatalog, 1600);
+      }
     })();
