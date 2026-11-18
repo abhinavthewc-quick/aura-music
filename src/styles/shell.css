@@ -10,13 +10,6 @@
 .tab-content.active { display: block; }
 body.has-mini .app-container { padding-bottom: calc(196px + var(--safe-bottom)); }
 .desktop-sidebar { display: none; }
-.ytm-top-search-wrap { display: flex; flex: 1; align-items: center; min-width: 0; max-width: 640px; }
-.ytm-top-search { display: flex; align-items: center; gap: 12px; width: 100%; min-height: var(--tap); padding: 0 14px; border: 1px solid var(--line); border-radius: var(--radius-xs); background: var(--surface-1); transition: border-color var(--dur-fast); }
-.ytm-top-search:focus-within { border-color: var(--accent); }
-.ytm-top-search i { color: var(--text-sub); font-size: 15px; }
-.ytm-top-search input { width: 100%; min-width: 0; padding: 10px 0; border: 0; outline: none; background: transparent; color: var(--text); }
-.ytm-top-search input::placeholder { color: var(--text-dim); }
-body.tab-search-active .ytm-top-search-wrap { visibility: hidden; pointer-events: none; }
 
 @media (min-width: 900px) {
   .app-container { padding: 20px 32px 48px calc(var(--sb-w) + 32px); transition: padding-left var(--dur) var(--ease-out); }
@@ -24,7 +17,6 @@ body.tab-search-active .ytm-top-search-wrap { visibility: hidden; pointer-events
   body.has-mini .app-container { padding-bottom: calc(var(--np-bar-h) + 32px); }
   .top-header { height: 60px; margin-bottom: 24px; }
   .top-header > span, .top-header .header-icon-btn { display: none; }
-  .ytm-top-search-wrap { margin-right: 24px; }
   .desktop-sidebar { position: fixed; z-index: 60; inset: 0 auto 0 0; display: flex; flex-direction: column; width: var(--sb-w); padding: 16px 12px; border-right: 1px solid var(--line); background: var(--bg); overflow-y: auto; overflow-x: hidden; scrollbar-width: thin; transition: width var(--dur) var(--ease-out); }
   body.has-mini .desktop-sidebar { bottom: var(--np-bar-h); }
   .desktop-brand { display: flex; align-items: center; gap: 10px; min-height: 52px; margin-bottom: 16px; padding: 0 4px; }
@@ -58,5 +50,5 @@ body.tab-search-active .ytm-top-search-wrap { visibility: hidden; pointer-events
   body.sb-collapsed .desktop-nav-btn span { font-size: 10px; line-height: 1.2; }
   body.sb-collapsed .desktop-nav-btn i { font-size: 20px; }
 }
-@media (max-width: 899px) { .sidebar-toggle, .ytm-top-search-wrap { display: none; } }
+@media (max-width: 899px) { .sidebar-toggle { display: none; } }
 @media (max-width: 390px) { .app-container { padding-left: max(12px, var(--safe-left)); padding-right: max(12px, var(--safe-right)); } }

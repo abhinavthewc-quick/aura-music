@@ -82,8 +82,8 @@ Other library features:
 - **Edit/delete** — rename title/artist, replace cover from a URL or uploaded
   file, delete from the library (also deletes the IndexedDB blob for local files).
 - **Stats** — total tracks, favourites, local files, distinct artists.
-- **Search within the library** — the main search box filters title/artist/album
-  locally as you type.
+- **Search within the library** — the search field at the top of Home filters
+  title/artist/album locally as you type.
 
 **Empty/loading/error:** skeleton rows while the remote catalogue loads; designed
 empty-library state with an “Add local audio” CTA; retryable error state when the
@@ -93,7 +93,7 @@ catalogue is unreachable.
 
 ### Local search
 
-The search tab filters the whole library by title, artist, album, film, or genre.
+The search field sits at the top of Home and filters the whole library by title, artist, album, film, or genre. Results open directly underneath it, 30 rows at a time, and the home feed is hidden while a search is open.
 Search categories and shortcuts (All, Favorites, Recently played, Local files)
 scope library results; category shortcuts do not masquerade as a search for unsupported
 content. Search copy describes the Aura library rather than podcasts.

@@ -161,13 +161,53 @@ test('failed storage writes never report success or drop tracks; corrupt/newer d
   expect(await page.evaluate(() => localStorage.getItem('auraPlaylists'))).toBe('{"version":99,"playlists":[]}');
 });
 
-test('Search category clears stale queries and playlist navigation clears Search body state', async ({page}) => {
-  await seedAura(page); await page.evaluate(() => (globalThis as any).goTab('tabSearch'));
+test('home search opens in place, clears stale queries and closes when leaving', async ({page}) => {
+  await seedAura(page);
+  await expect(page.locator('#tabSearch')).toHaveCount(0);
+  await expect(page.locator('#homeSearchResults')).toBeHidden();
+  await page.evaluate(() => (globalThis as any).goTab('tabSearch'));
+  await expect(page.locator('#tabHome')).toHaveClass(/search-open/);
+  await expect(page.locator('#homeSearchResults')).toBeVisible();
+  await expect(page.locator('#homeMainView')).toBeHidden();
   await page.locator('#searchTabInput').fill('Alpha');
+  await expect(page.locator('#searchResultsLabel')).toHaveText('1 result');
   await page.evaluate(() => (globalThis as any).goToSearchCategory('local'));
   await expect(page.locator('#searchTabInput')).toHaveValue(''); await expect(page.locator('#searchResultsLabel')).toHaveText('Local files');
   await expect(page.locator('#searchResultsList .song-item')).toHaveCount(1);
-  await openPlaylist(page); await expect(page.locator('body')).not.toHaveClass(/tab-search-active/);
+  await expect(page.locator('#searchMoreBtn')).toBeHidden();
+  await page.locator('.desktop-nav-btn[data-tab="tabHome"]').click();
+  await expect(page.locator('#homeSearchResults')).toBeHidden();
+  await expect(page.locator('#homeMainView')).toBeVisible();
+  await openPlaylist(page); await expect(page.locator('#tabHome')).not.toHaveClass(/search-open/);
+  await page.evaluate(() => (globalThis as any).goTab('tabHome'));
+  await expect(page.locator('#homeMainView')).toBeVisible();
+  await expect(page.locator('#homeSearchResults')).toBeHidden();
+});
+
+test('home search renders one screenful at a time instead of the whole library', async ({page}) => {
+  await seedAura(page);
+  await page.evaluate(() => {
+    const state = (globalThis as any).state;
+    for (let index = 0; index < 70; index += 1) {
+      state.songs.push({id:`extra-${index}`,title:`Extra track ${index}`,artist:'Filler',album:'Bulk',duration:60,url:`/__test__/audio/1.wav`,img:'/aura-logo.png'});
+    }
+  });
+  await page.locator('#searchTabInput').focus();
+  await expect(page.locator('#searchResultsList .song-item')).toHaveCount(30);
+  await page.locator('#searchMoreBtn').click();
+  await expect(page.locator('#searchResultsList .song-item')).toHaveCount(60);
+  await page.locator('#searchMoreBtn').click();
+  await expect(page.locator('#searchResultsList .song-item')).toHaveCount(74);
+  await expect(page.locator('#searchMoreBtn')).toBeHidden();
+  await page.locator('#searchTabInput').fill('Extra track 6');
+  await expect(page.locator('#searchResultsLabel')).toHaveText('11 results');
+  await expect(page.locator('#searchResultsList .song-item')).toHaveCount(11);
+  await page.locator('#searchClearBtn').click();
+  await expect(page.locator('#searchTabInput')).toHaveValue('');
+  await expect(page.locator('#searchResultsList .song-item')).toHaveCount(30);
+  await page.locator('#searchClearBtn').click();
+  await expect(page.locator('#homeSearchResults')).toBeHidden();
+  await expect(page.locator('#homeMainView')).toBeVisible();
 });
 
 test('YouTube playlist ends advance context, keep metadata, and reject stale iframe events', async ({page}) => {
@@ -203,7 +243,7 @@ test('desktop and mobile surfaces keep visible labels and no horizontal overflow
   const evidence = await seedAura(page);
   for (const width of [1440,768,390,320]) {
     await page.setViewportSize({width,height:900});
-    for (const tab of ['tabHome','tabSearch','tabLibrary','tabPlaylists']) {
+    for (const tab of ['tabHome','tabLibrary','tabPlaylists']) {
       await page.evaluate((tab) => (globalThis as any).goTab(tab),tab);
       expect(await page.evaluate(() => document.documentElement.scrollWidth - innerWidth),`${tab} at ${width}`).toBeLessThanOrEqual(1);
     }

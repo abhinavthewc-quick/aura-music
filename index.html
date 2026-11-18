@@ -299,7 +299,6 @@
       <div class="desktop-brand"><button class="sidebar-toggle" id="sidebarToggle" type="button" aria-label="Toggle menu" title="Menu"><i class="fa-solid fa-bars"></i></button><div class="desktop-brand-mark"><img src="./src/assets/brand-logo.webp" alt="Aura Music vinyl logo" width="512" height="512" loading="lazy" decoding="async"></div><div><strong>AURA</strong><span>MUSIC</span></div></div>
       <div class="desktop-nav-label">Menu</div>
       <button type="button" class="desktop-nav-btn active" data-tab="tabHome" aria-label="Home" onclick="navClick(this,'tabHome')"><i class="fa-solid fa-house"></i><span>Home</span></button>
-      <button type="button" class="desktop-nav-btn" data-tab="tabSearch" aria-label="Search" onclick="navClick(this,'tabSearch')"><i class="fa-solid fa-magnifying-glass"></i><span>Search</span></button>
       <button type="button" class="desktop-nav-btn" data-tab="tabLibrary" aria-label="Library" onclick="navClick(this,'tabLibrary')"><i class="fa-solid fa-layer-group"></i><span>Library</span></button>
       <button type="button" class="desktop-nav-btn" data-tab="tabPlaylists" aria-label="Playlists" onclick="navClick(this,'tabPlaylists')"><i class="fa-solid fa-bars-staggered"></i><span>Playlists</span></button>
       <button type="button" class="desktop-nav-btn" data-tab="tabRadio" aria-label="Radio" onclick="navClick(this,'tabRadio')"><i class="fa-solid fa-radio"></i><span>Radio</span></button>
@@ -358,13 +357,6 @@
       </button> 
       <span>Aura Music</span>
 
-      <div class="ytm-top-search-wrap">
-        <div class="ytm-top-search">
-          <i class="fa-solid fa-magnifying-glass"></i>
-          <input type="text" id="headerSearchInput" placeholder="Search your library" autocomplete="off" aria-label="Search your library">
-        </div>
-      </div>
-
       <div class="ytm-header-actions">
         <div class="header-profile-wrap" id="profileWrap">
           <button class="profile-btn" id="profileBtn" type="button" aria-label="Open profile" aria-expanded="false"><img class="profile-photo" id="profilePhoto" alt="" hidden><span class="profile-initial" id="profileInitial" aria-hidden="true">U</span></button>
@@ -390,6 +382,28 @@
     
 
     <div class="tab-content active" id="tabHome">
+      <section class="home-search" id="homeSearch" aria-label="Search your library">
+        <div class="srch-bar-row">
+          <div class="search-bar srch-bar" id="searchBarWrap" role="search">
+            <i class="fa-solid fa-magnifying-glass" aria-hidden="true"></i>
+            <input type="text" id="searchTabInput" placeholder="Search songs, artists, albums…" autocomplete="off" enterkeyhint="search" aria-label="Search songs, artists and albums">
+            <button class="srch-clear" id="searchClearBtn" type="button" aria-label="Clear search"><i class="fa-solid fa-xmark"></i></button>
+          </div>
+          <button type="button" class="glass-btn ctrl-glass-btn srch-mic" id="voiceSearchBtn" title="Search by voice" aria-label="Search by voice"><i class="fa-solid fa-microphone"></i></button>
+        </div>
+        <div id="homeSearchResults" hidden>
+          <div class="browse-grid" id="browseGrid">
+            <button type="button" class="browse-tile cat-all active" data-filter="all"><i class="fa-solid fa-music"></i>All tracks</button>
+            <button type="button" class="browse-tile cat-favorites" data-filter="favorites"><i class="fa-solid fa-heart"></i>Favorites</button>
+            <button type="button" class="browse-tile cat-recent" data-filter="recent"><i class="fa-solid fa-clock-rotate-left"></i>Recently played</button>
+            <button type="button" class="browse-tile cat-local" data-filter="local"><i class="fa-solid fa-file-audio"></i>Local files</button>
+          </div>
+          <div class="search-results-head"><p class="srch-section" id="searchResultsLabel">All tracks</p><button id="importLocalAudioBtn" class="playlist-secondary-btn" type="button" onclick="importLocalAudio()" hidden>Add local audio</button></div>
+          <div class="song-list" id="searchResultsList"></div>
+          <button type="button" class="home-search-more" id="searchMoreBtn" hidden>Show more</button>
+        </div>
+      </section>
+
       <div class="ytm-chips-bar" id="ytmMoodChips">
         <button type="button" class="ytm-chip active" data-mood="all">All</button>
         <button type="button" class="ytm-chip" data-mood="artists" id="homeArtistsChip">Artists</button>
@@ -451,7 +465,7 @@
         <div class="song-list" id="songList"></div>
         <div class="more-songs-note">
           <i class="fa-solid fa-magnifying-glass"></i>
-          <span>Find songs, artists and albums in your library with <button type="button" onclick="goTab('tabSearch')">Search</button>.</span>
+          <span>Search the whole library from the bar at the top of Home.</span>
         </div>
       </div>
 
@@ -467,31 +481,6 @@
 
       <!-- View 3: Artist Songs Drill-Down View -->
       <div id="homeArtistDetailView" style="display:none"></div>
-    </div>
-
-    <div class="tab-content" id="tabSearch">
-      <div class="srch-head">
-        <h2 class="srch-title">Search</h2>
-        <p class="srch-sub">Find tracks, artists, and albums in your Aura library.</p>
-      </div>
-      <div class="srch-bar-row">
-        <div class="search-bar srch-bar" id="searchBarWrap">
-          <i class="fa-solid fa-magnifying-glass"></i>
-          <input type="text" id="searchTabInput" placeholder="Songs, artists, albums…" autocomplete="off" enterkeyhint="search" aria-label="Search songs, artists and albums">
-          <button class="srch-clear" id="searchClearBtn" type="button" aria-label="Clear search"><i class="fa-solid fa-xmark"></i></button>
-        </div>
-        <button type="button" class="glass-btn ctrl-glass-btn srch-mic" id="voiceSearchBtn" title="Search by voice" aria-label="Search by voice"><i class="fa-solid fa-microphone"></i></button>
-      </div>
-      <div class="browse-grid" id="browseGrid">
-        <button type="button" class="browse-tile cat-all active" data-filter="all"><i class="fa-solid fa-music"></i>All tracks</button>
-        <button type="button" class="browse-tile cat-favorites" data-filter="favorites"><i class="fa-solid fa-heart"></i>Favorites</button>
-        <button type="button" class="browse-tile cat-recent" data-filter="recent"><i class="fa-solid fa-clock-rotate-left"></i>Recently played</button>
-        <button type="button" class="browse-tile cat-local" data-filter="local"><i class="fa-solid fa-file-audio"></i>Local files</button>
-      </div>
-
-      <div class="search-results-head"><p class="srch-section" id="searchResultsLabel">All tracks</p><button id="importLocalAudioBtn" class="playlist-secondary-btn" type="button" onclick="importLocalAudio()" hidden>Add local audio</button></div>
-      <div class="song-list" id="searchResultsList"></div>
-
     </div>
 
     <div class="tab-content" id="tabLibrary">
@@ -646,7 +635,7 @@
         <button type="button" class="glass-btn nav-btn" id="navPlaylistsBtn" onclick="navClick(this,'tabPlaylists')" aria-label="Playlists"><i class="fa-solid fa-bars-staggered"></i><span class="nav-label">Playlists</span></button>
         <button type="button" class="glass-btn nav-btn" id="navRadioBtn" onclick="navClick(this,'tabRadio')" aria-label="Radio"><i class="fa-solid fa-radio"></i><span class="nav-label">Radio</span></button>
       </div>
-      <button type="button" class="glass-btn nav-fab" id="navSearchFab" onclick="navClick(this,'tabSearch')" aria-label="Search"><i class="fa-solid fa-magnifying-glass"></i></button>
+      <button type="button" class="glass-btn nav-fab" id="navSearchFab" onclick="openSearch()" aria-label="Search"><i class="fa-solid fa-magnifying-glass"></i></button>
     </div>
   </div>
 

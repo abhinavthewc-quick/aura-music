@@ -2,7 +2,7 @@ import { toast } from './core/dom';
 import { applyArtistTrackOverrides, fetchArtistDirectory, fetchHfCatalog } from './core/catalog';
 import { ARTIST_METADATA_UPDATED_EVENT, installArtistPortraitFallback, setArtistMetadataCatalog, startArtistMetadata } from './core/artistMetadata';
 import { getProfileUsername, getSession, setProfileUsername } from './core/session';
-import { refreshArtistViews, refreshAutomaticArtistViews, renderQuickPicks, setGreeting, setupHeaderSearch, setupMoodChips } from './features/home';
+import { refreshArtistViews, refreshAutomaticArtistViews, renderQuickPicks, setGreeting, setupMoodChips } from './features/home';
 import { applyPlayDeepLink } from './features/deeplink';
 import { getArtistGroups, hydrateLocalTracks, reconcileCatalog, refreshAutomaticLibraryArtists, renderLibrary, renderRecent, renderSongs, updateLibCount } from './features/library';
 import { auraYTPlayer, auraYTVideoId, lastPlayRequestAt, loadSong, setupMainMediaSession, updateMainMediaSession } from './features/player';
@@ -97,7 +97,6 @@ import { $, setHfTracks, state } from './core/state';
       }
       setGreeting();
       setupMoodChips();
-      setupHeaderSearch();
       /* Paint skeletons (instead of "no tracks") while the first remote
          catalogue request is in flight and there is no cache to show. */
       state.catalogLoading = !state.hfSongs.length;

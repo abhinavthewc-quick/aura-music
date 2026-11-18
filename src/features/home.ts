@@ -7,7 +7,6 @@ import { DEFAULT_ARTIST_PORTRAIT, observeArtistMetadataCards, prioritizeArtistMe
 import { $, state } from '../core/state';
 import { getArtistGroups } from './library';
 import { playArtistCollection, refreshArtistPageMetadata, renderArtistPage } from './artist-page';
-import { goTab } from '../ui/nav';
 /* ===== 3075-3096 ===== */
     export function setGreeting(){
       $('greetingLabel').textContent = timeGreeting();
@@ -311,73 +310,6 @@ import { goTab } from '../ui/nav';
       (window as any).playArtistSongs = playArtistSongs;
     }
 
-    export function setupHeaderSearch(){
-      const input = $('headerSearchInput') as HTMLInputElement | null;
-      if(!input) return;
-
-      const triggerSearch = () => {
-        const q = input.value;
-        const tabInput = $('searchTabInput') as HTMLInputElement | null;
-        if(tabInput && tabInput.value !== q){
-          tabInput.value = q;
-          tabInput.dispatchEvent(new Event('input', { bubbles: true }));
-        }
-      };
-
-      const ensureSearchTab = () => {
-        const searchTab = $('tabSearch');
-        if(searchTab && !searchTab.classList.contains('active')){
-          goTab('tabSearch');
-        }
-      };
-
-      // Only sync the query while typing without jumping tabs
-      input.addEventListener('input', () => {
-        triggerSearch();
-      });
-
-      // Pressing Enter confirms search and smoothly opens Search tab
-      input.addEventListener('keydown', (e) => {
-        if(e.key === 'Enter'){
-          const q = input.value.trim();
-          if(q){
-            ensureSearchTab();
-            triggerSearch();
-            const tabInput = $('searchTabInput') as HTMLInputElement | null;
-            if(tabInput) tabInput.focus();
-          }
-        } else if(e.key === 'Escape'){
-          input.value = '';
-          triggerSearch();
-          input.blur();
-        }
-      });
-
-      // Clicking the search icon inside the top search bar confirms search
-      const searchIcon = input.parentElement?.querySelector('i.fa-magnifying-glass');
-      if(searchIcon){
-        searchIcon.addEventListener('click', () => {
-          if(input.value.trim()){
-            ensureSearchTab();
-            triggerSearch();
-          } else {
-            input.focus();
-          }
-        });
-        (searchIcon as HTMLElement).style.cursor = 'pointer';
-      }
-
-      // Keep header search input in sync when user types directly in searchTabInput
-      const tabInput = $('searchTabInput') as HTMLInputElement | null;
-      if(tabInput){
-        tabInput.addEventListener('input', () => {
-          if(input.value !== tabInput.value){
-            input.value = tabInput.value;
-          }
-        });
-      }
-    }
-
     /* Home and Library use the same identities, including collaborations and
        authoritative cloud profiles. A shared credit appears once per artist. */
     export function renderArtistSpotlight(){
@@ -414,7 +346,7 @@ import { goTab } from '../ui/nav';
         c.innerHTML = `<div class="aura-empty">
           <i class="fa-solid fa-compact-disc" aria-hidden="true"></i>
           <div><b>No picks yet</b><span>Your Aura library will appear here when the catalogue finishes loading.</span></div>
-          <button type="button" class="aura-empty-btn" onclick="goTab('tabSearch')">Find music</button>
+          <button type="button" class="aura-empty-btn" onclick="openSearch()">Find music</button>
         </div>`;
         return;
       }

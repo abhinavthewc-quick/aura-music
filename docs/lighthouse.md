@@ -163,6 +163,21 @@ to seconds and transfer sizes to KiB (1 KiB = 1,024 bytes).
 - Revalidate HTML and cache fingerprinted `/assets/*` for one year. Avoid
   overlapping cache rules: Cloudflare Pages joins matching header values.
 
+## Search on Home — 19 November 2026
+
+The Search tab is gone; one field at the top of Home opens its results directly
+underneath it. Nothing is rendered until somebody asks: the old tab built all
+493 rows (561 KB of HTML, ~3,400 nodes, one artwork request per row) the moment
+it was shown, while the panel now paints 30 rows and appends a page per "Show
+more". The home feed is hidden while results are open, so the two never paint
+at once.
+
+Measured on the 493-track production catalogue in dev with a 4× CPU throttle:
+opening the panel takes 13.8 ms, the first query 3.9 ms, later keystrokes
+1.1–1.6 ms (a per-song searchable-text cache removes the five
+lowercase/trim allocations per keystroke). The previous implementation inserted
+its 493 rows in 20.6 ms and kept them in the DOM for the whole visit.
+
 ## Reproduce
 
 ```sh

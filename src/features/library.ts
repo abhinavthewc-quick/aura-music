@@ -14,7 +14,7 @@ import { updateMainMediaSession } from './player';
 import { preparePlaylistTrackEdit } from './playlists';
 import { trackAvailable, type TrackSnapshot } from '../core/track-identity';
 import { playTrackSequence } from './queue';
-import { filterSearchTab } from './search';
+import { refreshSearchIfOpen } from './search';
 import { applyPlayDeepLink } from './deeplink';
 import { refreshPlaylistViews } from './playlists';
 import { renderUpNext } from './queue';
@@ -238,7 +238,7 @@ import { roomModeActive } from '../rooms/roomFlag';
           if (String(state.activeTrack?.id) === String(key)) refreshTrackMetadata(state.activeTrack);
           updateLibCount(); refreshPlaylistViews(); renderUpNext();
           if ($('tabLibrary')?.classList.contains('active')) renderLibrary();
-          if ($('tabSearch')?.classList.contains('active')) filterSearchTab();
+          refreshSearchIfOpen();
           return true;
         } catch { toast('This file could not be stored in this browser. Check device storage and try again.', 'triangle-exclamation'); return false; }
         finally {
@@ -256,7 +256,7 @@ import { roomModeActive } from '../rooms/roomFlag';
       localAudioPicker(async (files) => {
         let added = 0;
         for (const file of files) if (await storeLocalAudio(file,`local_${crypto.randomUUID()}`)) added += 1;
-        if (added) { toast(`Added ${added} local audio file${added === 1 ? '' : 's'}.`, 'circle-check'); goTab('tabSearch'); (globalThis as any).goToSearchCategory?.('local'); }
+        if (added) { toast(`Added ${added} local audio file${added === 1 ? '' : 's'}.`, 'circle-check'); (globalThis as any).goToSearchCategory?.('local'); }
       },true);
     }
     export function restoreLocalFile(id: string, metadata?: TrackSnapshot): void {
@@ -328,7 +328,7 @@ import { roomModeActive } from '../rooms/roomFlag';
         if (wasSelected) refreshTrackMetadata(state.activeTrack);
         filterSongs(); refreshPlaylistViews();
         if($('tabLibrary').classList.contains('active')) renderLibrary();
-        if($('tabSearch').classList.contains('active')) filterSearchTab();
+        refreshSearchIfOpen();
         renderRecent(); scheduleHomeSections();
         toast('Track updated without changing playback or playlist identity.', 'circle-check');
         closeEditModal();
@@ -376,7 +376,7 @@ import { roomModeActive } from '../rooms/roomFlag';
       if (song.isLocal && hasIndexedDB) { try { await withLocalTrackOperation(song.id, () => deleteLocalBlob(song.id)); } catch { /* unused blob can be cleaned up later */ } }
       filterSongs();
       if($('tabLibrary').classList.contains('active')) renderLibrary();
-      if($('tabSearch').classList.contains('active')) filterSearchTab();
+      refreshSearchIfOpen();
       updateLibCount();
       renderRecent();
       renderUpNext();
@@ -417,7 +417,7 @@ import { roomModeActive } from '../rooms/roomFlag';
         if (artistPage) refreshArtistPageFavorites(artistPage);
         else renderLibrary();
       }
-      if($('tabSearch').classList.contains('active')) filterSearchTab();
+      refreshSearchIfOpen();
       document.querySelectorAll<HTMLElement>('.artist-detail-page').forEach(refreshArtistPageFavorites);
       if(focusList){
         const rows = [...focusList.querySelectorAll<HTMLElement>('.song-item, .artist-song-item')];
@@ -774,7 +774,7 @@ import { roomModeActive } from '../rooms/roomFlag';
       }
       if(!hadSongs && state.songs.length) loadSong(state.currentIndex);
       if($('tabLibrary').classList.contains('active')) renderLibrary();
-      if($('tabSearch').classList.contains('active')) filterSearchTab();
+      refreshSearchIfOpen();
       if($('fullPlayerOverlay').classList.contains('active') || $('upNextSheet').classList.contains('active')) renderUpNext();
       applyPlayDeepLink();
     }

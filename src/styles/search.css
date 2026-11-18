@@ -1,8 +1,10 @@
-/* Library-only search: categories are filters, not acquisition tiles. */
-.srch-head { margin-bottom: 24px; }
-.srch-title { margin-bottom: 6px; color: var(--text); font-size: 28px; font-weight: 600; letter-spacing: -.035em; }
-.srch-sub { max-width: 64ch; color: var(--text-sub); font-size: 13px; line-height: 1.55; }
-.srch-bar-row { display: flex; align-items: stretch; gap: 8px; margin-bottom: 20px; }
+/* Library-only search: it lives on Home, categories are filters rather than
+   acquisition tiles, and the results open directly beneath the field. */
+.home-search { margin-bottom: 18px; }
+/* The field reads as the page's own control, not a toolbar, so it stops
+   growing with the desktop column. */
+@media (min-width: 900px) { .home-search .srch-bar-row { max-width: 760px; } }
+.srch-bar-row { display: flex; align-items: stretch; gap: 8px; margin-bottom: 14px; }
 .search-bar { display: flex; align-items: center; gap: 12px; flex: 1; min-width: 0; min-height: 52px; padding: 0 12px 0 16px; border: 1px solid var(--line-strong); border-radius: var(--radius-sm); background: var(--surface-1); transition: border-color var(--dur-fast); }
 .search-bar:focus-within { border-color: var(--accent); }
 .search-bar > i { color: var(--text-sub); font-size: 17px; }
@@ -10,6 +12,9 @@
 .search-bar input::placeholder { color: var(--text-dim); }
 .srch-clear { display: none; place-items: center; width: var(--tap); height: var(--tap); flex: 0 0 var(--tap); padding: 0; border: 0; border-radius: 50%; background: transparent; color: var(--text-sub); }
 .search-bar.has-text .srch-clear { display: grid; }
+/* While the results panel is open the X also closes it, so it must stay
+   reachable even when the field is already empty. */
+#tabHome.search-open .search-bar .srch-clear { display: grid; }
 .srch-clear:hover { background: var(--hover); color: var(--text); }
 .srch-mic { flex: 0 0 52px; width: 52px; height: 52px; border: 1px solid var(--line); border-radius: var(--radius-sm); background: var(--surface-2); color: var(--text-sub); font-size: 18px; }
 .srch-mic:hover { color: var(--text); }
@@ -21,6 +26,19 @@
 .browse-tile.active { border-color: var(--line-strong); background: var(--accent-soft); color: var(--accent); }
 .srch-section { margin-bottom: 12px; color: var(--text); font-size: 15px; font-weight: 600; }
 .srch-hint { color: var(--text-sub); font-size: 12px; }
-#tabSearch.searching .browse-grid { display: none; }
-#tabSearch.searching #searchResultsLabel { margin-top: 0; }
+#homeSearchResults.searching .browse-grid { display: none; }
+#homeSearchResults.searching #searchResultsLabel { margin-top: 0; }
+#homeSearchResults:not([hidden]) .browse-grid { margin-bottom: 16px; }
+.search-results-head { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 10px; }
+.search-results-head .srch-section { margin-bottom: 0; }
+.home-search-more { display: block; width: 100%; min-height: var(--tap); margin: 6px 0 20px; border: 1px dashed var(--line-strong); border-radius: var(--radius-xs); background: transparent; color: var(--text-sub); font-size: 13px; font-weight: 600; }
+.home-search-more:hover { background: var(--hover); color: var(--text); }
+.home-search-more[hidden] { display: none; }
+
+/* Searching hides the feed it sits above: results take the page over, so
+   there is one thing to read and nothing heavy is painted underneath. */
+#tabHome.search-open #ytmMoodChips,
+#tabHome.search-open #homeMainView,
+#tabHome.search-open #homeArtistsView,
+#tabHome.search-open #homeArtistDetailView { display: none !important; }
 @media (max-width: 600px) { .browse-grid { flex-wrap: nowrap; overflow-x: auto; padding-bottom: 4px; scrollbar-width: none; } .browse-tile { flex: 0 0 auto; } }
