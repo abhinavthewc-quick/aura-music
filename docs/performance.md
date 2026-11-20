@@ -532,3 +532,29 @@ The budget is a time-to-ready test, not a speed test: a fast machine on a cold
 CDN edge can still miss 560 ms and get the intro, and a slow machine with a warm
 cache can skip it. Both outcomes are correct for what the listener experiences —
 the animation only ever covers a wait that is actually happening.
+
+## Sixth pass: the login screen only paints for guests
+
+`#welcomeScreen` is a fixed overlay on top of the app. The app hid it from
+`init()` once the bundle had loaded — fast enough that a reload never showed
+it, but a cold first visit painted the sign-in screen for the length of the
+module download before Home replaced it. With the intro splash no longer
+covering every boot, that flash became visible.
+
+The decision now happens in the document, not in the bundle: an inline script
+runs before the body exists, reads the same session record `getSession()` uses
+(email, token, unexpired `exp`) and marks `<html data-aura-authed>`. The loader
+stylesheet, which is already parsed at that point, hides `.welcome-screen` for
+that attribute, so the first paint is already Home. Guests get
+`data-aura-guest` and the overlay stays up — and stays eligible for the
+fallback splash, which is what covers their boot.
+
+The same script releases the scroll lock for signed-in visitors, because the
+app is on screen and nothing should cover it. `init()` removes the attribute
+again if the session turns out to be expired by the time the bundle runs, so a
+sign-in screen can never be lost.
+
+Verified with the entry module blocked (so the app never runs): a signed-in
+document paints with the overlay hidden, a signed-out one keeps it. On a
+4× CPU / 0.5 Mbps profile the signed-in first paint is Home at ~3.8 s instead
+of the login screen followed by Home.

@@ -133,3 +133,33 @@ test('a boot that misses its budget gets the intro late, and it covers until rea
   await expect(page.locator('#auraLoader')).toHaveCount(0, { timeout: 15_000 });
   await expect(page.locator('#ytmQuickGrid .ytm-track-card:not([aria-hidden])')).toHaveCount(2);
 });
+
+/* The login overlay is hidden at parse time for signed-in visitors, so the
+   first paint is Home even before the bundle runs. Blocking the entry module
+   proves the decision is made in the document, not by app init. */
+
+test('a signed-in first paint is Home, not the login screen', async ({ page }) => {
+  await page.addInitScript(() => {
+    localStorage.setItem('auraSession_v2', JSON.stringify({
+      email: 'paint@example.com', name: 'Paint Check', picture: '',
+      exp: Math.floor(Date.now() / 1000) + 86_400, token: 'local:paint',
+    }));
+    localStorage.removeItem('auraTheme');
+  });
+  await page.route('**/src/main.ts*', (route) => route.abort());
+
+  await page.goto('/', { waitUntil: 'domcontentloaded' });
+  await expect(page.locator('#welcomeScreen')).toBeHidden();
+  await expect.poll(() => page.evaluate(() => document.documentElement.dataset.auraAuthed)).toBe('1');
+  await expect.poll(() => page.evaluate(() => document.documentElement.classList.contains('aura-loading'))).toBe(false);
+  expect(await page.evaluate(() => getComputedStyle(document.body).backgroundColor)).toBeTruthy();
+});
+
+test('a signed-out first paint keeps the login screen', async ({ page }) => {
+  await page.route('**/src/main.ts*', (route) => route.abort());
+
+  await page.goto('/', { waitUntil: 'domcontentloaded' });
+  await expect(page.locator('#welcomeScreen')).toBeVisible();
+  await expect.poll(() => page.evaluate(() => document.documentElement.dataset.auraAuthed)).toBeUndefined();
+  await expect.poll(() => page.evaluate(() => document.documentElement.dataset.auraGuest)).toBe('1');
+});

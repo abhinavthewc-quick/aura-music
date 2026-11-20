@@ -40,6 +40,11 @@ import { $, setHfTracks, state } from './core/state';
         $('welcomeScreen').classList.add('hidden');
         localStorage.setItem('auraLastLogin', new Date().toISOString());
         if(!localStorage.getItem('auraUserName')) localStorage.setItem('auraUserName', name);
+      } else {
+        /* The inline head script hides the login overlay for signed-in
+           visitors before first paint; if the session expired between that
+           check and here, give the overlay back. */
+        document.documentElement.removeAttribute('data-aura-authed');
       }
       setGreeting();
       setupMoodChips();
