@@ -87,97 +87,92 @@
   window.AuraOrb={create:create,mountAll:mountAll,reduce:reduce};
 })();
 
-/* Full-screen intro loader: plays the ReactDrops Liquid Glass Logo startup animation and smoothly dissolves into Aura Music. */
-(async function(){
+/* Full-screen intro loader. This is a fallback, not a gate: index.html only
+   reveals #auraLoader when the device looks slow at parse time, or when the app
+   has not signalled readiness by its budget (560 ms desktop / 680 ms coarse).
+   This module starts the animation on reveal and removes the splash the moment
+   the app says its first screen is on screen, so a fast boot never shows it.
+   The renderer is imported here rather than at module scope: a fast boot must
+   not download a shader chunk it will never display. */
+(function(){
   var el=document.getElementById('auraLoader'); if(!el) return;
   var root=document.documentElement;
-  // The intro is a scripted sequence, not a fixed wait: `speed` scales it. The
-  // old 3800ms floor held the app behind a splash for nearly four seconds even
-  // when everything was already parsed and painted. The sequence now finishes
-  // in ~1.5s at speed 1.2, and the floor only guards against a flash.
-  //
-  // On touch devices the floor is cut further: the app is interactive at ~300ms
-  // there, and a phone user is usually waiting on cellular, so a long branded
-  // splash costs more than it buys. The animation still runs, just shorter.
-  var coarsePointer=false;
-  try{ coarsePointer=window.matchMedia('(pointer: coarse)').matches; }catch(e){}
-  var MIN_MS=coarsePointer?350:1100, CAP_MS=coarsePointer?900:2200;
+
+  var started=false, done=false, timer:any, visibleSince=0;
+  var appReady=root.dataset.auraReady==='1';
+  document.addEventListener('aura:ready', function(){ appReady=true; if(!started) removeSplash(); });
+
   var reduce=false;
   try{ reduce=window.matchMedia('(prefers-reduced-motion:reduce)').matches; }catch(e){}
-  if(reduce) MIN_MS=200;
-  // Slow networks must not extend the splash just because a web font is still
-  // arriving. Text already paints with `font-display: swap`; after this window
-  // the swap happens in place instead of behind a full-screen cover.
-  var FONT_WAIT_MS=coarsePointer?700:1400;
 
-  var canvas = document.getElementById('auraLiquidCanvas') as HTMLCanvasElement | null;
-  var liquidRenderer: { pause(): void; dispose(): void } | null = null;
-
-  // Phones pay for the splash in GPU time, not bytes. The renderer draws a
-  // fullscreen fragment shader every frame, so cost scales with device pixels:
-  // at DPR 3 a 393px-wide phone shades ~1.13 megapixels per frame, which is
-  // enough to drop frames on mid-range hardware during a 1.5s intro. Cap the
-  // DPR and thin the shader on touch devices; the animation still reads the
-  // same at arm's length, it just stops competing with the app's own boot work.
-  var coarse = false;
-  try{ coarse = window.matchMedia('(pointer: coarse)').matches; }catch(e){}
-  var lowPower = coarse || (navigator.hardwareConcurrency || 8) <= 4 ||
-    ((navigator as any).deviceMemory || 8) <= 4;
-  var saveData = false;
-  try{ saveData = !!(navigator as any).connection?.saveData; }catch(e){}
-  // The WebGL intro is the single most expensive thing on the boot path: it
-  // downloads a shader chunk, compiles two programs, rasterises the logo at
-  // device resolution and shades a full-screen quad every frame — while the app
-  // is still parsing. On phones that work lands in the same main thread as the
-  // first render and produced >1.4s of long tasks in profiling. Touch devices
-  // (and reduced-motion / data-saver users) get the static mark instead, which
-  // keeps the branded hand-off at a fraction of the cost.
-  var useShader = !!canvas && !reduce && !saveData && !coarse;
-  var maxDpr = lowPower ? 1.25 : 2;
-
-  function cleanup(){
-    if(liquidRenderer){
-      try { liquidRenderer.dispose(); } catch(e){}
-      liquidRenderer = null;
-    }
-    if(el && el.parentNode) el.parentNode.removeChild(el);
+  function removeSplash(){
     root.classList.remove('aura-loading');
+    if(el && el.parentNode) el.parentNode.removeChild(el);
   }
 
-  try{
-    var t0=performance.now(), done=false;
-    // The splash used to gate on `window.load`, which does not fire until every
-    // image in the document has finished downloading. On a phone that meant the
-    // app sat behind a splash for ~3s while the browser fetched cover art for
-    // rails the user had not scrolled to yet — despite the app itself being
-    // interactive at ~290ms. Gate on DOM readiness plus fonts instead: that is
-    // what "the app can paint correctly" actually requires. Images stream in
-    // behind the splash and behind lazy rails, which is fine.
-    var loaded=document.readyState!=='loading';
-    var fontsOk=!document.fonts;
-    var timer: any;
+  var liquidRenderer: { pause(): void; dispose(): void } | null = null;
 
-    // Registered before the dynamic import below: the import awaits a network
-    // fetch, and a readiness event that fires during that await would otherwise
-    // be missed entirely, leaving the splash up until the failsafe cap.
-    if(!loaded){
-      document.addEventListener('DOMContentLoaded', function(){ loaded=true; check(); }, {once:true});
+  function start(){
+    if(started) return;
+    /* Readiness can land between the gate's timer and this module evaluating
+       (or while the browser was parsing the body). Nothing left to cover. */
+    if(appReady){ removeSplash(); return; }
+    started=true;
+    visibleSince=performance.now();
+
+    var coarse=false;
+    try{ coarse=window.matchMedia('(pointer: coarse)').matches; }catch(e){}
+    var lowPower = coarse || (navigator.hardwareConcurrency||8) <= 4 ||
+      ((navigator as any).deviceMemory||8) <= 4;
+    var saveData=false;
+    try{ saveData=!!(navigator as any).connection?.saveData; }catch(e){}
+    var canvas=document.getElementById('auraLiquidCanvas') as HTMLCanvasElement | null;
+    // Phones pay for the splash in GPU time, not bytes: the shader shades a
+    // fullscreen quad every frame while the app is still booting, so touch
+    // devices (and reduced-motion / data-saver users) get the static mark.
+    var useShader=!!canvas && !reduce && !saveData && !coarse;
+    /* The splash is a full-screen quad; 1.5 keeps the glass crisp without
+       paying for 4× the fragments on a boot that is already slow. */
+    var maxDpr=lowPower?1.25:1.5;
+    /* Leave as soon as the app is ready, but not before the mark has been on
+       screen long enough to register as an intro rather than a flicker. */
+    var MIN_VISIBLE_MS=coarse?220:260;
+    var CAP_MS=4200;
+    var FADE_MS=coarse?200:300;
+
+    function cleanup(){
+      if(liquidRenderer){ try{ liquidRenderer.dispose(); }catch(e){} liquidRenderer=null; }
+      removeSplash();
     }
+
+    function leave(){
+      if(done) return;
+      done=true;
+      clearInterval(timer);
+      if(liquidRenderer){ try{ liquidRenderer.pause(); }catch(e){} }
+      var tx=document.getElementById('auraLoaderText');
+      if(tx) tx.classList.add('leaving');
+      el.classList.add('leaving');
+      el.setAttribute('aria-hidden','true');
+      setTimeout(cleanup, FADE_MS + 40);
+    }
+
+    function check(){
+      if(done) return;
+      var spent=performance.now()-visibleSince;
+      if(appReady){
+        if(spent>=MIN_VISIBLE_MS) leave();
+        return;
+      }
+      /* A catalogue that never arrives must not trap the app behind a splash:
+         the skeleton rails are already the honest state to show. */
+      if(spent>=CAP_MS) leave();
+    }
+
     el.addEventListener('click', leave);
-    if(document.fonts && document.fonts.ready){
-      document.fonts.ready.then(function(){ fontsOk=true; check(); }, function(){ fontsOk=true; check(); });
-    }
+    timer=setInterval(check, 120);
+    check();
 
-    // The renderer (78 KB of shader source) is loaded on demand rather than
-    // imported statically: a static import put it on the critical path ahead of
-    // the app itself, so nothing booted until the splash animation's code had
-    // parsed. Fetched in parallel now, with the static logo shown until it is
-    // ready — #auraLoader:not([data-ready]) already reveals that fallback.
-    //
-    // Deliberately NOT awaited here: awaiting it would hold the readiness check
-    // loop below until the chunk had downloaded and parsed, which is exactly the
-    // dependency this change exists to remove. The splash leaves on its own
-    // schedule; the animation joins if it arrives in time.
     if(useShader && canvas){
       import('../components/liquid-glass-logo-renderer').then(function(mod){
         if(done) return;
@@ -211,39 +206,9 @@
         if(el) el.setAttribute('data-ready', '1');
       });
     }
-
-    function check(){
-      if(done) return;
-      var spent=performance.now()-t0;
-      if(!fontsOk && spent>=FONT_WAIT_MS) fontsOk=true;
-      // The blocking main stylesheet bundles UI fonts and icons.
-      var appReady=loaded && fontsOk;
-      if((spent>=MIN_MS && appReady) || spent>=CAP_MS){
-        leave();
-      }
-    }
-
-    function leave(){
-      if(done) return;
-      done=true;
-      clearInterval(timer);
-      // Stop shading immediately: the splash is fading out, and continuing to
-      // run a full-screen fragment shader while the app hydrates is exactly the
-      // contention that made the hand-off stutter.
-      if(liquidRenderer){
-        try{ liquidRenderer.pause(); }catch(e){}
-      }
-      var tx=document.getElementById('auraLoaderText');
-      if(tx) tx.classList.add('leaving');
-      el.classList.add('leaving');
-      el.setAttribute('aria-hidden','true');
-      var fadeDur=reduce?200:450;
-      setTimeout(cleanup, fadeDur + 50);
-    }
-
-    timer=setInterval(check, 80);
-    check();
-  }catch(err){
-    cleanup();
   }
+
+  if(root.dataset.auraSplash==='1') start();
+  else if(appReady) removeSplash();
+  else document.addEventListener('aura:splash', start, {once:true});
 })();

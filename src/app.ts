@@ -1,4 +1,5 @@
 import { toast } from './core/dom';
+import { markAppReady } from './core/boot';
 import { fetchCatalog } from './core/catalog';
 import { getProfileUsername, getSession, setProfileUsername } from './core/session';
 import { renderQuickPicks, setGreeting, setupMoodChips } from './features/home';
@@ -56,6 +57,12 @@ import { $, setHfTracks, state } from './core/state';
       updateLibCount();
       renderRecent();
       renderQuickPicks();
+      /* First screen is on screen: the welcome screen needs nothing else, and
+         a cached/local library is already usable. A cold catalogue waits for
+         the refresh below, so the splash (when the intro gate showed it) keeps
+         covering exactly the part that has nothing to show yet. */
+      if(!session) markAppReady('welcome');
+      else if(state.songs.length) markAppReady('cached');
       updateProfilePopup();
       applyPlayDeepLink();
       void hydrateLocalTracks().then(() => { renderRecent(); renderQuickPicks(); });
@@ -78,12 +85,14 @@ import { $, setHfTracks, state } from './core/state';
         if(!hadSongs && state.songs.length) loadSong(state.currentIndex, false, false);
         if($('tabLibrary').classList.contains('active')) renderLibrary();
         applyPlayDeepLink();
+        markAppReady('catalog');
       }).catch(()=>{
         state.catalogLoading = false;
         state.catalogError = true;
         renderSongs(state.songs);
         if($('tabLibrary').classList.contains('active')) renderLibrary();
          if(!state.hfSongs.length) toast('Could not load the Aura catalogue. Try again when your connection is stable.','triangle-exclamation');
+        markAppReady('catalog-error');
       });
       if(!state.hfSongs.length) refreshCatalog();
       else {

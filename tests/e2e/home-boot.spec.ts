@@ -78,3 +78,58 @@ test('a failing catalogue Function falls back to the bucket listing without a fa
   await expect(page.locator('#ytmQuickGrid .skeleton-block')).toHaveCount(0);
   expect(errors).toEqual([]);
 });
+/* The intro is a fallback: a fast boot must never show it. These tests run the
+   real gate from index.html against a stub catalogue. */
+
+test('a fast boot never shows the intro splash', async ({ page }) => {
+  await routeColdBoot(page, async () => payload);
+  await page.addInitScript(() => {
+    (window as any).__splashSeen = false;
+    const seen = () => {
+      const el = document.getElementById('auraLoader');
+      if (el && el.getBoundingClientRect().width > 0) (window as any).__splashSeen = true;
+      requestAnimationFrame(seen);
+    };
+    requestAnimationFrame(seen);
+  });
+
+  await page.goto('/', { waitUntil: 'domcontentloaded' });
+  await expect(page.locator('#ytmQuickGrid .ytm-track-card:not([aria-hidden])')).toHaveCount(2, { timeout: 15_000 });
+  await expect(page.locator('#auraLoader')).toHaveCount(0);
+  await expect.poll(() => page.evaluate(() => (globalThis as any).__splashSeen)).toBe(false);
+  await expect.poll(() => page.evaluate(() => document.documentElement.dataset.auraSplash)).toBeUndefined();
+  await expect.poll(() => page.evaluate(() => document.documentElement.classList.contains('aura-loading'))).toBe(false);
+  await expect.poll(() => page.evaluate(() => document.documentElement.dataset.auraReady)).toBe('1');
+});
+
+test('a slow connection reveals the intro from the first paint', async ({ page }) => {
+  await routeColdBoot(page, async () => payload);
+  await page.addInitScript(() => {
+    Object.defineProperty(navigator, 'connection', {
+      configurable: true,
+      value: { effectiveType: '3g', saveData: false, rtt: 800, downlink: 0.8 },
+    });
+  });
+
+  await page.goto('/', { waitUntil: 'domcontentloaded' });
+  /* Slow signal: revealed at parse time, so it is on screen immediately. */
+  await expect.poll(() => page.evaluate(() => document.documentElement.dataset.auraSplash)).toBe('1');
+  await expect(page.locator('#auraLoader')).toBeVisible();
+  await expect(page.locator('#auraLoader')).toContainText('Aura Music');
+  await expect(page.locator('#auraLoader')).toHaveCount(0, { timeout: 15_000 });
+  await expect(page.locator('#ytmQuickGrid .ytm-track-card:not([aria-hidden])')).toHaveCount(2);
+});
+
+test('a boot that misses its budget gets the intro late, and it covers until ready', async ({ page }) => {
+  await routeColdBoot(page, async () => {
+    await new Promise((resolve) => setTimeout(resolve, 2600));
+    return payload;
+  });
+
+  await page.goto('/', { waitUntil: 'domcontentloaded' });
+  await expect(page.locator('#auraLoader')).toBeVisible({ timeout: 5_000 });
+  await expect.poll(() => page.evaluate(() => document.documentElement.dataset.auraSplashLate)).toBe('1');
+  await expect(page.evaluate(() => (globalThis as any).state.songs.length)).resolves.toBe(0);
+  await expect(page.locator('#auraLoader')).toHaveCount(0, { timeout: 15_000 });
+  await expect(page.locator('#ytmQuickGrid .ytm-track-card:not([aria-hidden])')).toHaveCount(2);
+});

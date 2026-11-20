@@ -26,6 +26,12 @@ body.light-theme #auraLoader{background:#e2e2e5}
 .aura-startup-fallback{display:none;position:absolute;inset:0;align-items:center;justify-content:center;pointer-events:none}
 #auraLoader:not([data-ready]) .aura-startup-fallback{display:flex}
 #auraLoader[data-ready] .aura-startup-fallback{display:none}
+/* The intro is a fallback, not a gate: fast boots never see it. The attribute
+   is set by the gate script below, either at parse time on a slow-looking
+   device or by a timer when the app misses its readiness budget. */
+html:not([data-aura-splash]) #auraLoader{display:none}
+html[data-aura-splash-late] #auraLoader{animation:auraSplashIn .26s ease,auraLoaderFailsafe 0s linear 8s forwards}
+@keyframes auraSplashIn{from{opacity:0}}
 #auraLoaderText{margin-top:14px;text-align:center;color:rgba(255,255,255,.78);font:700 11px/1.4 "DM Sans",system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;letter-spacing:.24em;text-transform:uppercase;pointer-events:none;animation:auraLoaderTextIn .7s ease .2s backwards;transition:opacity .3s ease,transform .3s ease}
 body.light-theme #auraLoaderText{color:rgba(25,26,30,.78)}
 #auraLoaderText.leaving{opacity:0;transform:translateY(8px);animation:none}
@@ -39,6 +45,50 @@ body.light-theme #auraLoaderText{color:rgba(25,26,30,.78)}
 @media (prefers-reduced-motion:reduce){#auraLoaderText .d{animation:none;opacity:.7}#auraLoader.leaving{transition:opacity .2s ease;transform:none}#auraLoader:not([data-ready]) .aura-startup-fallback img{animation:none}}
 @keyframes auraLoaderFailsafe{to{opacity:0;visibility:hidden;pointer-events:none}}
 </style>
+<script>
+/* Intro gate. A fast boot must never show the splash, so this runs at parse
+   time: slow connections/devices reveal it before the body pays anything,
+   everyone else only sees it if the app has not signalled readiness by the
+   budget. `src/ui/loader.ts` starts the animation on the `aura:splash` event
+   and removes the splash as soon as `data-aura-ready` is set. */
+(function () {
+  var d = document.documentElement;
+  var nav = navigator;
+  var slow = false, coarse = false;
+  try { coarse = matchMedia('(pointer: coarse)').matches; } catch (e) {}
+  try {
+    var c = nav.connection || {};
+    slow = !!(c.saveData || c.effectiveType === '2g' || c.effectiveType === 'slow-2g' ||
+      c.effectiveType === '3g' || c.rtt >= 400);
+  } catch (e) {}
+  try { if ((nav.hardwareConcurrency || 8) <= 2) slow = true; } catch (e) {}
+
+  function reveal() {
+    if (d.getAttribute('data-aura-ready') === '1' || d.getAttribute('data-aura-splash') === '1') return;
+    /* Set the attributes even if the body has not been parsed yet: the CSS and
+       the event are what matter, and a late-arriving element still animates. */
+    d.setAttribute('data-aura-splash-late', '1');
+    d.setAttribute('data-aura-splash', '1');
+    try { document.dispatchEvent(new Event('aura:splash')); } catch (e) {}
+  }
+
+  if (slow) {
+    /* The connection or the CPU is already the bottleneck: cover the boot from
+       the first paint instead of popping the splash in later. */
+    d.setAttribute('data-aura-splash', '1');
+  } else {
+    setTimeout(reveal, coarse ? 680 : 560);
+  }
+
+  /* If the module graph never runs (crash, blocked script) nothing would ever
+     release the scroll lock or remove the cover. */
+  setTimeout(function () {
+    d.classList.remove('aura-loading');
+    var el = document.getElementById('auraLoader');
+    if (el) el.remove();
+  }, 10000);
+})();
+</script>
 <!-- Fonts and icons are bundled in the blocking main stylesheet. -->
 <link rel="preconnect" href="https://huggingface.co" crossorigin><link rel="preconnect" href="https://us.aws.cdn.hf.co" crossorigin><link rel="dns-prefetch" href="https://i.ytimg.com">
   <meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0">

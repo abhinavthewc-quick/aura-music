@@ -482,3 +482,53 @@ breaks.
 - **Waiting for the catalogue before dismissing the splash.** It would make
   every slow connection slower to interactive; the skeleton rails do the same
   job without holding the app hostage.
+
+## Fifth pass: the intro only plays when the boot needs covering
+
+The logo reveal used to run on every visit: a floor of 1,100 ms on desktop and
+350 ms on touch, then a 450 ms dissolve. On a fast connection the app was ready
+in roughly a third of that, so the animation was pure delay — the site was
+finished and the listener was still watching dots.
+
+It is now a fallback rather than a gate.
+
+### How the decision is made
+
+`index.html` contains a small gate that runs while the head is parsed, before
+the body exists:
+
+- **Slow signals** — `saveData`, `effectiveType` of `3g`/`2g`/`slow-2g`,
+  `rtt >= 400 ms`, or two cores — reveal the splash immediately, so it covers
+  the boot from the first paint.
+- **Everyone else** waits 560 ms (680 ms on touch). If `markAppReady()` has run
+  by then, the splash never appears at all; if not, it fades in and covers the
+  boot. The attribute is applied even before the body is parsed, so a document
+  that streams slowly still shows the cover the moment the element exists.
+- **Missing the budget on a fast device but ready shortly after** is handled by
+  the loader: the splash is never shown for less than ~220 ms and dissolves in
+  200–300 ms, so it reads as an intro rather than a flicker.
+
+`src/core/boot.ts` fires `markAppReady()` once the first meaningful screen is in
+the DOM: the welcome screen for signed-out visitors, the cached/local rails when
+a library already exists, and the catalogue response (or its failure) on a cold
+visit. The loader hears `aura:ready`, unlocks scroll and removes the splash. A
+crash that prevents the module graph from running is covered by a 10 s inline
+failsafe that removes the cover and the scroll lock.
+
+The renderer chunk is imported inside `start()` instead of at module scope, so a
+fast boot never downloads the shader it will not show.
+
+Measured on the built site:
+
+| | before | after |
+| --- | --- | --- |
+| intro on a fast desktop (cards at ~420 ms) | shown, floor 1,100 ms | **never shown** |
+| intro on a 4× CPU / 1.25 Mbps phone | shown from parse | shown from parse, leaves ~0.4 s after ready |
+| first content on a fast desktop | after the intro | **immediately** |
+
+### What this does not do
+
+The budget is a time-to-ready test, not a speed test: a fast machine on a cold
+CDN edge can still miss 560 ms and get the intro, and a slow machine with a warm
+cache can skip it. Both outcomes are correct for what the listener experiences —
+the animation only ever covers a wait that is actually happening.
