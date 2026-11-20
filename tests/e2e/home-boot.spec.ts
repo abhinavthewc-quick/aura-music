@@ -121,15 +121,19 @@ test('a slow connection reveals the intro from the first paint', async ({ page }
 });
 
 test('a boot that misses its budget gets the intro late, and it covers until ready', async ({ page }) => {
-  await routeColdBoot(page, async () => {
-    await new Promise((resolve) => setTimeout(resolve, 2600));
-    return payload;
-  });
+  /* Hold the catalogue open past the document's late-reveal budget (1.8 s on a
+     coarse pointer) but inside the client's 5 s edge timeout, so the intro is
+     on screen while the boot is genuinely unfinished. */
+  let release: (value: any) => void = () => {};
+  const gate = new Promise((resolve) => { release = resolve; });
+  await routeColdBoot(page, () => gate as Promise<any>);
 
   await page.goto('/', { waitUntil: 'domcontentloaded' });
   await expect(page.locator('#auraLoader')).toBeVisible({ timeout: 5_000 });
   await expect.poll(() => page.evaluate(() => document.documentElement.dataset.auraSplashLate)).toBe('1');
   await expect(page.evaluate(() => (globalThis as any).state.songs.length)).resolves.toBe(0);
+
+  release(payload);
   await expect(page.locator('#auraLoader')).toHaveCount(0, { timeout: 15_000 });
   await expect(page.locator('#ytmQuickGrid .ytm-track-card:not([aria-hidden])')).toHaveCount(2);
 });

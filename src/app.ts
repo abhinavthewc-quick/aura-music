@@ -1,3 +1,5 @@
+/* App-interior styles travel with the chunk that builds their markup. */
+import './styles/main.css';
 import { toast } from './core/dom';
 import { markAppReady } from './core/boot';
 import { fetchCatalog } from './core/catalog';

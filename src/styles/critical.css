@@ -1,0 +1,18 @@
+/* The landing page needs exactly these sheets to paint the sign-in screen and
+   the app chrome around it. Everything else (library, players, lyrics, radio,
+   rooms, overlays, playlists) is imported by the app chunk instead, so a first
+   visit parses a fraction of the CSS and a signed-in visitor gets the rest
+   together with the code that uses it. Keep this import order in sync with
+   main.css: the two files together are the old single sheet, and later rules
+   still win. */
+@import './fonts.css';
+@import './icons.css';
+@import './tokens.css';
+@import './base.css';
+@import './shell.css';
+@import './nav.css';
+@import './profile.css';
+@import './login.css';
+@import './home.css';
+@import './player-bar.css';
+@import './effects.css';

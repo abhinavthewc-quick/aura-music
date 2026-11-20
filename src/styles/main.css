@@ -1,18 +1,9 @@
-/* Aura's black listening room. Each component owns its active and responsive
-   states; there is no late override layer or alternate theme. */
-@import './fonts.css';
-@import './icons.css';
-@import './tokens.css';
-@import './base.css';
-@import './shell.css';
-@import './nav.css';
-@import './profile.css';
-@import './login.css';
-@import './home.css';
+/* App-interior styles. The sign-in screen and the chrome never need these, so
+   the app chunk imports this file: the rules arrive with the code that builds
+   the markup they style. critical.css holds the rest. */
 @import './library.css';
 @import './artists.css';
 @import './search.css';
-@import './player-bar.css';
 @import './full-player.css';
 @import './audio-versions.css';
 @import './lyrics.css';
@@ -20,5 +11,4 @@
 @import './overlays.css';
 @import './track-sheet.css';
 @import './settings.css';
-@import './effects.css';
 @import './playlists.css';
