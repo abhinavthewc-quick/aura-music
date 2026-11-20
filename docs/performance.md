@@ -393,3 +393,92 @@ whole file.
 - **The hot-cache status endpoint.** It is admin-only and returns live counts.
 - **Error responses.** 4xx/5xx are `no-store`; caching a transient 502 would
   turn a blip into a day-long outage.
+
+## Fourth pass: the hand-off from the logo reveal
+
+The complaint was specific: the logo animation ends and the app underneath is
+not there yet. On a phone the owner saw a home screen that read "No library
+tracks are available yet. Add local audio or check the catalogue connection."
+for a few seconds — an error-looking state during a completely normal boot.
+
+### What was actually happening
+
+The catalogue lived in the browser. Boot ran
+
+1. `tree?recursive=true&limit=1000` for the bucket → **2 paginated requests,
+   1,993 entries, 522 KB of JSON**,
+2. `manifest.json` (~1.4 s on its own),
+3. `/api/versions` (38 KB from D1),
+
+then merged all of it on the main thread. None of that started until the module
+graph had evaluated, so it could not overlap the splash at all. Measured on a
+throttled phone (390×844, 4× CPU, 10 Mbps, cold cache): real quick-pick cards
+at **~2.8 s**, and a 5/5 chance of the empty-library message being on screen in
+between.
+
+### 1. The catalogue is compiled at the edge, once, and cached
+
+`functions/api/catalog.ts` lists the bucket, reads the manifest and calls
+`publicVersions()` on the server, then compiles the tracks with the *same*
+`compileCatalog()` the client uses (`src/core/catalog.ts`). The response is
+compact — `url`/`hfUrl` are derived from `hfPath` on the client instead of being
+repeated twice per track — and cached in `caches.default` with
+`max-age=300, stale-while-revalidate=600`.
+
+| | before | after |
+| --- | --- | --- |
+| requests before Home fills | 2 tree pages + manifest + versions | **1** |
+| JSON parsed in the browser | ~560 KB | **316 KB (50 KB gzip)** |
+| cacheable at the edge | no | yes (`cf-cache-status: HIT`) |
+
+`fetchCatalog()` adopts the prefetched promise, then `tracksFromCatalogResponse()`
+rebuilds the player shape and rejects anything malformed. If the Function is
+missing (the Vite dev server) or answers 503/slow (>5 s), the client falls back
+to the direct bucket listing exactly as before — the fast path is never the only
+path.
+
+### 2. The request starts before the document is parsed
+
+`index.html` issues the `/api/catalog` fetch as the first thing in `<head>`,
+before the inline loader CSS, and only when a session exists (the welcome screen
+does not need a catalogue). The request now overlaps the logo animation instead
+of queueing behind it.
+
+### 3. The rails exist before JavaScript does
+
+Home used to be an empty grid until `renderQuickPicks()` ran, seconds later. The
+document now ships the skeleton cards themselves — 12 quick picks, 8 artists,
+8 picks — and the renderers leave that markup alone instead of repainting it.
+The rails' `aria-hidden` placeholders are replaced in place, so the layout does
+not jump when the real cards land. "No library tracks are available yet" is
+reserved for a catalogue that actually came back empty.
+
+### Measured
+
+Median of five cold runs, 390×844, 4× CPU, 10 Mbps, cold HTTP cache:
+
+| | before | after |
+| --- | --- | --- |
+| quick-pick cards painted | 2,768 ms | **1,675 ms** |
+| empty-library / "Loading artists…" visible | 5/5 | **0/5** |
+
+### Verification
+
+```bash
+npx playwright test tests/unit/catalog-function.spec.ts   # Function contract + edge cache
+npx playwright test tests/unit/catalog-edge.spec.ts       # payload → player round-trip
+npx playwright test tests/e2e/home-boot.spec.ts           # skeletons instead of the empty state
+```
+
+`catalog-function.spec.ts` stubs the bucket and a fake `caches.default`: it
+fails if the endpoint stops following `Link: rel="next"`, starts shipping
+redundant URLs, forgets the cache, or answers anything but 503 when the listing
+breaks.
+
+### Not done, and why
+
+- **Serving the payload to signed-out visitors.** The welcome screen never
+  renders a track, so that request would be pure waste on cellular.
+- **Waiting for the catalogue before dismissing the splash.** It would make
+  every slow connection slower to interactive; the skeleton rails do the same
+  job without holding the app hostage.

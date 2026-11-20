@@ -202,76 +202,20 @@ export function getArtistMeta(artistName: string, artists = readArtistsCache()):
   ))?.[1];
 }
 
-export async function fetchHfCatalog(): Promise<any[]> {
-  // D1 is the only version registry. An unavailable registry leaves originals
-  // playable rather than advertising obsolete versions from a second index.
-  const versionIndex = async () => {
-    try {
-      const response = await fetch('/api/versions', {signal: AbortSignal.timeout(8000)});
-      if (response.ok) {
-        const data = await response.json();
-        if (data?.v === 1 && data.source === 'database' && data.tracks && typeof data.tracks === 'object' && !Array.isArray(data.tracks)) return data;
-      }
-    } catch { /* temporary database outage */ }
-    return null;
-  };
-  const [treeRes, manifestRes, versionsRes] = await Promise.allSettled([
-    fetch(HF_TREE_URL), fetch(hfFileUrl('manifest.json')), versionIndex(),
-  ]);
-
-  if (treeRes.status !== 'fulfilled') throw treeRes.reason;
-
-  /* The bucket tree API returns 1000 entries per page with a
-     `Link: rel="next"` cursor. One request capped the whole library at 1000
-     files, so anything uploaded past that was invisible on the site. */
-  let items: any[] = [];
-  let res: Response = treeRes.value;
-  const seenPaths = new Set<string>();
-  for (let page = 0; page < 20; page++) {
-    if (!res.ok) {
-      if (!items.length) throw new Error('bucket listing failed (HTTP ' + res.status + ')');
-      break;
-    }
-    const batch = await res.json();
-    if (!Array.isArray(batch)) {
-      if (!items.length) throw new Error('unexpected bucket listing format');
-      break;
-    }
-    for (const it of batch) {
-      const p = it?.path;
-      if (typeof p === 'string' && !seenPaths.has(p)) {
-        seenPaths.add(p);
-        items.push(it);
-      }
-    }
-    const next = /<([^>]+)>;\s*rel="next"/.exec(res.headers.get('link') || '');
-    if (!next) break;
-    res = await fetch(next[1]);
-  }
-
-  let manifest: Manifest = {};
-  if (manifestRes.status === 'fulfilled' && manifestRes.value.ok) {
-    try {
-      const data = await manifestRes.value.json();
-      if (data && typeof data === 'object') manifest = data as Manifest;
-      if (manifest.artists && typeof manifest.artists === 'object') {
-        try {
-          localStorage.setItem(ARTISTS_CACHE_KEY, JSON.stringify(manifest.artists));
-        } catch { /* quota */ }
-      }
-    } catch { /* keep empty — filename parse still works */ }
-  }
+/* Everything below is pure: no fetch, no storage. The same compiler runs in
+   the browser and in the Pages Function that serves the edge-cached catalogue,
+   so both paths can never disagree about titles, covers or versions. */
+export function compileCatalog(items: any[], manifest: Manifest, versionsData: unknown): any[] {
   const meta: Record<string, ManifestEntry> =
-    manifest.tracks && typeof manifest.tracks === 'object' ? manifest.tracks : {};
-  let versions = parseAudioVersionsIndex(null);
-  if (versionsRes.status === 'fulfilled') {
-    versions = parseAudioVersionsIndex(versionsRes.value);
-  }
+    manifest?.tracks && typeof manifest.tracks === 'object' ? manifest.tracks : {};
+  const versions = parseAudioVersionsIndex(versionsData ?? null);
 
   const covers = new Map<string, string>(); // basename (lowercase, no ext) -> path
   const audios: { path: string; size: number }[] = [];
+  const seenPaths = new Set<string>();
 
   for (const it of items) {
+    if (typeof it?.path === 'string') seenPaths.add(it.path);
     if (!it || it.type !== 'file' || typeof it.path !== 'string') continue;
     const p: string = it.path;
     if (isAudioVersionPath(p)) continue;
@@ -331,14 +275,137 @@ export async function fetchHfCatalog(): Promise<any[]> {
     if (!prev.videoId && t.videoId) bySong.set(k, t);
     else if (prev.id === t.id && t.hfPath.startsWith('originals/')) bySong.set(k, t);
   }
-  const finalTracks = [...bySong.values()].filter(
+  return [...bySong.values()].filter(
     (t) => !isHiddenTrack(t.hfPath || '', t.artist || '', t.title || '')
   );
+}
 
+function rememberCatalog(tracks: any[]): void {
   try {
-    localStorage.setItem(CACHE_KEY, JSON.stringify({ tracks: finalTracks, at: Date.now() }));
+    localStorage.setItem(CACHE_KEY, JSON.stringify({ tracks, at: Date.now() }));
   } catch {
     /* quota — cache is best-effort */
   }
+}
+
+/** Direct bucket listing. Kept as the fallback for the edge catalogue (dev has
+ *  no Functions) and for a Function outage. With a cache already in
+ *  localStorage the caller refreshes this in an idle slot instead of blocking. */
+export async function fetchHfCatalog(): Promise<any[]> {
+  // D1 is the only version registry. An unavailable registry leaves originals
+  // playable rather than advertising obsolete versions from a second index.
+  const versionIndex = async () => {
+    try {
+      const response = await fetch('/api/versions', {signal: AbortSignal.timeout(8000)});
+      if (response.ok) {
+        const data = await response.json();
+        if (data?.v === 1 && data.source === 'database' && data.tracks && typeof data.tracks === 'object' && !Array.isArray(data.tracks)) return data;
+      }
+    } catch { /* temporary database outage */ }
+    return null;
+  };
+  const [treeRes, manifestRes, versionsRes] = await Promise.allSettled([
+    fetch(HF_TREE_URL), fetch(hfFileUrl('manifest.json')), versionIndex(),
+  ]);
+
+  if (treeRes.status !== 'fulfilled') throw treeRes.reason;
+
+  /* The bucket tree API returns 1000 entries per page with a
+     `Link: rel="next"` cursor. One request capped the whole library at 1000
+     files, so anything uploaded past that was invisible on the site. */
+  let items: any[] = [];
+  let res: Response = treeRes.value;
+  const seenPaths = new Set<string>();
+  for (let page = 0; page < 20; page++) {
+    if (!res.ok) {
+      if (!items.length) throw new Error('bucket listing failed (HTTP ' + res.status + ')');
+      break;
+    }
+    const batch = await res.json();
+    if (!Array.isArray(batch)) {
+      if (!items.length) throw new Error('unexpected bucket listing format');
+      break;
+    }
+    for (const it of batch) {
+      const p = it?.path;
+      if (typeof p === 'string' && !seenPaths.has(p)) {
+        seenPaths.add(p);
+        items.push(it);
+      }
+    }
+    const next = /<([^>]+)>;\s*rel="next"/.exec(res.headers.get('link') || '');
+    if (!next) break;
+    res = await fetch(next[1]);
+  }
+
+  let manifest: Manifest = {};
+  if (manifestRes.status === 'fulfilled' && manifestRes.value.ok) {
+    try {
+      const data = await manifestRes.value.json();
+      if (data && typeof data === 'object') manifest = data as Manifest;
+      if (manifest.artists && typeof manifest.artists === 'object') {
+        try {
+          localStorage.setItem(ARTISTS_CACHE_KEY, JSON.stringify(manifest.artists));
+        } catch { /* quota */ }
+      }
+    } catch { /* keep empty — filename parse still works */ }
+  }
+
+  const versionsData = versionsRes.status === 'fulfilled' ? versionsRes.value : null;
+  const finalTracks = compileCatalog(items, manifest, versionsData);
+  rememberCatalog(finalTracks);
   return finalTracks;
+}
+
+export function tracksFromCatalogResponse(data: unknown): any[] | null {
+  const payload = data as any;
+  if (!payload || payload.v !== 1 || !Array.isArray(payload.tracks) || !payload.tracks.length) return null;
+  const out: any[] = [];
+  for (const t of payload.tracks) {
+    if (!t || typeof t.id !== 'string' || typeof t.title !== 'string' || typeof t.img !== 'string') return null;
+    const hfPath = typeof t.hfPath === 'string' ? t.hfPath : '';
+    const url = typeof t.url === 'string' && t.url ? t.url : hfPath ? getAudioStreamUrl(hfPath) : '';
+    if (!url) return null;
+    out.push({
+      ...t,
+      url,
+      hfUrl: typeof t.hfUrl === 'string' && t.hfUrl ? t.hfUrl : hfPath ? hfFileUrl(hfPath) : '',
+      favorite: false,
+      isHf: true,
+      audioVersions: normalizeAudioVersions(t.audioVersions),
+    });
+  }
+  return out;
+}
+
+const EDGE_CATALOG_URL = '/api/catalog';
+const EDGE_TIMEOUT_MS = 5000;
+
+/** The catalogue as one cached request instead of a 520 KB, two-round-trip
+ *  bucket listing. Falls back to the listing if the Function is unavailable. */
+export async function fetchCatalog(): Promise<any[]> {
+  // index.html starts this request while the document is still parsing, so the
+  // splash animation and the catalogue download overlap instead of queueing.
+  const boot = (globalThis as any).__auraCatalog as Promise<unknown> | undefined;
+  try {
+    const pending = boot ?? fetch(EDGE_CATALOG_URL, { headers: { accept: 'application/json' } })
+      .then((r) => (r.ok ? r.json() : null));
+    const data = await withTimeout(pending, EDGE_TIMEOUT_MS);
+    const tracks = tracksFromCatalogResponse(data);
+    if (tracks) {
+      rememberCatalog(tracks);
+      return tracks;
+    }
+  } catch { /* Function down, cold and slow, or dev server: use the bucket */ }
+  return fetchHfCatalog();
+}
+
+function withTimeout<T>(promise: Promise<T>, ms: number): Promise<T> {
+  return new Promise<T>((resolve, reject) => {
+    const timer = setTimeout(() => reject(new Error('catalog timeout')), ms);
+    promise.then(
+      (value) => { clearTimeout(timer); resolve(value); },
+      (error) => { clearTimeout(timer); reject(error); },
+    );
+  });
 }

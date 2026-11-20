@@ -1,5 +1,5 @@
 import { toast } from './core/dom';
-import { fetchHfCatalog } from './core/catalog';
+import { fetchCatalog } from './core/catalog';
 import { getProfileUsername, getSession, setProfileUsername } from './core/session';
 import { renderQuickPicks, setGreeting, setupMoodChips } from './features/home';
 import { applyPlayDeepLink } from './features/deeplink';
@@ -60,11 +60,13 @@ import { $, setHfTracks, state } from './core/state';
       applyPlayDeepLink();
       void hydrateLocalTracks().then(() => { renderRecent(); renderQuickPicks(); });
 
-      /* Catalog lives in the Hugging Face bucket. With a cached library the
-         page is already useful, so the refresh waits for an idle slot instead
-         of competing with the first paint, fonts and visible artwork. On a
-         cold visit it runs immediately because there is nothing else to show. */
-      const refreshCatalog = () => fetchHfCatalog().then((tracks)=>{
+      /* The catalogue arrives from the edge-cached /api/catalog Function as one
+         small response, so even a cold visit resolves around the end of the
+         logo reveal. With a cached library the page is already useful, so that
+         refresh waits for an idle slot instead of competing with the first
+         paint, fonts and visible artwork. On a cold visit it runs immediately
+         because there is nothing else to show. */
+      const refreshCatalog = () => fetchCatalog().then((tracks)=>{
         state.catalogLoading = false;
         state.catalogError = false;
         const hadSongs = state.songs.length > 0;

@@ -89,6 +89,25 @@ import { playArtistCollection, renderArtistPage, type ArtistPageEntry } from './
       const container = $('ytmQuickGrid');
       if(!container) return;
       if(!state.songs || !state.songs.length){
+        /* A cold visit has no catalogue yet. Saying "no tracks" there read as a
+           broken library for the seconds before the first response, so paint
+           the shape of the rail instead and let the real cards replace it. */
+        if(state.catalogLoading){
+          if(quickPicksKey === 'loading') return;
+          quickPicksKey = 'loading';
+          /* index.html ships the same skeleton markup so the rail is already
+             on screen when the splash dissolves; only fill an empty rail. */
+          if(container.querySelector('.skeleton-block')) return;
+          container.innerHTML = Array.from({length: 12}, () => `
+            <div class="ytm-track-card" aria-hidden="true">
+              <div class="ytm-track-art skeleton-block"></div>
+              <div class="ytm-track-info">
+                <div class="skeleton-block skeleton-line"></div>
+                <div class="skeleton-block skeleton-line short"></div>
+              </div>
+            </div>`).join('');
+          return;
+        }
         if(quickPicksKey === 'empty') return;
         quickPicksKey = 'empty';
         container.innerHTML = '<p class="home-empty">No library tracks are available yet. Add local audio or check the catalogue connection.</p>';
@@ -185,9 +204,23 @@ import { playArtistCollection, renderArtistPage, type ArtistPageEntry } from './
       if (!shelf) return;
       const artists = getAllArtists();
       if (!artists.length) {
-        if (artistsShelfKey === 'empty') return;
-        artistsShelfKey = 'empty';
-        shelf.innerHTML = '<div style="color:var(--text-sub);padding:10px 0;font-size:13px">Loading artists…</div>';
+        /* Same reasoning as the quick-picks rail: show the shelf's silhouette
+           rather than a text placeholder that jumps when the data lands. */
+        const stateKey = state.catalogLoading ? 'loading' : 'empty';
+        if (artistsShelfKey === stateKey) return;
+        artistsShelfKey = stateKey;
+        if (stateKey === 'loading') {
+          /* Already painted by the document; leave it alone. */
+          if (shelf.querySelector('.skeleton-block')) return;
+          shelf.innerHTML = Array.from({length: 8}, () => `
+            <div class="ytm-artist-card" aria-hidden="true">
+              <div class="ytm-artist-art-wrap skeleton-block"></div>
+              <div class="ytm-artist-name skeleton-block skeleton-line" style="width:72%;margin-top:8px"></div>
+              <div class="ytm-artist-sub skeleton-block skeleton-line short" style="width:40%;margin-top:6px"></div>
+            </div>`).join('');
+          return;
+        }
+        shelf.innerHTML = '<div style="color:var(--text-sub);padding:10px 0;font-size:13px">No artists yet.</div>';
         return;
       }
 
@@ -362,6 +395,13 @@ import { playArtistCollection, renderArtistPage, type ArtistPageEntry } from './
     export let auraPickIds=[];
     export function renderAuraPicks(force?){
       const c=$('auraPicksScroll'); if(!c||typeof state.songs==='undefined') return;
+      if(!state.songs.length && state.catalogLoading){
+        /* index.html ships skeleton cards here too. */
+        if(!c.querySelector('.skeleton-block')){
+          c.innerHTML = Array.from({length: 8}, () => '<div class="aura-pick" aria-hidden="true"><div class="aura-pick-ph skeleton-block"></div></div>').join('');
+        }
+        return;
+      }
       if(!state.songs.length){
         c.innerHTML = `<div class="aura-empty">
           <i class="fa-solid fa-compact-disc" aria-hidden="true"></i>

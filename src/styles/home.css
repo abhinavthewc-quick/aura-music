@@ -102,3 +102,11 @@
 }
 @media (max-width: 420px) { .ytm-section-head { flex-wrap: wrap; gap: 8px; } .ytm-head-actions { margin-left: auto; } }
 @media (pointer: coarse) { .ytm-artist-play-overlay, .ytm-play-hover { opacity: 1; } }
+
+/* Cold-boot rails: the catalogue response replaces these, so keep them the same
+   size as real cards to avoid a layout jump when it lands. */
+.ytm-artist-art-wrap.skeleton-block { border-radius: 50%; }
+.ytm-track-info > .skeleton-line + .skeleton-line { margin-top: 8px; }
+.ytm-artist-card[aria-hidden="true"] .ytm-artist-name,
+.ytm-artist-card[aria-hidden="true"] .ytm-artist-sub { height: 10px; }
+.aura-pick-ph { position: absolute; inset: 0; border-radius: inherit; }
