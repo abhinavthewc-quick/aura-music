@@ -30,6 +30,9 @@ import { $ } from '../core/state';
       if(displayName) displayName.textContent=n;
       $('welcomeScreen').classList.add('hidden');
       updateProfilePopup();
+      /* Guests do not boot the home behind the sign-in screen; app.ts starts
+         it here, once there is a session to build it from. */
+      try { document.dispatchEvent(new Event('aura:signed-in')); } catch { /* ignore */ }
     }
 
     export function playLoginAnimation(n){
@@ -309,8 +312,10 @@ import { $ } from '../core/state';
         });
       }
 
-      const idle = (w.requestIdleCallback || ((fn: () => void) => setTimeout(fn, 1200)));
-      idle(loadGis, {timeout: 2600});
+      /* No idle prefetch: the client pulls a 107 kB cross-origin script, its
+         own stylesheet and an iframe, and it is the only third-party request
+         on the sign-in screen. It loads on the first press of "Continue with
+         Google" (below) and nothing else on this screen waits for it. */
     }
     initGoogleAuth();
 

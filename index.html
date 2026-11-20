@@ -1,6 +1,7 @@
 <!DOCTYPE html>
 <html lang="en" class="aura-loading">
 <head>
+<meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0">
 <script>
 /* Catalogue prefetch, first thing in the document: the request leaves before
    the inline loader styles and the bundled CSS are even parsed, so the home
@@ -48,11 +49,19 @@ body.light-theme #auraLoader{background:#e2e2e5}
 .aura-startup-fallback{display:none;position:absolute;inset:0;align-items:center;justify-content:center;pointer-events:none}
 #auraLoader:not([data-ready]) .aura-startup-fallback{display:flex}
 #auraLoader[data-ready] .aura-startup-fallback{display:none}
+/* Drawn, not fetched: the cover's art must never be the largest paint on a
+   slow boot, and a fallback that only appears when WebGL is missing does
+   not deserve a 17 kB download. */
+.aura-fallback-vinyl{width:min(62vw,240px);aspect-ratio:1;border-radius:50%;background:radial-gradient(circle at 50% 50%,#2b2b2b 0 6%,#0a0a0a 7% 13%,#141414 14% 19%,#090909 20% 30%,#121212 31% 32%,#070707 33% 100%);box-shadow:0 30px 90px rgba(0,0,0,.65),inset 0 0 0 1px rgba(255,255,255,.07)}
 /* The intro is a fallback, not a gate: fast boots never see it. The attribute
    is set by the gate script below, either at parse time on a slow-looking
    device or by a timer when the app misses its readiness budget. */
 html:not([data-aura-splash]) #auraLoader{display:none}
 html[data-aura-authed] .welcome-screen{display:none}
+/* A guest only ever sees the sign-in overlay, which covers the viewport:
+   keeping the app shell out of the layout removes its style, layout and
+   paint cost from the first visit entirely. */
+html[data-aura-guest] .app-container{display:none}
 html[data-aura-splash-late] #auraLoader{animation:auraSplashIn .26s ease,auraLoaderFailsafe 0s linear 8s forwards}
 @keyframes auraSplashIn{from{opacity:0}}
 #auraLoaderText{margin-top:14px;text-align:center;color:rgba(255,255,255,.78);font:700 11px/1.4 "DM Sans",system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;letter-spacing:.24em;text-transform:uppercase;pointer-events:none;animation:auraLoaderTextIn .7s ease .2s backwards;transition:opacity .3s ease,transform .3s ease}
@@ -100,7 +109,10 @@ body.light-theme #auraLoaderText{color:rgba(25,26,30,.78)}
        the first paint instead of popping the splash in later. */
     d.setAttribute('data-aura-splash', '1');
   } else {
-    setTimeout(reveal, coarse ? 680 : 560);
+    /* The document paints the sign-in screen long before the bundle runs on a
+       normal connection; only a boot that is still not ready this late is
+       worth covering. */
+    setTimeout(reveal, coarse ? 1500 : 1800);
   }
 
   /* If the module graph never runs (crash, blocked script) nothing would ever
@@ -112,10 +124,12 @@ body.light-theme #auraLoaderText{color:rgba(25,26,30,.78)}
   }, 10000);
 })();
 </script>
-<!-- Fonts and icons are bundled in the blocking main stylesheet. -->
+<!-- Fonts, icons and component styles are inlined into this document at
+       build time (inlineLandingCss in vite.config.js), so the first paint needs
+       no second request. Dev links the source sheet directly. -->
 <link rel="preconnect" href="https://huggingface.co" crossorigin><link rel="preconnect" href="https://us.aws.cdn.hf.co" crossorigin><link rel="dns-prefetch" href="https://i.ytimg.com">
-  <meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Aura Music</title>
+<meta name="description" content="Aura Music is a personal music player and radio: stream the Aura catalogue, browse artists, keep favourites and your own local files in one calm place.">
   <meta name="theme-color" content="#000000">
   <link rel="icon" type="image/png" sizes="64x64" href="/favicon-64.png">
   <link rel="apple-touch-icon" sizes="180x180" href="/apple-touch-icon.png">
@@ -123,11 +137,11 @@ body.light-theme #auraLoaderText{color:rgba(25,26,30,.78)}
   <link rel="stylesheet" href="/src/styles/main.css">
   <!-- Module entry in <head>: it is deferred anyway, but the browser starts
        fetching it while the 1,000-line document body is still parsing. -->
-  <script type="module" src="/src/main.ts"></script>
+  <script type="module" src="/src/main.ts" fetchpriority="low"></script>
 </head>
 <body>
 <script>try{if(localStorage.getItem('auraTheme')==='light')document.body.classList.add('light-theme');}catch(e){}</script>
-<div id="auraLoader" role="status" aria-live="polite" aria-label="Loading Aura Music"><div class="aura-startup-stage"><div class="aura-startup-art"><canvas id="auraLiquidCanvas" class="aura-liquid-canvas" aria-hidden="true"></canvas><div class="aura-startup-fallback"><img src="/aura-vinyl-logo.png" alt="" width="240" height="240"></div></div><div id="auraLoaderText">Aura Music<span class="d">.</span><span class="d">.</span><span class="d">.</span></div></div></div>
+<div id="auraLoader" role="status" aria-live="polite" aria-label="Loading Aura Music"><div class="aura-startup-stage"><div class="aura-startup-art"><canvas id="auraLiquidCanvas" class="aura-liquid-canvas" aria-hidden="true"></canvas><div class="aura-startup-fallback" aria-hidden="true"><span class="aura-fallback-vinyl"></span></div></div><div id="auraLoaderText">Aura Music<span class="d">.</span><span class="d">.</span><span class="d">.</span></div></div></div>
   <div class="net-banner" id="netBanner" role="status" aria-live="polite"></div>
   <main class="welcome-screen" id="welcomeScreen" aria-label="Welcome to Aura Music" tabindex="-1">
     <button class="welcome-info" id="welcomeInfo" type="button" aria-label="Why AURA Music asks you to sign in" aria-expanded="false"><svg class="login-icon" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M12 11v6m0-10v.01"/></svg></button>
@@ -390,7 +404,7 @@ body.light-theme #auraLoaderText{color:rgba(25,26,30,.78)}
 
   <div class="app-container">
     <aside class="desktop-sidebar" id="desktopSidebar" aria-label="Desktop navigation">
-      <div class="desktop-brand"><button class="sidebar-toggle" id="sidebarToggle" type="button" aria-label="Toggle menu" title="Menu"><i class="fa-solid fa-bars"></i></button><div class="desktop-brand-mark"><img src="./src/assets/brand-logo.webp" alt="Aura Music vinyl logo" width="512" height="512" loading="eager" decoding="async" fetchpriority="high"></div><div><strong>AURA</strong><span>MUSIC</span></div></div>
+      <div class="desktop-brand"><button class="sidebar-toggle" id="sidebarToggle" type="button" aria-label="Toggle menu" title="Menu"><i class="fa-solid fa-bars"></i></button><div class="desktop-brand-mark"><img src="./src/assets/brand-logo.webp" alt="" width="512" height="512" loading="lazy" decoding="async" fetchpriority="low"></div><div><strong>AURA</strong><span>MUSIC</span></div></div>
       <div class="desktop-nav-label">Menu</div>
       <button type="button" class="desktop-nav-btn active" data-tab="tabHome" aria-label="Home" onclick="navClick(this,'tabHome')"><i class="fa-solid fa-house"></i><span>Home</span></button>
       <button type="button" class="desktop-nav-btn" data-tab="tabLibrary" aria-label="Library" onclick="navClick(this,'tabLibrary')"><i class="fa-solid fa-layer-group"></i><span>Library</span></button>
