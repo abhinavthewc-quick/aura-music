@@ -1,18 +1,9 @@
 import './admin.css';
 import { ADMIN_EMAILS, GOOGLE_CLIENT_ID } from '../core/config';
-import { cleanArtist, cleanTitle, parseTrackName, cacheArtistDirectory, fetchArtistDirectory, getCachedArtistDirectory, ArtistMeta, type ArtistDirectory } from '../core/catalog';
-import { artistTrackId, normalizeArtistKey } from '../../lib/artistProfiles';
-import { buildAdminArtistGroups } from './artistGroups';
-import {
-  ARTIST_METADATA_UPDATED_EVENT, artistMetadataCreditHTML, createArtistMetadataDraft,
-  DEFAULT_ARTIST_PORTRAIT, editArtistMetadataDraft, getArtistMetadataResponse,
-  getArtistMetadataRevision, getDisplayArtistProfile, installArtistPortraitFallback,
-  observeArtistMetadataCards, prioritizeArtistMetadata, setArtistMetadataCatalog, setArtistPortraitSource,
-  startArtistMetadata, stopArtistMetadata, useAutomaticArtistMetadataDraft,
-} from '../core/artistMetadata';
+import { cleanArtist, cleanTitle, ArtistMeta } from '../core/catalog';
 import { verifyGoogleCredential } from '../core/google-auth';
-import { loadGoogleIdentity } from '../core/google-identity';
 import { clearSession, exchangeGoogleToken, getSession, setSession } from '../core/session';
+import { createAudioProcessing } from './audio-processing';
 
 const SECRET_NAMES = ['HF_TOKEN', 'HF_BUCKET_ID', 'YOUTUBE_COOKIES'] as const;
 
@@ -28,8 +19,6 @@ const $ = <T extends HTMLElement = HTMLElement>(id: string): T => {
 const gateCard = $('gateCard');
 const gateStatus = $('gateStatus');
 const gBtnBox = $('adminGoogleBtn');
-const gStart = $<HTMLButtonElement>('adminGoogleStart');
-const gNative = $('adminGoogleNative');
 const urlsInput = $<HTMLTextAreaElement>('urlsInput');
 const cookiesInput = $<HTMLTextAreaElement>('cookiesInput');
 const secretsStatus = $('secretsStatus');
@@ -44,8 +33,7 @@ const searchStatus = $('searchStatus');
 const searchModes = $('searchModes');
 const toastHost = $('toastHost');
 const gatedSections = Array.from(document.querySelectorAll<HTMLElement>('.adm-gated'));
-let adminGateAccepted = false;
-let adminMetadataGate = () => false;
+const adminPanels = ['panelAdd','panelLibrary','panelProcessing','panelArtists','panelDiscord','panelSettings'];
 
 /* ---------- toast ---------- */
 function toast(msg: string, kind: 'ok' | 'err' | '' = '') {
@@ -93,11 +81,12 @@ async function adminApi<T = any>(action: string, payload: Record<string, unknown
   return data as T;
 }
 
+const audioProcessing = createAudioProcessing({api:adminApi,toast});
+
 /* ---------- Google gate ---------- */
 let gisInitialized = false;
 
-async function renderGisButton() {
-  if (gStart.disabled) return;
+function renderGisButton() {
   if (!GOOGLE_CLIENT_ID) {
     setStatus(gateStatus, 'Google sign-in unavailable — use email & password below.', 'err');
     return;
@@ -117,54 +106,49 @@ async function renderGisButton() {
       setSession(swapped
         ? { email: p.email, name: p.name, picture: p.picture, exp: swapped.exp, token: swapped.token }
         : { email: p.email, name: p.name, picture: p.picture, exp: p.exp, token: resp.credential });
-      await unlock();
+      unlock();
     } catch (e) {
       setStatus(gateStatus, 'Sign-in failed — ' + ((e as Error).message || 'try again'), 'err');
     }
   };
 
-  gStart.disabled = true;
-  gStart.setAttribute('aria-busy', 'true');
-  setStatus(gateStatus, 'Loading Google sign-in…');
-  try {
-    await loadGoogleIdentity();
-    if (gateCard.hidden) return;
-    if (!gisInitialized) {
-      w.google.accounts.id.initialize({
-        client_id: GOOGLE_CLIENT_ID,
-        callback: handleResp,
-      });
+  if (!document.getElementById('auraGsiScript')) {
+    const s = document.createElement('script');
+    s.id = 'auraGsiScript';
+    s.src = 'https://accounts.google.com/gsi/client';
+    s.async = true;
+    s.defer = true;
+    s.onload = () => {
       gisInitialized = true;
-    }
-    gStart.hidden = true;
-    gNative.hidden = false;
-    gNative.replaceChildren();
-    w.google.accounts.id.renderButton(gNative, {
-      theme: 'filled_black', size: 'large', shape: 'pill', text: 'signin_with',
-      width: Math.max(200, Math.min(360, gBtnBox.clientWidth - 40)),
-    });
-    setStatus(gateStatus, 'Use the Google button to choose your admin account.');
-  } catch (error) {
-    gNative.replaceChildren();
-    gNative.hidden = true;
-    gStart.hidden = false;
-    setStatus(gateStatus, (error as Error).message || 'Could not load Google sign-in — try again or use email & password.', 'err');
-  } finally {
-    gStart.disabled = false;
-    gStart.removeAttribute('aria-busy');
+      try {
+        w.google.accounts.id.initialize({
+          client_id: GOOGLE_CLIENT_ID,
+          callback: handleResp,
+        });
+        w.google.accounts.id.renderButton(gBtnBox, {
+          theme: 'filled_black', size: 'large', shape: 'pill', text: 'signin_with',
+          width: Math.max(240, Math.min(420, gBtnBox.clientWidth || 420)),
+        });
+      } catch {
+        setStatus(gateStatus, 'Could not initialise Google sign-in.', 'err');
+      }
+    };
+    s.onerror = () => setStatus(gateStatus, 'Could not load Google sign-in — check your connection.', 'err');
+    document.head.appendChild(s);
+  } else if (gisInitialized) {
+    try {
+      w.google.accounts.id.renderButton(gBtnBox, {
+        theme: 'filled_black', size: 'large', shape: 'pill', text: 'signin_with',
+        width: Math.max(240, Math.min(420, gBtnBox.clientWidth || 420)),
+      });
+    } catch { /* ignore */ }
   }
+  setStatus(gateStatus, 'Waiting for Google sign-in…');
 }
-gStart.addEventListener('click', () => void renderGisButton());
 
-async function unlock() {
+function unlock() {
   const session = getSession();
   if (!session) return lock();
-  try {
-    await import('../styles/icons.css');
-  } catch {
-    setStatus(gateStatus, 'Could not load the admin interface. Check your connection and sign in again.', 'err');
-    return;
-  }
   gateCard.hidden = true;
   const bar = $('sessionBar');
   bar.hidden = false;
@@ -181,20 +165,18 @@ async function unlock() {
 }
 
 function lock(msg?: string) {
-  adminGateAccepted = false;
-  adminMetadataGate = () => false;
-  stopArtistMetadata();
+  audioProcessing.hide();
+  audioProcessing.reset();
   $('sessionBar').hidden = true;
   gatedSections.forEach((s) => { s.hidden = true; });
-  ['panelAdd', 'panelLibrary', 'panelArtists', 'panelDiscord', 'panelSettings'].forEach((id) => {
+  adminPanels.forEach((id) => {
     const el = document.getElementById(id);
     if (el) el.hidden = true;
   });
-  gNative.replaceChildren();
-  gNative.hidden = true;
-  gStart.hidden = !GOOGLE_CLIENT_ID;
+  gBtnBox.innerHTML = '';
   gateCard.hidden = false;
-  setStatus(gateStatus, msg || '', msg ? 'err' : '');
+  renderGisButton();
+  if (msg) setStatus(gateStatus, msg, 'err');
 }
 
 /* ---------- top-level tabs ---------- */
@@ -202,11 +184,13 @@ function switchTab(panelId: string): void {
   document.querySelectorAll<HTMLElement>('.adm-tab').forEach((b) => {
     b.classList.toggle('active', b.dataset.panel === panelId);
   });
-  for (const id of ['panelAdd', 'panelLibrary', 'panelArtists', 'panelDiscord', 'panelSettings']) {
+  for (const id of adminPanels) {
     const el = document.getElementById(id);
     if (el) el.hidden = id !== panelId;
   }
   if (panelId === 'panelLibrary') void loadLibraryManager();
+  if (panelId === 'panelProcessing') audioProcessing.show();
+  else audioProcessing.hide();
   if (panelId === 'panelArtists') void loadArtistsManager();
   if (panelId === 'panelDiscord') void initDiscord();
   if (panelId === 'panelSettings') {
@@ -243,30 +227,13 @@ async function passwordLogin() {
   }
   ($('admPasswordInput') as HTMLInputElement).value = '';
   setSession({ email: data.email, name: data.email, picture: '', exp: data.exp, token: data.token });
-  await unlock();
+  unlock();
 }
 
 /* ---------- repository config status ---------- */
 async function refreshSecretChips() {
-  const gateSession = getSession();
   try {
     const data = await adminApi<{ secrets: string[] }>('status');
-    // A restored local session is only a hint. The existing status request
-    // confirms the REAL server admin gate before any automatic lookups start.
-    const currentSession = getSession();
-    if (gateSession && gateSession.token === currentSession?.token && gateSession.email === currentSession?.email && gateCard.hidden) {
-      adminGateAccepted = true;
-      adminMetadataGate = () => {
-        const current = getSession();
-        return adminGateAccepted && gateCard.hidden && current?.token === gateSession.token && current?.email === gateSession.email;
-      };
-      requestAnimationFrame(() => requestAnimationFrame(() => {
-        if (!adminMetadataGate()) return;
-        startArtistMetadata({ canRequest: adminMetadataGate, catalog: buildAdminArtists().map(artist => artist.metadataName).filter(Boolean) });
-        observeArtistMetadataCards($('artistGrid'));
-        openArtistAutomaticPreview?.();
-      }));
-    }
     const have = new Set(data.secrets || []);
     const host = document.getElementById('secretChips');
     if (!host) return;
@@ -780,11 +747,8 @@ interface LibraryResponse {
   bucketId?: string;
   manifest?: Record<string, LibMeta>;
   artists?: Record<string, ArtistMeta>;
-  trackArtists?: Record<string, string>;
-  revision?: number;
 }
 interface LibEntry {
-  id: string;
   path: string; stem: string; ext: string; vid: string;
   size: number; mtime: string;
   title: string; artist: string; album: string; year: string; duration: number; genre?: string;
@@ -795,24 +759,8 @@ let libFiles: LibFile[] = [];
 let libCovers = new Map<string, string>(); // audio stem -> cover path
 let libManifest: Record<string, LibMeta> = {};
 let libArtists: Record<string, ArtistMeta> = {};
-let libTrackArtists: Record<string, string> = {};
-let libArtistRevision = -1;
-
-function ingestArtistDirectory(data: Partial<ArtistDirectory>): void {
-  if (!data.artists || !data.trackArtists || !Number.isInteger(data.revision)) return;
-  const cached = getCachedArtistDirectory();
-  const directory = data.revision < cached.revision ? cached : data as ArtistDirectory;
-  if (directory.revision < libArtistRevision) return;
-  libArtists = directory.artists;
-  libTrackArtists = directory.trackArtists;
-  libArtistRevision = directory.revision;
-  libArtistsCache = null;
-  libEntriesCache = null;
-  cacheArtistDirectory(directory);
-}
 
 interface AdminArtist {
-  key: string;
   name: string;
   normKey: string;
   trackCount: number;
@@ -823,13 +771,9 @@ interface AdminArtist {
   bio: string;
   genres: string[];
   social: string;
-  profile?: ArtistMeta;
-  metadataName: string;
-  renameTrackCount: number;
 }
 
 let libArtistsCache: AdminArtist[] | null = null;
-let libArtistsMetadataRevision = -1;
 let artistFilter = 'all';
 let artistSortMode = 'countDesc';
 let artistQuery = '';
@@ -840,8 +784,6 @@ let libLoadError = '';
 let libFilter = 'all';
 let libSortMode = 'title';
 let libQuery = '';
-let libArtistKey = '';
-let libArtistNormKey = '';
 let libSelectMode = false;
 let libSelected = new Set<string>();
 let coverPicker: HTMLInputElement | null = null;
@@ -867,12 +809,12 @@ function hfLibUrl(path: string): string {
 function ingestLibraryData(data: LibraryResponse): void {
   if (data.bucketId) libBucketId = data.bucketId;
   if (data.manifest) libManifest = data.manifest;
-  ingestArtistDirectory(data);
+  if (data.artists && typeof data.artists === 'object') libArtists = data.artists;
   const files = Array.isArray(data.files) ? data.files : [];
   libFiles = files.filter((f) => f && AUDIO_FILE_RE.test(f.path));
   libCovers = new Map();
   for (const f of files) {
-    if (f && IMG_FILE_RE.test(f.path)) libCovers.set(f.path.replace(/\.[^.]+$/, ''), f.path);
+    if (f && IMG_FILE_RE.test(f.path)) libCovers.set(f.path.split('/').pop().replace(/\.[^.]+$/, ''), f.path);
   }
   /* bucket data changed — drop the derived lists so the next read rebuilds them */
   libEntriesCache = null;
@@ -892,7 +834,10 @@ function buildLibEntries(): LibEntry[] {
     const ext = f.path.slice(stem.length);
     const vidM = VID_SUFFIX_RE.exec(stem);
     const vid = vidM ? vidM[1] : '';
-    let { artist, title } = parseTrackName(f.path);
+    const base = stem.split('/').pop().replace(VID_SUFFIX_RE, '');
+    const fm = /^(.+?)\s+-\s+(.+)$/.exec(base);
+    let artist = fm ? fm[1].trim() : '';
+    let title = fm ? fm[2].trim() : base;
     let album = '', year = '', duration = 0, genre = '';
     const m = vid ? libManifest[vid] : undefined;
     if (m) {
@@ -903,10 +848,8 @@ function buildLibEntries(): LibEntry[] {
       if (typeof m.d === 'number') duration = m.d;
       if (m.g) genre = m.g;
     }
-    artist = libTrackArtists[artistTrackId(vid, f.path)] || artist;
-    const coverPath = libCovers.get(stem);
+    const coverPath = libCovers.get(stem.split('/').pop());
     return {
-      id: 'hf:' + f.path,
       path: f.path, stem, ext, vid,
       size: Number(f.size) || 0, mtime: f.mtime || '',
       title, artist, album, year, duration, genre,
@@ -921,14 +864,7 @@ function libVisibleEntries(): LibEntry[] {
   let list = buildLibEntries().slice();
   if (libFilter === 'nocover') list = list.filter((e) => !e.coverUrl);
   else if (libFilter === 'noid') list = list.filter((e) => !e.vid);
-  if (libArtistKey) {
-    const artists = buildAdminArtists();
-    const matches = artists.filter((artist) => artist.normKey === libArtistNormKey);
-    const artist = artists.find((item) => item.key === libArtistKey) || (matches.length === 1 ? matches[0] : undefined);
-    const paths = new Set(artist?.tracks.map((track) => track.path));
-    list = list.filter((entry) => paths.has(entry.path));
-  }
-  const q = libArtistKey ? '' : libQuery.toLowerCase();
+  const q = libQuery.toLowerCase();
   if (q) {
     list = list.filter((e) =>
       e.title.toLowerCase().includes(q) ||
@@ -1052,21 +988,13 @@ function toggleLibSelect(path: string): void {
 /* ---------- modal host ---------- */
 const modalHost = $('modalHost');
 const modalCard = $('modalCard');
-let openArtistAutomaticPreview: (() => void) | null = null;
 
 function openModal(html: string, wide = false): void {
-  openArtistAutomaticPreview = null;
   modalCard.classList.toggle('wide', wide);
   modalCard.innerHTML = html;
-  const title = modalCard.querySelector<HTMLElement>('.adm-modal-title');
-  if (title) {
-    title.id = 'admModalTitle';
-    modalCard.setAttribute('aria-labelledby', title.id);
-  } else modalCard.removeAttribute('aria-labelledby');
   modalHost.hidden = false;
 }
 function closeModal(): void {
-  openArtistAutomaticPreview = null;
   modalHost.hidden = true;
   modalCard.classList.remove('wide');
   modalCard.innerHTML = '';
@@ -1176,7 +1104,7 @@ async function openEditTrackModal(path: string): Promise<void> {
         <div class="adm-field-full">
           ${entry.vid ? `
             <div class="adm-modal-file" style="display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:6px;">
-              <span>YouTube ID: <a href="https://www.youtube.com/watch?v=${escHtml(entry.vid)}" target="_blank" rel="noopener noreferrer" style="color:var(--text);text-decoration:underline;"><b>${escHtml(entry.vid)}</b> <i class="fa-solid fa-arrow-up-right-from-square" style="font-size:10px"></i></a></span>
+              <span>YouTube ID: <a href="https://www.youtube.com/watch?v=${escHtml(entry.vid)}" target="_blank" rel="noopener noreferrer" style="color:var(--gold);text-decoration:underline;"><b>${escHtml(entry.vid)}</b> <i class="fa-solid fa-arrow-up-right-from-square" style="font-size:10px"></i></a></span>
               <button type="button" class="adm-btn ghost small" id="etmFetchYtBtn" style="padding:2px 8px;font-size:11px;">Fetch YouTube Meta</button>
             </div>
           ` : `
@@ -1309,7 +1237,7 @@ async function openEditTrackModal(path: string): Promise<void> {
       if (!isNaN(n)) durSec = n;
     }
 
-    const toPath = newStem() + entry.ext;
+    const toPath = (entry.path.startsWith('originals/') ? 'originals/' : '') + newStem() + entry.ext;
     const saveBtn = $<HTMLButtonElement>('etmSaveBtn');
     const saveNextBtn = $<HTMLButtonElement>('etmSaveNextBtn');
     saveBtn.disabled = true;
@@ -1344,8 +1272,7 @@ async function openEditTrackModal(path: string): Promise<void> {
         if (durSec > 0) payload.duration = durSec;
         if (genre) payload.genre = genre;
         try {
-          const saved = await adminApi<Partial<ArtistDirectory>>('bucketManifestSet', payload);
-          ingestArtistDirectory(saved);
+          await adminApi('bucketManifestSet', payload);
           synced = true;
         } catch (e) {
           if (!/not in manifest/i.test((e as Error).message)) throw e;
@@ -1561,17 +1488,67 @@ function playTrackPreview(entry: { path: string; title: string; artist: string; 
 
 /* ---------- artist management ---------- */
 function buildAdminArtists(): AdminArtist[] {
-  const metadataRevision = getArtistMetadataRevision();
-  if (libArtistsCache && libArtistsMetadataRevision === metadataRevision) return libArtistsCache;
-  libArtistsMetadataRevision = metadataRevision;
+  if (libArtistsCache) return libArtistsCache;
   const entries = buildLibEntries();
-  libArtistsCache = buildAdminArtistGroups(entries, libArtists, Object.values(libTrackArtists)).map((group) => ({
-    ...group, trackCount: group.tracks.length,
-    img: (group.metadataName ? getDisplayArtistProfile(group.metadataName, group.profile)?.img : group.profile?.img) || DEFAULT_ARTIST_PORTRAIT,
-    hasCustomImg: Boolean(group.profile?.img) && createArtistMetadataDraft(group.profile).imgOverride,
-    bio: group.profile?.bio || '', genres: Array.isArray(group.profile?.genres) ? group.profile.genres : [],
-    social: group.profile?.social || '',
-  }));
+  const map = new Map<string, { name: string; tracks: LibEntry[]; albums: Set<string> }>();
+
+  for (const e of entries) {
+    const rawArtist = (e.artist || '').trim() || 'Unknown Artist';
+    const norm = rawArtist.toLowerCase();
+    let g = map.get(norm);
+    if (!g) {
+      g = { name: rawArtist, tracks: [], albums: new Set() };
+      map.set(norm, g);
+    }
+    g.tracks.push(e);
+    if (e.album) g.albums.add(e.album);
+  }
+
+  const result: AdminArtist[] = [];
+  for (const [norm, g] of map.entries()) {
+    const custom = libArtists[norm] || Object.values(libArtists).find((a) => (a.name || '').toLowerCase() === norm);
+    const name = custom?.name || g.name;
+    const sampleCover = g.tracks.find((t) => t.coverUrl)?.coverUrl || '';
+    const img = custom?.img || sampleCover;
+    const hasCustomImg = Boolean(custom?.img);
+    const bio = custom?.bio || '';
+    const genres = Array.isArray(custom?.genres) ? custom.genres : [];
+    const social = custom?.social || '';
+
+    result.push({
+      name,
+      normKey: norm,
+      trackCount: g.tracks.length,
+      tracks: g.tracks,
+      albums: Array.from(g.albums),
+      img,
+      hasCustomImg,
+      bio,
+      genres,
+      social,
+    });
+  }
+
+  // Include custom artists from manifest with 0 tracks
+  for (const [norm, meta] of Object.entries(libArtists)) {
+    const k = norm.toLowerCase();
+    if (!map.has(k) && meta) {
+      result.push({
+        name: meta.name || norm,
+        normKey: k,
+        trackCount: 0,
+        tracks: [],
+        albums: [],
+        img: meta.img || '',
+        hasCustomImg: Boolean(meta.img),
+        bio: meta.bio || '',
+        genres: Array.isArray(meta.genres) ? meta.genres : [],
+        social: meta.social || '',
+      });
+    }
+  }
+
+  libArtistsCache = result;
   return libArtistsCache;
 }
 
@@ -1630,7 +1607,6 @@ function renderArtistsGrid(): void {
 
   if (!all.length) {
     grid.innerHTML = '<span class="adm-chip dim">no artists found in library</span>';
-    if (adminMetadataGate()) setArtistMetadataCatalog([]);
     return;
   }
   if (!shown.length) {
@@ -1640,7 +1616,7 @@ function renderArtistsGrid(): void {
 
   grid.innerHTML = shown.map((a) => {
     const avatar = a.img
-      ? `<img data-artist-portrait src="${escHtml(a.img)}" alt="${escHtml(a.name)}" loading="lazy">`
+      ? `<img src="${escHtml(a.img)}" alt="${escHtml(a.name)}" loading="lazy">`
       : '<i class="fa-solid fa-user" style="font-size:32px;color:var(--dim)"></i>';
     const customBadge = a.hasCustomImg
       ? '<span class="adm-acard-badge" title="Custom portrait set"><i class="fa-solid fa-star"></i> Custom</span>'
@@ -1650,7 +1626,7 @@ function renderArtistsGrid(): void {
       : '';
 
     return `
-      <div class="adm-acard" data-artist="${escHtml(a.name)}" data-artist-key="${escHtml(a.normKey)}" data-artist-identity="${escHtml(a.key)}" data-artist-metadata-name="${escHtml(a.metadataName)}">
+      <div class="adm-acard" data-artist="${escHtml(a.name)}">
         <div class="adm-acard-avatar">
           ${avatar}
           ${customBadge}
@@ -1665,16 +1641,11 @@ function renderArtistsGrid(): void {
       </div>
     `;
   }).join('');
-  if (adminMetadataGate()) {
-    setArtistMetadataCatalog(all.map(artist => artist.metadataName).filter(Boolean));
-    observeArtistMetadataCards(grid);
-  }
 }
 
 async function loadArtistsManager(force = false): Promise<void> {
   const statusEl = $('artistStatus');
   if (force) setStatus(statusEl, 'Loading artists…');
-  void fetchArtistDirectory();
   try {
     if (!libFiles.length || force) {
       const data = await adminApi<LibraryResponse>('library');
@@ -1689,40 +1660,22 @@ async function loadArtistsManager(force = false): Promise<void> {
 }
 
 function viewArtistSongs(artistName: string): void {
-  const artists = buildAdminArtists();
-  const matchingKeys = artists.filter((item) => item.normKey === artistName);
-  const matchingNames = artists.filter((item) => item.name === artistName);
-  const artist = artists.find((item) => item.key === artistName) || (matchingKeys.length === 1 ? matchingKeys[0] : undefined) ||
-    (matchingNames.length === 1 ? matchingNames[0] : undefined);
-  if (!artist) return;
   switchTab('panelLibrary');
-  libArtistKey = artist.key;
-  libArtistNormKey = artist.normKey;
-  libQuery = artist.name;
+  libQuery = artistName;
   const input = $<HTMLInputElement>('libSearchInput');
-  input.value = artist.name;
+  input.value = artistName;
   renderLibGrid();
 }
 
 function openEditArtistModal(artistName: string): void {
   const artists = buildAdminArtists();
-  const matchingKeys = artists.filter((a) => a.normKey === normalizeArtistKey(artistName));
-  const matchingNames = artists.filter((a) => normalizeArtistKey(a.name) === normalizeArtistKey(artistName));
-  const artist = artists.find((a) => a.key === artistName) || (matchingKeys.length === 1 ? matchingKeys[0] : undefined) ||
-    (matchingNames.length === 1 ? matchingNames[0] : undefined);
+  const artist = artists.find((a) => a.name.toLowerCase() === artistName.toLowerCase() || a.normKey === artistName.toLowerCase());
   if (!artist) {
     toast('Artist not found', 'err');
     return;
   }
 
-  /* Capture the version when the editor opens, not when Save is clicked.
-     Refreshes in another tab must never silently upgrade a stale draft. */
-  const profile = artist.profile;
-  const openedArtistKey = profile?.key || artist.normKey;
-  const openedVersion = profile?.version || 0;
-
-  const draft = createArtistMetadataDraft(profile);
-  let chosenImg = draft.img;
+  let chosenImg = artist.hasCustomImg ? artist.img : '';
   const albumCovers = Array.from(new Set(artist.tracks.map((t) => t.coverUrl).filter(Boolean)));
 
   const carouselHtml = albumCovers.length ? `
@@ -1754,20 +1707,18 @@ function openEditArtistModal(artistName: string): void {
     <div class="adm-modal-head">
       <div>
         <h3 class="adm-modal-title"><i class="fa-solid fa-user-pen"></i> Edit Artist: ${escHtml(artist.name)}</h3>
-        <p class="adm-modal-sub">Custom values take priority. Clear a field to keep it blank, or use automatic to allow verified details. Automatic previews are never copied into your draft.</p>
+        <p class="adm-modal-sub">Customize artist portrait, biography, and genres, or batch rename artist across all tracks.</p>
       </div>
     </div>
 
     <div class="adm-edit-track-grid">
       <div class="adm-track-cover-col">
         <div class="adm-acard-avatar" style="width:130px;height:130px;margin:0 auto;box-shadow:0 8px 24px rgba(0,0,0,0.5);" id="aemAvatarBox">
-          <img id="aemAvatarImg" data-artist-portrait src="${escHtml(chosenImg || DEFAULT_ARTIST_PORTRAIT)}" alt="Custom picture draft">
+          ${(chosenImg || artist.img) ? `<img id="aemAvatarImg" src="${escHtml(chosenImg || artist.img)}" alt="${escHtml(artist.name)}">` : '<i class="fa-solid fa-user" style="font-size:44px;color:var(--dim)"></i>'}
         </div>
         <button type="button" class="adm-btn small ghost" id="aemUploadBtn"><i class="fa-solid fa-upload"></i> Upload Picture</button>
         <input type="file" id="aemFileInput" accept="image/jpeg,image/png,image/webp" style="display:none">
-        <button type="button" class="adm-btn small ghost" id="aemUseAutomaticImg">Use automatic picture</button>
-        <button type="button" class="adm-btn small ghost" id="aemClearPicBtn"><i class="fa-solid fa-xmark"></i> Clear picture</button>
-        <p class="adm-field-intent" id="aemImgMode" aria-live="polite"></p>
+        <button type="button" class="adm-btn small ghost" id="aemClearPicBtn" style="color:var(--red)"><i class="fa-solid fa-xmark"></i> Remove Picture</button>
       </div>
 
       <div class="adm-fields-grid">
@@ -1775,14 +1726,14 @@ function openEditArtistModal(artistName: string): void {
           <label class="adm-label" for="aemName">Artist Name</label>
           <input class="adm-input" id="aemName" type="text" maxlength="120" value="${escHtml(artist.name)}">
           <label class="adm-dcheck" style="margin-top:6px;">
-            <input type="checkbox" id="aemRenameTracks" ${artist.renameTrackCount ? 'checked' : 'disabled'}>
-            <span>Also update artist name on <b>${artist.renameTrackCount}</b> whole-credit tracks (batch rename). Other collaborators keep their credits.</span>
+            <input type="checkbox" id="aemRenameTracks" checked>
+            <span>Also update artist name on all <b>${artist.trackCount}</b> tracks in library (batch rename)</span>
           </label>
         </div>
 
         <div class="adm-field-full">
           <label class="adm-label" for="aemImgUrl">Picture URL <small style="color:var(--dim)">(direct image link)</small></label>
-          <input class="adm-input" id="aemImgUrl" type="url" placeholder="https://..." aria-describedby="aemImgMode" value="${chosenImg.startsWith('https://') ? escHtml(chosenImg) : ''}">
+          <input class="adm-input" id="aemImgUrl" type="url" placeholder="https://..." value="${artist.hasCustomImg ? escHtml(artist.img) : ''}">
         </div>
 
         <div class="adm-field-full">
@@ -1795,21 +1746,14 @@ function openEditArtistModal(artistName: string): void {
         </div>
 
         <div class="adm-field-full">
-          <label class="adm-label" for="aemBio">Custom biography</label>
-          <textarea class="adm-input" id="aemBio" rows="3" maxlength="2000" aria-describedby="aemBioMode" placeholder="Write a custom biography, or keep automatic enabled.">${escHtml(draft.bio)}</textarea>
-          <div class="adm-field-actions">
-            <button type="button" class="adm-btn small ghost" id="aemUseAutomaticBio">Use automatic biography</button>
-            <button type="button" class="adm-btn small ghost" id="aemClearBioBtn">Clear biography</button>
-          </div>
-          <p class="adm-field-intent" id="aemBioMode" aria-live="polite"></p>
+          <label class="adm-label" for="aemBio">Bio / Description</label>
+          <textarea class="adm-input" id="aemBio" rows="3" maxlength="600" placeholder="Short biography of the artist...">${escHtml(artist.bio)}</textarea>
         </div>
 
         <div class="adm-field-full">
           <label class="adm-label" for="aemSocial">Social / Website Link</label>
           <input class="adm-input" id="aemSocial" type="url" placeholder="https://instagram.com/..." value="${escHtml(artist.social)}">
         </div>
-
-        <section class="adm-automatic-preview adm-field-full" id="aemAutomaticPreview" aria-label="Automatic artist metadata"></section>
 
         <div class="adm-field-full">
           ${songsHtml}
@@ -1836,58 +1780,12 @@ function openEditArtistModal(artistName: string): void {
   const socialInput = $<HTMLInputElement>('aemSocial');
   const renameTracksCheck = $<HTMLInputElement>('aemRenameTracks');
   const statusEl = $('aemStatus');
-  const automaticPreview = $('aemAutomaticPreview');
-  let lastImgUrlInput = imgUrlInput.value;
-  let lastAutomaticPreviewHTML = '';
-
-  const updateIntentLabels = () => {
-    $('aemImgMode').textContent = draft.imgOverride
-      ? chosenImg ? 'Custom picture. Automatic pictures are not used.' : 'Picture cleared. Aura will use a neutral artist placeholder.'
-      : 'Automatic when verified. Any saved picture remains a fallback.';
-    $('aemBioMode').textContent = draft.bioOverride
-      ? draft.bio.trim() ? 'Custom biography. Automatic biographies are not used.' : 'Biography cleared. It will stay blank.'
-      : 'Automatic when verified. Any saved text remains a fallback.';
-    $('aemUseAutomaticImg').setAttribute('aria-pressed', String(!draft.imgOverride));
-    $('aemUseAutomaticBio').setAttribute('aria-pressed', String(!draft.bioOverride));
-  };
-  const renderAutomaticPreview = () => {
-    if (!modalCard.contains(automaticPreview) || modalHost.hidden) return;
-    const response = artist.metadataName ? getArtistMetadataResponse(artist.metadataName) : undefined;
-    const automatic = response?.metadata;
-    let content = '';
-    if (automatic && (automatic.img || automatic.bio)) {
-      content = '<p class="adm-field-intent">Read-only sources. Saving does not turn these details into custom values.</p>' +
-        (automatic.img ? `<img class="adm-automatic-portrait" data-artist-portrait src="${escHtml(automatic.img)}" alt="Automatic picture preview">` + artistMetadataCreditHTML(automatic.imageCredit, 'image') : '') +
-        (automatic.bio ? `<p class="adm-automatic-bio">${escHtml(automatic.bio)}</p>` + artistMetadataCreditHTML(automatic.bioCredit, 'bio') : '') +
-        (response.status === 'retry' ? '<p class="adm-field-intent">Showing saved verified details while the lookup is unavailable.</p>' : '');
-    } else {
-      const message = !artist.metadataName ? 'Artist ownership is unclear. No automatic details will be chosen.'
-        : response?.status === 'ambiguous' ? 'This name has more than one match. No automatic details will be chosen.'
-        : response?.status === 'not-found' || response?.status === 'ready' ? 'No verified details yet. Missing pictures use a neutral artist placeholder.'
-        : response?.status === 'retry' ? 'Automatic lookup is unavailable for now. Your custom values and saved details still work.'
-        : adminGateAccepted ? 'Checking verified sources…' : 'Automatic preview is available after admin access is confirmed.';
-      content = `<p class="adm-field-intent" role="status">${message}</p>`;
-    }
-    const html = '<h4>Automatic preview</h4>' + content;
-    if (html === lastAutomaticPreviewHTML) return;
-    lastAutomaticPreviewHTML = html;
-    const focused = document.activeElement;
-    const focusedSource = automaticPreview.contains(focused) && focused instanceof HTMLAnchorElement ? focused.href : '';
-    const focusedField = focusedSource ? focused?.closest('[data-artist-credit]')?.getAttribute('data-artist-credit') : undefined;
-    automaticPreview.innerHTML = html;
-    if (focusedSource) [...automaticPreview.querySelectorAll<HTMLAnchorElement>('a')]
-      .find(link => link.href === focusedSource && link.closest('[data-artist-credit]')?.getAttribute('data-artist-credit') === focusedField)?.focus({ preventScroll: true });
-  };
-  openArtistAutomaticPreview = renderAutomaticPreview;
-  renderAutomaticPreview();
-  updateIntentLabels();
-  if (artist.metadataName) prioritizeArtistMetadata(artist.metadataName, 'open');
 
   const updateAvatarPreview = (src: string) => {
     if (src) {
-      avatarBox.innerHTML = `<img id="aemAvatarImg" data-artist-portrait src="${escHtml(src)}" alt="Custom picture draft">`;
+      avatarBox.innerHTML = `<img id="aemAvatarImg" src="${escHtml(src)}" alt="">`;
     } else {
-      avatarBox.innerHTML = `<img id="aemAvatarImg" data-artist-portrait src="${escHtml(DEFAULT_ARTIST_PORTRAIT)}" alt="">`;
+      avatarBox.innerHTML = '<i class="fa-solid fa-user" style="font-size:44px;color:var(--dim)"></i>';
     }
   };
 
@@ -1896,24 +1794,16 @@ function openEditArtistModal(artistName: string): void {
   fileInput.addEventListener('change', () => {
     const file = fileInput.files?.[0];
     if (!file) return;
-    if (!['image/jpeg', 'image/png', 'image/webp'].includes(file.type)) {
-      setStatus(statusEl, 'Upload a JPEG, PNG or WebP portrait.', 'err');
-      return;
-    }
     if (file.size > MAX_COVER_BYTES) {
       setStatus(statusEl, '✗ Image file too large (max 1.5 MB)', 'err');
       return;
     }
     const reader = new FileReader();
     reader.onload = () => {
-      if (!modalCard.contains(fileInput)) return;
       const dataUri = String(reader.result || '');
       chosenImg = dataUri;
-      editArtistMetadataDraft(draft, 'img', chosenImg);
       imgUrlInput.value = '';
-      lastImgUrlInput = '';
       updateAvatarPreview(dataUri);
-      updateIntentLabels();
     };
     reader.readAsDataURL(file);
   });
@@ -1921,37 +1811,13 @@ function openEditArtistModal(artistName: string): void {
   imgUrlInput.addEventListener('input', () => {
     const url = imgUrlInput.value.trim();
     chosenImg = url;
-    editArtistMetadataDraft(draft, 'img', chosenImg);
-    lastImgUrlInput = imgUrlInput.value;
-    updateAvatarPreview(url);
-    updateIntentLabels();
+    updateAvatarPreview(url || artist.img);
   });
 
   $('aemClearPicBtn').addEventListener('click', () => {
     chosenImg = '';
-    editArtistMetadataDraft(draft, 'img', '');
     imgUrlInput.value = '';
-    lastImgUrlInput = '';
     updateAvatarPreview('');
-    updateIntentLabels();
-  });
-
-  $('aemUseAutomaticImg').addEventListener('click', () => {
-    useAutomaticArtistMetadataDraft(draft, 'img');
-    updateIntentLabels();
-  });
-  bioInput.addEventListener('input', () => {
-    editArtistMetadataDraft(draft, 'bio', bioInput.value);
-    updateIntentLabels();
-  });
-  $('aemClearBioBtn').addEventListener('click', () => {
-    bioInput.value = '';
-    editArtistMetadataDraft(draft, 'bio', '');
-    updateIntentLabels();
-  });
-  $('aemUseAutomaticBio').addEventListener('click', () => {
-    useAutomaticArtistMetadataDraft(draft, 'bio');
-    updateIntentLabels();
   });
 
   const carousel = document.getElementById('aemCarousel');
@@ -1960,14 +1826,11 @@ function openEditArtistModal(artistName: string): void {
       const opt = (e.target as HTMLElement).closest<HTMLElement>('.adm-artist-thumb-opt');
       if (!opt?.dataset.cover) return;
       chosenImg = opt.dataset.cover;
-      editArtistMetadataDraft(draft, 'img', chosenImg);
       imgUrlInput.value = chosenImg;
-      lastImgUrlInput = chosenImg;
       carousel.querySelectorAll('.adm-artist-thumb-opt').forEach((o) => {
         o.classList.toggle('active', o === opt);
       });
       updateAvatarPreview(chosenImg);
-      updateIntentLabels();
     });
   }
 
@@ -1993,14 +1856,6 @@ function openEditArtistModal(artistName: string): void {
 
   $('aemSaveBtn').addEventListener('click', async () => {
     const newName = nameInput.value.trim() || artist.name;
-    // Also notice programmatic field edits without treating an untouched
-    // automatic/fallback preview as a manual override.
-    if (bioInput.value !== draft.bio) editArtistMetadataDraft(draft, 'bio', bioInput.value);
-    if (imgUrlInput.value !== lastImgUrlInput) {
-      chosenImg = imgUrlInput.value.trim();
-      editArtistMetadataDraft(draft, 'img', chosenImg);
-      lastImgUrlInput = imgUrlInput.value;
-    }
     const bio = bioInput.value.trim();
     const genres = genresInput.value.split(',').map((g) => g.trim()).filter(Boolean);
     const social = socialInput.value.trim();
@@ -2011,24 +1866,38 @@ function openEditArtistModal(artistName: string): void {
     setStatus(statusEl, 'Saving artist profile…');
 
     try {
-      const res = await adminApi<ArtistDirectory & { ok: boolean; persisted: boolean; artist: ArtistMeta; renamedTrackCount?: number }>('artistSet', {
+      const res = await adminApi<{ ok: boolean; renamedTrackCount?: number }>('artistSet', {
         artist: artist.name,
-        artistKey: openedArtistKey,
-        version: openedVersion,
         name: newName,
         img: chosenImg,
         bio,
-        imgOverride: draft.imgOverride,
-        bioOverride: draft.bioOverride,
         genres,
         social,
         renameTracks,
       });
 
-      if (!res.persisted || !res.artist?.version) throw new Error('The server did not confirm a saved profile. Reload and try again.');
-      ingestArtistDirectory(res);
+      libArtists[artist.normKey] = {
+        name: newName,
+        img: chosenImg,
+        bio,
+        genres,
+        social,
+        updated: Date.now(),
+      };
+      if (newName.toLowerCase() !== artist.normKey) {
+        libArtists[newName.toLowerCase()] = libArtists[artist.normKey];
+      }
 
-      if (modalCard.contains(saveBtn)) closeModal();
+      if (renameTracks && newName !== artist.name) {
+        for (const t of artist.tracks) {
+          t.artist = newName;
+        }
+      }
+
+      libArtistsCache = null;
+      libEntriesCache = null;
+
+      closeModal();
       toast(res.renamedTrackCount ? `Artist saved & renamed across ${res.renamedTrackCount} tracks` : 'Artist profile saved', 'ok');
       renderArtistsGrid();
       renderLibGrid();
@@ -2271,11 +2140,11 @@ async function loadDiscordOverview(silent = false): Promise<void> {
     gateway.textContent = online
       ? (bot.botUser || 'connected') + ' · ' + (bot.latencyMs == null ? '—' : bot.latencyMs + ' ms')
       : bot.lastSeen ? 'last seen ' + fmtAgo(bot.lastSeen) : 'not connected yet';
-    gateway.className = 'adm-dstat-value ' + (online ? 'ok' : 'err');
+    gateway.className = 'v ' + (online ? 'ok' : 'err');
 
     const queued = Number(counts.queued || 0);
     $('discordQueueState').textContent = queued + ' / ' + (settings.threshold ?? '—');
-    $('discordQueueState').className = 'adm-dstat-value accent';
+    $('discordQueueState').className = 'v gold';
     $('discordActiveBatch').textContent = data.activeBatch
       ? '#' + data.activeBatch.id + ' · ' + data.activeBatch.status + ' · ' + data.activeBatch.trackCount + ' tracks'
       : 'none';
@@ -2648,7 +2517,7 @@ const DISCORD_SECTIONS: Array<{ id: DiscordSection; el: string; load: () => Prom
 function setDiscordSection(section: DiscordSection): void {
   discordSection = section;
   try { localStorage.setItem(DISCORD_STATE_KEY, section); } catch { /* ignore */ }
-  document.querySelectorAll<HTMLElement>('#discordSubnav .adm-dsubnav-btn').forEach((btn) => {
+  document.querySelectorAll<HTMLElement>('#discordSubnav .adm-seg-btn').forEach((btn) => {
     btn.classList.toggle('active', btn.dataset.dsec === section);
   });
   for (const item of DISCORD_SECTIONS) $(item.el).hidden = item.id !== section;
@@ -2850,8 +2719,6 @@ function bind() {
      every single letter. */
   let libFilterTimer: number | undefined;
   $('libSearchInput').addEventListener('input', () => {
-    libArtistKey = '';
-    libArtistNormKey = '';
     libQuery = ($('libSearchInput') as HTMLInputElement).value.trim();
     window.clearTimeout(libFilterTimer);
     libFilterTimer = window.setTimeout(() => renderLibGrid(), 150);
@@ -2924,12 +2791,12 @@ function bind() {
   $('artistGrid').addEventListener('click', (e) => {
     const editBtn = (e.target as HTMLElement).closest<HTMLElement>('[data-artist-edit]');
     if (editBtn?.dataset.artistEdit) {
-      openEditArtistModal(editBtn.closest<HTMLElement>('[data-artist-identity]')?.dataset.artistIdentity || editBtn.dataset.artistEdit);
+      openEditArtistModal(editBtn.dataset.artistEdit);
       return;
     }
     const viewBtn = (e.target as HTMLElement).closest<HTMLElement>('[data-artist-view]');
     if (viewBtn?.dataset.artistView) {
-      viewArtistSongs(viewBtn.closest<HTMLElement>('[data-artist-identity]')?.dataset.artistIdentity || viewBtn.dataset.artistView);
+      viewArtistSongs(viewBtn.dataset.artistView);
       return;
     }
   });
@@ -2986,45 +2853,6 @@ try {
 } catch { /* ignore */ }
 
 bind();
-installArtistPortraitFallback();
-/* Repaint directory changes, never an open editor. Its fields, portrait and
-   captured version belong to the draft until it is closed and reopened. */
-ingestArtistDirectory(getCachedArtistDirectory());
-window.addEventListener('aura:artists-updated', () => {
-  const directory = getCachedArtistDirectory();
-  if (directory.revision <= libArtistRevision) return;
-  ingestArtistDirectory(directory);
-  renderArtistsGrid();
-  renderLibGrid();
-  if (currentPlayingPath) {
-    const entry = buildLibEntries().find((item) => item.path === currentPlayingPath);
-    if (entry) $('admAudioArtist').textContent = entry.artist;
-  }
-});
-window.addEventListener(ARTIST_METADATA_UPDATED_EVENT, (event: CustomEvent) => {
-  if (!adminMetadataGate()) return;
-  if (event.detail?.displayChanged !== false) {
-    libArtistsCache = null;
-    const byKey = new Map(buildAdminArtists().map(artist => [artist.key, artist]));
-    $('artistGrid').querySelectorAll<HTMLElement>('.adm-acard').forEach(card => {
-      const artist = byKey.get(card.dataset.artistIdentity || ''), image = card.querySelector<HTMLImageElement>('[data-artist-portrait]');
-      if (artist && image) setArtistPortraitSource(image, artist.img);
-    });
-  }
-  // Only the separate read-only panel changes; no field, portrait draft,
-  // selected artist or captured edit version is replaced by a provider result.
-  openArtistAutomaticPreview?.();
-});
-let lastArtistRefresh = 0;
-const refreshArtists = () => {
-  if (!getSession() || document.visibilityState === 'hidden' || Date.now() - lastArtistRefresh < 15000) return;
-  lastArtistRefresh = Date.now();
-  void fetchArtistDirectory();
-};
-window.addEventListener('focus', refreshArtists);
-window.addEventListener('online', refreshArtists);
-document.addEventListener('visibilitychange', refreshArtists);
-setInterval(refreshArtists, 60000);
 renderQueue();
-if (getSession()) void unlock();
+if (getSession()) unlock();
 else lock();

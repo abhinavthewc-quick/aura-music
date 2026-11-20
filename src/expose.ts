@@ -18,7 +18,7 @@ import {
 import {
   openAbout, openEffects, openRadioEffectsTab, setRadioSegment, toggleAmbientLayer,
 } from './features/ambience';
-import { openArtist, playArtist, shuffleArtist } from './features/library';
+import { openArtist, shuffleArtist } from './features/library';
 import {
   addTrackToPlaylist, closePlaylistModal, closePlaylistPicker, deletePlaylist,
   drawerPlaylistTap, openPlaylistModal, openPlaylistPage, openPlaylistPicker,
@@ -35,7 +35,6 @@ import {
 Object.assign(globalThis, {
   $, state, toast,
   navClick, goTab, openPlaylistPage, renderPlaylistsPage,
-  openSearch, closeSearch,
   openPlaylistModal, closePlaylistModal, submitPlaylistModal, updatePlaylistCta,
   addTrackToPlaylist, removeTrackFromPlaylist, playPlaylist, deletePlaylist,
   openPlaylistPicker, closePlaylistPicker, playlistPageShare, playlistPageMore, drawerPlaylistTap,
@@ -43,11 +42,11 @@ Object.assign(globalThis, {
   queueTrackAction, openTrackMenu, playTrackSequence,
   closeEditModal, importLocalAudio, retryCatalog, saveEditedTrack,
   setLibView, toggleFavorite, toggleStatsPanel,
-  goToSearchCategory, runSearchChip,
+  goToSearchCategory, runSearchChip, openSearch, closeSearch,
   renderAuraPicks, resumeLastPlayed, shuffleAll,
   changeProfileName, closeHelp, logoutUser, openHelp, openSettings,
   openAbout, openEffects, openRadioEffectsTab, setRadioSegment, toggleAmbientLayer,
-   openArtist, playArtist, shuffleArtist,
+  openArtist, shuffleArtist,
   closeRadioSheetThen, loadRadioStations, radioMenuCopy, radioMenuShare,
   radioMenuSite, stopRadio, toggleRadioPlay,
 });

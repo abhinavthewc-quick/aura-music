@@ -1,2 +1,0 @@
-# Canonical discovery location for clients using the legacy catalog URL.
-/.well-known/ai-catalog.json /.well-known/ard.json 301

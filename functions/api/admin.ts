@@ -6,8 +6,8 @@
    The email must match the allow-list before any GitHub API call is made. */
 
 import { sealBox, fromBase64, toBase64 } from '../../lib/sealedBox.js';
-import { artistTrackId } from '../../lib/artistProfiles.js';
-import { readArtistDirectory, saveArtistProfile, saveTrackArtistEdits, ArtistStoreError, type ArtistEnv } from '../lib/artistStore.js';
+import { trackRef, type VersionDatabase } from '../lib/version-registry';
+import { audioAdmin } from '../lib/audio-processing-admin';
 
 const REPO = 'abhinavthewc-quick/aura-music';
 const WORKFLOW_FILE = 'upload-music.yml';
@@ -31,13 +31,14 @@ const AUDIO_EXT_RE = /\.(opus|mp3|ogg|m4a|webm)$/i;
 const IMAGE_EXT_RE = /\.(webp|jpe?g|png)$/i;
 const MAX_COVER_B64 = Math.ceil(1.5 * 1024 * 1024) * 4 / 3 + 64; // ~1.5 MB image
 
-interface Env extends ArtistEnv {
+interface Env {
   GH_TOKEN: string;
   GOOGLE_CLIENT_ID: string;
   ADMIN_PASSWORD?: string; // optional — enables the email+password login
   HF_TOKEN?: string; // bucket mutations (rename/delete) — set in Pages env
   HF_BUCKET_ID?: string;
   BOT_SERVICE_TOKEN?: string; // shared secret for the Aura Farmer Worker
+  VERSION_DB?: VersionDatabase;
 }
 
 /* The Discord bot's Worker may only use these read/dispatch actions. It never
@@ -50,6 +51,8 @@ interface BucketFile {
   mtime: string;
   xetHash?: string; // required to copyFile (rename) server-side
 }
+
+function mediaStem(path: string): string { return path.split('/').pop().replace(/\.[^.]+$/, ''); }
 
 function ytIdOf(u: string): string {
   const m = YT_RE.exec(u);
@@ -1115,6 +1118,13 @@ export const onRequestPost = async ({ request, env, ctx }: {
       case 'verify':
         return json({ ok: true, email });
 
+      case 'audioOverview': case 'audioJobs': case 'audioJob': case 'audioRetry':
+      case 'audioRecover': case 'audioRegenerate': case 'audioReconcile': {
+        if (!env.VERSION_DB) return json({error:'Audio processing database is unavailable'},503);
+        try { return json(await audioAdmin(env.VERSION_DB,body,email,env.HF_BUCKET_ID || HF_BUCKET)); }
+        catch (cause: any) { return json({error:cause.status ? cause.message : 'Audio processing operation failed'},cause.status || 502); }
+      }
+
       case 'search': {
         const q = String(body.q || '').trim().slice(0, SEARCH_MAX_Q);
         if (!q) return json({ error: 'empty query' }, 400);
@@ -1160,13 +1170,15 @@ export const onRequestPost = async ({ request, env, ctx }: {
       }
 
       case 'library': {
-        const [files, m, directory] = await Promise.all([bucketTree(), hfManifest(env), readArtistDirectory(env)]);
+        // Renditions are source attachments, not songs in the library manager.
+        const files = (await bucketTree()).filter((file) => !/^versions\//i.test(file.path));
+        const m = await hfManifest(env);
         return json({
           files,
           videoIds: [...uploadedVideoIds(files)],
           bucketId: hfBucketId(env),
           manifest: m.tracks,
-          ...directory,
+          artists: m.artists,
         });
       }
 
@@ -1185,27 +1197,32 @@ export const onRequestPost = async ({ request, env, ctx }: {
         assertSafePath(path);
         if (!AUDIO_EXT_RE.test(path)) return json({ error: 'only audio files can be deleted' }, 400);
         const files = await bucketTree(true);
-        const stem = path.replace(/\.[^.]+$/, '');
-        const group = files.filter((f) => f.path.replace(/\.[^.]+$/, '') === stem);
+        const stem = mediaStem(path);
+        const group = files.filter((f) => !/^versions\//i.test(f.path) && mediaStem(f.path) === stem);
         if (!group.some((f) => f.path === path)) return json({ error: 'not found in the bucket' }, 404);
         await hfBatch(env, group.map((f) => ({ type: 'deleteFile', path: f.path })));
+        if (env.VERSION_DB) await env.VERSION_DB.prepare('UPDATE audio_tracks SET active = 0, lease_owner = NULL, lease_until = 0 WHERE ref = ?')
+          .bind(trackRef(path)).run();
         await invalidateTree();
         return json({ ok: true, deleted: group.map((f) => f.path) });
       }
 
       case 'bucketRename': {
         const from = String(body.from || '');
-        const to = String(body.to || '');
+        const requestedTo = String(body.to || '');
+        const to = from.startsWith('originals/') && !requestedTo.includes('/') ? `originals/${requestedTo}` : requestedTo;
         assertSafePath(from);
         assertSafePath(to);
         if (!AUDIO_EXT_RE.test(from)) return json({ error: 'source must be an audio file' }, 400);
         if (!AUDIO_EXT_RE.test(to)) return json({ error: 'new name must keep an audio extension (.opus/.mp3/…)' }, 400);
         if (from === to) return json({ ok: true, renamed: [] });
         const files = await bucketTree(true);
-        const srcGroup = files.filter((f) => f.path.replace(/\.[^.]+$/, '') === from.replace(/\.[^.]+$/, ''));
+        const srcGroup = files.filter((f) => !/^versions\//i.test(f.path) && mediaStem(f.path) === mediaStem(from));
         if (!srcGroup.some((f) => f.path === from)) return json({ error: 'not found in the bucket' }, 404);
         const toStem = to.replace(/\.[^.]+$/, '');
-        const planned = srcGroup.map((f) => toStem + f.path.slice(from.replace(/\.[^.]+$/, '').length));
+        const planned = srcGroup.map((f) => IMAGE_EXT_RE.test(f.path) && f.path.startsWith('covers/')
+          ? `covers/${mediaStem(to)}${f.path.slice(f.path.lastIndexOf('.'))}`
+          : toStem + f.path.slice(f.path.lastIndexOf('.')));
         if (files.some((f) => planned.includes(f.path))) {
           return json({ error: 'a file with the new name already exists' }, 409);
         }
@@ -1226,6 +1243,16 @@ export const onRequestPost = async ({ request, env, ctx }: {
         }
         for (const f of srcGroup) ops.push({ type: 'deleteFile', path: f.path });
         await hfBatch(env, ops);
+        if (env.VERSION_DB) {
+          if (trackRef(from) === trackRef(to)) await env.VERSION_DB.prepare('UPDATE audio_tracks SET original_path = ? WHERE ref = ?')
+            .bind(to, trackRef(from)).run();
+          else {
+            // Filename-only identities change on an explicit rename; leave the
+            // old attachments inactive and let the Mac discover the new source.
+            await env.VERSION_DB.prepare('UPDATE audio_tracks SET active = 0, lease_owner = NULL, lease_until = 0 WHERE ref = ?')
+              .bind(trackRef(from)).run();
+          }
+        }
         await invalidateTree();
         return json({ ok: true, renamed: planned });
       }
@@ -1241,8 +1268,8 @@ export const onRequestPost = async ({ request, env, ctx }: {
         const files = await bucketTree();
         if (!files.some((f) => f.path === path)) return json({ error: 'not found in the bucket' }, 404);
         /* keep the existing cover extension so the site keeps resolving it */
-        const existing = files.find((f) => f.path.replace(/\.[^.]+$/, '') === stem && IMAGE_EXT_RE.test(f.path));
-        const target = existing ? existing.path : stem + '.webp';
+        const existing = files.find((f) => mediaStem(f.path) === mediaStem(path) && IMAGE_EXT_RE.test(f.path));
+        const target = existing ? existing.path : path.startsWith('originals/') ? `covers/${mediaStem(path)}.webp` : stem + '.webp';
         const ext = target.slice(target.lastIndexOf('.') + 1).toLowerCase();
         const stagedName = `cover-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}.${ext}`;
         const stagedPath = `${STAGING_DIR}/${stagedName}`;
@@ -1326,52 +1353,91 @@ export const onRequestPost = async ({ request, env, ctx }: {
           throw e;
         }
         manifestMem = { data: manifest, at: Date.now() };
-        const directory = fields.a ? await saveTrackArtistEdits(env, [{ id: 'vid:' + vid, artist: String(fields.a) }]) : undefined;
-        return json({ ok: true, dispatched: true, target: 'manifest.json', ...directory });
+        return json({ ok: true, dispatched: true, target: 'manifest.json' });
       }
 
-      /* Artist writes never stage a manifest or dispatch a download workflow. */
+      /* ----- Artist Profile Management: update image, bio, genres, or batch-rename artist ----- */
       case 'artistSet': {
-        const candidates: Array<{ id: string; artist: string }> = [];
-        let revision: number | undefined;
-        if (body.renameTracks === true) {
-          const [files, m, directory] = await Promise.all([bucketTree(), hfManifest(env), readArtistDirectory(env)]);
-          revision = directory.revision;
-          for (const file of files.filter((f) => AUDIO_EXT_RE.test(f.path))) {
-            const stem = file.path.replace(/\.[^.]+$/, '');
-            const vid = VIDEO_ID_SUFFIX_RE.exec(stem)?.[1] || '';
-            const parsed = /^(.+?)\s+-\s+(.+)$/.exec(stem.replace(VIDEO_ID_SUFFIX_RE, '').replace(/\s*-\s*Topic\s*-\s*/i, ' - '));
-            const id = artistTrackId(vid, file.path);
-            const artist = directory.trackArtists[id] || String(m.tracks[vid]?.a || parsed?.[1] || 'Unknown Artist').trim();
-            candidates.push({ id, artist });
+        const artist = String(body.artist || '').trim();
+        if (!artist) return json({ error: 'artist name required' }, 400);
+        const m = await hfManifest(env);
+        const artists: Record<string, Record<string, unknown>> = { ...(m.artists || {}) };
+        const tracks: Record<string, Record<string, unknown>> = { ...(m.tracks || {}) };
+
+        const artistKey = artist.toLowerCase();
+        const existing = (artists[artistKey] as Record<string, unknown>) || { name: artist };
+        const profile: Record<string, unknown> = { ...existing };
+
+        if (body.name) profile.name = String(body.name).trim();
+        if (body.img !== undefined) profile.img = String(body.img).trim();
+        if (body.bio !== undefined) profile.bio = String(body.bio).trim();
+        if (body.genres && Array.isArray(body.genres)) profile.genres = body.genres.map(String);
+        if (body.social !== undefined) profile.social = String(body.social).trim();
+        profile.updated = Date.now();
+
+        artists[artistKey] = profile;
+
+        let renamedTrackCount = 0;
+        const newName = body.renameTracks ? String(body.name || artist).trim() : null;
+        if (newName && newName !== artist) {
+          const oldNorm = artist.toLowerCase();
+          for (const [vid, entry] of Object.entries(tracks)) {
+            const a = String((entry as any).a || '').trim();
+            if (a.toLowerCase() === oldNorm || a === artist) {
+              (tracks[vid] as any).a = newName;
+              renamedTrackCount++;
+            }
           }
+          delete artists[artistKey];
+          artists[newName.toLowerCase()] = { ...profile, name: newName };
         }
-        /* Forward imgOverride/bioOverride unchanged: false unlocks, omission
-           preserves intent, and the store rejects non-boolean flags. */
-        const saved = await saveArtistProfile(env, body, candidates, revision);
-        return json({ ok: true, persisted: true, artist: saved.artist, renamedTrackCount: saved.renamedTrackCount, ...saved.directory });
+
+        const manifest = { v: 1, tracks, artists };
+        const stagedPath = `${STAGING_DIR}/manifest-${Date.now().toString(36)}.json`;
+        try {
+          await gh(env, `/repos/${REPO}/contents/${stagedPath}`, {
+            method: 'PUT',
+            body: JSON.stringify({
+              message: `chore: update artist metadata for ${artist}`,
+              content: toB64Utf8(JSON.stringify(manifest, null, 1)),
+              branch: 'main',
+            }),
+          });
+        } catch (e) {
+          throw new Error('could not stage manifest in repo — ' + (e as Error).message);
+        }
+        try {
+          await gh(env, `/repos/${REPO}/actions/workflows/${MANAGE_WORKFLOW_FILE}/dispatches`, {
+            method: 'POST',
+            body: JSON.stringify({
+              ref: 'main',
+              inputs: { op: 'manifest', staged_path: stagedPath, target_path: 'manifest.json' },
+            }),
+          });
+        } catch (e) {
+          await cleanupStaged(env, stagedPath);
+          throw e;
+        }
+        manifestMem = { data: manifest, at: Date.now() };
+        return json({ ok: true, dispatched: true, renamedTrackCount, artist: profile });
       }
 
       /* ----- Batch manifest metadata updates (batch artist/album edit) ----- */
       case 'batchManifestSet': {
         const updates = body.updates;
-        if (!Array.isArray(updates) || !updates.length || updates.length > 500) {
-          return json({ error: 'provide 1–500 track updates' }, 400);
+        if (!Array.isArray(updates) || !updates.length) {
+          return json({ error: 'updates array required' }, 400);
         }
         const m = await hfManifest(env);
         const tracks: Record<string, Record<string, unknown>> = { ...(m.tracks || {}) };
         let count = 0;
-        const artistEdits: Array<{ id: string; artist: string }> = [];
         for (const item of updates) {
           const vid = String(item.id || '');
-          if (!/^[A-Za-z0-9_-]{11}$/.test(vid)) return json({ error: 'bad video ID' }, 400);
+          if (!vid) continue;
           const existing = tracks[vid] || {};
           const fields: Record<string, unknown> = {};
           if (item.title) fields.t = String(item.title).trim();
-          if (item.artist) {
-            fields.a = String(item.artist).trim().slice(0, 200);
-            if (fields.a) artistEdits.push({ id: 'vid:' + vid, artist: String(fields.a) });
-          }
+          if (item.artist) fields.a = String(item.artist).trim();
           if (item.album) fields.al = String(item.album).trim();
           if (item.year) fields.y = String(item.year).trim();
           if (item.genre) fields.g = String(item.genre).trim();
@@ -1405,8 +1471,7 @@ export const onRequestPost = async ({ request, env, ctx }: {
           throw e;
         }
         manifestMem = { data: manifest, at: Date.now() };
-        const directory = artistEdits.length ? await saveTrackArtistEdits(env, artistEdits) : undefined;
-        return json({ ok: true, dispatched: true, count, ...directory });
+        return json({ ok: true, dispatched: true, count });
       }
 
       case 'expand': {
@@ -1686,7 +1751,6 @@ export const onRequestPost = async ({ request, env, ctx }: {
         return json({ error: 'unknown action' }, 400);
     }
   } catch (e) {
-    if (e instanceof ArtistStoreError) return json({ error: e.message }, e.status);
     return json({ error: (e as Error).message || 'server error' }, 502);
   }
 };

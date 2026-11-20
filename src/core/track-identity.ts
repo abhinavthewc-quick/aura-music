@@ -1,5 +1,3 @@
-import { trackKey, trackMatchesKey } from './trackIdentity';
-
 export interface TrackSnapshot {
   ref: string;
   legacyKey?: string;
@@ -12,13 +10,13 @@ export interface TrackSnapshot {
 
 /** Immutable source identity. Title/artist are display metadata, never a primary key. */
 export function stableTrackRef(song: any): string {
-  if (song?.isLocal) return song.id !== undefined && song.id !== null ? `id:${String(song.id)}` : '';
   if (/^[A-Za-z0-9_-]{11}$/.test(String(song?.videoId || ''))) return `video:${String(song.videoId)}`;
   return song?.id !== undefined && song?.id !== null ? `id:${String(song.id)}` : '';
 }
 
 export function legacyTrackKey(song: any): string {
-  return trackKey(song);
+  if (song?.videoId) return `vid:${song.videoId}`;
+  return `lk:${String(song?.title || '').toLowerCase().trim()}|${String(song?.artist || '').toLowerCase().trim()}`;
 }
 
 export function safeArtwork(value: unknown): string {
@@ -40,35 +38,18 @@ export function snapshotTrack(song: any, legacyKey?: string): TrackSnapshot {
   };
 }
 
-interface TrackLookup {
-  inputs: Array<{song:any; id:any; videoId:any; title:any; artist:any; catalogArtist:any; isLocal:any}>;
-  ids:Map<string,any>; refs:Map<string,any>; legacy:Map<string,any[]>; names:Map<string,any[]>;
-}
+interface TrackLookup { length:number; ids:Map<string,any>; refs:Map<string,any>; legacy:Map<string,any[]>; names:Map<string,any[]> }
 const lookups = new WeakMap<any[],TrackLookup>();
 function lookup(songs: any[]): TrackLookup {
   const cached = lookups.get(songs);
-  if (cached?.inputs.length === songs.length && cached.inputs.every((before,index) => {
-    const song = songs[index];
-    return before.song === song && ['id','videoId','title','artist','catalogArtist','isLocal'].every((field) => before[field] === song[field]);
-  })) return cached;
-  const result: TrackLookup = {inputs:[],ids:new Map(),refs:new Map(),legacy:new Map(),names:new Map()};
-  const add = (map:Map<string,any[]>,key:string,song:any) => {
-    const entries = map.get(key);
-    if (entries) { if (!entries.includes(song)) entries.push(song); } else map.set(key,[song]);
-  };
+  if (cached?.length === songs.length) return cached;
+  const result: TrackLookup = {length:songs.length,ids:new Map(),refs:new Map(),legacy:new Map(),names:new Map()};
   for (const song of songs) {
-    result.inputs.push({song,id:song.id,videoId:song.videoId,title:song.title,artist:song.artist,catalogArtist:song.catalogArtist,isLocal:song.isLocal});
-    result.ids.set(String(song.id),song);
-    const ref = stableTrackRef(song);
-    if (ref) result.refs.set(ref,song);
-    add(result.legacy,trackKey(song),song);
-    if (!song.videoId) {
-      const alias = `lk:${String(song.title || '').toLowerCase().trim()}|${String(song.artist || '').toLowerCase().trim()}`;
-      if (trackMatchesKey(song,alias)) add(result.legacy,alias,song);
-    }
-    for (const artist of new Set([song.artist,song.catalogArtist])) {
-      if (artist != null) add(result.names,`${String(song.title || '').toLowerCase().trim()}|${String(artist).toLowerCase().trim()}`,song);
-    }
+    result.ids.set(String(song.id),song); result.refs.set(stableTrackRef(song),song);
+    const key = legacyTrackKey(song), name = `${String(song.title || '').toLowerCase().trim()}|${String(song.artist || '').toLowerCase().trim()}`;
+    const legacy = result.legacy.get(key), names = result.names.get(name);
+    if (legacy) legacy.push(song); else result.legacy.set(key,[song]);
+    if (names) names.push(song); else result.names.set(name,[song]);
   }
   lookups.set(songs,result); return result;
 }

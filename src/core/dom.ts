@@ -1,6 +1,6 @@
 import { $ } from './state';
-import { DEFAULT_COVER } from './catalog';
-export { artistKey, artistMergeKey } from './artistGroups';
+import { DEFAULT_COVER, normalizeHfArtworkUrl } from './catalog';
+export { artistKey, artistMergeKey } from './artist-names';
 /* ===== 2942-2954 ===== */
     export function fmt(sec){
       if(!sec || !isFinite(sec) || sec < 0) return '0:00';
@@ -27,11 +27,24 @@ export { artistKey, artistMergeKey } from './artistGroups';
    search results, player…). The load "error" event doesn't bubble, so this
    runs in the capture phase. Anything that fails — or was saved with an
    empty/missing URL — gets swapped for the app's vinyl placeholder so no
-   browser broken-image glyph is ever visible. */
+   browser broken-image glyph is ever visible. Legacy bucket images retry their
+   migrated cover location first, including saved artist/playlist artwork.
+   Valid new uploads at the bucket root retain their working URLs. */
     export function installCoverFallback(){
       document.addEventListener('error',(e:any)=>{
         const el=e.target;
-        if(!el || el.tagName!=='IMG' || el.dataset.coverFallback) return;
+        if(!el || el.tagName!=='IMG') return;
+        const source = el.getAttribute('src') || '';
+        if(source === DEFAULT_COVER) return;
+        const migrated = normalizeHfArtworkUrl(source);
+        if(migrated !== source){
+          delete el.dataset.coverFallback;
+          el.src = migrated;
+          return;
+        }
+        // Covers already under covers/ do not remap, so a failed retry reaches
+        // the placeholder exactly once. A reused player image can retry again
+        // when its src changes to a different song.
         el.dataset.coverFallback='1';
         el.src=DEFAULT_COVER;
       },true);

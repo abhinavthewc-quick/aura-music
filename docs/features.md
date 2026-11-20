@@ -1,7 +1,6 @@
 # Features
 
-This guide describes the source tree's listener flows and local-first boundaries.
-Paths point at the owning module.
+This documents the supported listener surfaces and their local-first boundaries.
 It is not a claim that every third-party provider or live deployment was tested.
 See [remediation](remediation.md) for the verification gate and infrastructure
 work that cannot be completed by a source-only change.
@@ -11,21 +10,16 @@ work that cannot be completed by a source-only change.
 | Flow | Behaviour |
 | --- | --- |
 | Google sign-in | Google Identity Services button/One Tap. The ID token is verified in the browser (RS256 against Google's JWKS) and again by `/api/admin` for admin actions. Any Google account can enter. |
-| First entry | The user picks a username (2–20 characters, starting with a Unicode letter/number; spaces, `_` and `-` are also allowed). It is stored per email in `auraProfiles_v1` and becomes the profile name on this device. |
+| First entry | The user picks a username (3–20 characters, letters/numbers/space/`_`/`-`). It is stored per email in `auraProfiles_v1` and becomes the profile name on this device. |
 | Email + password fallback | Device-local accounts only. PBKDF2-SHA256, 150k iterations, random 16-byte salt; only the hash is stored (`auraLocalAccounts_v1`). Works offline and when Google is unavailable. |
 | Session | `auraSession_v2` stores email/name/picture, expiry and token. Google sessions are extended to 7 days via `/api/admin`’s exchange action; the raw ID token remains valid ~1 hour. |
-| Returning entry | A valid stored session opens a restoring/loading screen while the music runtime loads. Failed or slow startup exposes **Reload Aura**; malformed or expired sessions return to sign-in. |
-| Profile popover | Shows name, avatar (or initial), first/last sign-in, track and favourite counts, and “change name”. |
+| Profile popover | Shows name, avatar (or initial), first/last sign-in, track and favourite counts, theme toggle and “change name”. |
 | Sign out | Clears the display name and session, disables Google auto-select, shows a 1.5 s logout animation, then reloads. |
 | Admin gate | A separate allow-list (`ADMIN_EMAILS` in `src/core/config.ts`, mirrored in `functions/api/admin.ts`). Signing into the site does **not** grant admin API access unless the email is on that list. |
 
 **Privacy:** no account data is sent to an Aura backend. Sessions and profiles
 live in this browser only. The admin API sees Google tokens to verify them but
 does not store them.
-
-Signed-out entry loads the sign-in UI before the music runtime, catalogue or
-audio initialization. A received playlist fragment waits through sign-in and
-username entry, then opens its preview. See [startup recovery](troubleshooting.md#returning-session-startup-does-not-finish).
 
 ## Home
 
@@ -36,32 +30,20 @@ username entry, then opens its preview. See [startup recovery](troubleshooting.m
 - **Aura Picks**: eight seeded picks, refreshed when the catalogue grows or the
   user presses “Refresh mix”. Designed empty state when the library is empty.
 - **More from**: an artist spotlight for every artist with at least two tracks,
-  using the same artist identities and portraits as Library.
+  merged across spelling variants (`A. R. Rahman` / `A.R. Rahman` / `… - Topic`).
 - All sections are rebuilt in a single animation frame per change
   (`updateLibCount` batches the home paint).
 
 ## Library
 
-Four library views share the same track data:
+Four views share the library data:
 
 - **Tracks** — the full list (catalogue + added/local tracks), virtual one row
   per song, heart and “…” actions.
-- **Artists** — grouped by centralized artist identities; open an artist to
-  browse their credited tracks. Artist playback is opt-in and stays within that
-  collection instead of falling through to unrelated library tracks.
+- **Artists** — grouped by normalised artist name; group play starts a scoped
+  artist collection instead of falling through to unrelated library tracks.
 - **Albums** — grouped by album metadata from `manifest.json`.
 - **Films** — extracts `(From "Film")` credits from titles/albums.
-
-Home, Library, artist details and artist counts use one identity resolver.
-Admin-owned aliases/corrections take precedence over reviewed spelling variants;
-ambiguous names stay separate. Supported collaborations can appear under each
-credited artist while retaining the recording’s original track keys. Details:
-[Artist storage](artist-storage.md#read-side-artist-identity).
-
-Artist profiles automatically fill missing portraits and descriptions from
-Wikimedia sources after sign-in. Saved field overrides, including explicit
-clears, take precedence. Source credits accompany automatic content; unavailable
-portraits use a neutral placeholder. See [Automatic artist profiles](artist-metadata.md).
 
 Other library features:
 
@@ -82,27 +64,28 @@ Other library features:
 - **Edit/delete** — rename title/artist, replace cover from a URL or uploaded
   file, delete from the library (also deletes the IndexedDB blob for local files).
 - **Stats** — total tracks, favourites, local files, distinct artists.
-- **Search within the library** — the search field at the top of Home filters
-  title/artist/album locally as you type.
+- **Search within the library** — the search bar at the top of Home filters
+  title/artist/album locally as you type, with results opening underneath it.
 
 **Empty/loading/error:** skeleton rows while the remote catalogue loads; designed
-empty-library state with an “Add local audio” CTA; retryable error state when the
+empty-library state with a “Find music” CTA that opens the search field; retryable error state when the
 catalogue is unreachable.
 
 ## Search
 
 ### Local search
 
-The search field sits at the top of Home and filters the whole library by title, artist, album, film, or genre. Results open directly underneath it, 30 rows at a time, and the home feed is hidden while a search is open.
-Search categories and shortcuts (All, Favorites, Recently played, Local files)
-scope library results; category shortcuts do not masquerade as a search for unsupported
-content. Search copy describes the Aura library rather than podcasts.
+There is no separate Search destination. One field sits at the top of Home and
+its results open directly below it, so searching never leaves the page you were
+on. It filters the whole library by title, artist, album, film, or genre in
+30-row pages; the All, Favorites, Recently played, and Local files tiles scope
+results when the field is empty. Category shortcuts do not masquerade as a
+search for unsupported content, and the copy describes the Aura library rather
+than podcasts.
 
 Search is deliberately library-only. New music enters through the Discord
 submission pipeline, is reviewed/downloaded, and then appears in the shared
-Aura catalogue. Requests are an intentional user action through
-[AURA FARMER](https://github.com/angel2rider/AURA-FARMER), a separate repository;
-an empty search never submits music or injects third-party previews.
+Aura catalogue; search never injects previews from third-party catalogues.
 
 ## Playlists
 
@@ -116,10 +99,8 @@ an empty search never submits music or injects third-party previews.
   title/artist/artwork snapshots. Canonical references resolve only by direct
   stable/source identity, never by a matching legacy alias or title/artist.
   Only unresolved `legacy:` placeholders get unique alias/metadata fallback.
-   Old string-key playlists migrate without discarding unresolved entries;
-   metadata edits do not become track identities. Migration happens only during
-   an explicit mutation after the required verbatim backup; startup, previews,
-   refreshes and library deletion never rewrite playlist bytes.
+  Old string-key playlists migrate without discarding unresolved entries;
+  metadata edits do not become track identities.
 - Missing tracks are visible placeholders with remove/relink recovery. Export
   and import preserve their place in the order even if the receiving library
   does not yet contain the audio.
@@ -143,35 +124,8 @@ an empty search never submits music or injects third-party previews.
   restarting the current audio. Deleting the playlist detaches playback as a
   labeled snapshot instead of preserving a stale collection ID.
 - This is **same-origin browser synchronization**, not cloud or cross-device sync.
-- There are no backend Public/Unlisted/Private ACLs or synchronized cloud
-  collections. Existing privacy/year/shared metadata remains intact; explicit
-  snapshot links and file exports transfer a copy.
-
-### Sharing a playlist
-
-1. Open a playlist and choose **Share**. Aura builds a usable
-   `/#playlist=<snapshot>` link and opens native sharing when supported.
-2. The inline share panel shows the link, omission counts and sharing status.
-   **Copy link** uses clipboard fallbacks; if copying is blocked, select and
-   copy the displayed link manually. Native cancellation is reported without
-   silently copying.
-3. Recipients open a read-only preview after the existing sign-in flow. Choose
-   **Save playlist** to create a private browser-local copy, or **Dismiss**.
-   An unchanged snapshot already saved offers **Open saved playlist**.
-
-The snapshot contains the title, description and ordered track labels/keys.
-Anyone with the link can read it; subsequent sender edits do not update the
-recipient’s copy. Local audio, artwork/media URLs and account data are excluded.
-Local files and unresolvable legacy entries are omitted with counts. The limit
-is **100 tracks including omissions** and **16 KiB of decoded JSON**; oversized
-playlists fail visibly rather than silently dropping tracks.
-
-Only matches already in the recipient’s library can play. Missing tracks keep
-their names and places in the saved copy and resolve when the library updates.
-Opening or saving a link does not start playback, fetch missing music or submit
-downloads. Playlists remain local to each browser. Owners:
-`src/features/playlists.ts`, `src/features/deeplink.ts`, and
-`src/core/playlist-sharing.ts`.
+- There are no backend Public/Unlisted/Private ACLs or permanent share links.
+  Collections stay in this browser until you explicitly transfer an export.
 
 ## Player
 
@@ -180,25 +134,21 @@ downloads. Playlists remain local to each browser. Owners:
 - **Full player** opens from the mini player or a song; background gradients and
   control colours are derived from the cover art, contrast-checked against white
   text. Paused artwork uses a spring animation.
-- **Collection playback** — playlist, artist, and explicit ordered-collection
+- **Collection playback** — library, playlist, artist, and scoped search
   selections establish an ordered playback context with a cursor, queue
   interruptions, and listening history. Reaching a playlist boundary never
-  falls through to the global catalogue. Ordinary library/search selection
-  keeps the existing fallback behaviour and retires artist playback.
+  falls through to the global catalogue.
 - **Up Next / queue** — queued items interrupt without replacing the collection;
   Previous follows actual listening history, including those interruptions.
   Next after Previous replays future visits before pending queued items, and Up
   Next previews that same order. Visits carry stable track/override-anchor identity,
   so cursors rebase after shuffle or live reorder instead of trusting old indices.
-   Reordering Up Next is temporary and does not rewrite a saved playlist.
-   Handoffs, row selection, retirement and shuffle keep unheard interruptions,
-   including those held in forward history. The preview limit is 4 phone / 30 desktop.
+  Reordering Up Next is temporary and does not rewrite a saved playlist.
 - **Seek** — range slider plus the mobile bottom-edge progress line; seeks work
-  for the active, ready HTML audio or YouTube source. Pending YouTube reports
-  time zero, rejects seeking and never resumes the previous HTML audio.
+  for HTML audio and YouTube.
 - **Shuffle/repeat** — shuffle remains within the active collection. Repeat
   cycles off → all → one, mirrored between full and mini players; manual Next
-  remains a navigation action even when repeat-one is enabled. Initial repeat mode is all.
+  remains a navigation action even when repeat-one is enabled.
 - **Volume** — persisted when “Remember volume” is enabled; muted state restores
   the previous level.
 - **Media Session** — personal play/pause/previous/next/seek and metadata for HTML
@@ -230,9 +180,7 @@ removed; the existing licensed vanilla canvas loader renderer remains.
   URLs. Invalid input is rejected before disturbing playing audio; unsafe
   directory streams and optional homepage/favicon URLs are discarded.
 - Selecting radio pauses personal audio and stops active/pending YouTube playback
-  without consuming the personal queue or changing saved playlists. Artist
-  transport retires with unheard interruptions retained; scoped playlist
-  traversal and its listening history stay intact.
+  without changing the personal collection, queue or listening history.
 - Pause/resume/stop use request-generation and explicit-intent guards, so stale
   station promises/errors cannot overwrite a newer selection or revive a pause.
 - Station metadata includes name, country, tags and artwork; a full radio player
@@ -263,29 +211,24 @@ The effects panel mixes Web Audio layers under music/radio:
 
 ## Listen Together (rooms)
 
-A room is a shared playback session: admins control the transport, listeners
-hear synchronized playback, and everyone can chat and see the queue.
+A room is a shared playback session: one admin controls the transport, everyone
+hears the same track at the same moment, and listeners can chat and see the queue.
 Rooms are a **separate page** (`/rooms`) with their own bundle and Web Audio
 engine.
 
-- Enter a room code or paste an invite link, choose a name, then **Join room**;
-  **Start a room** makes you an admin. Entry shows progress, **Cancel** and
-  actionable errors.
-- The now-playing stage shows track, loading and sync status. **Turn on sound**
-  handles browser audio blocking; **Your volume** affects only your device.
-- Admins choose from the shared library, manage **Up next**, control playback,
-  and share controls through **Here together**. Listeners can browse and chat.
-- **Invite friends** opens an inline listener-link panel with copy/manual-copy
-  feedback. Its `/rooms?r=<id>` link excludes the admin key.
-- **Queue**, **People** and **Chat** shortcuts reach the room sections on small
-  screens. **Reconnect** handles a disconnected session; **Leave room** exits it.
+See [rooms.md](rooms.md) for the protocol, Durable Object, clock sync, drift
+correction, grace period and local development harness. The short version:
 
-See [rooms.md](rooms.md) for authority, protocol, lifecycle, synchronization and
-the development harness.
-
-Create/join responses must be HTTP successes; `exists: false` stays on the join
-screen with a clear error. WebSocket bases must be credential-free `ws:`/`wss:`
-URLs before connection. Failed joins use the visible join banner.
+- Create room → share link `/rooms?r=<id>`; the creator gets an admin key.
+- Invitees join with the code/name. Create/join service responses must be HTTP
+  successes; `exists: false` stays on the join screen with a clear error.
+- WebSocket bases must be credential-free `ws:`/`wss:` URLs before connection.
+  Failed joins show the visible join banner rather than an error hidden inside
+  the room view.
+- Admin can play/pause/seek/track, manage the queue, promote/demote listeners.
+- Chat, participants, queue and room expiry are server-authoritative.
+- Room survives an empty room for 3 minutes; listeners can reclaim control for
+  30 seconds after the last admin leaves.
 
 ## Settings
 
@@ -296,11 +239,8 @@ Stored in `auraSettings_v1` unless noted:
 | Autoplay next track | on | `ended` advances the queue |
 | Remember volume | on | stores `auraVolume` |
 | Reduce motion | off | adds `.aura-reduce-motion` (also honours OS preference) |
+| Theme | dark | persisted in `auraTheme`, applied before first paint |
 | Reset preferences | — | restores defaults after confirmation |
-
-The interface uses a true-black (`#000`) canvas with neutral raised surfaces,
-local fonts/icons and artwork colour. Legacy `auraTheme` values do not switch
-the app to a light theme.
 
 Other surfaces: Help & Support (mail/Discord), About, sidebar collapse
 (`auraSidebarCollapsed`), Effects, and the profile popover.
@@ -326,10 +266,7 @@ query parameter. The activity, its settings and setup live in
 - Toast live region (`role="status" aria-live="polite"`).
 - Global focus-visible ring, disabled/busy styles, reduced-motion support.
 - Escape closes the top overlay only; Tab is trapped in dialogs; focus is
-   restored on close; Enter/Space activates `role="button"` rows/cards.
-- At 900 px and above, the full player is nonmodal and its docked Up Next
-  companion is a region without `aria-modal`; Tab is untrapped. Phone overlays
-  retain modal focus behavior.
+  restored on close; Enter/Space activates `role="button"` rows/cards.
 - Active tabs expose `aria-current="page"`; icon-only controls have labels;
   cover images have alt text (empty for decorative art); form controls are
   labelled.

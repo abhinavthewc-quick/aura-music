@@ -1,15 +1,12 @@
+import { artistMatchKey } from './artist-names';
+import { isAudioVersionPath, normalizeAudioVersions, parseAudioVersionsIndex } from './audio-versions';
+
 /* Dynamic catalog: lists tracks (audio + cover art) from the public
    Hugging Face storage bucket at runtime instead of hardcoding them.
    Result is cached in localStorage so the library paints instantly and
    still works offline; a background refresh keeps it in sync.
    Optional extras (album / year / duration) come from the bucket's
-   manifest.json, written by the upload workflow and keyed by video ID.
-   Editable artist profiles and name overrides live independently in D1. */
-
-import { artistTrackId, type ArtistProfile, type ArtistDirectory } from '../../lib/artistProfiles';
-import { createArtistIdentityResolver } from './artistIdentity';
-import { getDisplayArtistProfile } from './artistMetadata';
-import type { DisplayArtistProfile } from '../../lib/artistMetadata';
+   manifest.json, written by the upload workflow and keyed by video ID. */
 
 export const HF_BUCKET_ID = 'Angelrider/sonora';
 const HF_TREE_URL = `https://huggingface.co/api/buckets/${HF_BUCKET_ID}/tree?recursive=true`;
@@ -47,7 +44,7 @@ const isHiddenTrack = (path: string, artist = '', title = '') =>
 export const DEFAULT_COVER =
   'data:image/svg+xml;utf8,' +
   encodeURIComponent(
-    '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 200 200"><rect width="200" height="200" rx="18" fill="#121212"/><circle cx="100" cy="100" r="62" fill="#080808" stroke="#454545" stroke-width="3"/><circle cx="100" cy="100" r="16" fill="#454545"/><path d="M138 52v50.5a20 20 0 1 0 10 17V62z" fill="#dedede"/></svg>'
+    '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 200 200"><rect width="200" height="200" rx="18" fill="#241a12"/><circle cx="100" cy="100" r="62" fill="#111" stroke="#b98249" stroke-width="3"/><circle cx="100" cy="100" r="16" fill="#b98249"/><path d="M138 52v50.5a20 20 0 1 0 10 17V62z" fill="#e6bd92"/></svg>'
   );
 
 export function hfFileUrl(path: string): string {
@@ -59,6 +56,22 @@ export function hfFileUrl(path: string): string {
   );
 }
 
+/** Artwork snapshots saved before the archive move still point at root files.
+ * Only migrate this bucket's root images; custom URLs and nested paths keep
+ * their meaning. Decode once and re-encode so literal %, Unicode, ? and # in
+ * filenames survive the move. */
+export function normalizeHfArtworkUrl(value: unknown): string {
+  const raw = typeof value === 'string' ? value : '';
+  try {
+    const url = new URL(raw);
+    const prefix = `/buckets/${HF_BUCKET_ID}/resolve/`;
+    if (url.origin !== 'https://huggingface.co' || url.username || url.password || !url.pathname.startsWith(prefix)) return raw;
+    const path = decodeURIComponent(url.pathname.slice(prefix.length));
+    if (!COVER_RE.test(path) || /[\/\\\x00-\x1f\x7f]/.test(path)) return raw;
+    return hfFileUrl(`covers/${path}`) + url.search + url.hash;
+  } catch { return raw; }
+}
+
 /**
  * Edge proxy URL with OCI Hyderabad hot-caching and byte-range streaming.
  */
@@ -68,8 +81,8 @@ export function getAudioStreamUrl(path: string): string {
   return '/api/audio?path=' + encodeURIComponent(path) + '&cache=2';
 }
 
-/* Preserve the historic filename parser: no-ID playlist keys include its
-   artist spelling. Richer read-side identity belongs in artistIdentity.ts. */
+/* YouTube's auto-generated channels publish as "<Artist> - Topic" — strip the
+   suffix so one artist groups as one artist everywhere in the UI. */
 export function cleanArtist(name: string): string {
   return name.replace(/\s*-\s*Topic$/i, '').trim() || 'Unknown Artist';
 }
@@ -114,7 +127,7 @@ export function extractVideoId(path: string): string {
 export function parseTrackName(path: string): { title: string; artist: string } {
   /* "<Artist> - Topic - <Title>" is the auto-generated-channel filename form:
      collapse the middle segment so the first " - " split lands on the artist. */
-  const base = path
+  const base = path.split('/').pop()
     .replace(/\.[^.]+$/, '')
     .replace(VIDEO_ID_SUFFIX_RE, '')
     .replace(/\s*-\s*Topic\s*-\s*/i, ' - ');
@@ -131,17 +144,23 @@ export function readCatalogCache(): any[] {
     const parsed = JSON.parse(raw);
     if (!Array.isArray(parsed?.tracks)) return [];
     // Drop hidden/pruned tracks even from the cache so removal is instant.
-    return applyArtistTrackOverrides(parsed.tracks.filter((t: any) => {
+    return parsed.tracks.filter((t: any) => {
       const path = typeof t?.id === 'string' && t.id.startsWith('hf:') ? t.id.slice(3) : '';
-      return !isHiddenTrack(path, t?.artist || '', t?.title || '');
-    }));
+      return !isAudioVersionPath(path) && !isHiddenTrack(path, t?.artist || '', t?.title || '');
+    }).map((song: any) => ({...song, audioVersions: normalizeAudioVersions(song.audioVersions)}));
   } catch {
     return [];
   }
 }
 
-export type ArtistMeta = ArtistProfile;
-export type { ArtistDirectory };
+export interface ArtistMeta {
+  name?: string;
+  img?: string;
+  bio?: string;
+  genres?: string[];
+  social?: string;
+  updated?: number;
+}
 
 export interface ManifestEntry {
   t?: string;
@@ -159,116 +178,45 @@ export type Manifest = {
 };
 
 export const ARTISTS_CACHE_KEY = 'auraHfArtists_v1';
-export const CLOUD_ARTISTS_CACHE_KEY = 'auraCloudArtists_v1';
 
-export function readCloudArtistsCache(): ArtistDirectory {
-  try {
-    const data = JSON.parse(localStorage.getItem(CLOUD_ARTISTS_CACHE_KEY) || 'null');
-    if (data && typeof data.artists === 'object' && data.artists && !Array.isArray(data.artists) &&
-      typeof data.trackArtists === 'object' && data.trackArtists && !Array.isArray(data.trackArtists)) {
-      return { artists: data.artists, trackArtists: data.trackArtists, revision: Number(data.revision) || 0 };
-    }
-  } catch { /* offline cache is optional */ }
-  return { artists: {}, trackArtists: {}, revision: 0 };
-}
-
-let cloudArtistsMemory: ArtistDirectory | undefined;
-function cloudArtists(): ArtistDirectory {
-  return cloudArtistsMemory || (cloudArtistsMemory = readCloudArtistsCache());
-}
-
-/* Subscribers must read the accepted in-memory snapshot, not a stale storage
-   value left by an older tab or response. */
-export function getCachedArtistDirectory(): ArtistDirectory {
-  return cloudArtists();
-}
-
-export function cacheArtistDirectory(directory: ArtistDirectory): boolean {
-  if (!directory?.artists || Array.isArray(directory.artists) || !directory.trackArtists || Array.isArray(directory.trackArtists) ||
-    !Number.isInteger(directory.revision) || directory.revision < 0) return false;
-  const current = cloudArtists();
-  /* Overlapping catalog/admin requests must not repaint an older snapshot. */
-  if (directory.revision < current.revision) return false;
-  const changed = JSON.stringify(current) !== JSON.stringify(directory);
-  cloudArtistsMemory = directory;
-  try { localStorage.setItem(CLOUD_ARTISTS_CACHE_KEY, JSON.stringify(directory)); } catch { /* quota */ }
-  if (changed && typeof window !== 'undefined') window.dispatchEvent(new Event('aura:artists-updated'));
-  return changed;
-}
-
-let artistFetch: Promise<ArtistDirectory> | undefined;
-export function fetchArtistDirectory(): Promise<ArtistDirectory> {
-  if (artistFetch) return artistFetch;
-  artistFetch = (async () => {
-    try {
-      const response = await fetch('/api/artists', { cache: 'no-store', signal: AbortSignal.timeout(6000) });
-      if (response.ok) cacheArtistDirectory(await response.json());
-    } catch { /* keep independent cloud overrides during a network outage */ }
-    return cloudArtists();
-  })().finally(() => { artistFetch = undefined; });
-  return artistFetch;
-}
-
-export function applyArtistTrackOverrides(tracks: any[]): any[] {
-  const overrides = cloudArtists().trackArtists;
-  return tracks.map((track) => {
-    const path = track.hfPath || (String(track.id || '').startsWith('hf:') ? String(track.id).slice(3) : '');
-    if (!path) return track;
-    const baseArtist = track.catalogArtist ?? track.artist;
-    const name = overrides[artistTrackId(track.videoId || extractVideoId(path), path)];
-    return { ...track, catalogArtist: baseArtist, artist: name || baseArtist };
-  });
-}
-
-if (typeof window !== 'undefined') {
-  window.addEventListener('storage', (event) => {
-    if (event.key !== CLOUD_ARTISTS_CACHE_KEY) return;
-    const directory = readCloudArtistsCache();
-    if (directory.revision < cloudArtists().revision) return;
-    cloudArtistsMemory = directory;
-    window.dispatchEvent(new Event('aura:artists-updated'));
-  });
-}
-
-let manifestArtistsRaw: string | null | undefined;
-let manifestArtistsCache: Record<string, ArtistMeta> = {};
-let combinedArtistSource: Record<string, ArtistMeta> | undefined;
-let combinedArtistsCache: Record<string, ArtistMeta> | undefined;
 export function readArtistsCache(): Record<string, ArtistMeta> {
-  let raw: string | null = null;
   try {
-    raw = localStorage.getItem(ARTISTS_CACHE_KEY);
-  } catch { /* storage may be unavailable */ }
-  if (raw !== manifestArtistsRaw) {
-    manifestArtistsRaw = raw;
-    manifestArtistsCache = {};
-    try {
-      const parsed = JSON.parse(raw || 'null');
-      if (parsed && typeof parsed === 'object' && !Array.isArray(parsed)) manifestArtistsCache = parsed;
-    } catch { /* bad fallback data cannot mask the cloud snapshot */ }
-    combinedArtistsCache = undefined;
+    const raw = localStorage.getItem(ARTISTS_CACHE_KEY);
+    if (!raw) return {};
+    const parsed = JSON.parse(raw);
+    return parsed && typeof parsed === 'object' ? parsed : {};
+  } catch {
+    return {};
   }
-  const cloud = cloudArtists().artists;
-  if (!combinedArtistsCache || combinedArtistSource !== cloud) {
-    combinedArtistSource = cloud;
-    combinedArtistsCache = { ...manifestArtistsCache, ...cloud };
-  }
-  return combinedArtistsCache;
 }
 
-export function getArtistMeta(artistName: string): DisplayArtistProfile | undefined {
+export function getArtistMeta(artistName: string, artists = readArtistsCache()): ArtistMeta | undefined {
   if (!artistName) return undefined;
-  const identity = createArtistIdentityResolver({
-    profiles: readArtistsCache(), authoritativeProfiles: cloudArtists().artists,
-    authoritativeNames: Object.values(cloudArtists().trackArtists),
-  }).resolve(artistName);
-  return identity && identity.confidence !== 'ambiguous'
-    ? getDisplayArtistProfile(identity.name, identity.profile) : undefined;
+  const k = artistName.toLowerCase().trim();
+  const exact = artists[k] || Object.values(artists).find((a) => (a?.name || '').toLowerCase().trim() === k);
+  if (exact) return exact;
+  const match = artistMatchKey(artistName);
+  if (!match) return undefined;
+  return Object.entries(artists).find(([name, profile]) => profile && (
+    artistMatchKey(name) === match || artistMatchKey(profile.name || '') === match
+  ))?.[1];
 }
 
 export async function fetchHfCatalog(): Promise<any[]> {
-  const [treeRes, manifestRes] = await Promise.allSettled([
-    fetch(HF_TREE_URL), fetch(hfFileUrl('manifest.json')), fetchArtistDirectory(),
+  // D1 is the only version registry. An unavailable registry leaves originals
+  // playable rather than advertising obsolete versions from a second index.
+  const versionIndex = async () => {
+    try {
+      const response = await fetch('/api/versions', {signal: AbortSignal.timeout(8000)});
+      if (response.ok) {
+        const data = await response.json();
+        if (data?.v === 1 && data.source === 'database' && data.tracks && typeof data.tracks === 'object' && !Array.isArray(data.tracks)) return data;
+      }
+    } catch { /* temporary database outage */ }
+    return null;
+  };
+  const [treeRes, manifestRes, versionsRes] = await Promise.allSettled([
+    fetch(HF_TREE_URL), fetch(hfFileUrl('manifest.json')), versionIndex(),
   ]);
 
   if (treeRes.status !== 'fulfilled') throw treeRes.reason;
@@ -315,6 +263,10 @@ export async function fetchHfCatalog(): Promise<any[]> {
   }
   const meta: Record<string, ManifestEntry> =
     manifest.tracks && typeof manifest.tracks === 'object' ? manifest.tracks : {};
+  let versions = parseAudioVersionsIndex(null);
+  if (versionsRes.status === 'fulfilled') {
+    versions = parseAudioVersionsIndex(versionsRes.value);
+  }
 
   const covers = new Map<string, string>(); // basename (lowercase, no ext) -> path
   const audios: { path: string; size: number }[] = [];
@@ -322,22 +274,31 @@ export async function fetchHfCatalog(): Promise<any[]> {
   for (const it of items) {
     if (!it || it.type !== 'file' || typeof it.path !== 'string') continue;
     const p: string = it.path;
+    if (isAudioVersionPath(p)) continue;
     if (p === 'manifest.json') continue;
     const ct: string = it.contentType || '';
     if (AUDIO_RE.test(p)) {
       if (!isHiddenTrack(p)) audios.push({ path: p, size: Number(it.size) || 0 });
     } else if (COVER_RE.test(p) || ct.startsWith('image/')) {
-      covers.set(p.replace(/\.[^.]+$/, '').toLowerCase(), p);
+      covers.set(p.split('/').pop().replace(/\.[^.]+$/, '').toLowerCase(), p);
     }
   }
 
   const tracks = audios.map((a) => {
     const { title, artist } = parseTrackName(a.path);
-    const cover = covers.get(a.path.replace(/\.[^.]+$/, '').toLowerCase());
+    const cover = covers.get(a.path.split('/').pop().replace(/\.[^.]+$/, '').toLowerCase());
     const videoId = extractVideoId(a.path);
     const m = videoId ? meta[videoId] : undefined;
+    const originalPath = a.path.replace(/^originals\//, '');
+    const ref = videoId ? `video:${videoId}` : `id:hf:${originalPath}`;
+    const audioVersions = normalizeAudioVersions(versions.tracks[ref]);
+    // Publish only files actually present in this listing. Upload audio before
+    // its index so partial uploads cannot advertise unavailable choices.
+    for (const mode of ['bass', 'bass-reverb'] as const) {
+      if (audioVersions[mode] && !seenPaths.has(audioVersions[mode].path)) delete audioVersions[mode];
+    }
     return {
-      id: 'hf:' + a.path,
+      id: 'hf:' + originalPath,
       title: (m?.t || title) || title,
       artist: (m?.a && m.a.trim() ? m.a : artist) || artist,
       album: m?.al || '',
@@ -351,6 +312,7 @@ export async function fetchHfCatalog(): Promise<any[]> {
       favorite: false,
       isHf: true,
       size: a.size,
+      audioVersions,
     };
   });
 
@@ -367,10 +329,11 @@ export async function fetchHfCatalog(): Promise<any[]> {
       continue;
     }
     if (!prev.videoId && t.videoId) bySong.set(k, t);
+    else if (prev.id === t.id && t.hfPath.startsWith('originals/')) bySong.set(k, t);
   }
-  const finalTracks = applyArtistTrackOverrides([...bySong.values()].filter(
+  const finalTracks = [...bySong.values()].filter(
     (t) => !isHiddenTrack(t.hfPath || '', t.artist || '', t.title || '')
-  ));
+  );
 
   try {
     localStorage.setItem(CACHE_KEY, JSON.stringify({ tracks: finalTracks, at: Date.now() }));

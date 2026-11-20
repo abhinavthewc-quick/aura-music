@@ -77,3 +77,7 @@
 }
 @media (min-width: 900px) { .lg-stage { --lg-d: clamp(280px, min(36vw, 58vh), 480px); } }
 @media (max-width: 899px) and (max-height: 520px) and (orientation: landscape) { .lg-stage { --lg-d: min(52vh, 220px); } .lg-brand { font-size: 40px; } .lg-tag { margin: 12px 0 16px; font-size: 13px; } .lg-points { display: none; } }
+
+.lg-aura, .lg-sheen, .lo-ripple, .logout-ring { display: none; }
+
+.login-icon { display: inline-block; width: 1.25em; height: 1.25em; flex-shrink: 0; vertical-align: middle; fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; }

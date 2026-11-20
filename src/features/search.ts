@@ -3,20 +3,6 @@ import { songItemHTML } from './library';
 import { goTab } from '../ui/nav';
 import { $, state } from '../core/state';
 
-// Compatibility for retained YouTube selections. Search itself stays library-only;
-// this transient queue is never populated by a remote acquisition/search service.
-export const auraYTQueue: any[] = [];
-export function extractYouTubeId(meta: any): string | null {
-  const id = meta?._auraYoutubeId || meta?.videoId || meta?.id;
-  if (/^[A-Za-z0-9_-]{11}$/.test(String(id || ''))) return String(id);
-  try {
-    const url = new URL(String(meta?.url || meta?.webpage_url || ''));
-    const candidate = url.hostname === 'youtu.be' ? url.pathname.slice(1)
-      : /^(?:www\.|music\.)?youtube\.com$/.test(url.hostname) ? url.searchParams.get('v') || url.pathname.split('/')[2] : '';
-    return /^[A-Za-z0-9_-]{11}$/.test(candidate || '') ? candidate : null;
-  } catch { return null; }
-}
-
 /* Search is intentionally library-only. Music acquisition belongs to the
    Discord submission pipeline; Aura Music is the place where the finished
    library is browsed and played.

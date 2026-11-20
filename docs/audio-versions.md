@@ -17,6 +17,30 @@ A warm switch changes complementary gains over 120 ms; it does not pause,
 reload, seek the native transport, create another listen, or fetch the file again.
 The files are already processed; browser decoding is ordinary audio playback.
 
+## Loudness matching
+
+Prepared renditions ship quieter than their own song's original. The render
+chain adds a large low-frequency gain, then scales the entire render down so its
+decoded peak fits under −1 dBFS; that linear attenuation takes the untouched
+mid and high content down with the bass (measured −8.5 LU on average across the
+catalogue, worst case ~12 LU). Without correction, switching from Bass to
+Original made the song jump louder and the listener reach for the system volume.
+
+While a song's renditions decode, the player measures each one with the
+ITU-R BS.1770-4 algorithm (K-weighting, 400 ms blocks, absolute and relative
+gates) and lifts it to the measured loudness of the same song's original. The
+original itself is only measured, never altered — per-song anchoring is what
+keeps level relationships between songs intact. Corrections are clamped to
+±15 dB, corrections under 0.5 dB are skipped, and boosted passages pass through
+a soft-knee shaper that holds peaks at the −1 dBFS ceiling instead of clipping.
+A rendition that finishes decoding before the original is matched as soon as
+the reference measurement arrives.
+
+The result is inaudible as processing: switching variants keeps the perceived
+level within ±0.5 LU of the original, verified on real catalogue material and
+by an automated test that plays a −10 dB rendition through the real output
+chain.
+
 If a requested sound is still loading, the current sound continues until it is
 ready. The newest selection wins, including while paused. Play/Pause, seeks,
 volume, repeat and queue advancement retain the canonical original transport.

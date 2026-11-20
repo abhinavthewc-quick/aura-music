@@ -1,5 +1,4 @@
 import { legacyTrackMatches, resolveTrackSnapshot, safeArtwork, snapshotTrack, type TrackSnapshot } from './track-identity';
-import { validateSharedPlaylist, type SharedPlaylist } from './playlist-sharing';
 
 export const PLAYLISTS_KEY = 'auraPlaylists';
 export const PLAYLIST_FORMAT = 'aura-playlist';
@@ -8,7 +7,6 @@ export const MAX_PLAYLISTS = 200;
 export const MAX_TRACKS_PER_PLAYLIST = 2000;
 export const MAX_IMPORT_BYTES = 16 * 1024 * 1024;
 export type PlaylistTrackRef = TrackSnapshot;
-export type PlaylistPrivacy = 'Public' | 'Private' | 'Unlisted';
 export interface Playlist {
   schemaVersion: 2;
   id: string;
@@ -16,9 +14,6 @@ export interface Playlist {
   description: string;
   createdAt: number;
   updatedAt: number;
-  privacy: PlaylistPrivacy;
-  year: number | string;
-  shared?: SharedPlaylist;
   tracks: PlaylistTrackRef[];
 }
 export interface PlaylistStore { version: 2; revision: number; playlists: Playlist[] }
@@ -35,7 +30,7 @@ function text(value: unknown, label: string, maximum: number, required = false):
     return fail(`${label} must be text.`);
   }
   const result = value.trim();
-  if ((required && !result) || Array.from(result).length > maximum) return fail(`${label} must contain ${required ? '1–' : 'at most '}${maximum} characters.`);
+  if ((required && !result) || result.length > maximum) return fail(`${label} must contain ${required ? '1–' : 'at most '}${maximum} characters.`);
   return result;
 }
 
@@ -89,14 +84,6 @@ export function normalizePlaylist(raw: unknown, songs: any[] = [], legacy = fals
     tracks.push(ref);
   }
   const createdAt = typeof raw.createdAt === 'number' && Number.isFinite(raw.createdAt) && raw.createdAt >= 0 ? raw.createdAt : Date.now();
-  let shared: SharedPlaylist | undefined;
-  if (raw.shared) {
-    try { shared = validateSharedPlaylist(raw.shared); } catch { /* Invalid auxiliary preview metadata cannot erase the saved collection. */ }
-  }
-  for (const ref of tracks) {
-    const details = shared?.tracks.find(track => track.key === ref.legacyKey || `video:${track.key.slice(4)}` === ref.ref && track.key.startsWith('vid:'));
-    if (details && !resolveTrackSnapshot(ref, songs)) { ref.title = details.title; ref.artist = details.artist; }
-  }
   return {
     schemaVersion: 2,
     id: text(raw.id,'Playlist id',200,true),
@@ -104,10 +91,6 @@ export function normalizePlaylist(raw: unknown, songs: any[] = [], legacy = fals
     description: text(raw.description,'Description',140),
     createdAt,
     updatedAt: typeof raw.updatedAt === 'number' && Number.isFinite(raw.updatedAt) && raw.updatedAt >= 0 ? raw.updatedAt : createdAt,
-    privacy: ['Public', 'Private', 'Unlisted'].includes(raw.privacy) ? raw.privacy : 'Private',
-    year: typeof raw.year === 'string' && raw.year.length <= 32 || typeof raw.year === 'number' && Number.isFinite(raw.year)
-      ? raw.year : new Date(createdAt).getFullYear(),
-    ...(shared ? { shared } : {}),
     tracks,
   };
 }

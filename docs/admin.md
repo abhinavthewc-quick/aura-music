@@ -60,12 +60,6 @@ Shows all bucket audio files, grouped with their cover/manifest state.
 - “Already uploaded” marks come from the `library` action; the tree cache is
   60 s, so a just-finished upload may be missing until the cache expires.
 
-Artist profile edits are stored independently in D1. Photo and biography fields
-have separate manual overrides: editing or clearing a field keeps that choice,
-while **Use automatic** permits a sourced Wikimedia value. Automatic refreshes
-preserve open drafts and their captured versions. See
-[Automatic artist profiles](artist-metadata.md#manual-control).
-
 ### 3. Discord (`panelDiscord`)
 
 Controls the Aura Farmer bot ([separate repo](https://github.com/angel2rider/AURA-FARMER)).
@@ -103,6 +97,37 @@ and `runs` here.
   not here.
 - **Status chips** — lists which GitHub secrets exist (names only) and whether
   the server sees HF credentials.
+
+## Audio processing (`panelProcessing`)
+
+Manage the D1 version registry without starting a process on the Mac.
+
+- Song totals distinguish fully ready, pending, processing, failed, expired
+  leases and unavailable originals. Coverage shows ready renditions and their
+  published bytes, and refreshes every 15 seconds while the tab is visible.
+- Search filenames, artists, IDs and errors; filter by status, sort, paginate,
+  select eligible songs and export the current filtered report as CSV.
+- **Inspect** shows both versions' file paths, sizes, durations, SHA-256,
+  recipes, attempt counts, retry times, errors and timestamps, plus the
+  original identity/hash, processing stage, lease expiry and song activity.
+- **Retry failed songs** or **Queue selected** makes unfinished versions
+  eligible for the next manual run and preserves versions already ready.
+- **Recover expired jobs** clears only expired processing leases. Active
+  workers are protected by an atomic administrative lease.
+- **Regenerate Bass / Bass + Reverb** queues only the inspected version. It
+  temporarily leaves the listener selector until the Mac publishes it again;
+  the original and partner version remain intact. A stale inspector cannot
+  overwrite a changed record.
+- **Check archive files** reconciles against a fresh complete Hugging Face
+  listing. It marks missing originals unavailable and missing published
+  versions pending; it does not delete archive files.
+- **Copy run command** copies the manually launched worker command. The
+  panel cannot start, stop or remotely inspect files on your Mac.
+
+Updated workers report stages, heartbeats and run outcomes. Until the next
+manual launch there may be no run report; this is distinct from a worker being
+offline. Recent activity records worker reports and authenticated admin queue
+changes. Existing local logs are not uploaded retroactively.
 
 ## Session / UI behaviour
 

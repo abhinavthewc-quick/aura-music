@@ -1,27 +1,15 @@
-import { escapeHtml, stateHTML, toast } from '../core/dom';
-import { buildArtistGroups, resolveArtistSelection, selectArtist, type ArtistGroup, type ArtistSelection } from '../core/artistGroups';
-import { DEFAULT_COVER, fetchHfCatalog, getCachedArtistDirectory, readArtistsCache, type ArtistMeta } from '../core/catalog';
-import {
-  getArtistMetadataRevision, getAutomaticArtistMetadata,
-  observeArtistMetadataCards, prioritizeArtistMetadata, setArtistMetadataCatalog, setArtistPortraitSource,
-} from '../core/artistMetadata';
-export { artistProfileDetailsHTML, updateArtistProfileDetails } from '../core/artistPresentation';
-import { playArtistCollection, refreshArtistPageFavorites, refreshArtistPageMetadata, renderArtistPage } from './artist-page';
-import { beginPlaybackIntent } from '../core/playbackIntent';
-import { refreshArtistViews, renderAuraPicks, renderQuickAccess, renderQuickPicks } from './home';
+import { artistMergeKey, escapeHtml, stateHTML, toast } from '../core/dom';
+import { artistKey, preferredArtistName } from '../core/artist-names';
+import { DEFAULT_COVER, fetchHfCatalog, getArtistMeta, readArtistsCache } from '../core/catalog';
+import { refreshFavoriteChrome, renderArtistSpotlight, renderAuraPicks, renderQuickAccess } from './home';
 import { filterSongs, loadSong, playSong, refreshTrackMetadata, resetFullPlayerArtToImage, stopAuraYouTube, updatePlayState } from './player';
-import { updateMainMediaSession } from './player';
 import { preparePlaylistTrackEdit } from './playlists';
-import { trackAvailable, type TrackSnapshot } from '../core/track-identity';
+import { snapshotTrack, stableTrackRef, trackAvailable, type TrackSnapshot } from '../core/track-identity';
 import { playTrackSequence } from './queue';
 import { refreshSearchIfOpen } from './search';
-import { applyPlayDeepLink } from './deeplink';
-import { refreshPlaylistViews } from './playlists';
-import { renderUpNext } from './queue';
-import { currentRadioStation } from './radio';
 import { goTab } from '../ui/nav';
 import { $, getPlayCount, persistLikedHistory, rebuildSongs, recordPlayCount, savedLikeMap, setHfTracks, state, trackKey } from '../core/state';
-import { roomModeActive } from '../rooms/roomFlag';
+import { playArtistCollection, refreshArtistPageFavorites, renderArtistPage } from './artist-page';
 /* ===== 3006-3012 ===== */
     /* Library Count */
     /* Home sections rebuild a lot of markup; coalesce the many callers
@@ -31,12 +19,11 @@ import { roomModeActive } from '../rooms/roomFlag';
       if(homeSectionsRaf) return;
       homeSectionsRaf = requestAnimationFrame(() => {
         homeSectionsRaf = 0;
-        try{ renderQuickAccess(); refreshArtistViews(); }catch(e){}
+        try{ renderArtistSpotlight(); renderQuickAccess(); }catch(e){}
       });
     }
     export function updateLibCount(){
       const _lc = $('libCount'); if(_lc) _lc.textContent = `${state.songs.length} track${state.songs.length!==1?'s':''} in your library`;
-      setArtistMetadataCatalog(getArtistGroups().filter(g => !g.key.startsWith('unresolved:')).map(g => g.name));
       scheduleHomeSections();
     }
 
@@ -94,7 +81,11 @@ import { roomModeActive } from '../rooms/roomFlag';
         let idx = state.songs.findIndex(item=>item.id===s.id);
         if(idx===-1 && s.title) idx = state.songs.findIndex(item=>item.title===s.title && item.artist===s.artist);
         if(idx===-1) return;
-        cards.push(`<div class="recent-card" role="button" tabindex="0" aria-label="Play ${escapeHtml(s.title||'track')}" data-play-song-id="${escapeHtml(state.songs[idx].id)}"><img src="${escapeHtml(s.img||DEFAULT_COVER)}" alt="" loading="lazy" decoding="async"><p>${escapeHtml(s.title)}</p></div>`);
+        const song = state.songs[idx];
+        // History is a saved snapshot. Artwork follows the current catalogue
+        // even before the listener plays this song again.
+        const image = song.img || s.img || DEFAULT_COVER;
+        cards.push(`<div class="recent-card" role="button" tabindex="0" aria-label="Play ${escapeHtml(s.title||'track')}" data-play-song-id="${escapeHtml(song.id)}"><img src="${escapeHtml(image)}" alt="" loading="lazy" decoding="async"><p>${escapeHtml(s.title)}</p></div>`);
       });
       c.innerHTML=cards.join('');
       renderQuickAccess();
@@ -122,30 +113,6 @@ import { roomModeActive } from '../rooms/roomFlag';
     /* IndexedDB storage for locally-uploaded state.audio files */
     export const hasIndexedDB = 'indexedDB' in window;
     export const LOCAL_DB_NAME = 'auraMusicDB', LOCAL_DB_STORE = 'audioFiles';
-    const localTrackRevisions = new Map<string, number>();
-    const localTrackOperations = new Map<string, Promise<unknown>>();
-    const retiredLocalURLs = new Set<string>();
-    const localTrackRevision = (id: string | number) => localTrackRevisions.get(String(id)) || 0;
-    function withLocalTrackOperation<T>(id: string | number, work: () => Promise<T>): Promise<T> {
-      const key = String(id), previous = localTrackOperations.get(key) || Promise.resolve();
-      const operation = previous.catch(() => undefined).then(work);
-      localTrackOperations.set(key, operation);
-      void operation.finally(() => { if (localTrackOperations.get(key) === operation) localTrackOperations.delete(key); }).catch(() => undefined);
-      return operation;
-    }
-    function releaseRetiredLocalURLs(): void {
-      for (const url of retiredLocalURLs) {
-        // A replaced file must not revoke the source of a paused/playing track.
-        if (state.audio.getAttribute('src') === url || state.audio.src === url) continue;
-        URL.revokeObjectURL(url); retiredLocalURLs.delete(url);
-      }
-    }
-    function retireLocalURL(url?: string): void {
-      if (url?.startsWith('blob:')) retiredLocalURLs.add(url);
-      releaseRetiredLocalURLs();
-    }
-    state.audio.addEventListener('emptied', releaseRetiredLocalURLs);
-    state.audio.addEventListener('loadstart', releaseRetiredLocalURLs);
     export function openLocalDB(){
       return new Promise<any>((resolve, reject) => {
         const req = indexedDB.open(LOCAL_DB_NAME, 1);
@@ -159,8 +126,8 @@ import { roomModeActive } from '../rooms/roomFlag';
       return new Promise<void>((resolve, reject) => {
         const tx = db.transaction(LOCAL_DB_STORE, 'readwrite');
         tx.objectStore(LOCAL_DB_STORE).put(blob, id);
-        tx.oncomplete = () => { db.close(); resolve(); };
-        tx.onabort = tx.onerror = () => { db.close(); reject(tx.error || new Error('Local audio transaction failed')); };
+        tx.oncomplete = () => resolve();
+        tx.onerror = () => reject(tx.error);
       });
     }
     export async function getLocalBlob(id){
@@ -170,8 +137,6 @@ import { roomModeActive } from '../rooms/roomFlag';
         const req = tx.objectStore(LOCAL_DB_STORE).get(id);
         req.onsuccess = () => resolve(req.result);
         req.onerror = () => reject(req.error);
-        tx.oncomplete = () => db.close();
-        tx.onabort = tx.onerror = () => { db.close(); reject(tx.error); };
       });
     }
     export async function deleteLocalBlob(id){
@@ -179,23 +144,20 @@ import { roomModeActive } from '../rooms/roomFlag';
       return new Promise<void>((resolve, reject) => {
         const tx = db.transaction(LOCAL_DB_STORE, 'readwrite');
         tx.objectStore(LOCAL_DB_STORE).delete(id);
-        tx.oncomplete = () => { db.close(); resolve(); };
-        tx.onabort = tx.onerror = () => { db.close(); reject(tx.error || new Error('Local audio transaction failed')); };
+        tx.oncomplete = () => resolve();
+        tx.onerror = () => reject(tx.error);
       });
     }
 
     /* Restore local file blobs from IndexedDB on load */
     export async function hydrateLocalTracks(){
-      for (const song of [...state.addedSongs]) {
+      for (const song of state.addedSongs) {
         if (!song.isLocal) continue;
-        const revision = localTrackRevision(song.id), originalURL = song.url;
         try {
           const blob = hasIndexedDB ? await getLocalBlob(song.id) : null;
-          if (localTrackRevision(song.id) !== revision || !state.addedSongs.includes(song) || song.url !== originalURL) continue;
           if (blob instanceof Blob) { song.url = URL.createObjectURL(blob); song.missing = false; }
           else { song.url = ''; song.missing = true; }
-          retireLocalURL(originalURL);
-        } catch { if (state.addedSongs.includes(song) && localTrackRevision(song.id) === revision && song.url === originalURL) { song.url = ''; song.missing = true; retireLocalURL(originalURL); } }
+        } catch { song.url = ''; song.missing = true; }
       }
       window.dispatchEvent(new CustomEvent('aura:library-changed'));
     }
@@ -206,51 +168,35 @@ import { roomModeActive } from '../rooms/roomFlag';
       input.onchange = () => { void onFiles([...input.files]); };
       input.click();
     }
-    async function storeLocalAudio(file: File, id: string | number, metadata?: TrackSnapshot, revision = localTrackRevision(id), requiredExisting = false): Promise<boolean> {
+    async function storeLocalAudio(file: File, id: string | number, metadata?: TrackSnapshot): Promise<boolean> {
       if (!/\.(mp3|opus|m4a|aac|ogg|flac|wav|webm)$/i.test(file.name) && !file.type.startsWith('audio/')) {
         toast('Choose a browser-supported audio file.', 'triangle-exclamation'); return false;
       }
       if (file.size > 250 * 1024 * 1024) { toast('This audio file is larger than the 250 MB local-file limit.', 'triangle-exclamation'); return false; }
-      const initial = state.addedSongs.find((song) => String(song.id) === String(id)), key = initial?.id ?? id;
-      return withLocalTrackOperation(key, async () => {
-        let previous: Blob | null = null, url = '', wroteBlob = false, committed = false;
-        const stillValid = () => localTrackRevision(key) === revision && (!requiredExisting || state.addedSongs.some(song => String(song.id) === String(key)));
-        try {
-          if (!stillValid()) { toast('This track was removed while the file picker was open.', 'circle-info'); return false; }
-          previous = await getLocalBlob(key) || null;
-          if (!stillValid()) return false;
-          await saveLocalBlob(key,file); wroteBlob = true;
-          if (!stillValid()) return false;
-          // Read after all awaits: edits/favorites may have replaced this record.
-          const existing = state.addedSongs.find((song) => String(song.id) === String(key));
-          if (existing && !existing.isLocal) throw new Error('This identity belongs to a non-local track');
-          const name = file.name.replace(/\.[^.]+$/,''), parts = name.split(' - ');
-          url = URL.createObjectURL(file);
-          const song = {...existing,id:key,title:existing?.title || metadata?.title || (parts.length > 1 ? parts.slice(1).join(' - ') : name),
-            artist:existing?.artist || metadata?.artist || (parts.length > 1 ? parts[0] : 'Local audio'),
-            img:existing?.img || metadata?.img || DEFAULT_COVER,duration:existing?.duration || metadata?.duration || 0,
-            url,isLocal:true,isHf:false,isYouTube:false,missing:false,favorite:!!existing?.favorite};
-          const next = state.addedSongs.map(item => item === existing ? song : item);
-          if (!existing) next.push(song);
-          if (!persistAddedSongs(next)) return false;
-          committed = true; state.addedSongs = next; rebuildSongs();
-          retireLocalURL(existing?.url);
-          if (String(state.activeTrack?.id) === String(key)) refreshTrackMetadata(state.activeTrack);
-          updateLibCount(); refreshPlaylistViews(); renderUpNext();
-          if ($('tabLibrary')?.classList.contains('active')) renderLibrary();
-          refreshSearchIfOpen();
-          return true;
-        } catch { toast('This file could not be stored in this browser. Check device storage and try again.', 'triangle-exclamation'); return false; }
-        finally {
-          if (!committed) {
-            if (url) URL.revokeObjectURL(url);
-            if (wroteBlob) {
-              try { if (previous) await saveLocalBlob(key,previous); else await deleteLocalBlob(key); }
-              catch { toast('The previous audio file could not be restored. Keep your original file and retry when browser storage is available.', 'triangle-exclamation'); }
-            }
-          }
+      const existing = state.addedSongs.find((song) => String(song.id) === String(id));
+      const key = existing?.id ?? id;
+      let previous: Blob | null = null;
+      try {
+        previous = await getLocalBlob(key) || null;
+        await saveLocalBlob(key,file);
+        const name = file.name.replace(/\.[^.]+$/,'');
+        const parts = name.split(' - ');
+        const url = URL.createObjectURL(file);
+        const song = {...existing,id:key,title:metadata?.title || existing?.title || (parts.length > 1 ? parts.slice(1).join(' - ') : name),
+          artist:metadata?.artist || existing?.artist || (parts.length > 1 ? parts[0] : 'Local audio'),
+          img:metadata?.img || existing?.img || DEFAULT_COVER,duration:metadata?.duration || existing?.duration || 0,
+          url,isLocal:true,isHf:false,isYouTube:false,missing:false,favorite:!!existing?.favorite};
+        const next = state.addedSongs.filter((item) => String(item.id) !== String(key)); next.push(song);
+        if (!persistAddedSongs(next)) {
+          if (previous) await saveLocalBlob(key,previous); else await deleteLocalBlob(key);
+          URL.revokeObjectURL(url); return false;
         }
-      });
+        if (existing?.url?.startsWith('blob:') && state.activeTrack !== existing) URL.revokeObjectURL(existing.url);
+        state.addedSongs = next; rebuildSongs(); updateLibCount();
+        if ($('tabLibrary')?.classList.contains('active')) renderLibrary();
+        refreshSearchIfOpen();
+        return true;
+      } catch { toast('This file could not be stored in this browser. Check device storage and try again.', 'triangle-exclamation'); return false; }
     }
     export function importLocalAudio(): void {
       localAudioPicker(async (files) => {
@@ -260,31 +206,28 @@ import { roomModeActive } from '../rooms/roomFlag';
       },true);
     }
     export function restoreLocalFile(id: string, metadata?: TrackSnapshot): void {
-      const revision = localTrackRevision(id), requiredExisting = state.addedSongs.some(song => String(song.id) === String(id));
       localAudioPicker(async (files) => {
-        if (files[0] && await storeLocalAudio(files[0],id,metadata,revision,requiredExisting)) toast('Local file restored. Its playlist reference is unchanged.', 'circle-check');
+        if (files[0] && await storeLocalAudio(files[0],id,metadata)) toast('Local file restored. Its playlist reference is unchanged.', 'circle-check');
       });
     }
 
     /* Edit track (title / artist / cover) */
     export let editingId = null, editPendingImg = null;
-    let editRevision = 0, pendingEditRevision: number | null = null;
 
     export function openEditModal(e, id){
       if(e) e.stopPropagation();
-      const song = state.addedSongs.find(s => String(s.id) === String(id));
+      const song = state.addedSongs.find(s => s.id === id);
       if(!song) return;
-      ++editRevision; editingId = song.id;
+      editingId = id;
       editPendingImg = song.img;
       $('editTitleInput').value = song.title;
       $('editArtistInput').value = song.artist;
-      $('editImgUrlInput').value = song.img?.startsWith('data:') ? '' : song.img || '';
+      $('editImgUrlInput').value = song.img.startsWith('data:') ? '' : song.img;
       $('editCoverPreview').src = song.img;
       $('editTrackModal').classList.add('active');
     }
 
     export function closeEditModal(){
-      ++editRevision;
       $('editTrackModal').classList.remove('active');
       $('editCoverFileInput').value = '';
       editingId = null; editPendingImg = null;
@@ -299,9 +242,7 @@ import { roomModeActive } from '../rooms/roomFlag';
       const file = e.target.files[0];
       if(!file) return;
       const reader = new FileReader();
-      const revision = editRevision;
       reader.onload = () => {
-        if (revision !== editRevision || editingId === null) return;
         editPendingImg = reader.result;
         $('editCoverPreview').src = reader.result;
         $('editImgUrlInput').value = '';
@@ -310,29 +251,21 @@ import { roomModeActive } from '../rooms/roomFlag';
     };
 
     export async function saveEditedTrack(){
-      const id = editingId, revision = editRevision;
-      if (id === null || pendingEditRevision === revision) return;
-      if (!state.addedSongs.some(s => String(s.id) === String(id))) return closeEditModal();
-      const fields = {title:$('editTitleInput').value.trim(),artist:$('editArtistInput').value.trim(),img:editPendingImg};
-      pendingEditRevision = revision;
-      try {
-        if (!await preparePlaylistTrackEdit()) return;
-        if (revision !== editRevision || editingId !== id) return;
-        const song = state.addedSongs.find(s => String(s.id) === String(id));
-        if (!song) return closeEditModal();
-        const next = {...song,title:fields.title || song.title,artist:fields.artist || song.artist,img:fields.img || song.img};
-        const list = state.addedSongs.map((item) => item === song ? next : item);
-        if (!persistAddedSongs(list)) return;
-        const wasSelected = state.activeTrack && String(state.activeTrack.id) === String(song.id);
-        state.addedSongs = list; rebuildSongs();
-        if (wasSelected) refreshTrackMetadata(state.activeTrack);
-        filterSongs(); refreshPlaylistViews();
-        if($('tabLibrary').classList.contains('active')) renderLibrary();
-        refreshSearchIfOpen();
-        renderRecent(); scheduleHomeSections();
-        toast('Track updated without changing playback or playlist identity.', 'circle-check');
-        closeEditModal();
-      } finally { if (pendingEditRevision === revision) pendingEditRevision = null; }
+      const song = state.addedSongs.find(s => String(s.id) === String(editingId));
+      if(!song) return closeEditModal();
+      const next = {...song,title:$('editTitleInput').value.trim() || song.title,artist:$('editArtistInput').value.trim() || song.artist,img:editPendingImg || song.img};
+      if (!await preparePlaylistTrackEdit()) return;
+      const list = state.addedSongs.map((item) => item === song ? next : item);
+      if (!persistAddedSongs(list)) return;
+      const wasSelected = state.activeTrack && String(state.activeTrack.id) === String(song.id);
+      state.addedSongs = list; rebuildSongs();
+      if (wasSelected) { state.activeTrack = next; refreshTrackMetadata(next); }
+      filterSongs();
+      if($('tabLibrary').classList.contains('active')) renderLibrary();
+      refreshSearchIfOpen();
+      renderRecent();
+      toast('Track updated without changing playback or playlist identity.', 'circle-check');
+      closeEditModal();
     }
 
     /* Delete track */
@@ -340,8 +273,7 @@ import { roomModeActive } from '../rooms/roomFlag';
       e?.stopPropagation();
       const song = state.addedSongs.find((item) => String(item.id) === String(id));
       if (!song || !confirm(`Remove “${song.title}” from your library?`)) return;
-      // Removing a library record must not migrate or rewrite saved playlists.
-      // Version-2 snapshots retain it; legacy keys remain recoverable verbatim.
+      if (!await preparePlaylistTrackEdit()) return;
       const next = state.addedSongs.filter((item) => String(item.id) !== String(id));
       const recent = state.recentlyPlayed.filter((item) => String(item.id) !== String(id));
       let previousRecent: string | null;
@@ -353,47 +285,30 @@ import { roomModeActive } from '../rooms/roomFlag';
         try { if (previousRecent === null) localStorage.removeItem('recentlyPlayed'); else localStorage.setItem('recentlyPlayed',previousRecent); } catch { /* metadata and audio are still intact */ }
         return;
       }
-      localTrackRevisions.set(String(song.id), localTrackRevision(song.id) + 1);
-      const removedCurrent = String((state.activeTrack || state.songs[state.currentIndex])?.id) === String(song.id);
-      const removedMainPlayback = removedCurrent && !currentRadioStation && !roomModeActive();
-      if (removedCurrent) {
-        if (removedMainPlayback) { beginPlaybackIntent(); stopAuraYouTube(); }
-        if (!roomModeActive()) {
-          state.audio.pause(); state.audio.onerror = null; state.audio.removeAttribute('src'); state.audio.load();
-        }
-        state.isPlaying=false; state.activeTrack=null; state.currentIndex=-1;
+      const wasSelected = state.activeTrack && String(state.activeTrack.id) === String(id);
+      if (wasSelected) {
+        state.audio.pause(); state.audio.removeAttribute('src'); state.audio.load();
+        stopAuraYouTube(); state.isPlaying=false; state.activeTrack=null; state.currentIndex=-1;
         resetFullPlayerArtToImage('');
-        for (const title of ['currentTitle','fullTitle','fullHeaderTitle']) { $(title).textContent='Select Track'; $(title).dataset.rawTitle='Select Track'; }
-        $('currentArtist').textContent='--'; $('fullArtist').textContent=''; $('currentImg').src='';
-        $('fullPlayerOverlay').classList.remove('active'); $('upNextSheet').classList.remove('active'); $('miniPlayer').classList.remove('active');
-        if (removedMainPlayback && 'mediaSession' in navigator) { navigator.mediaSession.metadata=null; navigator.mediaSession.playbackState='none'; }
-        updatePlayState();
+        for (const title of ['currentTitle','fullTitle','fullHeaderTitle']) { $(title).textContent='Select track'; $(title).dataset.rawTitle='Select track'; }
+        $('currentArtist').textContent=$('fullArtist').textContent=''; $('currentImg').src='';
+        $('fullPlayerOverlay').classList.remove('active'); updatePlayState();
       }
       state.addedSongs = next; state.recentlyPlayed = recent; rebuildSongs();
-      // All transport changes occur before this await. A newer selection or
-      // radio handoff cannot be reset by the eventual file-deletion callback.
-      retireLocalURL(song.url);
-      if (song.isLocal && hasIndexedDB) { try { await withLocalTrackOperation(song.id, () => deleteLocalBlob(song.id)); } catch { /* unused blob can be cleaned up later */ } }
+      // File destruction is deliberately after durable metadata commit.
+      if (song.isLocal && hasIndexedDB) { try { await deleteLocalBlob(song.id); } catch { /* unused blob can be cleaned up later */ } }
+      if (song.url?.startsWith('blob:')) URL.revokeObjectURL(song.url);
       filterSongs();
-      if($('tabLibrary').classList.contains('active')) renderLibrary();
+      if ($('tabLibrary').classList.contains('active')) renderLibrary();
       refreshSearchIfOpen();
-      updateLibCount();
-      renderRecent();
-      renderUpNext();
-      refreshPlaylistViews();
-      toast('Track removed from your library', 'circle-check');
+      updateLibCount(); renderRecent(); toast('Track removed from your library.', 'circle-check');
     }
 
 /* ===== 4925-4991 ===== */
     export function toggleFavorite(e, id) {
       if(e) e.stopPropagation();
-      // Preserve the production numeric-index API; raw IDs are passed as strings.
-      const song = typeof id === 'number' ? state.songs[id] : state.songs.find(s => String(s.id) === String(id));
+      const song = state.songs.find(s => String(s.id) === String(id));
       if(!song) return;
-      const focused = document.activeElement as HTMLElement | null;
-      const focusList = focused?.matches('.song-item-like')
-        ? focused.closest<HTMLElement>('#songList, #librarySongList, #searchResultsList') : null;
-      const focusIndex = focusList ? [...focusList.querySelectorAll('.song-item-like')].indexOf(focused) : -1;
       const previous = !!song.favorite;
       song.favorite = !previous;
       if(song.favorite) savedLikeMap[String(song.id)]=true; else delete savedLikeMap[String(song.id)];
@@ -410,22 +325,24 @@ import { roomModeActive } from '../rooms/roomFlag';
         $('fullLikeBtn').innerHTML=`<i class="fa-${song.favorite?'solid':'regular'} fa-heart"></i>`;
       }
       toast(song.favorite ? 'Saved to Liked Songs' : 'Removed from Liked Songs', song.favorite ? 'heart' : 'heart-crack');
-      filterSongs();
-      renderQuickAccess();
+      /* Patch the hearts that are already on screen instead of repainting the
+         home preview, the rails and the library list for one boolean. */
+      document.querySelectorAll<HTMLElement>('[data-like-song-id]').forEach((button) => {
+        if (button.dataset.likeSongId !== String(song.id)) return;
+        button.classList.toggle('active', !!song.favorite);
+        button.setAttribute('aria-pressed', String(!!song.favorite));
+        button.setAttribute('aria-label', `${song.favorite ? 'Unlike' : 'Like'} ${song.title || 'track'}`);
+        const icon = button.querySelector('i');
+        if (icon) icon.className = `fa-${song.favorite ? 'solid' : 'regular'} fa-heart`;
+      });
+      refreshFavoriteChrome();
+      libraryDirty = true;
       if($('tabLibrary').classList.contains('active')) {
         const artistPage = $('librarySongList').querySelector<HTMLElement>('.artist-detail-page');
         if (artistPage) refreshArtistPageFavorites(artistPage);
-        else renderLibrary();
       }
+      /* The results panel re-renders itself only when it is actually open. */
       refreshSearchIfOpen();
-      document.querySelectorAll<HTMLElement>('.artist-detail-page').forEach(refreshArtistPageFavorites);
-      if(focusList){
-        const rows = [...focusList.querySelectorAll<HTMLElement>('.song-item, .artist-song-item')];
-        const sameTrack = rows.find(row => (row.dataset.songId || row.dataset.artistSongId) === String(song.id));
-        const next = (sameTrack || rows[Math.min(focusIndex, rows.length - 1)])?.querySelector<HTMLElement>('.song-item-like');
-        if(next) next.focus({preventScroll:true});
-        else { focusList.tabIndex = -1; focusList.focus({preventScroll:true}); }
-      }
     }
 
     export function songIndexById(){
@@ -441,32 +358,16 @@ import { roomModeActive } from '../rooms/roomFlag';
         </div>`).join('');
     }
 
-    export function songItemHTML(s, songIdx?){
-      let index = -1;
-      if(typeof songIdx === 'number' && songIdx >= 0 && songIdx < state.songs.length){
-        const candidate = state.songs[songIdx];
-        if(candidate && (candidate.id === s.id || String(candidate.id) === String(s.id))){
-          index = songIdx;
-        }
-      }
-      if(index === -1){
-        index = state.songs.findIndex(item => item.id === s.id || String(item.id) === String(s.id));
-      }
-      if(index === -1 && s.title){
-        index = state.songs.findIndex(item => item.title === s.title && item.artist === s.artist);
-      }
-      const title = escapeHtml(s.title || 'Untitled');
-      const artist = escapeHtml(s.artist || 'Unknown Artist');
-      const cover = escapeHtml(s.img || DEFAULT_COVER);
-      return `<div class="song-item ${index >= 0 && index===state.currentIndex?'active':''}" data-song-id="${escapeHtml(String(s.id))}">
-          <button type="button" class="song-item-play" data-play-song-id="${escapeHtml(String(s.id))}" aria-label="Play ${title} by ${artist}" ${index < 0 || !trackAvailable(state.songs[index]) ? 'disabled' : ''}>
-            <span class="song-info"><img src="${cover}" alt="" loading="lazy" decoding="async"><span class="song-meta"><span class="song-title">${title}</span><span class="song-artist">${artist}</span></span></span>
-          </button>
-          <div class="song-item-actions">
-            <button type="button" class="song-item-like ${s.favorite?'active':''}" data-like-song-id="${escapeHtml(String(s.id))}" aria-label="${s.favorite?'Unlike':'Like'} ${title}" aria-pressed="${s.favorite?'true':'false'}"><i class="fa-${s.favorite?'solid':'regular'} fa-heart" aria-hidden="true"></i></button>
-            <button type="button" class="song-item-menu-btn" data-song-menu="${escapeHtml(String(s.id))}" aria-label="More options for ${title}"><i class="fa-solid fa-ellipsis" aria-hidden="true"></i></button>
-          </div>
-        </div>`;
+    export function songItemHTML(song: any, _songIdx?: number, artistKey?: string){
+      const title = escapeHtml(song.title || 'Untitled'), artist = escapeHtml(song.artist || 'Unknown artist');
+      const current = state.activeTrack || state.songs[state.currentIndex];
+      return `<div class="song-item ${current && stableTrackRef(current) === stableTrackRef(song) ? 'active' : ''}">
+        <button class="song-info" type="button" data-play-song-id="${escapeHtml(String(song.id))}" ${typeof artistKey === 'string' ? `data-artist-key="${escapeHtml(artistKey)}"` : ''} aria-label="Play ${title} by ${artist}" ${trackAvailable(song) ? '' : 'disabled'}>
+          <img src="${escapeHtml(song.img || DEFAULT_COVER)}" alt="" loading="lazy" decoding="async"><span><span class="song-title">${title}</span><span class="song-artist">${artist}${song.missing ? ' (file unavailable)' : ''}</span></span>
+        </button><div class="song-item-actions">
+          <button type="button" class="song-item-like ${song.favorite ? 'active' : ''}" data-like-song-id="${escapeHtml(String(song.id))}" aria-label="${song.favorite ? 'Unlike' : 'Like'} ${title}" aria-pressed="${!!song.favorite}"><i class="fa-${song.favorite ? 'solid' : 'regular'} fa-heart" aria-hidden="true"></i></button>
+          <button type="button" class="song-item-menu-btn" data-song-menu="${escapeHtml(String(song.id))}" aria-label="More options for ${title}"><i class="fa-solid fa-ellipsis" aria-hidden="true"></i></button>
+        </div></div>`;
     }
 
     export function renderSongs(list){
@@ -490,7 +391,16 @@ import { roomModeActive } from '../rooms/roomFlag';
         return diff !== 0 ? diff : 0;
       });
       const indexById = songIndexById();
-      c.innerHTML = sorted.map(s => songItemHTML(s, indexById.get(String(s.id)))).join('');
+      // #songList is the Home tab's "From your library" preview, not the full
+      // library (that is #librarySongList, built by renderLibrary on demand).
+      // It used to render every track: 493 rows and 493 cover <img> tags, and
+      // `loading="lazy"` does not defer inside a subtree that is display:none,
+      // so a phone downloaded ~200 cover images from Hugging Face before the
+      // user had touched anything. The preview only ever shows the top of the
+      // list, so cap it and let the Library tab own the full set.
+      const PREVIEW_LIMIT = 12;
+      const preview = sorted.slice(0, PREVIEW_LIMIT);
+      c.innerHTML = preview.map(s => songItemHTML(s, indexById.get(String(s.id)))).join('');
     }
 
 /* ===== Library tab view switcher: Tracks / Artists / Albums / Films ===== */
@@ -499,7 +409,7 @@ import { roomModeActive } from '../rooms/roomFlag';
 
     export function setLibView(v){
       libView = v === 'artists' || v === 'albums' || v === 'films' ? v : 'tracks';
-      currentArtist = null;   // any explicit view switch leaves artist pages
+      currentArtistKey = null;   // any explicit view switch leaves artist pages
       document.querySelectorAll('#libViewSeg .lib-seg-btn').forEach(b => {
         b.classList.toggle('active', (b as HTMLElement).dataset.view === libView);
       });
@@ -513,46 +423,67 @@ import { roomModeActive } from '../rooms/roomFlag';
 
     /* ---------- Artists: library-wide grouping, circle tiles, detail page ----------
        One source of truth for Home (scrolling row) and Library (grid tab):
-       verified aliases, conservative credit parsing and cloud ownership all
-       resolve before grouping. The catalogue's attribution stays untouched. */
-    let artistGroupingSnapshot: {
-      profiles: Record<string, ArtistMeta>;
-      directory: ReturnType<typeof getCachedArtistDirectory>;
-      metadataRevision: number;
-      inputs: { song: any; id: any; artist: any; img: any; hfPath: any }[];
-      groups: ArtistGroup[];
-    } | undefined;
+       groups merge artist variants via artistMergeKey, label each group with
+       a normal artist credit rather than a channel handle, sort busiest-first,
+       and prefer saved profiles over track artwork. */
+    /* Tests and the admin page can rewrite songs in place, which leaves
+       libraryVersion untouched; the first/last song ids plus the count are a
+       cheap stand-in that catches it without walking the array twice. */
+    function librarySeedFingerprint(): string {
+      const songs = state.songs || [];
+      const stamp = (song: any) => song ? `${song.id}@${song.artist}` : '';
+      return `${songs.length}:${stamp(songs[0])}:${stamp(songs[songs.length - 1])}`;
+    }
+
+    /* Grouping walks the whole library, parses the artist overlay and merges
+       names — and the home rails asked for it on every play. Nothing it reads
+       can change without rebuildSongs() bumping libraryVersion, so memoise it. */
+    let artistGroupsMemo: { version: number; raw: string; groups: any[] } | null = null;
+
     export function getArtistGroups(){
-      const profiles = readArtistsCache(), directory = getCachedArtistDirectory(), metadataRevision = getArtistMetadataRevision();
-      const previous = artistGroupingSnapshot;
-      // Home's shelf, grid, spotlight, stats and both detail views often paint
-      // together. Reuse their snapshot; also notice in-place local metadata edits.
-      if(previous && previous.profiles === profiles && previous.directory === directory && previous.metadataRevision === metadataRevision &&
-        previous.inputs.length === state.songs.length && state.songs.every((song, i) => {
-          const before = previous.inputs[i];
-          return before.song === song && before.id === song?.id && before.artist === song?.artist && before.img === song?.img && before.hfPath === song?.hfPath;
-        })) return previous.groups;
-      const groups = buildArtistGroups(state.songs, profiles, {
-        authoritativeProfiles: directory.artists, authoritativeNames: Object.values(directory.trackArtists),
-        automaticMetadata: getAutomaticArtistMetadata,
+      /* Artist portraits and bios can be written by the admin page (another
+         tab), so the raw overlay string is part of the memo key. */
+      const raw = librarySeedFingerprint() + '|' + (localStorage.getItem('auraHfArtists_v1') || '');
+      if (artistGroupsMemo && artistGroupsMemo.version === state.libraryVersion && artistGroupsMemo.raw === raw) return artistGroupsMemo.groups;
+      const keys: string[] = [];
+      const groups: any[] = [];
+      const profiles = readArtistsCache();
+      state.songs.forEach(s => {
+        const a = (s.artist || '').trim();
+        if(!a || a.toLowerCase() === 'unknown artist') return;
+        const k = artistMergeKey(keys, a);
+        let g = groups.find(x => x.key === k);
+        if(!g){ g = { key:k, name:'', names:new Map(), songs:[], cover:'' }; groups.push(g); keys.push(k); }
+        g.songs.push(s);
+        g.names.set(a, (g.names.get(a) || 0) + 1);
+        if(!g.cover && s.img) g.cover = s.img;
       });
-      artistGroupingSnapshot = { profiles, directory, metadataRevision, groups,
-        inputs: state.songs.map(song => ({ song, id: song?.id, artist: song?.artist, img: song?.img, hfPath: song?.hfPath })) };
+      groups.forEach(g => {
+        g.name = preferredArtistName(g.names);
+        g.key = artistKey(g.name);
+        const custom = getArtistMeta(g.name, profiles) || [...g.names.keys()].map(name => getArtistMeta(name, profiles)).find(Boolean);
+        const sample = g.songs.find(song => song.img && !song.img.includes('default') && !song.img.includes('data:image')) || g.songs[0];
+        if (custom?.name) g.name = preferredArtistName([[custom.name, 1], [g.name, 0]]);
+        g.cover = custom?.img || sample?.img || g.cover;
+        g.bio = custom?.bio || '';
+      });
+      groups.sort((a, b) => b.songs.length - a.songs.length || a.name.localeCompare(b.name));
+      artistGroupsMemo = { version: state.libraryVersion, raw, groups };
       return groups;
     }
 
     function artistInitial(name){ return String(name || '').trim().charAt(0) || '#'; }
+    function artistFallbackColor(_name){ return 'var(--surface-2)'; }
     function artistAvatarHTML(g, cls){
-      if(g.cover) return `<img class="artist-avatar ${cls || ''}" data-artist-portrait src="${escapeHtml(g.cover)}" alt="">`;
-      return `<span class="artist-avatar artist-avatar-fallback ${cls || ''}" aria-hidden="true">${escapeHtml(artistInitial(g.name))}</span>`;
+      if(g.cover) return `<img class="artist-avatar ${cls || ''}" src="${escapeHtml(g.cover)}" alt="">`;
+      return `<span class="artist-avatar artist-avatar-fallback ${cls || ''}" style="background:${artistFallbackColor(g.name)}">${escapeHtml(artistInitial(g.name))}</span>`;
     }
-
     export function artistTileHTML(g, i){
-      return `<button type="button" class="artist-tile" data-artist-key="${escapeHtml(g.key)}" data-artist-metadata-name="${g.key.startsWith('unresolved:') ? '' : escapeHtml(g.name)}" onclick="openArtist(${i})">${artistAvatarHTML(g, '')}<span class="artist-name">${escapeHtml(g.name)}</span></button>`;
+      return `<button type="button" class="artist-tile" onclick="openArtist(${i})">${artistAvatarHTML(g, '')}<span class="artist-name">${escapeHtml(g.name)}</span></button>`;
     }
 
-    let currentArtist: ArtistSelection | null = null;
-    let artistGroupsCache: ArtistGroup[] = [];
+    let currentArtistKey: any = null;
+    let artistGroupsCache: any[] = [];
 
     function renderLibraryArtists(){
       const c = $('librarySongList');
@@ -564,71 +495,40 @@ import { roomModeActive } from '../rooms/roomFlag';
         return;
       }
       if(heading){ heading.style.display = ''; heading.textContent = 'Artists'; }
-      if(currentArtist != null){
-        const g = resolveArtistSelection(artistGroupsCache, currentArtist);
+      if(currentArtistKey != null){
+        const gi = artistGroupsCache.findIndex(g => g.key === currentArtistKey);
+        const g = gi >= 0 ? artistGroupsCache[gi] : null;
         if(g){
-          currentArtist = selectArtist(g);
           if(heading) heading.style.display = 'none';
-          $('tabLibrary')?.classList.add('artist-detail-open');
-          let page = c.querySelector<HTMLElement>('.artist-page');
-          if(!page) { c.innerHTML = '<div class="artist-page"></div>'; page = c.querySelector('.artist-page'); }
-          renderArtistPage(page, g, { prefix: 'libraryArtist', onBack: () => {
-            setLibView('artists');
-            document.querySelector<HTMLButtonElement>('#libViewSeg [data-view="artists"]')?.focus({ preventScroll: true });
-          }, onFavorite: toggleFavorite });
+          c.innerHTML = '<section class="artist-detail-page"></section>';
+          renderArtistPage(c.firstElementChild as HTMLElement, { key: g.key, name: g.name, img: g.cover, bio: g.bio, songs: g.songs }, {
+            prefix: 'libraryArtist', trackActions: true,
+            onBack: () => { setLibView('artists'); document.querySelector<HTMLElement>('#libViewSeg [data-view="artists"]')?.focus({ preventScroll: true }); },
+          });
           return;
         }
-        currentArtist = null;
+        currentArtistKey = null;
       }
       c.innerHTML = `<div class="artist-tiles">${artistGroupsCache.map((g, i) => artistTileHTML(g, i)).join('')}</div>`;
-      observeArtistMetadataCards(c);
-    }
-
-    export function refreshAutomaticLibraryArtists(){
-      if(libView !== 'artists') return;
-      const groups = getArtistGroups();
-      artistGroupsCache = groups;
-      const updateAvatar = (avatar: Element | null, group: ArtistGroup, cls = '') => {
-        if(!avatar) return;
-        if(avatar instanceof HTMLImageElement && group.cover) setArtistPortraitSource(avatar, group.cover);
-        else {
-          const template = document.createElement('template');
-          template.innerHTML = artistAvatarHTML(group, cls);
-          const next = template.content.firstElementChild;
-          if(next && !avatar.isEqualNode(next)) avatar.replaceWith(next);
-        }
-      };
-      const container = $('librarySongList');
-      if(currentArtist) {
-        const group = resolveArtistSelection(groups, currentArtist), page = container.querySelector<HTMLElement>('.artist-page');
-        if(!group || !page) return;
-        refreshArtistPageMetadata(page, group);
-      } else {
-        const byKey = new Map(groups.map(group => [group.key, group]));
-        container.querySelectorAll<HTMLElement>('.artist-tile').forEach(tile => {
-          const group = byKey.get(tile.dataset.artistKey || '');
-          if(group) updateAvatar(tile.querySelector('.artist-avatar'), group);
-        });
-      }
     }
 
     export function openArtist(i){
       const groups = artistGroupsCache.length ? artistGroupsCache : getArtistGroups();
       artistGroupsCache = groups;
-      currentArtist = groups[i] ? selectArtist(groups[i]) : null;
-      if(groups[i] && !groups[i].key.startsWith('unresolved:')) prioritizeArtistMetadata(groups[i].name, 'open');
+      currentArtistKey = groups[i] ? groups[i].key : null;
       libView = 'artists';
       document.querySelectorAll('#libViewSeg .lib-seg-btn').forEach(b => {
         b.classList.toggle('active', (b as HTMLElement).dataset.view === 'artists');
       });
       goTab('tabLibrary');
       renderLibrary();
+      window.scrollTo({ top: 0, behavior: 'instant' });
       $('libraryArtistName')?.focus({ preventScroll: true });
     }
 
     export function playArtistByKey(key: string, startId: string): void {
       const group = getArtistGroups().find((item) => item.key === key);
-      if (group) playArtistCollection(group, false, startId);
+      if (group) playArtistCollection({ key: group.key, name: group.name, img: group.cover, songs: group.songs }, false, startId);
     }
 
     export function playArtist(i, shuffle){
@@ -636,7 +536,8 @@ import { roomModeActive } from '../rooms/roomFlag';
       artistGroupsCache = groups;
       const g = groups[i];
       if(!g || !g.songs.length) return;
-      if(playArtistCollection(g, !!shuffle)) $('fullPlayerOverlay').classList.add('active');
+      playArtistCollection({ key: g.key, name: g.name, img: g.cover, songs: g.songs }, !!shuffle);
+      $('fullPlayerOverlay').classList.add('active');
     }
     export function shuffleArtist(i){ playArtist(i, true); }
 
@@ -654,7 +555,11 @@ import { roomModeActive } from '../rooms/roomFlag';
         if(!g){ g = {name, songs: []}; groups.set(key, g); }
         g.songs.push(s);
       };
-      if(view === 'albums'){
+      if(view === 'artists'){
+        for(const group of getArtistGroups()){
+          groups.set(group.key, {name: group.name, songs: group.songs});
+        }
+      }else if(view === 'albums'){
         state.songs.forEach(s => {
           const al = (s.album||'').trim();
           push(al ? 'album:'+al : 'album:', al || 'Singles & extras', s);
@@ -700,10 +605,21 @@ import { roomModeActive } from '../rooms/roomFlag';
       });
     }
 
+    /* Coming back to a tab the user already painted should not rebuild 493
+       rows and their artwork. Callers that mutate the library call
+       renderLibrary() directly; nav uses the cheap staleness check. */
+    let libraryDirty = true;
+    let libraryPaintedVersion = -1;
+
+    export function renderLibraryIfStale(){
+      if (libraryDirty || libraryPaintedVersion !== state.libraryVersion) renderLibrary();
+    }
+
     export function renderLibrary(){
+      libraryDirty = false;
+      libraryPaintedVersion = state.libraryVersion;
       const c=$('librarySongList');
       const heading=$('allTracksSection');
-      $('tabLibrary')?.classList.remove('artist-detail-open');
       if(heading) heading.style.display = '';
       if(heading) heading.textContent = libView==='artists'?'Artists':libView==='albums'?'Albums':libView==='films'?'Films':'All tracks';
       if(!state.songs.length){
@@ -723,7 +639,7 @@ import { roomModeActive } from '../rooms/roomFlag';
       }else{
         renderGroups(libView);
       }
-      $('tabLibrary')?.classList.toggle('artist-detail-open', libView === 'artists' && currentArtist != null && !!c.querySelector('.artist-detail-page'));
+      $('tabLibrary')?.classList.toggle('artist-detail-open', libView === 'artists' && currentArtistKey != null && !!c.querySelector('.artist-detail-page'));
       updateLibNowPlaying();
       if($('statsPanel').style.display!=='none') renderStatsPanel();
     }
@@ -754,31 +670,6 @@ import { roomModeActive } from '../rooms/roomFlag';
         <div class="stats-cell"><div class="stat-num">${artistCount}</div><div class="stat-label">Artists</div></div>`;
     }
 
-    /* First load and an explicit retry must finish through the same path, so
-       artist/playlist views and still-pending track links all recover together. */
-    export function reconcileCatalog(tracks: any[]){
-      state.catalogLoading = false;
-      state.catalogError = false;
-      const hadSongs = state.songs.length > 0;
-      setHfTracks(tracks);
-      renderSongs(state.songs);
-      renderRecent();
-      renderQuickPicks();
-      refreshArtistViews();
-      refreshPlaylistViews();
-      updateLibCount();
-      const song = state.songs[state.currentIndex];
-      if(song){
-        for(const id of ['currentArtist', 'fullArtist']) if($(id)) $(id).textContent = song.artist;
-        updateMainMediaSession();
-      }
-      if(!hadSongs && state.songs.length) loadSong(state.currentIndex);
-      if($('tabLibrary').classList.contains('active')) renderLibrary();
-      refreshSearchIfOpen();
-      if($('fullPlayerOverlay').classList.contains('active') || $('upNextSheet').classList.contains('active')) renderUpNext();
-      applyPlayDeepLink();
-    }
-
     /* Retry the remote catalogue from the error state's button. */
     export async function retryCatalog(){
       if(state.catalogLoading) return;
@@ -787,11 +678,15 @@ import { roomModeActive } from '../rooms/roomFlag';
       renderSongs(state.songs);
       if($('tabLibrary').classList.contains('active')) renderLibrary();
       try{
-        reconcileCatalog(await fetchHfCatalog());
+        const tracks = await fetchHfCatalog();
+        setHfTracks(tracks);
+        renderRecent();
+        updateLibCount();
       }catch(e){
-        state.catalogLoading = false;
         state.catalogError = true;
         toast('Could not refresh the Aura catalogue. Showing the last saved library.','triangle-exclamation');
+      }finally{
+        state.catalogLoading = false;
         renderSongs(state.songs);
         if($('tabLibrary').classList.contains('active')) renderLibrary();
       }

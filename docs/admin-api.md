@@ -78,6 +78,30 @@ All examples assume the request contains a valid `credential` unless stated.
 “Panel” means the admin UI uses this action. “HF” means it needs `HF_TOKEN` +
 `HF_BUCKET_ID`.
 
+### Audio processing
+
+All processing actions require an authenticated allow-listed admin and the
+`VERSION_DB` binding. Bot service credentials cannot use them. Responses are
+private and uncached; worker credentials and lease-owner tokens are not sent
+to the browser.
+
+| Action | Input | Result |
+| --- | --- | --- |
+| `audioOverview` | none | Song/version counts, registered tracks, worker reports and recent activity |
+| `audioJobs` | none | Current bounded registry snapshot |
+| `audioJob` | `ref` | Both version records, original identity, lease/stage and last 50 song events |
+| `audioRetry` | `refs` (1–100), or `all: true` for failed songs | Queues unfinished versions; keeps ready partners |
+| `audioRecover` | `refs` (1–100), or `all: true` | Queues only expired processing jobs |
+| `audioRegenerate` | one-element `refs`, `mode`, `expected_updated_at` | Queues that version only if its inspected revision is current |
+| `audioReconcile` | none | Checks a complete fresh HF listing; missing files become pending/unavailable |
+
+Queue operations acquire a short administrative lease with one atomic SQL
+update before modifying versions, so an active worker or concurrent claim is
+protected. Results report `queued` and `skipped` song counts. Invalid inputs
+return 400, missing songs 404, and active/changed jobs 409. Original and ready
+partner audio bytes are not modified. Activity records the verified admin
+email; the most recent 2,000 events are retained.
+
 ### `search`
 
 Search YouTube Music/videos through YouTube’s InnerTube API (no key, no quota

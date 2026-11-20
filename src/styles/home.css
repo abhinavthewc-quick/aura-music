@@ -43,7 +43,12 @@
 .soundscape-btn { flex-shrink: 0; min-height: var(--tap); padding: 8px 14px; border: 1px solid var(--line); border-radius: var(--radius-xs); background: transparent; color: var(--text); font-size: 12px; font-weight: 600; }
 .soundscape-btn:hover { border-color: var(--accent); }
 .aura-picks { margin-bottom: 32px; }
-.aura-picks-scroll, .recent-scroll { display: flex; gap: 16px; width: 100%; overflow-x: auto; overflow-y: hidden; padding: 2px 2px 12px; scrollbar-width: none; scroll-snap-type: x proximity; }
+.aura-picks-scroll, .recent-scroll { display: flex; gap: 16px; width: 100%; overflow-x: auto; overflow-y: hidden; padding: 2px 2px 12px; scrollbar-width: none; scroll-snap-type: x proximity; overscroll-behavior-x: contain; }
+/* Horizontal rails hold more cards than fit on screen. content-visibility keeps
+   the browser from laying out or fetching for the ones scrolled out of view,
+   which is what makes `loading="lazy"` actually defer inside a scroller — on a
+   phone it was requesting every card's cover up front. */
+.aura-picks-scroll > *, .recent-scroll > * { content-visibility: auto; contain-intrinsic-size: auto 200px; }
 .aura-picks-scroll::-webkit-scrollbar, .recent-scroll::-webkit-scrollbar { display: none; }
 .aura-pick { position: relative; flex: 0 0 180px; height: 200px; overflow: hidden; border: 1px solid var(--line); border-radius: var(--radius-sm); background: var(--surface-1); cursor: pointer; scroll-snap-align: start; }
 .aura-pick img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; }
@@ -70,7 +75,7 @@
 
 .ytm-artists-shelf { display: flex; gap: 24px; overflow-x: auto; margin-bottom: 28px; padding: 4px 2px 12px; scrollbar-width: none; }
 .ytm-artists-shelf::-webkit-scrollbar { display: none; }
-.ytm-artist-card { display: flex; flex-direction: column; align-items: center; flex: 0 0 112px; min-width: 0; padding: 0; border: 0; background: transparent; color: var(--text); text-align: center; cursor: pointer; }
+.ytm-artist-card { display: flex; flex-direction: column; align-items: center; flex: 0 0 112px; min-width: 0; padding: 0; border: 0; background: transparent; color: var(--text); text-align: center; cursor: pointer; content-visibility: auto; contain-intrinsic-size: auto 150px; }
 .ytm-artist-art-wrap { position: relative; width: 100px; height: 100px; overflow: hidden; border: 1px solid var(--line); border-radius: 50%; background: var(--surface-2); }
 .ytm-artist-avatar { display: block; width: 100%; height: 100%; object-fit: cover; }
 .ytm-artist-play-overlay { position: absolute; right: 4px; bottom: 4px; display: grid; place-items: center; width: 32px; height: 32px; border-radius: 50%; background: var(--text); color: var(--bg); opacity: 0; transition: opacity var(--dur-fast); }

@@ -1,12 +1,12 @@
 import { timeGreeting, toast } from '../core/dom';
-import { resolveArtistSelection, selectArtist, type ArtistSelection } from '../core/artistGroups';
+import { artistMatchKey } from '../core/artist-names';
 import { playSong } from './player';
 import { escapeHtml } from './radio';
 import { DEFAULT_COVER } from '../core/catalog';
-import { DEFAULT_ARTIST_PORTRAIT, observeArtistMetadataCards, prioritizeArtistMetadata, setArtistPortraitSource } from '../core/artistMetadata';
 import { $, state } from '../core/state';
 import { getArtistGroups } from './library';
-import { playArtistCollection, refreshArtistPageMetadata, renderArtistPage } from './artist-page';
+import { goTab } from '../ui/nav';
+import { playArtistCollection, renderArtistPage, type ArtistPageEntry } from './artist-page';
 /* ===== 3075-3096 ===== */
     export function setGreeting(){
       $('greetingLabel').textContent = timeGreeting();
@@ -63,10 +63,34 @@ import { playArtistCollection, refreshArtistPageMetadata, renderArtistPage } fro
     let currentMood = 'all';
     let currentQuickPage = 0;
 
+    /* Every play calls updateLibCount(), which rebuilds the home rails on the
+       next frame. Re-creating ~30 <img> nodes for identical content made the
+       page flash and re-decode artwork, so each rail compares a cheap
+       signature first and only writes the DOM when something actually changed. */
+    let quickPicksKey = '';
+    let artistsShelfKey = '';
+    let spotlightKey = '';
+
+    /* A heart tap changes one boolean. Rebuilding the picks, the artist shelf
+       and 493 library rows for it is what made favouriting feel sticky, so the
+       visible hearts are patched in place (library.ts) and only the tiles whose
+       text/count depends on favourites are refreshed here. */
+    export function refreshFavoriteChrome(){
+      updateDesktopHeroStats();
+      const sub = document.querySelector<HTMLElement>('#quickGrid .quick-tile:first-child .qt-sub');
+      if (sub) {
+        const count = state.songs.filter(s => s.favorite).length;
+        sub.textContent = `${count} track${count !== 1 ? 's' : ''}`;
+      }
+      if (currentMood === 'favorites') renderQuickPicks();
+    }
+
     export function renderQuickPicks(page?: number){
       const container = $('ytmQuickGrid');
       if(!container) return;
       if(!state.songs || !state.songs.length){
+        if(quickPicksKey === 'empty') return;
+        quickPicksKey = 'empty';
         container.innerHTML = '<p class="home-empty">No library tracks are available yet. Add local audio or check the catalogue connection.</p>';
         return;
       }
@@ -74,7 +98,11 @@ import { playArtistCollection, refreshArtistPageMetadata, renderArtistPage } fro
       let pool = state.songs.filter((song) => !song.missing);
       if (currentMood === 'favorites') pool = pool.filter((song) => song.favorite);
       if (currentMood === 'recent') pool = state.recentlyPlayed.map((recent) => pool.find((song) => String(song.id) === String(recent.id))).filter(Boolean);
-      if (!pool.length) { container.innerHTML = '<p class="home-empty">No tracks in this collection yet. Choose All or add a favorite from your library.</p>'; return; }
+      if (!pool.length) {
+        if(quickPicksKey === 'none') return;
+        quickPicksKey = 'none';
+        container.innerHTML = '<p class="home-empty">No tracks in this collection yet. Choose All or add a favorite from your library.</p>'; return;
+      }
 
       const pageSize = 12; // 3 columns x 4 rows
       const totalPages = Math.max(1, Math.ceil(pool.length / pageSize));
@@ -83,6 +111,9 @@ import { playArtistCollection, refreshArtistPageMetadata, renderArtistPage } fro
 
       const start = currentQuickPage * pageSize;
       const slice = pool.slice(start, start + pageSize);
+      const nextKey = currentMood + '|' + currentQuickPage + '|' + state.currentIndex + '|' + (state.isPlaying ? 1 : 0) + '|' + slice.map(s => s.id).join(',');
+      if (nextKey === quickPicksKey) return;
+      quickPicksKey = nextKey;
 
       const html = slice.map(s => {
         const globalIdx = state.songs.findIndex(x => x.id === s.id);
@@ -132,21 +163,21 @@ import { playArtistCollection, refreshArtistPageMetadata, renderArtistPage } fro
       });
     }
 
-    export interface ArtistDirectoryEntry {
-      key: string;
-      name: string;
-      img: string;
+    export interface ArtistDirectoryEntry extends ArtistPageEntry {
       count: number;
-      songs: any[];
-      metadataName: string;
     }
 
     export function getAllArtists(): ArtistDirectoryEntry[] {
-      return getArtistGroups().map(g => ({
-        key: g.key, name: g.name, img: g.cover || DEFAULT_ARTIST_PORTRAIT,
-        count: g.songs.length, songs: g.songs,
-         metadataName: g.key.startsWith('unresolved:') ? '' : g.name,
-       }));
+      return getArtistGroups().map(group => ({
+        key: group.key, name: group.name, img: group.cover || DEFAULT_COVER,
+        bio: group.bio, count: group.songs.length, songs: group.songs,
+      }));
+    }
+
+    function artistForName(artists: ArtistDirectoryEntry[], name: string): ArtistDirectoryEntry | undefined {
+      const match = artistMatchKey(name);
+      return artists.find(artist => artist.name.toLowerCase() === name.toLowerCase()) ||
+        artists.find(artist => match && (artistMatchKey(artist.key) === match || artistMatchKey(artist.name) === match));
     }
 
     export function renderFeaturedArtistsShelf() {
@@ -154,22 +185,26 @@ import { playArtistCollection, refreshArtistPageMetadata, renderArtistPage } fro
       if (!shelf) return;
       const artists = getAllArtists();
       if (!artists.length) {
+        if (artistsShelfKey === 'empty') return;
+        artistsShelfKey = 'empty';
         shelf.innerHTML = '<div style="color:var(--text-sub);padding:10px 0;font-size:13px">Loading artists…</div>';
         return;
       }
 
       const topArtists = artists.slice(0, 16);
+      const key = topArtists.map(a => a.key + '|' + a.name + '|' + a.img + '|' + a.count).join('~');
+      if (key === artistsShelfKey) return;
+      artistsShelfKey = key;
       shelf.innerHTML = topArtists.map(a => `
-        <div class="ytm-artist-card" role="button" tabindex="0" data-artist-open="${escapeHtml(a.key)}" data-artist-metadata-name="${escapeHtml(a.metadataName)}" title="${escapeHtml(a.name)}">
+        <button type="button" class="ytm-artist-card" data-open-artist="${escapeHtml(a.key)}" title="${escapeHtml(a.name)}">
           <div class="ytm-artist-art-wrap">
-            <img class="ytm-artist-avatar" data-artist-portrait src="${escapeHtml(a.img)}" alt="${escapeHtml(a.name)}" loading="lazy" decoding="async">
+            <img class="ytm-artist-avatar" src="${escapeHtml(a.img)}" alt="${escapeHtml(a.name)}" loading="lazy" decoding="async">
             <div class="ytm-artist-play-overlay"><i class="fa-solid fa-play"></i></div>
           </div>
           <div class="ytm-artist-name">${escapeHtml(a.name)}</div>
           <div class="ytm-artist-sub">${a.count} song${a.count !== 1 ? 's' : ''}</div>
-        </div>
+        </button>
       `).join('');
-      observeArtistMetadataCards(shelf);
     }
 
     export function renderArtistsFullGrid() {
@@ -182,16 +217,15 @@ import { playArtistCollection, refreshArtistPageMetadata, renderArtistPage } fro
       }
 
       grid.innerHTML = artists.map(a => `
-        <div class="ytm-artist-card grid-card" role="button" tabindex="0" data-artist-open="${escapeHtml(a.key)}" data-artist-metadata-name="${escapeHtml(a.metadataName)}" title="${escapeHtml(a.name)}">
+        <button type="button" class="ytm-artist-card grid-card" data-open-artist="${escapeHtml(a.key)}" title="${escapeHtml(a.name)}">
           <div class="ytm-artist-art-wrap">
-            <img class="ytm-artist-avatar" data-artist-portrait src="${escapeHtml(a.img)}" alt="${escapeHtml(a.name)}" loading="lazy" decoding="async">
+            <img class="ytm-artist-avatar" src="${escapeHtml(a.img)}" alt="${escapeHtml(a.name)}" loading="lazy" decoding="async">
             <div class="ytm-artist-play-overlay"><i class="fa-solid fa-play"></i></div>
           </div>
           <div class="ytm-artist-name">${escapeHtml(a.name)}</div>
           <div class="ytm-artist-sub">${a.count} song${a.count !== 1 ? 's' : ''}</div>
-        </div>
+        </button>
       `).join('');
-      observeArtistMetadataCards(grid);
     }
 
     export function openHomeArtistsTab() {
@@ -203,10 +237,10 @@ import { playArtistCollection, refreshArtistPageMetadata, renderArtistPage } fro
     }
 
     export function showArtistsView() {
-      $('tabHome')?.classList.remove('artist-detail-open');
       const mainView = $('homeMainView');
       const artistsView = $('homeArtistsView');
       const detailView = $('homeArtistDetailView');
+      $('tabHome')?.classList.remove('artist-detail-open');
       if (mainView) mainView.style.display = 'none';
       if (detailView) detailView.style.display = 'none';
       if (artistsView) {
@@ -216,25 +250,24 @@ import { playArtistCollection, refreshArtistPageMetadata, renderArtistPage } fro
     }
 
     export function showDefaultHomeView() {
-      $('tabHome')?.classList.remove('artist-detail-open');
       const mainView = $('homeMainView');
       const artistsView = $('homeArtistsView');
       const detailView = $('homeArtistDetailView');
+      $('tabHome')?.classList.remove('artist-detail-open');
       if (artistsView) artistsView.style.display = 'none';
       if (detailView) detailView.style.display = 'none';
       if (mainView) mainView.style.display = 'block';
     }
 
-    let openArtistSelection: ArtistSelection | null = null;
-    export function openArtistDetail(artistName: string | ArtistSelection, scroll = true, interactive = true) {
-      const group = resolveArtistSelection(getArtistGroups(), artistName);
-      if(!group) {
-        if(typeof artistName !== 'string') { closeArtistDetail(); return; }
-        toast('That artist is no longer in your library.', 'circle-info');
-        return;
-      }
-      openArtistSelection = selectArtist(group);
-      if(interactive && !group.key.startsWith('unresolved:')) prioritizeArtistMetadata(group.name, 'open');
+    export function openArtistDetail(artistName: string) {
+      const artists = getAllArtists();
+      const artist = artistForName(artists, artistName) || {
+        key: artistName.toLowerCase().trim(),
+        name: artistName,
+        img: DEFAULT_COVER,
+        count: 0,
+        songs: state.songs.filter(s => (s.artist || '').toLowerCase().includes(artistName.toLowerCase()))
+      };
 
       const mainView = $('homeMainView');
       const artistsView = $('homeArtistsView');
@@ -243,65 +276,39 @@ import { playArtistCollection, refreshArtistPageMetadata, renderArtistPage } fro
       if (mainView) mainView.style.display = 'none';
       if (artistsView) artistsView.style.display = 'none';
       if (detailView) detailView.style.display = 'block';
-      if(detailView) renderArtistPage(detailView, group, { prefix: 'artist', onBack: () => {
-        closeArtistDetail();
-        openHomeArtistsTab();
-        $('homeArtistsChip')?.focus({ preventScroll: true });
-      } });
-      if(scroll) {
-        const reduced = window.matchMedia('(prefers-reduced-motion: reduce)').matches || document.body.classList.contains('aura-reduce-motion');
-        window.scrollTo({ top: 0, behavior: reduced ? 'auto' : 'smooth' });
-        detailView?.querySelector<HTMLElement>('.artist-hero-name')?.focus({ preventScroll: true });
-      }
-    }
 
-    export function refreshArtistViews() {
-      renderFeaturedArtistsShelf();
-      renderArtistSpotlight();
-      if($('homeArtistsView')?.style.display === 'block') renderArtistsFullGrid();
-      if(openArtistSelection && $('homeArtistDetailView')?.style.display === 'block') openArtistDetail(openArtistSelection, false, false);
+      if (detailView) renderArtistPage(detailView, artist, { prefix: 'artist', onBack: closeArtistDetail });
+      goTab('tabHome');
+      window.scrollTo({ top: 0, behavior: 'instant' });
+      $('artistName')?.focus({ preventScroll: true });
     }
-
-    export function refreshAutomaticArtistViews() {
-      const groups = getArtistGroups(), byKey = new Map(groups.map(group => [group.key, group]));
-      document.querySelectorAll<HTMLElement>('[data-artist-open]').forEach(card => {
-        const group = byKey.get(card.dataset.artistOpen || ''), image = card.querySelector<HTMLImageElement>('[data-artist-portrait]');
-        if(group && image) setArtistPortraitSource(image, group.cover || DEFAULT_ARTIST_PORTRAIT);
-      });
-      $('artistSpotlightContainer')?.querySelectorAll<HTMLImageElement>('[data-artist-key][data-artist-portrait]').forEach(image => {
-        const group = byKey.get(image.dataset.artistKey || '');
-        if(group) setArtistPortraitSource(image, group.cover || DEFAULT_ARTIST_PORTRAIT);
-      });
-      if(!openArtistSelection || $('homeArtistDetailView')?.style.display !== 'block') return;
-      const group = resolveArtistSelection(groups, openArtistSelection), page = $('homeArtistDetailView');
-      if(group && page) refreshArtistPageMetadata(page, group);
-      // Names, selection, song rows and playback callbacks remain mounted.
-    }
-
-    document.addEventListener('click', event => {
-      const card = (event.target as HTMLElement).closest<HTMLElement>('[data-artist-open]');
-      if(card?.dataset.artistOpen) openArtistDetail(card.dataset.artistOpen);
-    });
 
     export function closeArtistDetail() {
-      openArtistSelection = null;
-      const activeChip = document.querySelector('#ytmMoodChips .ytm-chip.active') as HTMLElement | null;
-      const mood = activeChip?.dataset.mood || 'all';
-
-      if (mood === 'artists') {
-        showArtistsView();
-      } else {
-        showDefaultHomeView();
-      }
+      openHomeArtistsTab();
+      $('homeArtistsChip')?.focus({ preventScroll: true });
     }
 
     export function playArtistSongs(artistName: string, shuffle = false, startId?: string) {
-      const artist = resolveArtistSelection(getArtistGroups(), artistName);
+      const artists = getAllArtists();
+      const artist = artistForName(artists, artistName);
       if (!artist || !artist.songs.length) return;
-      if(playArtistCollection(artist, shuffle, startId)) toast(`Playing ${artist.name}`, 'play');
+
+      playArtistCollection(artist, shuffle, startId);
     }
 
-    window.addEventListener('aura:library-changed', refreshArtistViews);
+    document.addEventListener('click', (event) => {
+      const button = (event.target as Element).closest<HTMLElement>('[data-open-artist]');
+      if (!button) return;
+      const artist = getAllArtists().find(entry => entry.key === button.dataset.openArtist);
+      if (artist) openArtistDetail(artist.name);
+    });
+
+    window.addEventListener('aura:library-changed', () => {
+      if (!$('tabHome')?.classList.contains('artist-detail-open')) return;
+      const name = $('artistName')?.textContent;
+      const artist = getAllArtists().find(entry => entry.name === name);
+      if (artist) renderArtistPage($('homeArtistDetailView'), artist, { prefix: 'artist', onBack: closeArtistDetail });
+    });
 
     if (typeof window !== 'undefined') {
       (window as any).openHomeArtistsTab = openHomeArtistsTab;
@@ -310,32 +317,45 @@ import { playArtistCollection, refreshArtistPageMetadata, renderArtistPage } fro
       (window as any).playArtistSongs = playArtistSongs;
     }
 
-    /* Home and Library use the same identities, including collaborations and
-       authoritative cloud profiles. A shared credit appears once per artist. */
+    /* Spotlights use the same artist names and collections as the directory. */
     export function renderArtistSpotlight(){
-      const artists = getArtistGroups().filter(g => g.songs.length >= 2);
+      const artists = getArtistGroups().filter(group => group.songs.length >= 2);
       const container = $('artistSpotlightContainer');
-      if(!container) return;
 
-      if(!artists.length){ container.innerHTML=''; return; }
+      if(!artists.length){
+        if(spotlightKey === 'empty') return;
+        spotlightKey = 'empty';
+        container.innerHTML=''; return;
+      }
+
+      // Each block is a horizontal rail that only ever shows the first few
+      // cards before the user scrolls it. Rendering every song of every artist
+      // built 334 <img> tags on a real library, and `loading="lazy"` does not
+      // defer inside a horizontal scroller, so a phone fetched hundreds of
+      // covers to show a rail it could only display ~3 cards of at a time.
+      const RAIL_LIMIT = 10;
+      const BLOCK_LIMIT = 6;
 
       const indexById = new Map<string, number>();
       state.songs.forEach((song, i) => indexById.set(String(song.id), i));
-      container.innerHTML = artists.map((g:any)=>{
-        const cards = g.songs.map(s=>{
+      const visible = artists.slice(0, BLOCK_LIMIT);
+      const key = visible.map(g => g.key + '|' + g.cover + '|' + g.name + '|' + g.songs.slice(0, RAIL_LIMIT).map(s => s.id).join(',')).join('~');
+      if (key === spotlightKey) return;
+      spotlightKey = key;
+      container.innerHTML = visible.map((g:any)=>{
+        const cards = g.songs.slice(0, RAIL_LIMIT).map(s=>{
           const idx = indexById.get(String(s.id)) ?? -1;
           if(idx < 0) return '';
           return `<div class="spotlight-card" role="button" tabindex="0" aria-label="Play ${escapeHtml(s.title||'')}" data-play-song-id="${escapeHtml(s.id)}"><img src="${escapeHtml(s.img||DEFAULT_COVER)}" alt="" loading="lazy" decoding="async"><p class="sc-title">${escapeHtml(s.title)}</p><p class="sc-sub">${escapeHtml(s.artist)}</p></div>`;
         }).join('');
         return `<div class="artist-spotlight-block" style="margin-bottom:24px">
           <div class="spotlight-header">
-            <img class="spotlight-avatar" data-artist-portrait data-artist-key="${escapeHtml(g.key)}" data-artist-metadata-name="${g.key.startsWith('unresolved:') ? '' : escapeHtml(g.name)}" src="${escapeHtml(g.cover || DEFAULT_ARTIST_PORTRAIT)}" alt="" loading="lazy" decoding="async">
-            <div><p>More from</p><p>${escapeHtml(g.name)}</p></div>
+            <img class="spotlight-avatar" src="${escapeHtml(g.cover||DEFAULT_COVER)}" alt="" loading="lazy" decoding="async">
+            <div><p style="font-size:11px;color:var(--text-sub)">More from</p><p style="font-size:16px;font-weight:800">${escapeHtml(g.name)}</p></div>
           </div>
           <div class="recent-scroll">${cards}</div>
         </div>`;
       }).join('');
-      observeArtistMetadataCards(container);
     }
 
 /* ===== 4646-4660 ===== */

@@ -97,6 +97,74 @@ function errorResponse(message: string, status: number, head = false, extra: Rec
   });
 }
 
+/** Edge-cache a track for a day. The key carries the revision, so a re-published
+ * rendition is a different entry and can never serve stale bytes. */
+export const AUDIO_EDGE_CACHE_TTL_SECONDS = 86_400;
+
+/**
+ * Cache key for a track revision.
+ *
+ * Built from the REAL request origin, not a synthetic hostname: the Cache API
+ * keys on the URL, and nothing in the docs promises a made-up host resolves to
+ * a usable entry. The revision goes in the query string rather than a header
+ * because `cache.match` cannot be told to ignore headers, and a stale entry is
+ * the one failure mode that would actually be audible — a new rendition must
+ * land on a different key.
+ */
+export function edgeCacheKey(requestUrl: URL, bucket: string, path: string, revision: string): Request {
+  const key = new URL(requestUrl.origin);
+  key.pathname = `/__aura_edge_audio/${encodeURIComponent(bucket)}/${encodeURIComponent(path)}`;
+  key.search = `?rev=${encodeURIComponent(revision)}`;
+  return new Request(key.toString(), { method: 'GET' });
+}
+
+/**
+ * Read a track from Cloudflare's per-datacenter edge cache.
+ *
+ * A Range header on the lookup is deliberate: Cloudflare's cache slices a
+ * cached full response into a 206 itself, which is what makes seeking work
+ * without us storing partial content (cache.put rejects 206 outright).
+ */
+export async function readEdgeCache(key: Request, range: string | null): Promise<Response | null> {
+  try {
+    const cache = (globalThis as { caches?: { default?: Cache } }).caches?.default;
+    if (!cache) return null;
+    const lookup = new Request(key.url, { method: 'GET', headers: range ? { Range: range } : {} });
+    return (await cache.match(lookup)) || null;
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * Store a full track response in the edge cache.
+ *
+ * Only ever called with a complete 200. A 206 would throw inside cache.put, so
+ * a range request that misses simply streams from origin and does not populate
+ * the cache — the next full request will.
+ */
+export function writeEdgeCache(context: AudioContext, key: Request, response: Response): void {
+  try {
+    // Defence in depth. Call sites already gate on status 200, but rebuilding
+    // the response below forces status 200, so a partial body passed in here
+    // would be silently stored as if it were the whole file — the exact
+    // corruption the revision key exists to prevent. Refuse anything else.
+    if (response.status !== 200) return;
+    const cache = (globalThis as { caches?: { default?: Cache } }).caches?.default;
+    if (!cache) return;
+    // Rebuild the response so the stored copy carries an explicit edge TTL and
+    // no per-request markers (x-aura-cache would otherwise be served stale).
+    const headers = new Headers(response.headers);
+    headers.set('Cache-Control', `public, max-age=${AUDIO_EDGE_CACHE_TTL_SECONDS}`);
+    headers.delete('x-aura-cache');
+    const cacheable = new Response(response.clone().body, { status: 200, headers });
+    const task = cache.put(key, cacheable).catch(() => { /* cache is best-effort */ });
+    if (typeof context.waitUntil === 'function') context.waitUntil(task);
+  } catch {
+    // Never let a cache write break playback.
+  }
+}
+
 function updateExistence(key: string, exists: boolean): void {
   existenceCache.delete(key);
   if (existenceCache.size >= MAX_EXISTENCE_ENTRIES) {
@@ -292,6 +360,26 @@ async function handleAudio(context: AudioContext, head: boolean): Promise<Respon
   const revision = identity?.revision || '';
   const requestedRevision = url.searchParams.get('v') || '';
 
+  // Edge cache: only for GETs whose bytes are pinned to a known revision.
+  // Without a revision the file at a path can be replaced, so caching it would
+  // risk serving a stale rendition — exactly the bug the revision exists to
+  // prevent. HEAD is skipped too: it would populate the cache with an empty body.
+  const edgeKey = identity && revision && !head ? edgeCacheKey(url, bucket, path, revision) : null;
+  if (edgeKey) {
+    const hit = await readEdgeCache(edgeKey, range);
+    if (hit) {
+      // The cached entry is a full 200; Cloudflare already sliced it if the
+      // request carried a Range. Re-stamp the per-request markers.
+      const headers = new Headers(hit.headers);
+      headers.set('x-aura-cache', 'HIT-EDGE');
+      headers.set('x-aura-revision', revision);
+      headers.set('Cache-Control', revision && requestedRevision === revision
+        ? `public, max-age=${AUDIO_EDGE_CACHE_TTL_SECONDS}`
+        : 'public, max-age=0, must-revalidate');
+      return new Response(hit.body, { status: hit.status, headers: corsHeaders(Object.fromEntries(headers)) });
+    }
+  }
+
   if (config && identity) {
     let exists = existenceCache.get(key)?.exists || false;
     const cached = existenceCache.get(key);
@@ -311,7 +399,14 @@ async function handleAudio(context: AudioContext, head: boolean): Promise<Respon
       try {
         const signed = await signOciS3Request(head ? 'HEAD' : 'GET', objectPath, config, range ? { range } : {});
         const response = await fetch(signed.url, { method: head ? 'HEAD' : 'GET', headers: signed.headers, signal: AbortSignal.timeout(5000) });
-        if (response.status === 200 || response.status === 206) return streamResponse(response, type, 'HIT-OCI', head,revision,requestedRevision);
+        if (response.status === 200 || response.status === 206) {
+          const fromOci = streamResponse(response, type, 'HIT-OCI', head,revision,requestedRevision);
+          // OCI is a 30-track hot set; the edge cache is per-datacenter and much
+          // larger. Promoting a full OCI read into it saves the OCI round trip
+          // for every later listener in the same colo.
+          if (edgeKey && fromOci.status === 200) writeEdgeCache(context, edgeKey, fromOci);
+          return fromOci;
+        }
         if (response.status === 416) {
           await response.body?.cancel().catch(() => {});
           return errorResponse('Byte range is not satisfiable', 416, head, { 'Content-Range': response.headers.get('content-range') || '' });
@@ -356,7 +451,12 @@ async function handleAudio(context: AudioContext, head: boolean): Promise<Respon
   }
   if (!head && !response.body) return errorResponse('Remote catalog storage returned no audio', 502);
   if (config && identity && !head) scheduleCacheUpload(context, config, key, objectPath, archiveUrl,identity,bucket);
-  return streamResponse(response, type, 'MISS-HF-STREAMING', head,revision,requestedRevision);
+  const streamed = streamResponse(response, type, 'MISS-HF-STREAMING', head,revision,requestedRevision);
+  // Populate the edge cache only from a complete 200. A 206 is a partial body:
+  // cache.put rejects it, and storing it would poison the entry for every
+  // later request that expects the whole file.
+  if (edgeKey && streamed.status === 200) writeEdgeCache(context, edgeKey, streamed);
+  return streamed;
 }
 
 export const onRequestOptions = async (): Promise<Response> => new Response(null, { status: 204, headers: corsHeaders() });

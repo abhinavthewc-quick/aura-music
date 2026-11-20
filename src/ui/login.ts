@@ -1,94 +1,52 @@
 import { GOOGLE_CLIENT_ID, ADMIN_EMAILS } from '../core/config';
 import { verifyGoogleCredential } from '../core/google-auth';
 import {
-  exchangeGoogleToken, getProfileUsername, getSession, isValidUsername, normalizeUsername,
+  clearSession, exchangeGoogleToken, getSession, getProfileUsername, isValidUsername, normalizeUsername,
   SESSION_TTL_SEC, setProfileUsername, setSession,
 } from '../core/session';
 import { loginLocalAccount, normEmail, registerLocalAccount } from '../core/local-auth';
-import { loadApplication } from '../core/bootstrap';
-import { loadGoogleIdentity } from '../core/google-identity';
+import { toast } from '../core/dom';
+import { updateProfilePopup } from '../features/settings';
+import { $ } from '../core/state';
+/* ===== 4706-4725 ===== */
 
-// Keep the entry independent of the music store and feature modules.
-const $ = <T extends HTMLElement = HTMLElement>(id: string) => document.getElementById(id) as T;
-
+    /* Merged home greeting (desktop hero) + welcome screen v2 */
+    (function(){
+      const lab=$('greetingLabel'), nm=$('displayUserName');
+      function syncHero(){
+        const hl=$('heroGreetLabel'), hn=$('heroGreetName');
+        if(hl&&lab) hl.textContent=(lab.textContent||'Welcome back');
+        if(hn&&nm) hn.textContent=(nm.textContent||'User');
+      }
+      if(lab&&nm){ const mo=new MutationObserver(syncHero); [lab,nm].forEach(e=>mo.observe(e,{childList:true,characterData:true,subtree:true})); syncHero(); }
+    })();
 /* ===== 4813-4871 ===== */
-    export async function finishLogin(n: string){
+    export function finishLogin(n){
       const now = new Date().toISOString();
       if(!localStorage.getItem('auraFirstLogin')) localStorage.setItem('auraFirstLogin', now);
       localStorage.setItem('auraLastLogin', now);
       localStorage.setItem('auraUserName', n);
-      await loadApplication();
+      const displayName = $('displayUserName');
+      if(displayName) displayName.textContent=n;
+      $('welcomeScreen').classList.add('hidden');
+      updateProfilePopup();
     }
 
-    export function showSignIn(message = ''){
-      const welcome = $('welcomeScreen'), overlay = $('loginOverlay');
-      const wasRestoring = document.documentElement.hasAttribute('data-aura-entry');
-      const app = $('musicApp');
-      app.hidden = true;
-      app.inert = true;
-      welcome.hidden = false;
-      welcome.classList.remove('hidden');
-      welcome.inert = false;
-      welcome.setAttribute('aria-hidden', 'false');
-      overlay.hidden = true;
-      overlay.classList.remove('active');
-      overlay.setAttribute('aria-hidden', 'true');
-      $('loginRetry').hidden = true;
-      document.documentElement.removeAttribute('data-aura-entry');
-      if(message || wasRestoring) setGoogleNote(message || 'Please sign in again to continue.', true);
-      if(wasRestoring) welcome.focus({ preventScroll: true });
-    }
-
-    function showLibraryError(message: string){
-      document.documentElement.dataset.auraEntry = 'failed';
-      const status = $('loginStatus');
-      status.textContent = message;
-      status.classList.add('login-error');
-      $('loginRetry').hidden = false;
-    }
-
-    let libraryOpening = false;
-    export async function playLoginAnimation(n: string, restoring = false){
-      if(libraryOpening) return;
-      if(!getSession()) { showSignIn('Your session has ended. Please sign in again.'); return; }
-      libraryOpening = true;
+    export function playLoginAnimation(n){
       const overlay=$('loginOverlay');
-      const wn=$('loginWelcomeName'); if(wn) wn.textContent=restoring ? 'Aura Music' : 'Welcome, '+n;
-      const status=$('loginStatus');
-      status.textContent='Getting your music ready…';
-      status.classList.remove('login-error');
-      $('loginRetry').hidden=true;
-      const welcome=$('welcomeScreen');
-      welcome.hidden=true;
-      welcome.classList.add('hidden');
-      welcome.inert=true;
-      welcome.setAttribute('aria-hidden','true');
-      overlay.hidden=false;
+      const wn=$('loginWelcomeName'); if(wn) wn.textContent='Welcome, '+n;
       overlay.classList.add('active');
       overlay.setAttribute('aria-hidden','false');
-      document.documentElement.dataset.auraEntry='loading';
-      overlay.focus({ preventScroll: true });
-      const timeout=window.setTimeout(() => showLibraryError('Aura is taking longer than expected. Reload to try again.'), 15000);
-      try{
-        await finishLogin(n);
-        $('loginRetry').hidden=true;
+      setTimeout(()=>{
+        finishLogin(n);
         overlay.classList.remove('active');
         overlay.setAttribute('aria-hidden','true');
-        document.querySelector<HTMLElement>('.app-container')?.focus({ preventScroll: true });
-      }catch{
-        if(!getSession()) showSignIn('Your session has ended. Please sign in again.');
-        else {
-          showLibraryError('Could not open your library. Check your connection and try again.');
-          $('loginRetry').focus();
-        }
-      }finally{
-        clearTimeout(timeout);
-        libraryOpening=false;
-      }
+      },1500);
     }
 
     /* ---------- Google Sign-In (any Google account; username picked on first entry) ---------- */
-    let gisInitialized = false;
+    let gisLoaded = false;
+    let gisRequested = false;
     let pending: { profile: { email: string; name: string; picture: string; exp: number }; credential: string } | null = null;
 
     function showUsernamePicker(email: string){
@@ -110,7 +68,7 @@ const $ = <T extends HTMLElement = HTMLElement>(id: string) => document.getEleme
       if(box) box.hidden = false;
     }
 
-    async function submitUsername(){
+    function submitUsername(){
       const err = $('pickUsernameErr');
       const n = normalizeUsername(($('pickUsernameInput') as HTMLInputElement)?.value || '');
       if(!isValidUsername(n)){
@@ -126,15 +84,15 @@ const $ = <T extends HTMLElement = HTMLElement>(id: string) => document.getEleme
       setProfileUsername(profile.email, n);
       setSession({ email: profile.email, name: n, picture: profile.picture, exp: profile.exp, token: credential });
       hideUsernamePicker();
-      await playLoginAnimation(n);
+      playLoginAnimation(n);
     }
 
     /* Shared entry: saved username → straight in; otherwise ask for one. */
-    async function enterWithProfile(p: { email: string; name: string; picture: string; exp: number }, token: string){
+    function enterWithProfile(p: { email: string; name: string; picture: string; exp: number }, token: string){
       const saved = getProfileUsername(p.email);
       if(saved){
         setSession({ email: p.email, name: saved, picture: p.picture, exp: p.exp, token });
-        await playLoginAnimation(saved);
+        playLoginAnimation(saved);
         return;
       }
       pending = { profile: p, credential: token };
@@ -153,9 +111,9 @@ const $ = <T extends HTMLElement = HTMLElement>(id: string) => document.getEleme
           const swapped = await exchangeGoogleToken(credential);
           if (swapped) { token = swapped.token; exp = swapped.exp; }
         }
-        await enterWithProfile({ ...p, exp }, token);
+        enterWithProfile({ ...p, exp }, token);
       }catch(err){
-        setGoogleNote('Sign-in failed — ' + (((err as Error).message)||'please try again'), true);
+        toast('Sign-in failed — ' + (((err as Error).message)||'please try again'), 'triangle-exclamation');
       }
     }
 
@@ -234,7 +192,7 @@ const $ = <T extends HTMLElement = HTMLElement>(id: string) => document.getEleme
         const pw2El = $('authPassword2Input') as HTMLInputElement;
         if(pwEl) pwEl.value = '';
         if(pw2El) pw2El.value = '';
-        await enterWithProfile(
+        enterWithProfile(
           { email, name: email, picture: '', exp: Math.floor(Date.now() / 1000) + 180 * 24 * 3600 },
           'local:' + email,
         );
@@ -252,76 +210,107 @@ const $ = <T extends HTMLElement = HTMLElement>(id: string) => document.getEleme
       el?.addEventListener('keydown', (e: KeyboardEvent) => { if(e.key === 'Enter') submitEmailAuth(); }),
     );
 
-    function setGoogleNote(message: string, error = false){
-      const note = $('googleAuthNote');
-      if(note){ note.textContent = message; note.classList.toggle('login-error', error); }
-    }
-
     export function initGoogleAuth(){
-      const box = $('googleSignInBox'), div = $('googleSignInDiv');
-      const ours = $<HTMLButtonElement>('googleSignInBtn');
-      if(!box || !div || !ours) return;
+      const box = $('googleSignInBox'), div = $('googleSignInDiv'), note = $('googleAuthNote');
+      if(!box || !div) return;
       if(!GOOGLE_CLIENT_ID){
-        setGoogleNote('Google sign-in is not configured yet — continue with email & password below.', true);
-        ours.hidden = true;
+        if(note) note.innerHTML = '<i class="fa-solid fa-triangle-exclamation"></i> Google sign-in is not configured yet — you can still continue with email &amp; password below.';
+        const ours = $('googleSignInBtn') as HTMLElement | null;
+        if(ours) ours.hidden = true;
         return;
       }
+      if(getSession()) return; // already signed in this session
 
       const w = window as any;
+
+      /* Google's personalized "Sign in as …" button draws its content wider than
+         the iframe Google places it in (the width option is only a minimum), so
+         the right end (the G logo) is clipped inside Google's own cross-origin
+         iframe — page CSS can't reach in. The primary CTA is therefore our own
+         button, which opens Google's One Tap floating prompt on click; that UI
+         is never clipped. The native button is rendered only as a fallback for
+         when the prompt cannot be displayed. */
+      const showNativeFallback = () => {
+        const ours = $('googleSignInBtn') as HTMLElement | null;
+        if(ours) ours.hidden = true;
+        if(div){
+          div.hidden = false;
+          if(!div.childElementCount) drawNativeButton();
+        }
+      };
+
       const drawNativeButton = () => {
         const slot = Math.floor(div.getBoundingClientRect().width) || 275;
-        // Google's personalized iframe adds padding beyond its width option.
-        const width = Math.min(360, Math.max(200, slot - 40));
-        w.google.accounts.id.renderButton(div, {
-          theme: 'filled_black', size: 'large', shape: 'pill',
-          text: 'signin_with', width,
-        });
+        const width = Math.min(420, Math.max(240, slot));
+        try{
+          w.google.accounts.id.renderButton(div, {
+            theme: 'filled_black', size: 'large', shape: 'pill',
+            text: 'signin_with', width,
+          });
+        }catch{ /* fallback unavailable; note text remains */ }
       };
 
       let resizeTimer: number | undefined;
       const onResize = () => {
         if(resizeTimer) clearTimeout(resizeTimer);
         resizeTimer = window.setTimeout(() => {
-          if(!w.google?.accounts?.id || div.hidden) return;
-          div.replaceChildren();
-          try{ drawNativeButton(); }catch{ /* keep the email fallback available */ }
+          if(!w.google?.accounts?.id || !div || div.hidden) return;
+          div.innerHTML = '';
+          drawNativeButton();
         }, 200);
       };
       window.addEventListener('resize', onResize);
       window.addEventListener('orientationchange', onResize);
 
-      ours.addEventListener('click', async () => {
-        if(ours.disabled) return;
-        ours.disabled = true;
-        ours.setAttribute('aria-busy', 'true');
-        setGoogleNote('Loading Google sign-in…');
+      /* Google Identity Services pulls a large cross-origin client, its own
+         stylesheet and several requests. Eagerly injecting it during boot put
+         all of that on the same network and main thread as the first render,
+         for a button most visitors never press. Load it once the app is idle
+         (or immediately if the CTA is pressed) and keep the click handler
+         responsive in the meantime. */
+      const promptGoogle = () => {
         try{
-          await loadGoogleIdentity();
-          if(box.hidden || $('welcomeScreen').classList.contains('hidden')) return;
-          if(!gisInitialized){
+          w.google.accounts.id.prompt((n: any) => {
+            if(n?.isNotDisplayed?.() || n?.isSkippedMoment?.()) showNativeFallback();
+          });
+        }catch{ showNativeFallback(); }
+      };
+      const loadGis = () => {
+        if(gisRequested) return;
+        gisRequested = true;
+        const s = document.createElement('script');
+        s.src = 'https://accounts.google.com/gsi/client';
+        s.async = true;
+        s.defer = true;
+        s.onload = () => {
+          gisLoaded = true;
+          try{
             w.google.accounts.id.initialize({
               client_id: GOOGLE_CLIENT_ID,
               callback: (resp: any) => handleCredential(resp?.credential || ''),
             });
-            gisInitialized = true;
-          }
-          // One Tap is requested only by a click. The native button also lets
-          // browsers that block One Tap open a fresh, user-initiated popup.
-          ours.hidden = true;
-          div.hidden = false;
-          drawNativeButton();
-          setGoogleNote('Choose your Google account to continue. You can also use the Google button above.');
-          try{ w.google.accounts.id.prompt(); }catch{ /* native popup sign-in remains available */ }
-        }catch(error){
-          div.replaceChildren();
-          div.hidden = true;
-          ours.hidden = false;
-          setGoogleNote((error as Error).message || 'Could not load Google sign-in. Try again or use email and password.', true);
-        }finally{
-          ours.disabled = false;
-          ours.removeAttribute('aria-busy');
-        }
-      });
+            promptGoogle();
+          }catch{ showNativeFallback(); }
+        };
+        s.onerror = () => {
+          const ours = $('googleSignInBtn') as HTMLElement | null;
+          if(ours){ ours.hidden = true; ours.removeAttribute('aria-busy'); }
+          if(note) note.innerHTML = '<i class="fa-solid fa-triangle-exclamation"></i> Could not load Google sign-in — check your connection, or continue with email &amp; password below.';
+        };
+        document.head.appendChild(s);
+      };
+
+      const ours = $('googleSignInBtn') as HTMLElement | null;
+      if(ours){
+        ours.addEventListener('click', () => {
+          if(gisLoaded){ promptGoogle(); return; }
+          ours.setAttribute('aria-busy','true');
+          loadGis();
+        });
+      }
+
+      const idle = (w.requestIdleCallback || ((fn: () => void) => setTimeout(fn, 1200)));
+      idle(loadGis, {timeout: 2600});
     }
     initGoogleAuth();
 
@@ -345,3 +334,20 @@ const $ = <T extends HTMLElement = HTMLElement>(id: string) => document.getEleme
         btn.setAttribute('aria-expanded','false');
       }
     });
+
+    $('profileBtn').onclick=(e)=>{
+      e.stopPropagation();
+      const pop=$('profilePopover');
+      const open=pop.classList.toggle('active');
+      $('profileBtn').setAttribute('aria-expanded', String(open));
+      if(open) updateProfilePopup();
+    };
+
+    document.addEventListener('click',(e)=>{
+      if(!e.target.closest('#profileWrap')){
+        $('profilePopover').classList.remove('active');
+        $('profileBtn').setAttribute('aria-expanded','false');
+      }
+    });
+
+export { clearSession };

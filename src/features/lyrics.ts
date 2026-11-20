@@ -1,5 +1,5 @@
 import { state, $ } from '../core/state';
-import { getActivePlaybackTime, seekActivePlayback } from './player';
+import { currentPlaybackTime } from './player';
 
 export type SyncType = 'Syllable' | 'Word' | 'Line' | 'Unsynced';
 
@@ -896,11 +896,13 @@ export function renderLyrics(lyrics: ParsedLyrics | null, containerId = 'fullPla
     return;
   }
 
-  const curTime = getActivePlaybackTime();
+  const curTime = state.isPlaying
+    ? (state.audio?.currentTime || (window as any).auraYTPlayer?.getCurrentTime?.() || 0)
+    : ((window as any).auraYTPlayer?.getCurrentTime?.() || 0);
 
   let introHtml = '';
   if (lyrics.lines.length > 0 && lyrics.lines[0].time > 1.8) {
-    const isIntroActive = curTime + syncOffset < lyrics.lines[0].time;
+    const isIntroActive = curTime < lyrics.lines[0].time;
     introHtml = `
       <div class="bl-lyric-line bl-instrumental ${isIntroActive ? 'active' : 'passed'}" data-idx="-1" data-time="0" onclick="seekToLyric(0)">
         <div class="bl-lyric-main">
@@ -973,13 +975,13 @@ export function renderLyrics(lyrics: ParsedLyrics | null, containerId = 'fullPla
   const backdrop = $('blLyricsBackdrop');
   if (backdrop) {
     const curSong = state.songs[state.currentIndex];
-    const poster = curSong?.img || '';
+    const poster = curSong?.img || (window as any).auraYTPoster || '';
     if (poster) {
       backdrop.style.backgroundImage = `url("${poster}")`;
     }
   }
 
-  // Sync to the selected source, including a paused position or the intro at 0.
+  // Sync to current audio position immediately
   updateLyricsProgress(curTime, containerId);
   setTimeout(() => centerActiveLyricLine(undefined, false), 50);
 
@@ -1074,7 +1076,11 @@ export function startLyricsSyncLoop() {
       return;
     }
     lastLyricsSync = now;
-    updateLyricsProgress(getActivePlaybackTime());
+    const curTime = currentPlaybackTime();
+
+    if (curTime > 0) {
+      updateLyricsProgress(curTime);
+    }
     lyricsRafId = requestAnimationFrame(tick);
   }
   lyricsRafId = requestAnimationFrame(tick);
@@ -1092,8 +1098,7 @@ export function stopLyricsSyncLoop() {
   }
 }
 
-/* The lyrics sheet is independent of the full-player overlay. Transport class
-   changes on a minimized player must not stop a visible (even paused) sheet. */
+/* Auto-stop when lyrics panel is hidden */
 function observeLyricsVisibility() {
   const sheet = $('upNextSheet'), panel = $('ytmLyricsPanel');
   if (!sheet || !panel) return;
@@ -1102,10 +1107,8 @@ function observeLyricsVisibility() {
     else if (currentLyrics?.isSynced) startLyricsSyncLoop();
   };
   const observer = new MutationObserver(sync);
-  observer.observe(sheet,{attributes:true,attributeFilter:['class','style','data-tab']});
-  observer.observe(panel,{attributes:true,attributeFilter:['class','style','hidden']});
-  const container = $('fullPlayerLyricsContainer');
-  if (container) observer.observe(container,{attributes:true,attributeFilter:['class','style']});
+  observer.observe(sheet,{attributes:true,attributeFilter:['class','data-tab']});
+  observer.observe(panel,{attributes:true,attributeFilter:['hidden']});
   document.addEventListener('visibilitychange',sync);
   sync();
 }
@@ -1224,7 +1227,7 @@ export function cycleLyricsFontSize() {
 export function toggleLyricsAlign() {
   alignMode = alignMode === 'left' ? 'center' : 'left';
   const btn = $('blAlignBtn');
-  if (btn) btn.innerHTML = `<i class="fa-solid ${alignMode === 'left' ? 'fa-align-left' : 'fa-align-center'}"></i>`;
+  if (btn) btn.innerHTML = `<i class="fa-solid fa-align-${alignMode}"></i>`;
   const scrollEl = $('blLyricsScroll');
   if (scrollEl) {
     scrollEl.classList.remove('align-left', 'align-center');
@@ -1240,7 +1243,8 @@ export function setSyncOffset(delta: number) {
       localStorage.setItem('aura_offset_' + currentTrackKey, syncOffset.toString());
     } catch (_) {}
   }
-  updateLyricsProgress(getActivePlaybackTime());
+  const curTime = state.audio?.currentTime || (window as any).auraYTPlayer?.getCurrentTime?.() || 0;
+  updateLyricsProgress(curTime);
 }
 
 export function resetSyncOffset() {
@@ -1251,7 +1255,8 @@ export function resetSyncOffset() {
       localStorage.removeItem('aura_offset_' + currentTrackKey);
     } catch (_) {}
   }
-  updateLyricsProgress(getActivePlaybackTime());
+  const curTime = state.audio?.currentTime || (window as any).auraYTPlayer?.getCurrentTime?.() || 0;
+  updateLyricsProgress(curTime);
 }
 
 function updateSyncOffsetLabel() {
@@ -1265,19 +1270,30 @@ function escapeHtml(str: string): string {
   return str.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
 }
 
-export function seekToLyric(time: number): void {
-  if(!seekActivePlayback(time)) return;
-  userIsScrolling = false;
-  if (userScrollTimeout) clearTimeout(userScrollTimeout);
-  const autoBtn = $('blAutoScrollBtn');
-  if (autoBtn) autoBtn.style.display = 'none';
-  updateLyricsProgress(Math.max(0, time));
-  setTimeout(() => centerActiveLyricLine(undefined, true), 40);
-}
-
 /* Expose Global Handlers for HTML Onclick Binding */
 if (typeof window !== 'undefined') {
-  (window as any).seekToLyric = seekToLyric;
+  (window as any).seekToLyric = function(time: number) {
+    userIsScrolling = false;
+    if (userScrollTimeout) clearTimeout(userScrollTimeout);
+    const autoBtn = $('blAutoScrollBtn');
+    if (autoBtn) autoBtn.style.display = 'none';
+
+    const yt = (window as any).auraYTPlayer;
+    if (yt && typeof yt.seekTo === 'function') {
+      try {
+        yt.seekTo(time, true);
+        updateLyricsProgress(time);
+        setTimeout(() => centerActiveLyricLine(undefined, true), 40);
+        return;
+      } catch (_) {}
+    }
+    if (state.audio) {
+      state.audio.currentTime = time;
+      if (state.audio.paused) state.audio.play();
+      updateLyricsProgress(time);
+      setTimeout(() => centerActiveLyricLine(undefined, true), 40);
+    }
+  };
   (window as any).resumeLyricsAutoScroll = resumeLyricsAutoScroll;
   (window as any).centerActiveLyricLine = centerActiveLyricLine;
   (window as any).toggleLyricsTranslation = toggleLyricsTranslation;

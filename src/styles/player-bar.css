@@ -38,7 +38,7 @@
 .mini-volume::-moz-range-thumb { width: 12px; height: 12px; border: 0; border-radius: 50%; background: var(--text); }
 @media (max-width: 899px) {
   .desk-only { display: none; }
-  body.np-open .player-bar, body.np-open .radio-player-bar { display: none; }
+  body.np-track-open .player-bar, body.np-radio-open .radio-player-bar { display: none; }
 }
 @media (min-width: 900px) {
   .player-bar, .radio-player-bar { right: 0; bottom: 0; left: 0; width: 100%; max-width: none; height: var(--np-bar-h); min-height: 0; padding: 0 24px; overflow: visible; border: 0; border-top: 1px solid var(--line); border-radius: 0; background: var(--player-bg); box-shadow: none; transform: none; }

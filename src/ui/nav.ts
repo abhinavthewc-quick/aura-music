@@ -1,4 +1,4 @@
-import { renderLibrary, flushPlaybackHomeRefresh } from '../features/library';
+import { renderLibraryIfStale, flushPlaybackHomeRefresh } from '../features/library';
 import { loadRadioStations } from '../features/radio';
 import { $ } from '../core/state';
 /* ===== 3073-3074 ===== */
@@ -91,11 +91,10 @@ import { $ } from '../core/state';
       });
       document.querySelectorAll('.tab-content').forEach(t=>t.classList.remove('active'));
       $(tabId).classList.add('active');
-      document.body.classList.remove('tab-search-active');
       /* Tapping Home from the nav returns to the feed; leaving Home closes the
          panel too, so coming back never lands on a stale query. */
       if(tabId !== 'tabHome' || !keepSearchOnHome) (globalThis as any).closeSearch?.(true);
-      if(tabId==='tabLibrary')renderLibrary();
+      if(tabId==='tabLibrary')renderLibraryIfStale();
       if(tabId==='tabPlaylists') (globalThis as any).renderPlaylistsPage?.();
       if(tabId==='tabHome')flushPlaybackHomeRefresh();
       if(tabId==='tabRadio' && !$('radioStationList').dataset.loaded){ $('radioStationList').dataset.loaded='1'; loadRadioStations('top'); }
@@ -110,3 +109,4 @@ import { $ } from '../core/state';
         if(active) moveNavIndicator(active,true);
       });
     });
+

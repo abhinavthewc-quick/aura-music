@@ -18,11 +18,7 @@ export function getSession(): AuraSession | null {
     const raw = localStorage.getItem(SESSION_KEY);
     if (!raw) return null;
     const s = JSON.parse(raw);
-    // Keep the first-paint hint in index.html aligned with this stored-data check.
-    if (!s ||
-      typeof s.email !== 'string' || !s.email.trim() ||
-      typeof s.token !== 'string' || !s.token.trim() ||
-      typeof s.exp !== 'number' || !Number.isFinite(s.exp) || s.exp * 1000 <= Date.now()) {
+    if (!s || !s.email || !s.token || typeof s.exp !== 'number' || s.exp * 1000 <= Date.now()) {
       localStorage.removeItem(SESSION_KEY);
       return null;
     }

@@ -1,61 +1,46 @@
 import { readCatalogCache } from './catalog';
-import { trackKey } from './trackIdentity';
-export { trackKey, trackMatchesKey } from './trackIdentity';
 import type { PlaybackContext, RepeatMode } from './playback-context';
-import { stableTrackRef } from './track-identity';
+import { legacyTrackKey, stableTrackRef } from './track-identity';
+import { readAudioVersionPreference, type AudioVersion } from './audio-versions';
+
+function storedArray(key: string): any[] {
+  try {
+    const parsed = JSON.parse(localStorage.getItem(key) || '[]');
+    return Array.isArray(parsed) ? parsed.filter((item) => item && typeof item === 'object' && !Array.isArray(item)) : [];
+  } catch { return []; }
+}
 
 // Mutable shared store. Every cross-module-reassigned top-level `let` from the
 // original single-file app lives here so feature modules can read/write it.
 export const AURA_LIKED_KEY='auraLikedSongs_v2';
 export const AURA_PLAY_COUNTS_KEY='aura_play_counts_v1';
 
-function readStoredJSON(key: string): unknown {
-  try { return JSON.parse(localStorage.getItem(key) || 'null'); }
-  catch { return null; }
-}
-
-function hasStoredId(id: unknown): boolean {
-  return typeof id === 'string' ? !!id.trim() : typeof id === 'number' && Number.isFinite(id);
-}
-
-const trackTextFields = ['title', 'artist', 'catalogArtist', 'videoId', 'img', 'url', 'hfPath', 'hfUrl'];
-function readStoredTracks(key: string): any[] {
-  const records = readStoredJSON(key);
-  if (!Array.isArray(records)) return [];
-  // Ignore only unusable records. Keep optional metadata, original IDs and
-  // object references: IndexedDB hydration later fills in local tracks' URLs.
-  return records.filter(s => s && typeof s === 'object' && !Array.isArray(s) &&
-    (s.id == null || typeof s.id === 'string' || typeof s.id === 'number' && Number.isFinite(s.id)) &&
-    trackTextFields.every(key => s[key] == null || typeof s[key] === 'string') &&
-    (hasStoredId(s.id) || !!(s.title?.trim() || s.artist?.trim() || s.videoId?.trim())));
-}
-
 export const playCountMap: Record<string, number> = (() => {
-  const counts: Record<string, number> = Object.create(null);
-  const parsed = readStoredJSON(AURA_PLAY_COUNTS_KEY);
-  if (parsed && typeof parsed === 'object' && !Array.isArray(parsed)) {
-    for (const [key, value] of Object.entries(parsed)) {
-      if (typeof value === 'number' && Number.isFinite(value) && value >= 0) counts[key] = value;
-    }
+  try {
+    const raw = localStorage.getItem(AURA_PLAY_COUNTS_KEY);
+    const parsed = raw ? JSON.parse(raw) : {};
+    return typeof parsed === 'object' && parsed !== null ? parsed : {};
+  } catch {
+    return {};
   }
-  return counts;
 })();
 
 export const state = {
   hfSongs: readCatalogCache() as any[],
-  addedSongs: readStoredTracks('addedTracks'),
+  addedSongs: storedArray('addedTracks').filter((song) => song.id !== null && song.id !== undefined),
   songs: [] as any[],
-  auraLikedHistory: readStoredTracks(AURA_LIKED_KEY),
-  recentlyPlayed: readStoredTracks('recentlyPlayed'),
+  auraLikedHistory: storedArray(AURA_LIKED_KEY),
+  recentlyPlayed: storedArray('recentlyPlayed'),
   activeTrack: null as any,
   libraryVersion: 0,
   currentIndex: 0,
   isPlaying: false,
+  preferredAudioVersion: readAudioVersionPreference(),
+  activeAudioVersion: 'original' as AudioVersion,
   isShuffle: false,
-  repeatMode: 'all' as RepeatMode,
+  repeatMode: 'off' as RepeatMode,
   playbackContext: null as PlaybackContext | null,
   audio: document.getElementById('audioPlayer') as HTMLAudioElement,
-  auraYTQueueIndex: -1,
   radioIsPlaying: false,
   /* Catalogue fetch state, used to paint skeletons / retry UI instead of a
      misleading "no tracks" empty state during the first network round-trip. */
@@ -63,13 +48,17 @@ export const state = {
   catalogError: false,
 };
 
-// Seed popularity in memory only. Reading corrupt or missing storage must not
-// overwrite the original data; recordPlayCount persists on an actual play.
-if (Object.keys(playCountMap).length === 0) {
-  state.recentlyPlayed.forEach((s: any, idx: number) => {
-    if (hasStoredId(s.id)) playCountMap[String(s.id)] = Math.max(1, 10 - idx);
-  });
-}
+// Seed play counts from recentlyPlayed if playCountMap is initially empty
+try {
+  if (Object.keys(playCountMap).length === 0 && Array.isArray(state.recentlyPlayed)) {
+    state.recentlyPlayed.forEach((s: any, idx: number) => {
+      if (s?.id) {
+        playCountMap[String(s.id)] = Math.max(1, 10 - idx);
+      }
+    });
+    localStorage.setItem(AURA_PLAY_COUNTS_KEY, JSON.stringify(playCountMap));
+  }
+} catch {}
 
 export function getPlayCount(s: any): number {
   if (!s) return 0;
@@ -89,29 +78,29 @@ export function recordPlayCount(songId: string | number, tKey?: string) {
   } catch {}
 }
 
-export const savedLikeMap: Record<string, boolean> = state.auraLikedHistory.reduce((map, s) => {
-  if (hasStoredId(s.id)) map[String(s.id)] = true;
-  return map;
-}, Object.create(null));
+export const savedLikeMap = Object.fromEntries(state.auraLikedHistory.map((x: any) => [String(x.id), true]));
 /* Older likes used numeric ids from the hardcoded catalog; match those by
    title+artist too so history survives the move to Hugging Face. */
 export let likedKeySet = new Set<string>(
-  state.auraLikedHistory.filter((s: any) => !s.isLocal && (s.title || s.artist)).map((x: any) => likeKey(x.title, x.catalogArtist ?? x.artist))
+  state.auraLikedHistory.map((x: any) => likeKey(x.title, x.artist))
 );
 export function likeKey(title?: string, artist?: string): string {
   return (title || '') + '|' + (artist || '');
 }
 function applyFavorites(list: any[]) {
   list.forEach((s: any) => {
-    s.favorite = !!savedLikeMap[String(s.id)] || (!s.isLocal && (
-      likedKeySet.has(likeKey(s.title, s.catalogArtist ?? s.artist)) || likedKeySet.has(likeKey(s.title, s.artist))
-    ));
+    s.favorite = !!savedLikeMap[String(s.id)] || (!s.isLocal && likedKeySet.has(likeKey(s.title, s.artist)));
   });
 }
 
+/* One song = one entry, no matter how it arrived (bucket catalog, manual add,
+   YouTube link, local file). Video ID is the strongest identity; otherwise
+   title+artist decides. Cross-source duplicates collapse onto the HF entry
+   and carry their favorite flag over. */
+export const trackKey = legacyTrackKey;
+
 export function rebuildSongs() {
-  const current = state.activeTrack || state.songs[state.currentIndex];
-  const hadSongs = state.songs.length > 0;
+  const current = state.songs[state.currentIndex];
   const seen = new Set<string>();
   const hf: any[] = [];
   for (const s of state.hfSongs) {
@@ -140,32 +129,24 @@ export function rebuildSongs() {
     if (countB !== countA) return countB - countA;
     return 0;
   });
-  let idx = -1;
   if (current) {
-    if (hasStoredId(current.id)) {
-      idx = state.songs.findIndex((s: any) => hasStoredId(s.id) && String(s.id) === String(current.id));
-    }
-    if (idx === -1 && !current.isLocal) idx = state.songs.findIndex((s: any) => !s.isLocal && trackKey(s) === trackKey(current));
-    const source = typeof state.audio?.getAttribute === 'function' ? state.audio.getAttribute('src') : state.audio?.src;
-    if (idx === -1 && (state.isPlaying || source?.trim())) {
-      // A catalogue refresh can remove the loaded (including paused) track.
-      // Keep its identity in the derived list while its audio continues, never
-      // in hfSongs/addedSongs or storage. A later selection/rebuild drops it.
-      // Explicit deletion clears playback and currentIndex before rebuilding.
-      idx = state.songs.push(current) - 1;
-    }
+    let idx = state.songs.findIndex((s: any) => String(s.id) === String(current.id));
+    if (idx === -1) idx = state.songs.findIndex((s: any) => trackKey(s) === trackKey(current));
+    const kept = state.songs.findIndex((song) => stableTrackRef(song) === stableTrackRef(current));
+    state.currentIndex = kept;
   }
-  // Only an initially empty library gets a default selection. A removed,
-  // unloaded track or an explicit reset must not silently select its neighbour.
-  state.currentIndex = idx !== -1 ? idx : !hadSongs && state.songs.length ? 0 : -1;
-  if (state.activeTrack) state.activeTrack = state.songs[state.currentIndex] || null;
   state.libraryVersion += 1;
-  queueMicrotask(() => window.dispatchEvent(new Event('aura:library-changed')));
+  queueMicrotask(() => window.dispatchEvent(new CustomEvent('aura:library-changed')));
 }
 export function setHfTracks(tracks: any[]) {
+  const current = state.songs[state.currentIndex];
   state.hfSongs = tracks;
   applyFavorites(state.hfSongs);
   rebuildSongs();
+  if (current) {
+    const idx = state.songs.findIndex((s: any) => String(s.id) === String(current.id));
+    if (idx !== -1) state.currentIndex = idx;
+  }
 }
 applyFavorites(state.hfSongs);
 applyFavorites(state.addedSongs);
@@ -175,11 +156,10 @@ export const $ = (id: string) => document.getElementById(id);
 
 export function persistLikedHistory(): boolean {
   const history = state.songs.filter((song) => song.favorite).map((song) => ({
-    id:song.id,title:song.title,artist:song.artist,catalogArtist:song.catalogArtist,img:song.img||'',videoId:song.videoId||'',
-    ...(!song.isLocal ? {url:song.url||''} : {}),isLocal:!!song.isLocal,isYouTube:!!song.isYouTube,
+    id:song.id,title:song.title,artist:song.artist,img:song.img||'',videoId:song.videoId||'',isLocal:!!song.isLocal,isYouTube:!!song.isYouTube,
   }));
   try { localStorage.setItem(AURA_LIKED_KEY,JSON.stringify(history)); } catch { return false; }
   state.auraLikedHistory = history;
-  likedKeySet = new Set(history.filter((song) => !song.isLocal).map((song) => likeKey(song.title,song.catalogArtist ?? song.artist)));
+  likedKeySet = new Set(history.filter((song) => !song.isLocal).map((song) => likeKey(song.title,song.artist)));
   return true;
 }

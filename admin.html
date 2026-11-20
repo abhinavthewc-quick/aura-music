@@ -4,18 +4,12 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Aura Admin — Music Uploader</title>
-  <meta name="description" content="Sign in to manage the Aura Music library, artist profiles, artwork and download queue.">
-  <meta name="theme-color" content="#000000">
-  <link rel="canonical" href="https://aura-music-01g.pages.dev/admin">
-  <link rel="icon" type="image/png" sizes="96x96" href="/src/assets/favicon.png">
-  <link rel="preload" href="/src/assets/fonts/dm-sans-latin.woff2" as="font" type="font/woff2" crossorigin>
-  <link rel="preload" href="/src/assets/fonts/cormorant-garamond-latin.woff2" as="font" type="font/woff2" crossorigin>
 </head>
 <body>
   <header class="adm-header">
-    <a class="adm-back" href="/">&larr; Aura Music</a>
+    <a class="adm-back" href="./index.html">&larr; Aura Music</a>
     <h1>AURA <span>Admin</span></h1>
-    <p class="adm-sub">Sign in &rarr; search or paste YouTube links &rarr; they land in your library automatically.</p>
+    <p class="adm-sub">Manage the music library, song versions, downloads and Discord.</p>
   </header>
 
   <main class="adm-grid">
@@ -24,14 +18,14 @@
     <section class="adm-card adm-span2 adm-gate" id="gateCard">
       <h2>Sign in to manage downloads</h2>
       <p class="adm-hint">Only <b>vivekpereiraalbert@gmail.com</b> and <b>abhinavthewc@gmail.com</b> have access. Sign in with Google, or use the password fallback below.</p>
-      <div id="adminGoogleBtn" class="adm-google"><button type="button" class="adm-btn" id="adminGoogleStart"><svg class="adm-google-icon" viewBox="0 0 24 24" aria-hidden="true"><path d="M20 7a9 9 0 1 0 1 9v-5h-9v4h5"/></svg>Sign in with Google</button><div id="adminGoogleNative" hidden></div></div>
+      <div id="adminGoogleBtn" class="adm-google"></div>
       <div class="adm-or"><span>or use email &amp; password</span></div>
       <div class="adm-emailauth">
         <input class="adm-input" id="admEmailInput" type="email" placeholder="Email address" autocomplete="email" aria-label="Email address">
         <input class="adm-input" id="admPasswordInput" type="password" placeholder="Password" autocomplete="current-password" aria-label="Password">
         <button type="button" class="adm-btn primary" id="admPasswordBtn">Sign in</button>
       </div>
-      <div class="adm-status" id="gateStatus" role="status" aria-live="polite"></div>
+      <div class="adm-status" id="gateStatus"></div>
     </section>
 
     <!-- Signed-in bar (only visible while signed in) -->
@@ -44,6 +38,7 @@
     <nav class="adm-tabs adm-gated" id="admTabs" hidden aria-label="Admin sections">
       <button type="button" class="adm-tab active" data-panel="panelAdd"><i class="fa-solid fa-cloud-arrow-down"></i> Find &amp; queue</button>
       <button type="button" class="adm-tab" data-panel="panelLibrary"><i class="fa-solid fa-music"></i> Library <span class="adm-tabcount" id="libTabCount" hidden></span></button>
+      <button type="button" class="adm-tab" data-panel="panelProcessing"><i class="fa-solid fa-sliders"></i> Audio processing</button>
       <button type="button" class="adm-tab" data-panel="panelArtists"><i class="fa-solid fa-users"></i> Artists <span class="adm-tabcount" id="artistsTabCount" hidden></span></button>
       <button type="button" class="adm-tab" data-panel="panelDiscord"><i class="fa-brands fa-discord"></i> Discord <span class="adm-tabcount" id="discordTabCount" hidden></span></button>
       <button type="button" class="adm-tab" data-panel="panelSettings"><i class="fa-solid fa-gear"></i> Settings</button>
@@ -66,7 +61,7 @@
       <div class="adm-status" id="searchStatus"></div>
 
       <div class="adm-or"><span>or paste links</span></div>
-        <textarea id="urlsInput" class="adm-input adm-textarea" rows="2" spellcheck="false" aria-label="YouTube links to queue" placeholder="https://music.youtube.com/watch?v=…&#10;or a /playlist?list=… / album link — it expands into individual tracks&#10;valid lines move into the queue automatically"></textarea>
+        <textarea id="urlsInput" class="adm-input adm-textarea" rows="2" spellcheck="false" placeholder="https://music.youtube.com/watch?v=…&#10;or a /playlist?list=… / album link — it expands into individual tracks&#10;valid lines move into the queue automatically"></textarea>
 
       <div class="adm-queuehead">
         <span class="adm-queuetitle">Queue <span class="adm-count" id="urlCount"></span></span>
@@ -89,6 +84,33 @@
       <p class="adm-flow"><i class="fa-solid fa-rotate"></i> Live progress: <b>3s</b> polling while a run is active (10s idle). Click a run to expand its steps in place, or <b>logs</b> for GitHub.</p>
     </section>
     </div><!-- /panelAdd -->
+
+    <div class="adm-panel" id="panelProcessing" hidden>
+      <section class="adm-card adm-span2 audio-admin" aria-labelledby="audioHeading">
+        <div class="audio-heading"><div><h2 id="audioHeading">Audio processing</h2><p class="adm-hint">Originals stay in the library. Bass and Bass + Reverb are prepared on your Mac, then published to Hugging Face.</p></div><button class="adm-btn ghost" id="audioRefresh" type="button">Refresh</button></div>
+        <div id="audioStatus" class="adm-status" role="status" aria-live="polite"></div>
+        <div id="audioSummary" class="audio-summary" aria-label="Song processing totals"></div>
+        <div class="audio-coverage"><label for="audioCoverage">Versions ready <strong id="audioCoverageText">Loading…</strong></label><progress id="audioCoverage" max="1" value="0"></progress></div>
+        <div class="audio-worker"><div><strong>Manual Mac worker</strong><p id="audioWorkerInfo">Loading the latest worker report…</p></div><button class="adm-btn" id="audioCopyCommand" type="button">Copy run command</button></div>
+        <div class="audio-toolbar">
+          <button class="adm-btn" id="audioRetryFailed" type="button" disabled>Retry failed songs</button>
+          <button class="adm-btn" id="audioRecover" type="button" disabled>Recover expired jobs</button>
+          <button class="adm-btn ghost" id="audioReconcile" type="button" disabled>Check archive files</button>
+          <button class="adm-btn ghost" id="audioExport" type="button" disabled>Export report</button>
+        </div>
+        <p class="adm-hint">Queue changes take effect the next time you run the Mac worker. Active jobs keep their leases; retries preserve versions already ready.</p>
+        <div class="audio-searchbar">
+          <input id="audioSearch" class="adm-input" type="search" placeholder="Find a song, artist, ID or error…" aria-label="Search processing jobs">
+          <select id="audioFilter" class="adm-input" aria-label="Filter processing status"><option value="all">All songs</option><option value="attention">Needs attention</option><option value="pending">Pending</option><option value="processing">Processing</option><option value="failed">Failed</option><option value="expired">Expired lease</option><option value="ready">Ready</option><option value="inactive">Unavailable original</option></select>
+          <select id="audioSort" class="adm-input" aria-label="Sort processing jobs"><option value="attention">Needs attention first</option><option value="title">Song title</option><option value="recent">Recently updated</option></select>
+        </div>
+        <div class="audio-listhead"><label><input id="audioSelectPage" type="checkbox" disabled> Select eligible songs on this page</label><button class="adm-btn small" id="audioRetrySelected" type="button" disabled>Queue selected</button></div>
+        <div id="audioJobs" aria-busy="true"><p class="adm-hint">Loading processing records…</p></div>
+        <div class="audio-pagination"><span id="audioPageInfo"></span><button class="adm-btn ghost small" id="audioPrev" type="button" disabled>Previous</button><button class="adm-btn ghost small" id="audioNext" type="button" disabled>Next</button></div>
+        <details class="audio-activity"><summary>Recent activity</summary><div id="audioActivity"><p class="adm-hint">Activity appears after the worker reports a run or an admin changes the queue.</p></div></details>
+      </section>
+    </div>
+    <dialog id="audioInspector" class="audio-inspector" aria-labelledby="audioInspectorTitle"></dialog>
 
     <!-- Library tab: bucket browser -->
     <div class="adm-panel" id="panelLibrary" hidden>
@@ -135,7 +157,7 @@
     <div class="adm-panel" id="panelArtists" hidden>
     <section class="adm-card adm-span2 adm-gated" id="artistsCard" hidden>
       <h2><span class="adm-num"><i class="fa-solid fa-users" style="font-size:11px"></i></span> Artist Management <span class="adm-libhead-sub" id="artistsHeadSub"></span></h2>
-      <p class="adm-hint">Verified portraits and biographies appear automatically when available. Edit an artist to set custom values, keep a field blank, or use automatic details again. Profile and name changes sync immediately; automatic details never rename tracks.</p>
+      <p class="adm-hint">Manage artist portraits, bios, genres, and batch-rename artists across your library. Changes immediately sync to Aura Music's artist shelves and directories.</p>
 
       <div class="adm-libbar">
         <div class="adm-libsearch">
@@ -154,7 +176,7 @@
       <div class="adm-libchips" id="artistFilters">
         <button type="button" class="adm-chip artistf active" data-f="all">All artists <b>–</b></button>
         <button type="button" class="adm-chip artistf" data-f="hascustom">Custom picture <b>–</b></button>
-        <button type="button" class="adm-chip artistf" data-f="defaultpic">No custom picture <b>–</b></button>
+        <button type="button" class="adm-chip artistf" data-f="defaultpic">Default picture <b>–</b></button>
       </div>
 
       <div class="adm-status" id="artistStatus"></div>
@@ -199,17 +221,17 @@
       <p class="adm-hint">Discord links queue in the bot backend until the threshold is reached, then hand off to the same <code>upload-music.yml</code> download workflow the rest of this panel uses. The gateway runs on your VPS; this panel talks to its Cloudflare Worker backend.</p>
       <div class="adm-dashboard" id="discordStats">
         <div class="adm-dstat-card">
-          <div class="adm-dstat-icon accent"><i class="fa-solid fa-server"></i></div>
+          <div class="adm-dstat-icon gold"><i class="fa-solid fa-server"></i></div>
           <div class="adm-dstat-info">
             <div class="adm-dstat-label">Gateway</div>
             <div class="adm-dstat-value" id="discordGatewayState">—</div>
           </div>
         </div>
         <div class="adm-dstat-card">
-          <div class="adm-dstat-icon accent"><i class="fa-solid fa-seedling"></i></div>
+          <div class="adm-dstat-icon gold"><i class="fa-solid fa-seedling"></i></div>
           <div class="adm-dstat-info">
             <div class="adm-dstat-label">Silo</div>
-            <div class="adm-dstat-value accent" id="discordQueueState">—</div>
+            <div class="adm-dstat-value gold" id="discordQueueState">—</div>
           </div>
         </div>
         <div class="adm-dstat-card">
@@ -393,7 +415,7 @@
     <div class="adm-audio-ctrls">
       <button type="button" class="adm-audio-btn" id="admAudioPlayBtn" title="Play/Pause"><i class="fa-solid fa-play" id="admAudioPlayIcon"></i></button>
       <span class="adm-audio-time" id="admAudioCurTime">0:00</span>
-      <input type="range" class="adm-audio-seek" id="admAudioSeek" min="0" max="100" value="0" step="0.1" aria-label="Seek preview audio">
+      <input type="range" class="adm-audio-seek" id="admAudioSeek" min="0" max="100" value="0" step="0.1">
       <span class="adm-audio-time" id="admAudioTotalTime">0:00</span>
       <button type="button" class="adm-audio-btn small" id="admAudioMuteBtn" title="Mute"><i class="fa-solid fa-volume-high" id="admAudioMuteIcon"></i></button>
     </div>

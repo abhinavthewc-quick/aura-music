@@ -1,0 +1,366 @@
+/**
+ * Loudness matching for preprocessed renditions.
+ *
+ * The sub-bass renderer adds a large amount of gain, then attenuates the whole
+ * render linearly so its decoded peak fits under -1 dBFS. That attenuation also
+ * scales down the untouched mid/high content, so a "Bass" or "Bass + Reverb"
+ * file arrives ~8.5 LU below its own song's original. Switching from a quiet
+ * rendition to the loud original makes the listener reach for the system volume
+ * twice for one song.
+ *
+ * This module measures integrated loudness per ITU-R BS.1770-4 (K-weighting
+ * plus the -70 LUFS absolute and -10 LU relative gates) so a rendition can be
+ * lifted to the loudness of the same song's original. Originals are never
+ * altered: they are the reference every rendition is matched against, which is
+ * exactly what stops volume jumping between songs.
+ *
+ * Everything operates on plain channel data so it is testable without a
+ * browser, and so playback nodes stay untouched.
+ */
+
+/** Peak ceiling for a boosted rendition. Leaves headroom for the output chain. */
+export const LEVEL_CEILING = 0.891; // -1.00 dBFS
+/**
+ * Peak handling window. Peaks are ridden down by scaling the waveform, never by
+ * bending samples: a memoryless shaper colours everything above its knee, which
+ * is audible distortion on a boosted rendition. Lookahead lets the gain be
+ * already low when a transient arrives, so the reduction costs no punch.
+ */
+export const LIMITER_LOOKAHEAD_MS = 5;
+/** How quickly peak reduction lets go once a transient has passed. */
+export const LIMITER_RELEASE_MS = 80;
+/** A rendition is never lifted or cut further than this. */
+export const MAX_LEVEL_ADJUSTMENT_DB = 15;
+/** Below this the correction is inaudible and not worth rewriting the buffer. */
+export const MIN_LEVEL_ADJUSTMENT_DB = 0.5;
+/** Residual loudness error that ends the correction loop. */
+export const LEVEL_TOLERANCE_LU = 0.5;
+/** K-weighting and gating are broadband measures; 8 kHz keeps them accurate and cheap. */
+const ANALYSIS_RATE = 8000;
+
+export interface LoudnessStats {
+  /** Integrated loudness in LUFS. -Infinity for silence. */
+  lufs: number;
+  /** Largest absolute sample value across channels. */
+  peak: number;
+}
+
+export interface LevelMatchResult {
+  /** Corrected channel data. Fresh arrays; inputs are never mutated. */
+  channels: Float32Array[];
+  /** Total level correction applied, in dB. */
+  gainDb: number;
+  /** Loudness of the corrected audio. */
+  lufs: number;
+  /** Sample peak of the corrected audio. */
+  peak: number;
+}
+
+interface Biquad { b0: number; b1: number; b2: number; a1: number; a2: number }
+
+/** BS.1770 K-weighting stage 1: +4 dB high shelf. */
+function shelfStage(sampleRate: number): Biquad {
+  const f0 = 1681.9744509555319, Q = 0.7071752369554196, gainDb = 3.999843853973347;
+  const A = Math.pow(10, gainDb / 40);
+  const w0 = 2 * Math.PI * f0 / sampleRate;
+  const alpha = Math.sin(w0) / (2 * Q);
+  const cosw = Math.cos(w0), sqrtA = Math.sqrt(A);
+  const a0 = (A + 1) - (A - 1) * cosw + 2 * sqrtA * alpha;
+  return {
+    b0: A * ((A + 1) + (A - 1) * cosw + 2 * sqrtA * alpha) / a0,
+    b1: -2 * A * ((A - 1) + (A + 1) * cosw) / a0,
+    b2: A * ((A + 1) + (A - 1) * cosw - 2 * sqrtA * alpha) / a0,
+    a1: 2 * ((A - 1) - (A + 1) * cosw) / a0,
+    a2: ((A + 1) - (A - 1) * cosw - 2 * sqrtA * alpha) / a0,
+  };
+}
+
+/** BS.1770 K-weighting stage 2: RLB high-pass. */
+function highPassStage(sampleRate: number): Biquad {
+  const f0 = 38.13547087602444, Q = 0.5003270373238773;
+  const w0 = 2 * Math.PI * f0 / sampleRate;
+  const alpha = Math.sin(w0) / (2 * Q);
+  const cosw = Math.cos(w0);
+  const a0 = 1 + alpha;
+  return {
+    b0: (1 + cosw) / 2 / a0,
+    b1: -(1 + cosw) / a0,
+    b2: (1 + cosw) / 2 / a0,
+    a1: -2 * cosw / a0,
+    a2: (1 - alpha) / a0,
+  };
+}
+
+function filter(input: Float32Array, stage: Biquad): Float32Array {
+  const output = new Float32Array(input.length);
+  let x1 = 0, x2 = 0, y1 = 0, y2 = 0;
+  for (let i = 0; i < input.length; i++) {
+    const x = input[i];
+    const y = stage.b0 * x + stage.b1 * x1 + stage.b2 * x2 - stage.a1 * y1 - stage.a2 * y2;
+    x2 = x1; x1 = x; y2 = y1; y1 = y; output[i] = y;
+  }
+  return output;
+}
+
+/** Averaging decimation. Loudness is a broadband weighted-energy measure, so a
+ * box filter's mild treble roll-off affects the reference and the rendition
+ * alike and cancels out of the difference this module actually uses. */
+function decimate(input: Float32Array, factor: number): Float32Array {
+  if (factor <= 1) return input;
+  const length = Math.floor(input.length / factor);
+  const output = new Float32Array(length);
+  for (let i = 0; i < length; i++) {
+    let sum = 0;
+    const base = i * factor;
+    for (let j = 0; j < factor; j++) sum += input[base + j];
+    output[i] = sum / factor;
+  }
+  return output;
+}
+
+function decimationFactor(sampleRate: number): number {
+  return Math.max(1, Math.round(sampleRate / ANALYSIS_RATE));
+}
+
+/** Integrated loudness (LUFS) and sample peak of already-decoded audio. */
+export function measureLoudness(channels: Float32Array[], sampleRate: number): LoudnessStats {
+  if (!channels.length || !(sampleRate > 0)) return { lufs: -Infinity, peak: 0 };
+  const factor = decimationFactor(sampleRate);
+  const rate = sampleRate / factor;
+  const shelf = shelfStage(rate), highPass = highPassStage(rate);
+
+  let peak = 0;
+  const weighted: Float32Array[] = [];
+  for (const channel of channels) {
+    for (let i = 0; i < channel.length; i++) {
+      const value = Math.abs(channel[i]);
+      if (value > peak) peak = value;
+    }
+    weighted.push(filter(filter(decimate(channel, factor), shelf), highPass));
+  }
+
+  const blockSize = Math.round(.4 * rate), hop = Math.round(.1 * rate);
+  const frames = Math.min(...weighted.map((channel) => channel.length));
+  if (frames < blockSize) return { lufs: -Infinity, peak };
+
+  // Gating blocks carry the mean square energy of all channels of that block.
+  const energies: number[] = [];
+  for (let start = 0; start + blockSize <= frames; start += hop) {
+    let sum = 0;
+    for (const channel of weighted) {
+      let energy = 0;
+      for (let i = start; i < start + blockSize; i++) energy += channel[i] * channel[i];
+      sum += energy / blockSize;
+    }
+    energies.push(sum);
+  }
+  if (!energies.length) return { lufs: -Infinity, peak };
+
+  const loudness = (energy: number) => -0.691 + 10 * Math.log10(Math.max(energy, 1e-20));
+  // Absolute gate: blocks quieter than -70 LUFS never count.
+  const absolute = energies.filter((energy) => loudness(energy) > -70);
+  if (!absolute.length) return { lufs: -Infinity, peak };
+  // Relative gate: blocks more than 10 LU under the gated mean are dropped.
+  const mean = absolute.reduce((total, energy) => total + energy, 0) / absolute.length;
+  const relative = loudness(mean) - 10;
+  const gated = absolute.filter((energy) => loudness(energy) > relative);
+  const kept = gated.length ? gated : absolute;
+  const finalMean = kept.reduce((total, energy) => total + energy, 0) / kept.length;
+  return { lufs: loudness(finalMean), peak };
+}
+
+/**
+ * Level correction in dB that brings `target` to the loudness of `reference`.
+ * Returns 0 when either side is unmeasurable (silence, missing audio) so an
+ * unknown rendition keeps its original level instead of guessing.
+ */
+export function matchingGainDb(reference: LoudnessStats | null | undefined, target: LoudnessStats | null | undefined): number {
+  if (!reference || !target) return 0;
+  if (!Number.isFinite(reference.lufs) || !Number.isFinite(target.lufs)) return 0;
+  const gain = reference.lufs - target.lufs;
+  if (!Number.isFinite(gain)) return 0;
+  return Math.max(-MAX_LEVEL_ADJUSTMENT_DB, Math.min(MAX_LEVEL_ADJUSTMENT_DB, gain));
+}
+
+/** Peak magnitude of every frame, stereo-linked so the image never shifts. */
+function stereoPeaks(channels: Float32Array[], gain: number, frames: number): Float32Array {
+  const envelope = new Float32Array(frames);
+  for (const channel of channels) {
+    const length = Math.min(frames, channel.length);
+    for (let i = 0; i < length; i++) {
+      const value = Math.abs(channel[i]) * gain;
+      if (value > envelope[i]) envelope[i] = value;
+    }
+  }
+  return envelope;
+}
+
+/**
+ * Gain curve that keeps `envelope` under `ceiling`.
+ *
+ * Reduction is applied by scaling the waveform, so a steady tone leaves the
+ * limiter as a pure sinusoid at a lower level — no harmonics, unlike the
+ * memoryless soft-knee shaper this replaces, which bent every sample above its
+ * knee and measured ~25% THD on a boosted sine. The lookahead window pulls the
+ * gain down *before* a transient arrives so the attack clamps nothing, and the
+ * release lets go smoothly afterwards, which is what keeps heavy reduction from
+ * sounding like pumping.
+ */
+function limitingGains(envelope: Float32Array, ceiling: number, sampleRate: number): Float32Array {
+  const frames = envelope.length;
+  const lookahead = Math.max(1, Math.round(LIMITER_LOOKAHEAD_MS / 1000 * sampleRate));
+  const release = Math.max(1, Math.round(LIMITER_RELEASE_MS / 1000 * sampleRate));
+  const releaseCoefficient = 1 - Math.exp(-1 / release);
+
+  const required = new Float32Array(frames);
+  for (let i = 0; i < frames; i++) {
+    const value = envelope[i];
+    required[i] = value > ceiling ? ceiling / value : 1;
+  }
+
+  // Sliding-window minimum over [i, i + lookahead], via a monotonic deque, so
+  // each frame already knows the reduction the coming transient will need.
+  const windowed = new Float32Array(frames);
+  const queue = new Int32Array(frames);
+  let head = 0, tail = 0, next = 0;
+  for (let i = 0; i < frames; i++) {
+    const end = Math.min(frames - 1, i + lookahead);
+    while (next <= end) {
+      while (tail > head && required[queue[tail - 1]] >= required[next]) tail--;
+      queue[tail++] = next++;
+    }
+    while (queue[head] < i) head++;
+    windowed[i] = required[queue[head]];
+  }
+
+  const gains = new Float32Array(frames);
+  let current = 1;
+  for (let i = 0; i < frames; i++) {
+    const want = windowed[i];
+    // Attack is instant — the lookahead already put the gain in place — while
+    // release eases back up without ever overshooting what the ceiling allows.
+    current = want < current ? want : current + (want - current) * releaseCoefficient;
+    gains[i] = current;
+  }
+  return gains;
+}
+
+/**
+ * Apply a level correction to decoded channels, riding down any peak that would
+ * pass the ceiling. The gain is written into the samples rather than a playback
+ * node so the result is deterministic and measurable, and so a boosted rendition
+ * can never clip the shared output graph.
+ *
+ * When the corrected audio already fits under the ceiling the correction is a
+ * single multiply and the samples pass through untouched — the common case, and
+ * the one that must stay bit-transparent.
+ */
+export function applyLevel(
+  channels: Float32Array[],
+  gainDb: number,
+  sampleRate = 48000,
+  ceiling = LEVEL_CEILING,
+): Float32Array[] {
+  const gain = Math.pow(10, gainDb / 20);
+  if (!Number.isFinite(gain) || gain === 1 || !channels.length) return channels;
+
+  const frames = channels[0].length;
+  const envelope = stereoPeaks(channels, gain, frames);
+  let peak = 0;
+  for (let i = 0; i < frames; i++) if (envelope[i] > peak) peak = envelope[i];
+
+  if (peak <= ceiling) {
+    return channels.map((channel) => {
+      const output = new Float32Array(channel.length);
+      for (let i = 0; i < channel.length; i++) output[i] = channel[i] * gain;
+      return output;
+    });
+  }
+
+  const gains = limitingGains(envelope, ceiling, sampleRate > 0 ? sampleRate : 48000);
+  return channels.map((channel) => {
+    const output = new Float32Array(channel.length);
+    const length = Math.min(frames, channel.length);
+    for (let i = 0; i < length; i++) output[i] = channel[i] * gain * gains[i];
+    return output;
+  });
+}
+
+/** True when a correction is worth applying at all. */
+export function isLevelCorrectionWorthwhile(gainDb: number): boolean {
+  return Number.isFinite(gainDb) && Math.abs(gainDb) >= MIN_LEVEL_ADJUSTMENT_DB;
+}
+
+/** Read a decoded buffer as plain channel data for analysis. */
+export function bufferChannels(buffer: AudioBuffer): Float32Array[] {
+  const channels: Float32Array[] = [];
+  for (let index = 0; index < buffer.numberOfChannels; index++) {
+    channels.push(buffer.getChannelData(index));
+  }
+  return channels;
+}
+
+/**
+ * Closed-loop match: lift `channels` to `referenceLufs`, riding peaks under the
+ * ceiling, then re-measure and top up once — peak reduction absorbs part of the
+ * first gain step, so one extra pass closes most of the residual gap. Returns
+ * null when no meaningful correction is needed or possible; inputs are never
+ * mutated.
+ */
+export function matchLevelToReference(
+  channels: Float32Array[],
+  sampleRate: number,
+  referenceLufs: number,
+  targetStats?: LoudnessStats,
+): LevelMatchResult | null {
+  if (!Number.isFinite(referenceLufs)) return null;
+  const stats = targetStats ?? measureLoudness(channels, sampleRate);
+  const gainDb = matchingGainDb({lufs: referenceLufs, peak: stats.peak}, stats);
+  if (!isLevelCorrectionWorthwhile(gainDb)) return null;
+
+  let current = channels;
+  let applied = 0;
+  let lufs = stats.lufs, peak = stats.peak;
+  for (let pass = 0; pass < 2; pass++) {
+    const step = pass === 0
+      ? gainDb
+      : matchingGainDb({lufs: referenceLufs, peak}, {lufs, peak});
+    if (!isLevelCorrectionWorthwhile(step) && pass > 0) break;
+    if (applied + step > MAX_LEVEL_ADJUSTMENT_DB || applied + step < -MAX_LEVEL_ADJUSTMENT_DB) break;
+    current = applyLevel(current, step, sampleRate);
+    applied += step;
+    const measured = measureLoudness(current, sampleRate);
+    lufs = measured.lufs; peak = measured.peak;
+    if (Math.abs(referenceLufs - lufs) <= LEVEL_TOLERANCE_LU) break;
+  }
+  return {channels: current, gainDb: applied, lufs, peak};
+}
+
+/** Convenience overload: measure a decoded AudioBuffer directly. */
+export function measureAudioBuffer(buffer: AudioBuffer): LoudnessStats {
+  return measureLoudness(bufferChannels(buffer), buffer.sampleRate);
+}
+
+/**
+ * Convenience overload: match a decoded AudioBuffer to `referenceLufs`, writing
+ * the corrected samples into a copy of `buffer` when a correction applies.
+ * Returns the input buffer unchanged when no meaningful correction applies.
+ */
+export function matchBufferToReference(buffer: AudioBuffer, referenceLufs: number): {buffer: AudioBuffer; gainDb: number} {
+  const stats = measureAudioBuffer(buffer);
+  if (!Number.isFinite(referenceLufs) || !Number.isFinite(stats.lufs)) return {buffer, gainDb: 0};
+  const result = matchLevelToReference(bufferChannels(buffer), buffer.sampleRate, referenceLufs, stats);
+  if (!result) return {buffer, gainDb: 0};
+  return {buffer: toAudioBuffer(buffer, result.channels), gainDb: result.gainDb};
+}
+
+/** Build a buffer sharing `template`'s format from corrected channel data. */
+export function toAudioBuffer(template: AudioBuffer, channels: Float32Array[]): AudioBuffer {
+  const output = new AudioBuffer({
+    length: template.length,
+    sampleRate: template.sampleRate,
+    numberOfChannels: channels.length,
+  });
+  for (let index = 0; index < channels.length; index++) output.copyToChannel(channels[index] as Float32Array<ArrayBuffer>, index);
+  return output;
+}

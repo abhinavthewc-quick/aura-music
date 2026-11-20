@@ -1,7 +1,12 @@
-import { playLoginAnimation, showSignIn } from './ui/login';
-import { getSession } from './core/session';
+import './ui/loader';
+import './app';
+import './expose';
+import './ui/login';
+import './ui/mini-player';
+import './ui/marquee';
+import './features/playlists';
+import './ui/a11y';
+import './features/presence-reporter';
+import { installCoverFallback } from './core/dom';
 
-// The HEAD hint controls first paint; this remains the authoritative check.
-const session = getSession();
-if (session) void playLoginAnimation(session.name || 'Listener', true);
-else showSignIn();
+installCoverFallback();

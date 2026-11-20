@@ -17,6 +17,8 @@
 
 [The main entry](../src/styles/main.css) imports component owners; there is no final “polish,” “quality,” or numbered override layer.
 
+The [sound selector](../src/styles/audio-versions.css) owns the three waveform buttons, preparation dots, and sliding selection mark. It uses the existing neutral tokens, native radio-group keyboard behavior, and reduced-motion preferences; it does not recolor the shell or transport.
+
 | Owner | Responsibility |
 | --- | --- |
 | [Baseline](../src/styles/base.css) | Reset, focus, disabled/hidden contracts, feedback states, reduced motion, marquee |
@@ -43,7 +45,7 @@ Rich lyrics retain `--word-prog`, `.active`/`.passed`/`.upcoming`/`.done`, trans
 
 ## Theme compatibility
 
-The listener, sign-in, Admin and Rooms use the canonical neutral-black identity. Legacy `auraTheme` values and the OS light preference do not switch palettes; no light-theme control is advertised. Artwork supplies color without changing control contrast.
+The listener, sign-in, Admin and Rooms default to the canonical neutral-black identity. The listener retains its existing light-mode preference with neutral white surfaces and dark gray controls. Admin and Rooms expose no theme control. Artwork supplies color without changing transport contrast.
 
 ## Cascade rules
 

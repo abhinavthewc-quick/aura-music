@@ -1,41 +1,46 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="en" class="aura-loading">
 <head>
+<style id="aura-loader-css">
+html.aura-loading,html.aura-loading body{overflow:hidden}
+#auraLoader{position:fixed;inset:0;z-index:2147483000;background:#000000;display:flex;align-items:center;justify-content:center;overflow:hidden;will-change:opacity,transform;animation:auraLoaderFailsafe 0s linear 8s forwards;transition:opacity .45s cubic-bezier(.16,1,.3,1),transform .45s cubic-bezier(.16,1,.3,1)}
+body.light-theme #auraLoader{background:#e2e2e5}
+#auraLoader.leaving{opacity:0;transform:scale(1.05);pointer-events:none}
+.aura-startup-stage{display:flex;flex-direction:column;align-items:center;justify-content:center;width:100%;max-width:540px;height:100%;max-height:540px;position:relative;user-select:none}
+.aura-startup-art{position:relative;width:min(90vw,480px);height:min(90vw,480px);display:flex;align-items:center;justify-content:center}
+.aura-liquid-canvas{position:absolute;inset:0;width:100%;height:100%;display:block}
+.aura-startup-fallback{display:none;position:absolute;inset:0;align-items:center;justify-content:center;pointer-events:none}
+#auraLoader:not([data-ready]) .aura-startup-fallback{display:flex}
+#auraLoader[data-ready] .aura-startup-fallback{display:none}
+#auraLoaderText{margin-top:14px;text-align:center;color:rgba(255,255,255,.78);font:700 11px/1.4 "DM Sans",system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;letter-spacing:.24em;text-transform:uppercase;pointer-events:none;animation:auraLoaderTextIn .7s ease .2s backwards;transition:opacity .3s ease,transform .3s ease}
+body.light-theme #auraLoaderText{color:rgba(25,26,30,.78)}
+#auraLoaderText.leaving{opacity:0;transform:translateY(8px);animation:none}
+#auraLoaderText .d{display:inline-block;opacity:.25;animation:auraDot 1.2s ease-in-out infinite}
+#auraLoaderText .d:nth-child(2){animation-delay:.2s}
+#auraLoaderText .d:nth-child(3){animation-delay:.4s}
+@keyframes auraLoaderTextIn{from{opacity:0;transform:translateY(6px)}}
+@keyframes auraDot{0%,80%,100%{opacity:.25}40%{opacity:1}}
+#auraLoader:not([data-ready]) .aura-startup-fallback img{animation:auraMarkIn .8s cubic-bezier(.16,1,.3,1) both}
+@keyframes auraMarkIn{from{opacity:0;transform:scale(.92)}}
+@media (prefers-reduced-motion:reduce){#auraLoaderText .d{animation:none;opacity:.7}#auraLoader.leaving{transition:opacity .2s ease;transform:none}#auraLoader:not([data-ready]) .aura-startup-fallback img{animation:none}}
+@keyframes auraLoaderFailsafe{to{opacity:0;visibility:hidden;pointer-events:none}}
+</style>
+<!-- Fonts and icons are bundled in the blocking main stylesheet. -->
+<link rel="preconnect" href="https://huggingface.co" crossorigin><link rel="preconnect" href="https://us.aws.cdn.hf.co" crossorigin><link rel="dns-prefetch" href="https://i.ytimg.com">
   <meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Aura Music</title>
-  <meta name="description" content="Your personal space for music. Enjoy your library, playlists, live radio and ambient soundscapes, or listen together with friends on Aura Music.">
   <meta name="theme-color" content="#000000">
-  <script>
-    /* Paint hint only: keep these checks in sync with core/session.getSession.
-       Tokens are opaque here, including device-local and extended site sessions. */
-    (() => {
-      try {
-        const session = JSON.parse(localStorage.getItem('auraSession_v2') || 'null');
-        if (!session ||
-          typeof session.email !== 'string' || !session.email.trim() ||
-          typeof session.token !== 'string' || !session.token.trim() ||
-          typeof session.exp !== 'number' || !Number.isFinite(session.exp) || session.exp * 1000 <= Date.now()) return;
-        document.documentElement.dataset.auraEntry = 'restoring';
-        // This fallback also works when the entry module never downloads.
-        setTimeout(() => {
-          if (document.documentElement.dataset.auraEntry !== 'restoring') return;
-          document.documentElement.dataset.auraEntry = 'failed';
-          const status = document.getElementById('loginStatus');
-          if (status) status.textContent = 'Aura is taking longer than expected. Reload to try again.';
-          const retry = document.getElementById('loginRetry');
-          if (retry) retry.hidden = false;
-        }, 15000);
-      } catch { /* Unavailable storage or malformed data leaves sign-in visible. */ }
-    })();
-  </script>
-  <link rel="canonical" href="https://aura-music-01g.pages.dev/">
-  <link rel="preload" href="/src/assets/fonts/dm-sans-latin.woff2" as="font" type="font/woff2" crossorigin>
-  <link rel="preload" href="/src/assets/fonts/cormorant-garamond-latin.woff2" as="font" type="font/woff2" crossorigin>
-  <link rel="icon" type="image/png" sizes="96x96" href="/src/assets/favicon.png">
-  <link rel="apple-touch-icon" href="/aura-logo.png">
-  <link rel="stylesheet" href="/src/styles/entry.css">
+  <link rel="icon" type="image/png" sizes="64x64" href="/favicon-64.png">
+  <link rel="apple-touch-icon" sizes="180x180" href="/apple-touch-icon.png">
+
+  <link rel="stylesheet" href="/src/styles/main.css">
+  <!-- Module entry in <head>: it is deferred anyway, but the browser starts
+       fetching it while the 1,000-line document body is still parsing. -->
+  <script type="module" src="/src/main.ts"></script>
 </head>
 <body>
+<script>try{if(localStorage.getItem('auraTheme')==='light')document.body.classList.add('light-theme');}catch(e){}</script>
+<div id="auraLoader" role="status" aria-live="polite" aria-label="Loading Aura Music"><div class="aura-startup-stage"><div class="aura-startup-art"><canvas id="auraLiquidCanvas" class="aura-liquid-canvas" aria-hidden="true"></canvas><div class="aura-startup-fallback"><img src="/aura-vinyl-logo.png" alt="" width="240" height="240"></div></div><div id="auraLoaderText">Aura Music<span class="d">.</span><span class="d">.</span><span class="d">.</span></div></div></div>
   <div class="net-banner" id="netBanner" role="status" aria-live="polite"></div>
   <main class="welcome-screen" id="welcomeScreen" aria-label="Welcome to Aura Music" tabindex="-1">
     <button class="welcome-info" id="welcomeInfo" type="button" aria-label="Why AURA Music asks you to sign in" aria-expanded="false"><svg class="login-icon" viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M12 11v6m0-10v.01"/></svg></button>
@@ -86,20 +91,20 @@
     </div>
   </main>
 
-  <div class="login-overlay" id="loginOverlay" role="region" aria-label="Loading Aura Music" tabindex="-1">
+  <div class="login-overlay" id="loginOverlay" aria-hidden="true">
     <div class="lo-mark">
-      <svg viewBox="0 0 120 120" aria-hidden="true"><circle class="lo-track" cx="60" cy="60" r="52"/><circle class="lo-draw" cx="60" cy="60" r="52"/></svg>
+      <svg viewBox="0 0 120 120" aria-hidden="true"><defs><linearGradient id="loGold" x1="0" y1="0" x2="1" y2="1"><stop offset="0" stop-color="#fdf0d2"/><stop offset=".55" stop-color="#e6bd92"/><stop offset="1" stop-color="#b98249"/></linearGradient></defs><circle class="lo-track" cx="60" cy="60" r="52"/><circle class="lo-draw" cx="60" cy="60" r="52"/></svg>
+      <span class="lo-ripple"></span>
+      <span class="lo-ripple lo-ripple-2"></span>
       <span class="lo-disc"></span>
       <span class="lo-needle"></span>
     </div>
-    <div class="login-caption" id="loginWelcomeName">Aura Music</div>
-    <div class="login-subcaption" id="loginStatus" role="status" aria-live="polite">Restoring your session…</div>
-    <a class="aura-state-btn login-retry" id="loginRetry" href="" hidden>Reload Aura</a>
+    <div class="login-caption" id="loginWelcomeName">Welcome</div>
+    <div class="login-subcaption">Getting your music ready…</div>
   </div>
 
   <div class="toast-container" id="toastContainer" role="status" aria-live="polite" aria-atomic="true"></div>
 
-  <div id="musicApp" hidden inert>
   <div class="track-sheet-overlay" id="trackSheetOverlay">
     <div class="track-sheet" id="trackSheet" role="dialog" aria-modal="true" aria-label="Track options">
       <div class="track-sheet-handle"></div>
@@ -172,7 +177,7 @@
   <div class="modal-overlay" id="settingsModal" role="dialog" aria-modal="true" aria-labelledby="settingsTitle" aria-hidden="true">
     <div class="settings-modal-card">
       <div class="settings-head">
-        <div class="settings-title-wrap"><div class="settings-icon"><i class="fa-solid fa-sliders"></i></div><div><h3 id="settingsTitle">Settings</h3><p>Make Aura Music work your way</p></div></div>
+        <div class="settings-title-wrap"><div class="settings-icon"><i class="fa-solid fa-sliders"></i></div><div><h3 id="settingsTitle" style="margin:0;font-size:18px">Settings</h3><p style="margin:3px 0 0;color:var(--text-sub);font-size:10px">Make Aura Music work your way</p></div></div>
         <button class="settings-close" id="settingsCloseBtn" type="button" aria-label="Close settings"><i class="fa-solid fa-xmark"></i></button>
       </div>
       <div class="settings-section">
@@ -210,8 +215,9 @@
   </div>
 
   <div class="side-menu" id="sideMenu" onclick="if(event.target.id==='sideMenu')this.style.display='none'">
-    <div class="side-menu-content" role="dialog" aria-modal="true" aria-label="Menu">
+    <div class="side-menu-content">
       <h3 style="color:var(--accent);margin-bottom:20px">Menu</h3>
+      <p id="themeToggleBtn" class="menu-item" role="button" tabindex="0"><i class="fa-solid fa-sun" id="themeIcon"></i> <span id="themeLabel">Light Mode</span></p>
       <a class="menu-item menu-item-link" id="roomsMenuLink" href="/rooms">
         <i class="fa-solid fa-headphones"></i> Listen together
         <span class="room-link-dot" aria-hidden="true"></span>
@@ -227,11 +233,11 @@
     </div>
   </div>
 
-  <div class="modal-overlay" id="aboutModal" role="dialog" aria-modal="true" aria-labelledby="aboutTitle" aria-hidden="true">
+  <div class="modal-overlay" id="aboutModal" role="dialog" aria-modal="true" aria-hidden="true">
     <div class="about-card">
       <button class="about-close" id="aboutCloseBtn" type="button" aria-label="Close"><i class="fa-solid fa-xmark"></i></button>
       <div class="about-logo"><img src="./src/assets/about-logo.jpg" alt="Aura Music logo" width="260" height="260" loading="lazy" decoding="async"></div>
-      <h3 id="aboutTitle">AURA Music</h3>
+      <h3>AURA Music</h3>
       <p class="about-version">Personal build · v1.0</p>
       <p class="about-desc">A personal music player and library — bring your own tracks, browse live radio, and layer ambient sound.</p>
       <div class="about-list">
@@ -245,6 +251,8 @@
 
   <div class="logout-overlay" id="logoutOverlay" aria-hidden="true">
     <div class="logout-scene">
+      <span class="logout-ring"></span>
+      <span class="logout-ring logout-ring-2"></span>
       <span class="logout-disc"></span>
       <span class="logout-needle"></span>
     </div>
@@ -255,18 +263,18 @@
   <div class="effects-modal" id="effectsModal" role="dialog" aria-modal="true" aria-label="Ambient effects" aria-hidden="true">
     <div class="effects-card">
       <div class="effects-head">
-        <div class="effects-title-wrap"><div class="effects-icon"><i class="fa-solid fa-wand-magic-sparkles"></i></div><div><h3>Ambient Effects</h3><p class="effects-sub">Mix multiple ambience layers underneath your music or radio — each with its own volume.</p></div></div>
+        <div class="effects-title-wrap"><div class="effects-icon"><i class="fa-solid fa-wand-magic-sparkles"></i></div><div><h3 style="margin:0;font-size:18px">Ambient Effects</h3><p class="effects-sub">Mix multiple ambience layers underneath your music or radio — each with its own volume.</p></div></div>
         <button class="effects-close" id="effectsCloseBtn" type="button" aria-label="Close effects"><i class="fa-solid fa-xmark"></i></button>
       </div>
 
       <div class="effects-toggle-row">
         <div class="effects-toggle-item">
-          <div><b id="spatialToggleLabel">Vibe</b><span id="spatialModeLabel">Stereo</span></div>
-          <label class="effects-switch"><input type="checkbox" id="spatialToggle" aria-labelledby="spatialToggleLabel" aria-describedby="spatialModeLabel"><span class="effects-switch-track"></span></label>
+          <div><b>Vibe</b><span id="spatialModeLabel">Stereo</span></div>
+          <label class="effects-switch"><input type="checkbox" id="spatialToggle"><span class="effects-switch-track"></span></label>
         </div>
         <div class="effects-toggle-item">
-          <div><b id="muffleToggleLabel">Muffle</b><span id="muffleModeLabel">Clear</span></div>
-          <label class="effects-switch"><input type="checkbox" id="muffleToggle" aria-labelledby="muffleToggleLabel" aria-describedby="muffleModeLabel"><span class="effects-switch-track"></span></label>
+          <div><b>Muffle</b><span id="muffleModeLabel">Clear</span></div>
+          <label class="effects-switch"><input type="checkbox" id="muffleToggle"><span class="effects-switch-track"></span></label>
         </div>
       </div>
 
@@ -293,10 +301,9 @@
     </div>
   </div>
 
-  <div class="app-container" role="main" aria-label="Music library" tabindex="-1">
-    <h1 class="visually-hidden">Aura Music</h1>
+  <div class="app-container">
     <aside class="desktop-sidebar" id="desktopSidebar" aria-label="Desktop navigation">
-      <div class="desktop-brand"><button class="sidebar-toggle" id="sidebarToggle" type="button" aria-label="Toggle menu" title="Menu"><i class="fa-solid fa-bars"></i></button><div class="desktop-brand-mark"><img src="./src/assets/brand-logo.webp" alt="Aura Music vinyl logo" width="512" height="512" loading="lazy" decoding="async"></div><div><strong>AURA</strong><span>MUSIC</span></div></div>
+      <div class="desktop-brand"><button class="sidebar-toggle" id="sidebarToggle" type="button" aria-label="Toggle menu" title="Menu"><i class="fa-solid fa-bars"></i></button><div class="desktop-brand-mark"><img src="./src/assets/brand-logo.webp" alt="Aura Music vinyl logo" width="512" height="512" loading="eager" decoding="async" fetchpriority="high"></div><div><strong>AURA</strong><span>MUSIC</span></div></div>
       <div class="desktop-nav-label">Menu</div>
       <button type="button" class="desktop-nav-btn active" data-tab="tabHome" aria-label="Home" onclick="navClick(this,'tabHome')"><i class="fa-solid fa-house"></i><span>Home</span></button>
       <button type="button" class="desktop-nav-btn" data-tab="tabLibrary" aria-label="Library" onclick="navClick(this,'tabLibrary')"><i class="fa-solid fa-layer-group"></i><span>Library</span></button>
@@ -337,6 +344,7 @@
 
       <div class="desktop-nav-label desktop-nav-label-lower">Preferences</div>
       <div class="desktop-settings-group" aria-label="App menu">
+        <button class="desktop-nav-btn" type="button" onclick="document.getElementById('themeToggleBtn').click()"><i class="fa-solid fa-sun" id="desktopThemeIcon"></i><span id="desktopThemeLabel">Light mode</span></button>
         <button class="desktop-nav-btn" type="button" onclick="openSettings()"><i class="fa-solid fa-sliders"></i><span>Settings</span></button>
         <button class="desktop-nav-btn" type="button" onclick="openEffects()"><i class="fa-solid fa-wand-magic-sparkles"></i><span>Effects</span></button>
         <button class="desktop-nav-btn" type="button" onclick="openAbout()"><i class="fa-solid fa-circle-info"></i><span>About</span></button>
@@ -344,6 +352,8 @@
         <button class="desktop-nav-btn danger" type="button" onclick="logoutUser()"><i class="fa-solid fa-right-from-bracket"></i><span>Log out</span></button>
       </div>
       <div class="desktop-sidebar-note">
+        <i class="fa-solid fa-leaf sb-leaf-big" aria-hidden="true"></i>
+        <i class="fa-solid fa-leaf sb-leaf-small" aria-hidden="true"></i>
         <div class="sb-ready"><span class="desktop-status-dot"></span>Audio engine ready</div>
       </div>
     </aside>
@@ -480,7 +490,7 @@
       </div>
 
       <!-- View 3: Artist Songs Drill-Down View -->
-      <div id="homeArtistDetailView" style="display:none"></div>
+      <section class="artist-detail-page" id="homeArtistDetailView" style="display:none"></section>
     </div>
 
     <div class="tab-content" id="tabLibrary">
@@ -585,10 +595,9 @@
 
     <div class="player-bar" id="miniPlayer">
       <input type="range" class="mini-seek desk-only" id="miniSeek" min="0" max="100" step="any" value="0" aria-label="Seek">
-      <button class="song-info" id="miniTrackOpenBtn" type="button" aria-labelledby="miniOpenLabel currentTitle currentArtist" aria-controls="fullPlayerOverlay" aria-expanded="false">
-        <span class="visually-hidden" id="miniOpenLabel">Open full player:</span>
+      <button class="song-info" id="miniTrackOpenBtn" type="button" aria-label="Open full player">
         <img id="currentImg" src="" alt="" decoding="async">
-        <span class="song-meta"><span id="currentTitle" class="song-title">Select Track</span><span id="currentArtist" class="song-artist">--</span><span class="mini-np">Now playing</span></span>
+        <div><div id="currentTitle" class="song-title">Select Track</div><div id="currentArtist" class="song-artist">--</div><div class="mini-np">Now playing</div></div>
       </button>
       <div class="mini-controls">
         <button class="glass-btn ctrl-glass-btn desk-only" id="miniPrevBtn" type="button" aria-label="Previous track"><i class="fa-solid fa-backward-step"></i></button>
@@ -597,6 +606,14 @@
         <span class="mini-time desk-only" id="miniTime">0:00 / 0:00</span>
       </div>
       <div class="mini-right desk-only">
+        <div class="mini-version-control" id="miniVersionControl" hidden>
+          <div class="audio-version-rail" id="miniAudioVersion" role="radiogroup" aria-label="Song version">
+          <button type="button" class="audio-version-button" role="radio" aria-label="Original" aria-checked="true" tabindex="0" data-audio-version="original"><svg class="audio-version-wave" viewBox="0 0 28 24" aria-hidden="true"><path d="M2 12c3 0 3-5 6-5s3 10 6 10 3-10 6-10 3 5 6 5"/></svg><span>Original</span><span class="sound-ready-dot" aria-hidden="true"></span></button>
+          <button type="button" class="audio-version-button" role="radio" aria-label="Bass boosted" aria-checked="false" tabindex="-1" data-audio-version="bass"><svg class="audio-version-wave" viewBox="0 0 28 24" aria-hidden="true"><path d="M2 12c4 0 3-8 7-8s3 16 7 16 3-8 10-8"/></svg><span>Bass</span><span class="sound-ready-dot" aria-hidden="true"></span></button>
+          <button type="button" class="audio-version-button" role="radio" aria-label="Bass + reverb" aria-checked="false" tabindex="-1" data-audio-version="bass-reverb"><svg class="audio-version-wave" viewBox="0 0 28 24" aria-hidden="true"><path class="sound-echo" d="M2 17c3 0 3-5 6-5s3 10 6 10 3-10 6-10 3 5 6 5"/><path d="M2 8c3 0 3-5 6-5s3 10 6 10 3-10 6-10 3 5 6 5"/></svg><span>Reverb</span><span class="sound-ready-dot" aria-hidden="true"></span></button>
+          <span class="audio-version-marker" aria-hidden="true"></span>
+        </div>
+        </div>
         <button class="mini-icon-btn" id="miniLikeBtn" type="button" aria-label="Like" aria-pressed="false"><i class="fa-regular fa-heart"></i></button>
         <button class="mini-icon-btn" id="miniShuffleBtn" type="button" aria-label="Shuffle"><i class="fa-solid fa-shuffle"></i></button>
         <button class="mini-icon-btn" id="miniRepeatBtn" type="button" aria-label="Repeat off"><i class="fa-solid fa-repeat"></i></button>
@@ -604,7 +621,7 @@
           <button class="mini-icon-btn" id="miniVolBtn" type="button" aria-label="Mute"><i class="fa-solid fa-volume-high" id="miniVolIcon"></i></button>
           <input type="range" class="mini-volume" id="miniVolume" min="0" max="100" value="80" aria-label="Volume">
         </div>
-        <button class="mini-icon-btn mini-expand" id="miniExpandBtn" type="button" aria-label="Open full player" aria-controls="fullPlayerOverlay" aria-expanded="false"><i class="fa-solid fa-chevron-up"></i></button>
+        <button class="mini-icon-btn mini-expand" id="miniExpandBtn" type="button" aria-label="Open full player"><i class="fa-solid fa-chevron-up"></i></button>
       </div>
       <div class="mini-progress-track">
         <div class="mini-progress-fill" id="progressFill"></div>
@@ -615,12 +632,11 @@
 
     <div class="radio-player-bar" id="radioMiniPlayer">
       <div class="radio-mini-art" id="radioMiniArt"><i class="fa-solid fa-radio"></i></div>
-      <button class="radio-mini-info" id="radioMiniOpenBtn" type="button" aria-labelledby="radioMiniOpenLabel radioMiniName" aria-controls="radioFullPlayerOverlay" aria-expanded="false">
-        <span class="visually-hidden" id="radioMiniOpenLabel">Open radio player:</span>
-        <span class="radio-mini-label">Live radio</span>
-        <span class="radio-mini-name" id="radioMiniName">Nothing playing</span>
-        <span class="radio-mini-meta" id="radioMiniMeta">Live station</span>
-      </button>
+      <div class="radio-mini-info">
+        <div class="radio-mini-label">Live radio</div>
+        <div class="radio-mini-name" id="radioMiniName">Nothing playing</div>
+        <div class="radio-mini-meta" id="radioMiniMeta">Live station</div>
+      </div>
       <div class="radio-mini-controls">
         <button class="radio-mini-btn primary" id="radioMiniPlayBtn" type="button" aria-label="Pause radio"><i class="fa-solid fa-pause"></i></button>
         <button class="radio-mini-btn" id="radioMiniStopBtn" type="button" aria-label="Stop radio"><i class="fa-solid fa-stop"></i></button>
@@ -648,17 +664,21 @@
     </div>
     <div class="full-player-art" id="fullPlayerArt">
       <img id="fullImg" src="" alt="" decoding="async">
-      <div class="ytm-art-overlay-tools">
-        <button type="button" class="ytm-art-tool-btn" id="artInfoBtn" title="Track options"><i class="fa-solid fa-circle-info"></i></button>
-        <button type="button" class="ytm-art-tool-btn" id="artLikeBtn" title="Like song" onclick="document.getElementById('fullLikeBtn').click()"><i class="fa-regular fa-heart" id="artLikeIcon"></i></button>
-        <button type="button" class="ytm-art-tool-btn" id="artShareBtn" title="Share track"><i class="fa-solid fa-share-nodes"></i></button>
-      </div>
     </div>
     <div class="youtube-mode-badge" id="youtubeModeBadge">Official YouTube player • playing inside AURA</div>
     <div class="full-player-body">
       <div class="full-player-meta">
         <div><div id="fullTitle" class="full-track-title">Track</div><div id="fullArtist" class="full-track-artist">Artist</div></div>
         <button class="like-btn" id="fullLikeBtn" type="button" aria-label="Like current song" aria-pressed="false"><i class="fa-regular fa-heart"></i></button>
+      </div>
+      <div class="audio-version-control" id="fullVersionControl" hidden>
+        <div class="audio-version-rail" id="fullAudioVersion" role="radiogroup" aria-label="Song version">
+          <button type="button" class="audio-version-button" role="radio" aria-label="Original" aria-checked="true" tabindex="0" data-audio-version="original"><svg class="audio-version-wave" viewBox="0 0 28 24" aria-hidden="true"><path d="M2 12c3 0 3-5 6-5s3 10 6 10 3-10 6-10 3 5 6 5"/></svg><span>Original</span><span class="sound-ready-dot" aria-hidden="true"></span></button>
+          <button type="button" class="audio-version-button" role="radio" aria-label="Bass boosted" aria-checked="false" tabindex="-1" data-audio-version="bass"><svg class="audio-version-wave" viewBox="0 0 28 24" aria-hidden="true"><path d="M2 12c4 0 3-8 7-8s3 16 7 16 3-8 10-8"/></svg><span>Bass</span><span class="sound-ready-dot" aria-hidden="true"></span></button>
+          <button type="button" class="audio-version-button" role="radio" aria-label="Bass + reverb" aria-checked="false" tabindex="-1" data-audio-version="bass-reverb"><svg class="audio-version-wave" viewBox="0 0 28 24" aria-hidden="true"><path class="sound-echo" d="M2 17c3 0 3-5 6-5s3 10 6 10 3-10 6-10 3 5 6 5"/><path d="M2 8c3 0 3-5 6-5s3 10 6 10 3-10 6-10 3 5 6 5"/></svg><span>Bass + reverb</span><span class="sound-ready-dot" aria-hidden="true"></span></button>
+          <span class="audio-version-marker" aria-hidden="true"></span>
+        </div>
+        <p id="audioVersionStatus" role="status" aria-live="polite" hidden></p>
       </div>
       <div class="full-seek-slider-wrap">
         <input type="range" id="fullSeekSlider" class="full-seek-slider" value="0" min="0" max="100" aria-label="Seek within track">
@@ -766,9 +786,9 @@
        accessibility impact. The app refreshes these attributes once a second. -->
   <div id="auraPresence" hidden aria-hidden="true"></div>
 
+  <!-- Boot calls loadSong(0) for artwork, not playback. preload="none"
+       keeps that from spending mobile bandwidth on an audio range request
+       before the listener has pressed play; player.ts restores "auto" then. -->
   <audio id="audioPlayer" preload="none"></audio>
-  </div>
-
-  <script type="module" src="/src/main.ts"></script>
 </body>
 </html>

@@ -43,6 +43,7 @@ Production (and Preview if used):
 | `ADMIN_PASSWORD` | optional | `/api/admin` | Enables the email/password admin login. If unset, only Google sign-in works. |
 | `HF_TOKEN` | for bucket mutations | `/api/admin` | Hugging Face token for rename/delete/cover/manifest actions. |
 | `HF_BUCKET_ID` | for bucket mutations / custom archive | `/api/admin`, `/api/audio` | e.g. `Angelrider/sonora`; must match the client bucket. `/api/audio` uses its public default if unset. |
+| `VERSION_WORKER_TOKEN` | for the Mac processor | `/api/versions` | High-entropy secret matching the private Mac token file. Public version reads do not require it. |
 | `OCI_NAMESPACE` | optional hot cache, all five OCI fields together | `/api/audio` | OCI object-storage namespace, not a URL. |
 | `OCI_BUCKET_NAME` | optional hot cache | `/api/audio` | Dedicated cache bucket; never mix it with valuable or unrelated storage. |
 | `OCI_REGION` | optional hot cache | `/api/audio` | OCI region identifier. |
@@ -53,6 +54,10 @@ Production (and Preview if used):
 | `BOT_WORKER_URL` | for the Discord tab | `functions/api/bot.ts` | Base URL of the Aura Farmer Worker, e.g. `https://aura-farmer.<sub>.workers.dev`. |
 | `BOT_ADMIN_TOKEN` | for the Discord tab | `functions/api/bot.ts` | Shared secret the Worker expects on `/v1/admin` (the Worker's `BOT_ADMIN_TOKEN`). |
 | `BOT_SERVICE_TOKEN` | for Discord dispatch | `/api/admin` | Shared secret the Worker presents on `/api/admin`, limited to `search`, `expand`, `dispatch`, `runs`, `runJobs`, and `libraryIds`. Must match the Worker's `AURA_SERVICE_TOKEN`. |
+
+The `VERSION_DB` D1 binding points to `aura-audio-versions`; the existing
+`ARTIST_DB` binding is independent. See [audio processing](audio-processing.md)
+for the schema, manual Mac command and safe Pages configuration updates.
 
 `GH_TOKEN` must not be exposed to the browser. The admin panel never receives
 it: it sends either a Google ID token or a `v1.<exp>.<hmac>` session token, and
@@ -152,7 +157,7 @@ Stored in the browser, not in the repo:
 
 | Key | Purpose |
 | --- | --- |
-| `auraTheme` | Legacy `light`/`dark` values are retained but ignored by the neutral-black interface. |
+| `auraTheme` | `light` or `dark`; applied before first paint. |
 | `auraSettings_v1` | Autoplay, volume memory, and reduced-motion preference. |
 | `auraVolume` | Last volume (when remember-volume is on). |
 | `auraPlaylists` | Version-2 browser-local playlist store with durable track references; see [data model](data-model.md#playlists-and-export-files). |
@@ -179,8 +184,8 @@ These are public/keyless and are called directly from the browser:
 - `https://de1.api.radio-browser.info` — radio directory.
 - `https://www.youtube.com/oembed` and the official IFrame API — metadata and
   playback for supported legacy/deep-linked YouTube tracks.
-- Google Identity Services — loaded on demand for sign-in. Fonts and Font Awesome
-  SVG-mask icons are bundled locally, with no runtime font/icon CDN requests.
+- Google Fonts and Font Awesome CDN — UI assets; Google Identity Services for
+  sign-in.
 - Lyrics provider endpoints used by the active lyrics module.
 
 Listener search is library-only; there is no public podcast search or online

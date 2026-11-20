@@ -1,6 +1,12 @@
 /* Shared track rows and Library. Also used by Search and Home. */
 .song-list { display: flex; flex-direction: column; gap: 2px; width: 100%; min-width: 0; }
-.song-item { display: flex; align-items: center; justify-content: space-between; gap: 12px; min-width: 0; min-height: 68px; padding: 0 12px 0 0; border: 0; border-radius: var(--radius-xs); background: transparent; color: var(--text); transition: background-color var(--dur-fast); }
+/* The library renders every track at once (hundreds of rows). content-visibility
+   lets the browser skip layout, paint and image decode for rows that are off
+   screen, which is the single biggest mobile win here: a phone no longer lays
+   out ~500 rows of ~10 nodes each before it can paint the first one.
+   contain-intrinsic-size keeps the scrollbar honest so the list does not jump
+   as rows are realised. */
+.song-item { display: flex; align-items: center; justify-content: space-between; gap: 12px; min-width: 0; min-height: 68px; padding: 0 12px 0 0; border: 0; border-radius: var(--radius-xs); background: transparent; color: var(--text); transition: background-color var(--dur-fast); content-visibility: auto; contain-intrinsic-size: auto 68px; }
 .song-item:hover { background: var(--hover); }
 .song-item.active { background: var(--accent-soft); }
 .song-item-play { display: flex; align-items: center; align-self: stretch; flex: 1; min-width: 0; min-height: var(--tap); padding: 10px 0 10px 12px; border: 0; border-radius: var(--radius-xs); appearance: none; background: transparent; color: inherit; text-align: left; }

@@ -1,0 +1,25 @@
+/* Three sound contours on a quiet rail. The moving mark follows the listener. */
+.audio-version-control { margin-top: 16px; }
+.audio-version-control p { margin: 8px 0 0; color: var(--text-sub); font-size: 12px; line-height: 1.4; }
+.audio-version-rail { --version-index: 0; position: relative; display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); width: 100%; padding-bottom: 7px; border-bottom: 1px solid var(--line-strong); }
+.audio-version-button { position: relative; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 6px; min-width: 0; min-height: 60px; padding: 8px 4px; border: 0; border-radius: var(--radius-xs); background: transparent; color: var(--text-sub); font: 500 12px/1.2 var(--font-ui); cursor: pointer; transition: color var(--dur-fast), background-color var(--dur-fast); }
+.audio-version-button:hover:not(:disabled) { background: var(--hover); color: var(--text); }
+.audio-version-button[aria-checked="true"] { color: var(--accent); background: var(--accent-soft); }
+.audio-version-button:focus-visible { outline: 2px solid var(--accent); outline-offset: -2px; }
+.audio-version-button:disabled { opacity: .35; cursor: not-allowed; }
+.audio-version-wave { width: 28px; height: 24px; overflow: visible; fill: none; stroke: currentColor; stroke-width: 1.6; stroke-linecap: round; stroke-linejoin: round; transition: transform var(--dur) var(--ease-spring); }
+.audio-version-button[data-audio-version="bass"] .audio-version-wave { stroke-width: 2.2; }
+.audio-version-button[aria-checked="true"] .audio-version-wave { transform: translateY(-1px); }
+.sound-echo { opacity: .35; }
+.audio-version-marker { position: absolute; bottom: -1px; left: 0; width: calc(100% / 3); height: 2px; transform: translateX(calc(var(--version-index) * 100%)); transition: transform 260ms var(--ease-spring); pointer-events: none; }
+.audio-version-marker::after { content: ""; position: absolute; inset: 0 12px; border-radius: 2px; background: var(--accent); }
+.sound-ready-dot { position: absolute; top: 8px; right: 12px; width: 4px; height: 4px; border-radius: 50%; background: currentColor; opacity: 0; transition: opacity var(--dur); }
+.audio-version-button[data-load-state="loading"] .sound-ready-dot { opacity: .5; animation: soundPreparing 1.2s ease-in-out infinite; }
+.audio-version-button[data-load-state="failed"] .sound-ready-dot { opacity: .5; background: var(--danger); }
+@keyframes soundPreparing { 50% { opacity: .15; } }
+.mini-version-control { width: 216px; margin-right: 12px; }
+.mini-version-control .audio-version-rail { padding-bottom: 4px; }
+.mini-version-control .audio-version-button { min-height: 52px; gap: 2px; font-size: 11px; }
+.mini-version-control .audio-version-wave { width: 24px; height: 20px; }
+.mini-version-control .sound-ready-dot { top: 6px; right: 8px; }
+@media (min-width: 900px) and (max-width: 1120px) { .mini-version-control { width: 180px; margin-right: 6px; } }

@@ -1,4 +1,4 @@
-/* Black is the canvas. Artwork supplies color; controls stay neutral. */
+/* The listening room: black is the canvas; artwork supplies the color. */
 :root {
   color-scheme: dark;
   --bg: #000;
@@ -10,8 +10,9 @@
   --text-sub: #a3a3a3;
   --text-dim: #808080;
   --accent: #fff;
-  --accent-ink: #0a0a0a;
+  --accent-strong: #dedede;
   --accent-rgb: 255, 255, 255;
+  --accent-ink: #0a0a0a;
   --accent-soft: rgba(var(--accent-rgb), .1);
   --success: #94c5a6;
   --info: #a8b9cf;
@@ -37,11 +38,14 @@
   --radius-xs: 8px;
   --radius-sm: 12px;
   --radius-md: 16px;
+  --radius-lg: 16px;
   --radius-pill: 999px;
   --tap: 44px;
   --dur-fast: 140ms;
   --dur: 220ms;
   --ease-out: cubic-bezier(.22, .61, .36, 1);
+  --ease-in: cubic-bezier(.4, 0, 1, 1);
+  --ease-in-out: cubic-bezier(.4, 0, .2, 1);
   --ease-spring: cubic-bezier(.22, 1, .36, 1);
   --safe-top: env(safe-area-inset-top, 0px);
   --safe-right: env(safe-area-inset-right, 0px);
@@ -52,18 +56,103 @@
   --np-queue-w: clamp(320px, 34vw, 480px);
   --mobile-dock-h: 76px;
   --mobile-player-bottom: calc(98px + var(--safe-bottom));
-  /* Shared names used by the vanilla DOM features. */
+  /* Album-derived values written by the player. Never use these in the shell. */
+  --dyn-rgb: 255, 255, 255;
+  --dyn-rgb-hi: 255, 255, 255;
+  --dyn-rgb-lo: 188, 188, 188;
+  --dyn-fg: #0a0a0a;
+  /* Compatibility aliases for the vanilla DOM modules. */
   --card-bg: var(--surface-1);
   --card-border: var(--line);
   --card-hover: var(--hover);
+  --surface-raised: var(--surface-2);
+  --surface-overlay: var(--surface-2);
+  --border-subtle: var(--line);
+  --brass-soft: var(--accent-soft);
   --glass-btn-bg: var(--surface-2);
   --glass-btn-border: var(--line);
   --player-bg: var(--surface-1);
   --full-player-bg: var(--bg);
   --nav-bg: var(--surface-1);
+  --profile-glass-bg: var(--surface-2);
+  --profile-glass-border: var(--line);
+  --profile-glass-highlight: transparent;
+  --menu-glass-bg: var(--surface-1);
+  --menu-glass-border: var(--line);
+  --sidebar-bg: var(--bg);
+  --sb-text: var(--text-sub);
+  --sb-line: var(--line);
+  --gold: var(--accent);
+  --gold-2: var(--accent);
+  --tan: var(--accent);
+  --tan-2: var(--accent);
+  --tan-ink: var(--accent-ink);
   --slider-fill: var(--accent);
   --slider-track: var(--surface-3);
   --slider-dot: var(--text);
   --skeleton: var(--surface-3);
   --skeleton-shine: var(--hover);
+  --shadow-sm: none;
+  --shadow-md: var(--shadow-overlay);
+}
+
+/* Light is the same room with daylight, not a separate blue/glass theme. */
+body.light-theme {
+  color-scheme: light;
+  --bg: #f5f5f5;
+  --surface-1: #ededed;
+  --surface-2: #fff;
+  --surface-3: #e3e3e3;
+  --text: #242424;
+  --text-rgb: 36, 36, 36;
+  --text-sub: #626262;
+  --text-dim: #7a7a7a;
+  --accent: #242424;
+  --accent-strong: #0a0a0a;
+  --accent-rgb: 36, 36, 36;
+  --accent-ink: #fff;
+  --success: #367852;
+  --info: #516d88;
+  --warning: #666666;
+  --danger: #b64242;
+  --danger-soft: rgba(182, 66, 66, .08);
+  --line: rgba(36, 36, 36, .13);
+  --line-strong: rgba(36, 36, 36, .24);
+  --hover: rgba(36, 36, 36, .055);
+  --overlay-scrim: rgba(20, 20, 20, .4);
+  --shadow-overlay: 0 24px 72px rgba(36, 36, 36, .16);
+  --shadow-art: 0 18px 48px rgba(36, 36, 36, .12);
+  /* Rebind aliases in the theme scope; custom-property aliases compute before inheritance. */
+  --accent-soft: rgba(var(--accent-rgb), .13);
+  --focus-ring: var(--accent);
+  --card-bg: var(--surface-1);
+  --card-border: var(--line);
+  --card-hover: var(--hover);
+  --surface-raised: var(--surface-2);
+  --surface-overlay: var(--surface-2);
+  --border-subtle: var(--line);
+  --brass-soft: var(--accent-soft);
+  --glass-btn-bg: var(--surface-2);
+  --glass-btn-border: var(--line);
+  --player-bg: var(--surface-1);
+  --full-player-bg: var(--bg);
+  --nav-bg: var(--surface-1);
+  --profile-glass-bg: var(--surface-2);
+  --profile-glass-border: var(--line);
+  --menu-glass-bg: var(--surface-1);
+  --menu-glass-border: var(--line);
+  --sidebar-bg: var(--bg);
+  --sb-text: var(--text-sub);
+  --sb-line: var(--line);
+  --gold: var(--accent);
+  --gold-2: var(--accent);
+  --tan: var(--accent);
+  --tan-2: var(--accent);
+  --tan-ink: var(--accent-ink);
+  --slider-fill: var(--accent);
+  --slider-track: var(--surface-3);
+  --slider-dot: var(--text);
+  --skeleton: var(--surface-3);
+  --skeleton-shine: var(--hover);
+  --shadow-md: var(--shadow-overlay);
 }
