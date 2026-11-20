@@ -500,9 +500,12 @@ the body exists:
 - **Slow signals** — `saveData`, `effectiveType` of `3g`/`2g`/`slow-2g`,
   `rtt >= 400 ms`, or two cores — reveal the splash immediately, so it covers
   the boot from the first paint.
-- **Everyone else** waits 560 ms (680 ms on touch). If `markAppReady()` has run
-  by then, the splash never appears at all; if not, it fades in and covers the
-  boot. The attribute is applied even before the body is parsed, so a document
+- **Everyone else** waits 1,500 ms (1,800 ms on touch). If `markAppReady()` has
+  run by then, the splash never appears at all; if not, it fades in and covers
+  the boot. The budget is deliberately generous: a healthy boot on a fast device
+  can take a second on a busy phone, and flashing the intro at 560 ms only to
+  cover a screen that was about to paint is worse than showing it late. Slow
+  connections never reach this branch — they reveal from the first paint. The attribute is applied even before the body is parsed, so a document
   that streams slowly still shows the cover the moment the element exists.
 - **Missing the budget on a fast device but ready shortly after** is handled by
   the loader: the splash is never shown for less than ~220 ms and dissolves in
@@ -529,7 +532,7 @@ Measured on the built site:
 ### What this does not do
 
 The budget is a time-to-ready test, not a speed test: a fast machine on a cold
-CDN edge can still miss 560 ms and get the intro, and a slow machine with a warm
+CDN edge can still miss 1.5 s and get the intro, and a slow machine with a warm
 cache can skip it. Both outcomes are correct for what the listener experiences —
 the animation only ever covers a wait that is actually happening.
 
@@ -558,3 +561,77 @@ Verified with the entry module blocked (so the app never runs): a signed-in
 document paints with the overlay hidden, a signed-out one keeps it. On a
 4× CPU / 0.5 Mbps profile the signed-in first paint is Home at ~3.8 s instead
 of the login screen followed by Home.
+
+## Seventh pass: Lighthouse, and the CSS a first visit does not need
+
+The goal was a perfect mobile and desktop Lighthouse run on the live URL.
+The first audit scored 70 mobile — not because anything was slow to compute but
+because the boot still did work the screen never used.
+
+### What the audits found
+
+| audit | mobile, before | why |
+| --- | --- | --- |
+| total blocking time | 8.3 s | the whole app graph (198 kB) evaluated before the login screen was settled |
+| first contentful paint | 1.3 s | 15 kB document, then a round trip for a 44 kB stylesheet |
+| `charset` / best practices | 96 | `<meta charset>` sat past Lighthouse's 1,024-byte window |
+| largest contentful paint | the splash PNG | the 17 kB intro art became the LCP candidate on guests |
+| cumulative layout shift, desktop | 0.108 | the invisible Home behind the overlay kept re-laying out |
+
+### What changed
+
+- The entry split in two: `main-*.js` (28 kB — loader, session, login, boot)
+  starts immediately, and the 198 kB app chunk is imported only once a session
+  exists or a sign-in completes. A guest never downloads the player, library,
+  lyrics, playlists, rooms or the media-session shim.
+- The landing stylesheet is inlined at build time (`inlineLandingCss()` in
+  `vite.config.js`) instead of linked. Vite does not process a stylesheet link
+  that carries `media="print"` or sits in `<noscript>`, so the inline pass reads
+  the *built* asset — with hashed font URLs and `@import`s already resolved —
+  and replaces the link with a `<style>` block. One less round trip before the
+  first paint; the tradeoff is that the document is no longer cacheable
+  separately from the CSS (`/` is `max-age=0` anyway, and the SPA is a single
+  navigation).
+- `critical.css` now holds only what the document can paint — fonts, icons,
+  tokens, base, shell, nav, profile, login, home, player bar, effects — and the
+  app-interior sheets (library, artists, search, full player, audio versions,
+  lyrics, radio, overlays, track sheet, settings, playlists) are imported by the
+  app chunk. A guest parses 536 rules instead of 1,180; HTML transfer went
+  293 kB → 218 kB (59 → 48 kB gzip, 49 kB brotli). A signed-in visitor gets the
+  deferred sheets together with the code that builds the markup they style, so
+  nothing paints unstyled.
+- `charset` and `viewport` moved to the top of `<head>`.
+- The splash art is drawn in CSS (`.aura-fallback-vinyl`) instead of the PNG, so
+  the intro can no longer win the LCP race; the brand image on the login screen
+  is `alt=""`, `loading="lazy"` and `fetchpriority="low"`.
+- Guests get `html[data-aura-guest] .app-container { display: none }`, so the
+  overlay no longer lays out a Home nobody can see.
+
+### Measured
+
+Live URL, Lighthouse 13.6, three consecutive mobile runs and one desktop run:
+
+| | mobile | desktop |
+| --- | --- | --- |
+| Performance / Accessibility / Best Practices / SEO | **100 / 100 / 100 / 100** | **100 / 100 / 100 / 100** |
+| first contentful paint | 1.13–1.16 s | 310 ms |
+| largest contentful paint | 1.13–1.16 s | 310 ms |
+| total blocking time | 0–46 ms | 0 ms |
+| cumulative layout shift | 0.0053 | 0.0002 |
+
+The local preview (`vite preview`, same throttling) is a little faster still:
+mobile FCP 0.95 s, desktop FCP 0.26 s. The remaining mobile cost is the 49 kB
+document itself plus CDN latency; the only weightless layout shift left is DM
+Sans swapping in for the fallback on the sign-in copy.
+
+### Keeping it
+
+- The style split is verified by comparing fourteen landmarks (computed display,
+  colour, typography, geometry, mask) at 1440 px and 390 px, signed in and signed
+  out: the two builds are identical except a margin inside the shell guests do
+  not render.
+- `npm run build` must keep emitting exactly one inlined `<style>` for `/` and a
+  separate app stylesheet; if `inlineLandingCss()` stops matching, the page
+  silently returns to a blocking link and the FCP budget goes with it.
+- Adding a component that the document markup uses before the app chunk runs
+  means adding its sheet to `critical.css`, not `main.css`.
