@@ -168,6 +168,12 @@ test('home search opens in place, clears stale queries and closes when leaving',
   await expect(page.locator('#homeMainView')).toBeHidden();
   await page.locator('#searchTabInput').fill('Alpha');
   await expect(page.locator('#searchResultsLabel')).toHaveText('1 result');
+  const playTarget = page.locator('#searchResultsList .song-info').first();
+  await expect(playTarget).toHaveCSS('background-color', 'rgba(0, 0, 0, 0)');
+  await expect(playTarget).toHaveCSS('border-top-style', 'none');
+  await expect(playTarget).toHaveCSS('appearance', 'none');
+  await expect(playTarget).toHaveCSS('text-align', 'left');
+  await expect(playTarget).toHaveCSS('padding-left', '12px');
   await page.evaluate(() => (globalThis as any).goToSearchCategory('local'));
   await expect(page.locator('#searchTabInput')).toHaveValue(''); await expect(page.locator('#searchResultsLabel')).toHaveText('Local files');
   await expect(page.locator('#searchResultsList .song-item')).toHaveCount(1);

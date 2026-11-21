@@ -9,7 +9,9 @@
 .song-item { display: flex; align-items: center; justify-content: space-between; gap: 12px; min-width: 0; min-height: 68px; padding: 0 12px 0 0; border: 0; border-radius: var(--radius-xs); background: transparent; color: var(--text); transition: background-color var(--dur-fast); content-visibility: auto; contain-intrinsic-size: auto 68px; }
 .song-item:hover { background: var(--hover); }
 .song-item.active { background: var(--accent-soft); }
-.song-item-play { display: flex; align-items: center; align-self: stretch; flex: 1; min-width: 0; min-height: var(--tap); padding: 10px 0 10px 12px; border: 0; border-radius: var(--radius-xs); appearance: none; background: transparent; color: inherit; text-align: left; }
+/* The play target is a button element. Reset the browser's button chrome here
+   so search/library rows stay transparent and aligned with the row surface. */
+.song-item > .song-info { align-self: stretch; min-height: var(--tap); padding: 10px 0 10px 12px; border: 0; border-radius: var(--radius-xs); appearance: none; background: transparent; color: inherit; text-align: left; cursor: pointer; }
 .song-info { display: flex; align-items: center; gap: 12px; flex: 1; min-width: 0; overflow: hidden; }
 .song-info img { display: block; width: 48px; height: 48px; flex: 0 0 48px; border-radius: var(--radius-xs); background: var(--surface-2); object-fit: cover; }
 .song-info > div, .song-info > .song-meta { flex: 1; min-width: 0; }
@@ -51,4 +53,4 @@
 .artist-avatar-fallback { display: grid; place-items: center; color: var(--text-sub); font-size: 32px; font-weight: 500; }
 .artist-name { max-width: 112px; overflow: hidden; color: var(--text); font-size: 13px; font-weight: 600; text-align: center; white-space: nowrap; text-overflow: ellipsis; }
 @media (min-width: 1100px) { #songList { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 4px 20px; } }
-@media (max-width: 600px) { .song-item { gap: 8px; padding: 0 4px 0 0; } .song-item-play { padding: 8px 0 8px 4px; } .song-info { gap: 10px; } .song-info img { width: 44px; height: 44px; flex-basis: 44px; } }
+@media (max-width: 600px) { .song-item { gap: 8px; padding: 0 4px 0 0; } .song-item > .song-info { padding: 8px 0 8px 4px; } .song-info { gap: 10px; } .song-info img { width: 44px; height: 44px; flex-basis: 44px; } }
